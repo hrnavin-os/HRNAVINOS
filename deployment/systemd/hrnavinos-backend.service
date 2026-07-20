@@ -1,0 +1,31 @@
+[Unit]
+Description=HRNAVINOS ERP - FastAPI backend (Gunicorn + Uvicorn workers)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=exec
+User=hrnavinos
+Group=hrnavinos
+WorkingDirectory=/var/www/hrnavinos-erp/backend
+EnvironmentFile=/var/www/hrnavinos-erp/backend/.env
+ExecStart=/var/www/hrnavinos-erp/backend/.venv/bin/gunicorn app.main:app \
+    --workers 4 \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --bind 127.0.0.1:8000 \
+    --access-logfile /var/www/hrnavinos-erp/backend/app/logs/gunicorn.access.log \
+    --error-logfile /var/www/hrnavinos-erp/backend/app/logs/gunicorn.error.log \
+    --timeout 60
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

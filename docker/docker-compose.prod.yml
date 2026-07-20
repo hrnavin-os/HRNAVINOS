@@ -1,0 +1,81 @@
+# Production compose variant. Postgres is NOT exposed to the host, and the
+# frontend/backend images are expected to already be built (e.g. by CI) and
+# tagged, or built in place with `docker compose -f docker/docker-compose.prod.yml build`.
+#
+# Usage on the VPS:
+#   docker compose -f docker/docker-compose.prod.yml --env-file .env.prod up -d
+name: hrnavinos-erp
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: hrnavinos-erp-backend:${IMAGE_TAG:-latest}
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      SECRET_KEY: ${SECRET_KEY}
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      RATE_LIMIT_ENABLED: "true"
+    volumes:
+      - backend_uploads:/app/app/uploads
+      - backend_logs:/app/app/logs
+    ports:
+      - "127.0.0.1:8000:8000"
+    command: >
+      sh -c "alembic upgrade head &&
+             gunicorn app.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --access-logfile - --error-logfile - --timeout 60"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
+    image: hrnavinos-erp-frontend:${IMAGE_TAG:-latest}
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:3000:80"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+volumes:
+  postgres_data:
+  backend_uploads:
+  backend_logs:

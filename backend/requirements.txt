@@ -1,0 +1,42 @@
+# ==================== Core Framework ====================
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+gunicorn==23.0.0
+
+# ==================== Database ====================
+sqlalchemy==2.0.36
+alembic==1.14.0
+psycopg2-binary==2.9.10
+asyncpg==0.30.0
+
+# ==================== Validation / Settings ====================
+pydantic==2.10.4
+pydantic-settings==2.7.1
+email-validator==2.2.0
+
+# ==================== Auth / Security ====================
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+# Pinned <4.1: passlib 1.7.4 reads bcrypt.__about__.__version__, removed in bcrypt 4.1+
+bcrypt==4.0.1
+python-multipart==0.0.20
+
+# ==================== Rate Limiting / Caching ====================
+slowapi==0.1.9
+redis==5.2.1
+
+# ==================== Utilities ====================
+python-dotenv==1.0.1
+tenacity==9.0.0
+
+# ==================== Logging ====================
+python-json-logger==3.2.1
+
+# ==================== Testing ====================
+pytest==8.3.4
+pytest-asyncio==0.25.1
+httpx==0.28.1
+faker==33.1.0
+
+# ==================== Lint / Format ====================
+ruff==0.8.4
