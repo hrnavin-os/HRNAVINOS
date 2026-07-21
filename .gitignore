@@ -1,3 +1,6 @@
+# ==================== Claude Code harness state ====================
+.claude/scheduled_tasks.lock
+
 # ==================== Python / Backend ====================
 __pycache__/
 *.py[cod]
