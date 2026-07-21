@@ -1,8 +1,5 @@
-"""Data access for Notification entities."""
+"""Data access for Notification documents."""
 import uuid
-
-from sqlalchemy import func, select, update
-from sqlalchemy.orm import Session
 
 from app.models.notification import Notification
 from app.repositories.base_repository import BaseRepository
@@ -11,19 +8,13 @@ from app.repositories.base_repository import BaseRepository
 class NotificationRepository(BaseRepository[Notification]):
     model = Notification
 
-    def __init__(self, db: Session) -> None:
-        super().__init__(db, Notification)
+    def __init__(self) -> None:
+        super().__init__(Notification)
 
-    def unread_count(self, user_id: uuid.UUID) -> int:
-        stmt = select(func.count()).select_from(Notification).where(
-            Notification.user_id == user_id, Notification.is_read.is_(False), Notification.is_deleted.is_(False)
-        )
-        return self.db.execute(stmt).scalar_one()
+    async def unread_count(self, user_id: uuid.UUID) -> int:
+        return await Notification.find(
+            {"user_id": user_id, "is_read": False, "is_deleted": False}
+        ).count()
 
-    def mark_all_read(self, user_id: uuid.UUID) -> None:
-        self.db.execute(
-            update(Notification)
-            .where(Notification.user_id == user_id, Notification.is_read.is_(False))
-            .values(is_read=True)
-        )
-        self.db.flush()
+    async def mark_all_read(self, user_id: uuid.UUID) -> None:
+        await Notification.find({"user_id": user_id, "is_read": False}).update({"$set": {"is_read": True}})

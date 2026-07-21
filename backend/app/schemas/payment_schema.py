@@ -31,9 +31,6 @@ class PaymentResponse(BaseModel):
     method: PaymentMethod
     reference_number: str | None
     status: PaymentStatus
-    verified_by: uuid.UUID | None
-    verified_at: datetime | None
-    rejection_reason: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}

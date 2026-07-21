@@ -1,33 +1,27 @@
-"""Notification model — an in-app message delivered to a specific User."""
+"""Notification document — an in-app message delivered to a specific User."""
 import uuid
-from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Enum, ForeignKey, String, Text
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pymongo import IndexModel
+from pydantic import Field
 
-from app.database.base import BaseModel
+from app.database.base import BaseDocument
 from app.models.enums import NotificationType
 
-if TYPE_CHECKING:
-    from app.models.user import User
 
+class Notification(BaseDocument):
+    user_id: uuid.UUID
+    title: str = Field(max_length=150)
+    message: str
+    type: NotificationType = NotificationType.INFO
+    link: str | None = Field(default=None, max_length=500)
+    is_read: bool = False
 
-class Notification(BaseModel):
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    title: Mapped[str] = mapped_column(String(150), nullable=False)
-    message: Mapped[str] = mapped_column(Text, nullable=False)
-    type: Mapped[NotificationType] = mapped_column(
-        Enum(NotificationType, native_enum=False, values_callable=lambda e: [m.value for m in e]),
-        default=NotificationType.INFO,
-        nullable=False,
-    )
-    link: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
-
-    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+    class Settings:
+        name = "notifications"
+        indexes = [
+            IndexModel([("user_id", 1)]),
+            IndexModel([("is_read", 1)]),
+        ]
 
     def __repr__(self) -> str:
         return f"<Notification {self.id} user={self.user_id} read={self.is_read}>"

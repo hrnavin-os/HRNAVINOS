@@ -3,17 +3,16 @@ import uuid
 from typing import Any
 
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy.orm import Session
 
 from app.models.audit_log import AuditLog
 from app.repositories.audit_log_repository import AuditLogRepository
 
 
 class AuditService:
-    def __init__(self, db: Session) -> None:
-        self.repository = AuditLogRepository(db)
+    def __init__(self) -> None:
+        self.repository = AuditLogRepository()
 
-    def record(
+    async def record(
         self,
         *,
         user_id: uuid.UUID | None,
@@ -33,4 +32,4 @@ class AuditService:
             ip_address=ip_address,
             user_agent=user_agent,
         )
-        return self.repository.create(entry)
+        return await self.repository.create(entry)

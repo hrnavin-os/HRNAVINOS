@@ -1,7 +1,7 @@
 [Unit]
 Description=HRNAVINOS ERP - FastAPI backend (Gunicorn + Uvicorn workers)
-After=network.target postgresql.service
-Wants=postgresql.service
+After=network.target mongod.service
+Wants=mongod.service
 
 [Service]
 Type=exec

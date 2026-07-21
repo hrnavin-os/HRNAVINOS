@@ -55,4 +55,7 @@ export const PERMISSIONS = {
   TICKETS_CREATE: 'tickets.create',
 
   REPORTS_VIEW: 'reports.view',
+
+  SETTINGS_VIEW: 'settings.view',
+  SETTINGS_UPDATE: 'settings.update',
 }

@@ -41,7 +41,7 @@ def configure_logging() -> None:
             },
             "loggers": {
                 "uvicorn.access": {"level": "WARNING", "propagate": True},
-                "sqlalchemy.engine": {"level": "WARNING", "propagate": True},
+                "pymongo": {"level": "WARNING", "propagate": True},
             },
         }
     )

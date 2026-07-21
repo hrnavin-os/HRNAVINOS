@@ -10,13 +10,13 @@ from app.models.enums import PlacementStatus
 
 class PlacementCreate(BaseModel):
     student_id: uuid.UUID
-    company_name: str = Field(min_length=2, max_length=150)
+    company_id: uuid.UUID
     job_role: str = Field(min_length=2, max_length=150)
     package_amount: Decimal | None = Field(default=None, ge=0)
 
 
 class PlacementUpdate(BaseModel):
-    company_name: str | None = Field(default=None, min_length=2, max_length=150)
+    company_id: uuid.UUID | None = None
     job_role: str | None = Field(default=None, min_length=2, max_length=150)
     package_amount: Decimal | None = Field(default=None, ge=0)
     status: PlacementStatus | None = None
@@ -26,7 +26,7 @@ class PlacementUpdate(BaseModel):
 class PlacementResponse(BaseModel):
     id: uuid.UUID
     student_id: uuid.UUID
-    company_name: str
+    company_id: uuid.UUID
     job_role: str
     package_amount: Decimal | None
     status: PlacementStatus

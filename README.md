@@ -9,8 +9,8 @@ management, admissions, student and batch management, attendance, finance
 **Frontend** — React 19, Vite, Tailwind CSS v4, React Router, Axios, React
 Hook Form, TanStack Query, Context API.
 
-**Backend** — Python 3.12, FastAPI, SQLAlchemy 2.0, Alembic, PostgreSQL,
-Pydantic v2, JWT authentication, slowapi (rate limiting).
+**Backend** — Python 3.12, FastAPI, MongoDB, Beanie (ODM), Motor (async
+driver), Pydantic v2, JWT authentication, slowapi (rate limiting).
 
 **DevOps** — Docker / Docker Compose, GitHub Actions CI/CD, Nginx, Gunicorn +
 Uvicorn workers, PM2, Let's Encrypt.
@@ -38,8 +38,8 @@ contain business logic:
 ```
 Route (HTTP I/O, permission checks)
   -> Service (business logic, transactions, audit logging)
-    -> Repository (data access, SQLAlchemy queries)
-      -> Model (ORM entity)
+    -> Repository (data access, Beanie/Motor queries)
+      -> Model (Beanie Document / MongoDB collection)
 ```
 
 Every module ships with a Model, Pydantic Schemas (DTOs), a Repository, a
@@ -78,8 +78,7 @@ cd backend
 python -m venv .venv
 .venv/Scripts/activate   # .venv/bin/activate on macOS/Linux
 pip install -r requirements.txt
-cp .env.example .env     # point DATABASE_URL at a real local Postgres
-alembic upgrade head
+cp .env.example .env     # point MONGODB_URI at a real local MongoDB
 python scripts/seed_db.py
 uvicorn app.main:app --reload
 ```
@@ -97,12 +96,13 @@ npm run dev
 
 ```bash
 cd backend
-pip install -r requirements-dev.txt   # adds pgserver, an embedded Postgres for tests
+pip install -r requirements-dev.txt   # adds pymongo-inmemory, an embedded MongoDB for tests
 pytest
 ```
 
-Tests run against a real (throwaway, embedded) PostgreSQL instance rather
-than SQLite, since the app relies on Postgres-specific column types.
+Tests run against a real (throwaway, embedded) MongoDB instance rather than
+a mock, so behavior (including BSON-specific encoding quirks) matches
+production.
 
 ## Documentation
 

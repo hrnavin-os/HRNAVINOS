@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Deploys the latest `main` branch to this VPS: pulls code, installs
-# dependencies, runs migrations, builds the frontend, and restarts services.
+# dependencies, builds the frontend, and restarts services. MongoDB is
+# schema-less and Beanie creates/updates indexes on app startup, so there is
+# no separate migration step.
 # Run as the `hrnavinos` app user from anywhere; it cd's into APP_DIR itself.
 # Usage: bash deployment/scripts/deploy.sh
 set -euo pipefail
@@ -22,9 +24,6 @@ fi
 source .venv/bin/activate
 pip install --upgrade pip -q
 pip install -r requirements.txt -q
-
-echo "==> Running database migrations"
-alembic upgrade head
 
 echo "==> Restarting backend service"
 sudo systemctl restart hrnavinos-backend

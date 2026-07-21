@@ -1,37 +1,26 @@
-"""Role model and the role<->permission association table."""
-from typing import TYPE_CHECKING
+"""Role document — a named collection of permissions assignable to users (RBAC)."""
+import uuid
 
-from sqlalchemy import Boolean, Column, ForeignKey, String, Table
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pymongo import IndexModel
+from pydantic import Field
 
-from app.database.base import Base, BaseModel
-
-if TYPE_CHECKING:
-    from app.models.permission import Permission
-    from app.models.user import User
-
-role_permissions = Table(
-    "role_permissions",
-    Base.metadata,
-    Column("role_id", UUID(as_uuid=True), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
-    Column("permission_id", UUID(as_uuid=True), ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
-)
+from app.database.base import BaseDocument
 
 
-class Role(BaseModel):
-    """A named collection of permissions assignable to users (RBAC)."""
+class Role(BaseDocument):
+    name: str = Field(max_length=100)
+    description: str | None = Field(default=None, max_length=255)
+    is_system: bool = False
+    # References Permission.id. MongoDB has no joins/relationships, so the
+    # actual Permission documents are resolved by the service layer when needed.
+    permission_ids: list[uuid.UUID] = Field(default_factory=list)
 
-    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
-    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    is_system: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-
-    permissions: Mapped[list["Permission"]] = relationship(
-        "Permission", secondary=role_permissions, back_populates="roles", lazy="selectin"
-    )
-    users: Mapped[list["User"]] = relationship(
-        "User", back_populates="role", foreign_keys="User.role_id"
-    )
+    class Settings:
+        name = "roles"
+        indexes = [
+            IndexModel([("name", 1)], unique=True),
+            IndexModel([("is_deleted", 1)]),
+        ]
 
     def __repr__(self) -> str:
         return f"<Role {self.name}>"

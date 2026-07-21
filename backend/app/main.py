@@ -9,6 +9,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.config.settings import settings
 from app.core.logging_config import configure_logging
+from app.database.mongo import close_mongo_connection, connect_to_mongo
 from app.exceptions.handlers import register_exception_handlers
 from app.middleware.rate_limiter import limiter
 from app.middleware.request_context import RequestContextMiddleware
@@ -18,7 +19,9 @@ from app.routes.api_router import api_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
+    await connect_to_mongo()
     yield
+    await close_mongo_connection()
 
 
 def create_application() -> FastAPI:

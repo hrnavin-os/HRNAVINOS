@@ -2,10 +2,8 @@
 import uuid
 
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy.orm import Session
 
 from app.core.dependencies import RequirePermissions
-from app.database.session import get_db
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.common import PaginatedResponse, PaginationParams
@@ -16,46 +14,42 @@ router = APIRouter(prefix="/invoices", tags=["Invoices"])
 
 
 @router.post("", response_model=InvoiceResponse, status_code=status.HTTP_201_CREATED)
-def create_invoice(
+async def create_invoice(
     payload: InvoiceCreate,
-    db: Session = Depends(get_db),
     actor: User = Depends(RequirePermissions(Permissions.INVOICES_CREATE)),
 ) -> InvoiceResponse:
-    return InvoiceResponse.model_validate(InvoiceService(db).create(payload, actor_id=actor.id))
+    return InvoiceResponse.model_validate(await InvoiceService().create(payload, actor_id=actor.id))
 
 
 @router.get("", response_model=PaginatedResponse[InvoiceResponse])
-def list_invoices(
+async def list_invoices(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: str | None = None,
     sort_by: str = "created_at",
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     student_id: uuid.UUID | None = None,
-    db: Session = Depends(get_db),
     actor: User = Depends(RequirePermissions(Permissions.INVOICES_VIEW)),
 ) -> PaginatedResponse[InvoiceResponse]:
     params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)
-    result = InvoiceService(db).list(params, student_id=student_id)
+    result = await InvoiceService().list(params, student_id=student_id)
     return PaginatedResponse[InvoiceResponse].build(
         [InvoiceResponse.model_validate(i) for i in result.items], result.total, result.page, result.page_size
     )
 
 
 @router.get("/{invoice_id}", response_model=InvoiceResponse)
-def get_invoice(
+async def get_invoice(
     invoice_id: uuid.UUID,
-    db: Session = Depends(get_db),
     actor: User = Depends(RequirePermissions(Permissions.INVOICES_VIEW)),
 ) -> InvoiceResponse:
-    return InvoiceResponse.model_validate(InvoiceService(db).get(invoice_id))
+    return InvoiceResponse.model_validate(await InvoiceService().get(invoice_id))
 
 
 @router.put("/{invoice_id}", response_model=InvoiceResponse)
-def update_invoice(
+async def update_invoice(
     invoice_id: uuid.UUID,
     payload: InvoiceUpdate,
-    db: Session = Depends(get_db),
     actor: User = Depends(RequirePermissions(Permissions.INVOICES_UPDATE)),
 ) -> InvoiceResponse:
-    return InvoiceResponse.model_validate(InvoiceService(db).update(invoice_id, payload, actor_id=actor.id))
+    return InvoiceResponse.model_validate(await InvoiceService().update(invoice_id, payload, actor_id=actor.id))

@@ -53,12 +53,14 @@ plus a map of the modules — it is not a substitute for the generated docs.
 | Batch Management | `/batches` | |
 | Tutor Management | `/tutors` | |
 | Attendance | `/attendance` | `/mark` bulk-marks a whole batch for a date |
-| Payments / Finance | `/payments` | `/verify` approves or rejects a pending payment |
+| Payments / Finance | `/payments` | `/verify` approves or rejects a pending payment; `/{id}/verifications` lists the approve/reject history for that payment |
 | Invoices | `/invoices` | |
-| Placement | `/placements` | |
+| Placement | `/placements` | references a `Company` via `company_id` |
+| Companies | `/companies` | placement partner organizations |
 | Notifications | `/notifications` | scoped to the current user; `/unread-count`, `/mark-all-read` |
 | Tickets | `/tickets` | help-desk; any authenticated user can raise one |
-| Reports | `/reports` | `/revenue`, `/admissions`, `/attendance`, `/lead-conversion` |
+| Reports | `/reports` | live: `/revenue`, `/admissions`, `/attendance`, `/lead-conversion`; persisted: `POST /generate`, `GET /saved`, `GET /saved/{id}` |
+| Settings | `/settings` | singleton institute-wide settings (GET/PUT) |
 
 ## Example: Login → Authenticated Request
 

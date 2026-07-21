@@ -1,5 +1,5 @@
 # Development / test-only dependencies (not installed in production).
 -r requirements.txt
 
-# Embedded Postgres binary for integration tests (no local Postgres install needed).
-pgserver==0.1.4
+# Embedded MongoDB binary for integration tests (no local MongoDB install needed).
+pymongo-inmemory==0.5.0

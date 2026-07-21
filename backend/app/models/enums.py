@@ -1,7 +1,7 @@
 """Shared status/type enums used across business models.
 
-Stored as plain VARCHAR (native_enum=False) so adding a new value later is
-a data migration, not a schema migration against a Postgres native type.
+Each is a plain `StrEnum`; Beanie/Pydantic serialize them as plain strings
+in MongoDB documents, so adding a new value later is just a data change.
 """
 from enum import StrEnum
 
@@ -106,3 +106,15 @@ class TicketPriority(StrEnum):
     MEDIUM = "medium"
     HIGH = "high"
     URGENT = "urgent"
+
+
+class VerificationDecision(StrEnum):
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class ReportType(StrEnum):
+    REVENUE = "revenue"
+    ADMISSIONS = "admissions"
+    ATTENDANCE = "attendance"
+    LEAD_CONVERSION = "lead_conversion"

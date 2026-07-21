@@ -1,8 +1,6 @@
 """Business logic for the Tickets (Help Desk) module."""
 import uuid
 
-from sqlalchemy.orm import Session
-
 from app.exceptions.base import NotFoundError
 from app.models.ticket import Ticket
 from app.repositories.ticket_repository import TicketRepository
@@ -13,27 +11,24 @@ from app.services.audit_service import AuditService
 
 
 class TicketService:
-    def __init__(self, db: Session) -> None:
-        self.db = db
-        self.tickets = TicketRepository(db)
-        self.users = UserRepository(db)
-        self.audit = AuditService(db)
+    def __init__(self) -> None:
+        self.tickets = TicketRepository()
+        self.users = UserRepository()
+        self.audit = AuditService()
 
-    def create(self, data: TicketCreate, *, actor_id: uuid.UUID) -> Ticket:
+    async def create(self, data: TicketCreate, *, actor_id: uuid.UUID) -> Ticket:
         ticket = Ticket(**data.model_dump(), raised_by=actor_id, created_by=actor_id, updated_by=actor_id)
-        self.tickets.create(ticket)
-        self.audit.record(user_id=actor_id, action="CREATE", entity_type="Ticket", entity_id=str(ticket.id))
-        self.db.commit()
-        self.db.refresh(ticket)
+        await self.tickets.create(ticket)
+        await self.audit.record(user_id=actor_id, action="CREATE", entity_type="Ticket", entity_id=str(ticket.id))
         return ticket
 
-    def get(self, ticket_id: uuid.UUID) -> Ticket:
-        ticket = self.tickets.get_by_id(ticket_id)
+    async def get(self, ticket_id: uuid.UUID) -> Ticket:
+        ticket = await self.tickets.get_by_id(ticket_id)
         if not ticket:
             raise NotFoundError("Ticket not found.")
         return ticket
 
-    def list(
+    async def list(
         self, params: PaginationParams, *, raised_by: uuid.UUID | None = None, assigned_to: uuid.UUID | None = None
     ) -> PaginatedResponse:
         filters = {}
@@ -41,7 +36,7 @@ class TicketService:
             filters["raised_by"] = raised_by
         if assigned_to:
             filters["assigned_to"] = assigned_to
-        items, total = self.tickets.list(
+        items, total = await self.tickets.list(
             page=params.page,
             page_size=params.page_size,
             search=params.search,
@@ -52,31 +47,28 @@ class TicketService:
         )
         return PaginatedResponse.build(items, total, params.page, params.page_size)
 
-    def update(self, ticket_id: uuid.UUID, data: TicketUpdate, *, actor_id: uuid.UUID | None) -> Ticket:
-        ticket = self.get(ticket_id)
+    async def update(self, ticket_id: uuid.UUID, data: TicketUpdate, *, actor_id: uuid.UUID | None) -> Ticket:
+        ticket = await self.get(ticket_id)
         update_data = data.model_dump(exclude_unset=True)
         update_data["updated_by"] = actor_id
-        self.tickets.update(ticket, update_data)
-        self.audit.record(
+        await self.tickets.update(ticket, update_data)
+        await self.audit.record(
             user_id=actor_id, action="UPDATE", entity_type="Ticket", entity_id=str(ticket.id), changes=update_data
         )
-        self.db.commit()
-        self.db.refresh(ticket)
         return ticket
 
-    def assign(self, ticket_id: uuid.UUID, data: TicketAssign, *, actor_id: uuid.UUID | None) -> Ticket:
-        ticket = self.get(ticket_id)
-        if not self.users.get_by_id(data.assigned_to):
+    async def assign(self, ticket_id: uuid.UUID, data: TicketAssign, *, actor_id: uuid.UUID | None) -> Ticket:
+        ticket = await self.get(ticket_id)
+        if not await self.users.get_by_id(data.assigned_to):
             raise NotFoundError("Specified assignee does not exist.")
         ticket.assigned_to = data.assigned_to
         ticket.updated_by = actor_id
-        self.audit.record(
+        await ticket.save()
+        await self.audit.record(
             user_id=actor_id,
             action="ASSIGN",
             entity_type="Ticket",
             entity_id=str(ticket.id),
             changes={"assigned_to": str(data.assigned_to)},
         )
-        self.db.commit()
-        self.db.refresh(ticket)
         return ticket

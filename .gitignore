@@ -24,9 +24,9 @@ backend/.coverage
 backend/htmlcov/
 backend/.mypy_cache/
 backend/.ruff_cache/
-backend/_pg_test_runtime/
-backend/_pg_test_data/
-backend/_pg_smoke_data/
+backend/_mongo_test_runtime/
+backend/_mongodb_data/
+backend/_local_mongo_server.py
 
 # ==================== Node / Frontend ====================
 node_modules/
@@ -63,7 +63,6 @@ logs/
 # ==================== Docker ====================
 docker/volumes/
 
-# ==================== Alembic ====================
-# (migration versions ARE tracked; only local db files ignored)
+# ==================== Local databases ====================
 *.sqlite3
 *.db

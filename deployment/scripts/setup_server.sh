@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-time Ubuntu VPS provisioning for HRNAVINOS ERP.
-# Installs: Python 3.12, Node.js 22, PostgreSQL, Nginx, Git, PM2, Certbot.
+# Installs: Python 3.12, Node.js 22, MongoDB 7, Nginx, Git, PM2, Certbot.
 # Run once as a sudo-capable user: sudo bash deployment/scripts/setup_server.sh
 set -euo pipefail
 
@@ -16,14 +16,19 @@ apt-get install -y \
     software-properties-common \
     build-essential \
     curl \
+    gnupg \
     git \
     ufw \
-    libpq-dev \
     nginx \
-    postgresql \
-    postgresql-contrib \
     certbot \
     python3-certbot-nginx
+
+echo "==> Installing MongoDB 7"
+curl -fsSL https://pgp.mongodb.com/server-7.0.asc | gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
+echo "deb [signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/7.0 multiverse" \
+    > /etc/apt/sources.list.d/mongodb-org-7.0.list
+apt-get update -y
+apt-get install -y mongodb-org
 
 echo "==> Installing Python 3.12"
 add-apt-repository -y ppa:deadsnakes/ppa
@@ -48,7 +53,7 @@ ufw allow 'Nginx Full'
 ufw --force enable
 
 echo "==> Enabling services"
-systemctl enable --now postgresql
+systemctl enable --now mongod
 systemctl enable --now nginx
 
 cat <<'EOF'
@@ -56,11 +61,17 @@ cat <<'EOF'
 ==> Server provisioning complete.
 
 Next steps:
-  1. Create the application database and user:
-       sudo -u postgres psql -c "CREATE USER hrnavinos WITH PASSWORD 'change-me';"
-       sudo -u postgres psql -c "CREATE DATABASE hrnavinos_erp OWNER hrnavinos;"
+  1. (Optional but recommended) Enable MongoDB auth and create an app user:
+       mongosh --eval '
+         db.getSiblingDB("admin").createUser({
+           user: "hrnavinos", pwd: "change-me",
+           roles: [{ role: "readWrite", db: "hrnavinos_erp" }]
+         })'
+     then set `security.authorization: enabled` in /etc/mongod.conf and
+     restart mongod, and use a MONGODB_URI with credentials in backend/.env.
   2. Clone the repository into /var/www/hrnavinos-erp as the hrnavinos user.
-  3. Copy backend/.env.example -> backend/.env and fill in real values.
+  3. Copy backend/.env.example -> backend/.env and fill in real values
+     (MONGODB_URI, MONGODB_DB_NAME=hrnavinos_erp, SECRET_KEY, ...).
   4. Run deployment/scripts/setup_nginx.sh to install the Nginx site config.
   5. Run deployment/scripts/setup_ssl.sh <domain> to obtain a Let's Encrypt certificate.
   6. Run deployment/scripts/deploy.sh for the first deployment.

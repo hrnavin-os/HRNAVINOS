@@ -1,6 +1,5 @@
-"""Data access for Role entities."""
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+"""Data access for Role documents."""
+import uuid
 
 from app.models.role import Role
 from app.repositories.base_repository import BaseRepository
@@ -9,15 +8,14 @@ from app.repositories.base_repository import BaseRepository
 class RoleRepository(BaseRepository[Role]):
     model = Role
 
-    def __init__(self, db: Session) -> None:
-        super().__init__(db, Role)
+    def __init__(self) -> None:
+        super().__init__(Role)
 
-    def get_by_name(self, name: str) -> Role | None:
-        stmt = select(Role).where(Role.name == name, Role.is_deleted.is_(False))
-        return self.db.execute(stmt).scalar_one_or_none()
+    async def get_by_name(self, name: str) -> Role | None:
+        return await Role.find_one({"name": name, "is_deleted": False})
 
-    def name_exists(self, name: str, *, exclude_id=None) -> bool:
-        stmt = select(Role.id).where(Role.name == name)
+    async def name_exists(self, name: str, *, exclude_id: uuid.UUID | None = None) -> bool:
+        query: dict = {"name": name}
         if exclude_id:
-            stmt = stmt.where(Role.id != exclude_id)
-        return self.db.execute(stmt).first() is not None
+            query["_id"] = {"$ne": exclude_id}
+        return await Role.find_one(query) is not None

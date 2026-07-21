@@ -1,6 +1,5 @@
-"""Data access for Tutor entities."""
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+"""Data access for Tutor documents."""
+import uuid
 
 from app.models.tutor import Tutor
 from app.repositories.base_repository import BaseRepository
@@ -9,9 +8,8 @@ from app.repositories.base_repository import BaseRepository
 class TutorRepository(BaseRepository[Tutor]):
     model = Tutor
 
-    def __init__(self, db: Session) -> None:
-        super().__init__(db, Tutor)
+    def __init__(self) -> None:
+        super().__init__(Tutor)
 
-    def get_by_user_id(self, user_id) -> Tutor | None:
-        stmt = select(Tutor).where(Tutor.user_id == user_id, Tutor.is_deleted.is_(False))
-        return self.db.execute(stmt).scalar_one_or_none()
+    async def get_by_user_id(self, user_id: uuid.UUID) -> Tutor | None:
+        return await Tutor.find_one({"user_id": user_id, "is_deleted": False})

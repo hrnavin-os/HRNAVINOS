@@ -1,32 +1,30 @@
-"""Refresh token model — enables logout / revocation and session management."""
+"""Refresh token document — enables logout / revocation and session management."""
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pymongo import IndexModel
+from pydantic import Field
 
-from app.database.base import BaseModel
-
-if TYPE_CHECKING:
-    from app.models.user import User
+from app.database.base import BaseDocument
 
 
-class RefreshToken(BaseModel):
+class RefreshToken(BaseDocument):
     """A single issued refresh token (identified by its JWT `jti`), trackable and revocable."""
 
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    jti: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    device_info: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    user_id: uuid.UUID
+    jti: str = Field(max_length=64)
+    expires_at: datetime
+    revoked: bool = False
+    revoked_at: datetime | None = None
+    device_info: str | None = Field(default=None, max_length=255)
+    ip_address: str | None = Field(default=None, max_length=45)
 
-    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+    class Settings:
+        name = "refresh_tokens"
+        indexes = [
+            IndexModel([("jti", 1)], unique=True),
+            IndexModel([("user_id", 1)]),
+        ]
 
     def __repr__(self) -> str:
         return f"<RefreshToken {self.jti} user={self.user_id}>"

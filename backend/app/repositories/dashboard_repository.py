@@ -1,63 +1,59 @@
-"""Read-only cross-entity aggregation queries for the Dashboard module."""
+"""Read-only cross-collection aggregation queries for the Dashboard module."""
 from decimal import Decimal
 
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session
-
 from app.models.batch import Batch
-from app.models.enums import BatchStatus, LeadStatus, PaymentStatus, PlacementStatus
+from app.models.enums import BatchStatus, LeadStatus, PaymentStatus, PlacementStatus, StudentStatus, TicketStatus
 from app.models.lead import Lead
 from app.models.payment import Payment
 from app.models.placement import Placement
 from app.models.student import Student
 from app.models.ticket import Ticket
-from app.models.enums import StudentStatus, TicketStatus
 from app.models.tutor import Tutor
 
 
 class DashboardRepository:
-    def __init__(self, db: Session) -> None:
-        self.db = db
+    async def total_students(self) -> int:
+        return await Student.find({"is_deleted": False}).count()
 
-    def _count(self, model, *conditions) -> int:
-        stmt = select(func.count()).select_from(model).where(model.is_deleted.is_(False), *conditions)
-        return self.db.execute(stmt).scalar_one()
+    async def active_students(self) -> int:
+        return await Student.find({"is_deleted": False, "status": StudentStatus.ACTIVE}).count()
 
-    def total_students(self) -> int:
-        return self._count(Student)
+    async def total_leads(self) -> int:
+        return await Lead.find({"is_deleted": False}).count()
 
-    def active_students(self) -> int:
-        return self._count(Student, Student.status == StudentStatus.ACTIVE)
+    async def new_leads(self) -> int:
+        return await Lead.find({"is_deleted": False, "status": LeadStatus.NEW}).count()
 
-    def total_leads(self) -> int:
-        return self._count(Lead)
+    async def total_batches(self) -> int:
+        return await Batch.find({"is_deleted": False}).count()
 
-    def new_leads(self) -> int:
-        return self._count(Lead, Lead.status == LeadStatus.NEW)
+    async def ongoing_batches(self) -> int:
+        return await Batch.find({"is_deleted": False, "status": BatchStatus.ONGOING}).count()
 
-    def total_batches(self) -> int:
-        return self._count(Batch)
+    async def total_tutors(self) -> int:
+        return await Tutor.find({"is_deleted": False}).count()
 
-    def ongoing_batches(self) -> int:
-        return self._count(Batch, Batch.status == BatchStatus.ONGOING)
+    async def pending_payments(self) -> int:
+        return await Payment.find({"is_deleted": False, "status": PaymentStatus.PENDING}).count()
 
-    def total_tutors(self) -> int:
-        return self._count(Tutor)
+    async def total_revenue(self) -> Decimal:
+        pipeline = [
+            {"$match": {"is_deleted": False, "status": PaymentStatus.VERIFIED.value}},
+            {"$group": {"_id": None, "total": {"$sum": "$amount"}}},
+        ]
+        result = await Payment.get_motor_collection().aggregate(pipeline).to_list(length=1)
+        if not result:
+            return Decimal("0")
+        total = result[0]["total"]
+        return total.to_decimal() if hasattr(total, "to_decimal") else Decimal(str(total))
 
-    def pending_payments(self) -> int:
-        return self._count(Payment, Payment.status == PaymentStatus.PENDING)
+    async def open_tickets(self) -> int:
+        return await Ticket.find(
+            {"is_deleted": False, "status": {"$in": [TicketStatus.OPEN.value, TicketStatus.IN_PROGRESS.value]}}
+        ).count()
 
-    def total_revenue(self) -> Decimal:
-        stmt = select(func.coalesce(func.sum(Payment.amount), 0)).where(
-            Payment.status == PaymentStatus.VERIFIED, Payment.is_deleted.is_(False)
-        )
-        return Decimal(self.db.execute(stmt).scalar_one())
+    async def total_placements(self) -> int:
+        return await Placement.find({"is_deleted": False}).count()
 
-    def open_tickets(self) -> int:
-        return self._count(Ticket, Ticket.status.in_([TicketStatus.OPEN, TicketStatus.IN_PROGRESS]))
-
-    def total_placements(self) -> int:
-        return self._count(Placement)
-
-    def students_placed(self) -> int:
-        return self._count(Placement, Placement.status == PlacementStatus.JOINED)
+    async def students_placed(self) -> int:
+        return await Placement.find({"is_deleted": False, "status": PlacementStatus.JOINED}).count()

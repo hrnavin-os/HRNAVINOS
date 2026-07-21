@@ -7,6 +7,7 @@ from app.routes import (
     audit_log_routes,
     auth_routes,
     batch_routes,
+    company_routes,
     course_routes,
     dashboard_routes,
     invoice_routes,
@@ -17,6 +18,7 @@ from app.routes import (
     placement_routes,
     report_routes,
     role_routes,
+    settings_routes,
     student_routes,
     ticket_routes,
     tutor_routes,
@@ -41,6 +43,8 @@ api_router.include_router(attendance_routes.router)
 api_router.include_router(payment_routes.router)
 api_router.include_router(invoice_routes.router)
 api_router.include_router(placement_routes.router)
+api_router.include_router(company_routes.router)
 api_router.include_router(notification_routes.router)
 api_router.include_router(ticket_routes.router)
 api_router.include_router(report_routes.router)
+api_router.include_router(settings_routes.router)

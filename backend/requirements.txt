@@ -3,11 +3,13 @@ fastapi==0.115.6
 uvicorn[standard]==0.34.0
 gunicorn==23.0.0
 
-# ==================== Database ====================
-sqlalchemy==2.0.36
-alembic==1.14.0
-psycopg2-binary==2.9.10
-asyncpg==0.30.0
+# ==================== Database (MongoDB) ====================
+motor==3.7.1
+# Pinned <2.0: Beanie 2.x's driver-metadata handshake expects pymongo's
+# native async client and breaks Motor (AsyncIOMotorClient has no
+# `append_metadata`). 1.29.0 is the last release with full Motor support.
+beanie==1.29.0
+pymongo==4.17.0
 
 # ==================== Validation / Settings ====================
 pydantic==2.10.4

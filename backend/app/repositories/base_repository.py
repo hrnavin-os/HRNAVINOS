@@ -1,36 +1,58 @@
-"""Generic repository providing common CRUD + pagination/filtering/sorting.
+"""Generic async repository providing common CRUD + pagination/filtering/sorting.
 
 Concrete repositories subclass this for entity-specific queries; the base
 keeps data-access mechanics (soft delete, pagination) in one place so
-services never touch SQLAlchemy directly.
+services never touch Beanie/Motor queries directly.
 """
+import re
 import uuid
 from typing import Any, Generic, TypeVar
 
-from sqlalchemy import asc, desc, func, select
-from sqlalchemy.orm import Session
+from app.database.base import BaseDocument
 
-from app.database.base import BaseModel
-
-ModelType = TypeVar("ModelType", bound=BaseModel)
+ModelType = TypeVar("ModelType", bound=BaseDocument)
 
 
 class BaseRepository(Generic[ModelType]):
     model: type[ModelType]
 
-    def __init__(self, db: Session, model: type[ModelType] | None = None) -> None:
-        self.db = db
+    def __init__(self, model: type[ModelType] | None = None) -> None:
         if model is not None:
             self.model = model
 
     # ---------- Reads ----------
-    def get_by_id(self, entity_id: uuid.UUID, *, include_deleted: bool = False) -> ModelType | None:
-        stmt = select(self.model).where(self.model.id == entity_id)
-        if not include_deleted:
-            stmt = stmt.where(self.model.is_deleted.is_(False))
-        return self.db.execute(stmt).scalar_one_or_none()
+    async def get_by_id(self, entity_id: uuid.UUID, *, include_deleted: bool = False) -> ModelType | None:
+        document = await self.model.get(entity_id)
+        if document is None:
+            return None
+        if not include_deleted and document.is_deleted:
+            return None
+        return document
 
-    def list(
+    def _build_query(
+        self,
+        *,
+        search: str | None,
+        search_fields: list[str] | None,
+        include_deleted: bool,
+        filters: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        query: dict[str, Any] = {}
+        if not include_deleted:
+            query["is_deleted"] = False
+
+        if filters:
+            for field, value in filters.items():
+                if value is not None:
+                    query[field] = value
+
+        if search and search_fields:
+            pattern = re.escape(search)
+            query["$or"] = [{field: {"$regex": pattern, "$options": "i"}} for field in search_fields]
+
+        return query
+
+    async def list(
         self,
         *,
         page: int = 1,
@@ -42,61 +64,38 @@ class BaseRepository(Generic[ModelType]):
         include_deleted: bool = False,
         filters: dict[str, Any] | None = None,
     ) -> tuple[list[ModelType], int]:
-        stmt = select(self.model)
-        count_stmt = select(func.count()).select_from(self.model)
+        query = self._build_query(
+            search=search, search_fields=search_fields, include_deleted=include_deleted, filters=filters
+        )
 
-        if not include_deleted:
-            stmt = stmt.where(self.model.is_deleted.is_(False))
-            count_stmt = count_stmt.where(self.model.is_deleted.is_(False))
+        total = await self.model.find(query).count()
 
-        if filters:
-            for field, value in filters.items():
-                if value is None or not hasattr(self.model, field):
-                    continue
-                stmt = stmt.where(getattr(self.model, field) == value)
-                count_stmt = count_stmt.where(getattr(self.model, field) == value)
-
-        if search and search_fields:
-            like = f"%{search}%"
-            conditions = [
-                getattr(self.model, field).ilike(like)
-                for field in search_fields
-                if hasattr(self.model, field)
-            ]
-            if conditions:
-                from sqlalchemy import or_
-
-                stmt = stmt.where(or_(*conditions))
-                count_stmt = count_stmt.where(or_(*conditions))
-
-        if hasattr(self.model, sort_by):
-            column = getattr(self.model, sort_by)
-            stmt = stmt.order_by(asc(column) if sort_order == "asc" else desc(column))
-
-        total = self.db.execute(count_stmt).scalar_one()
-        stmt = stmt.offset((page - 1) * page_size).limit(page_size)
-        items = list(self.db.execute(stmt).scalars().all())
+        sort_expr = f"{'-' if sort_order == 'desc' else '+'}{sort_by}"
+        items = await (
+            self.model.find(query)
+            .sort(sort_expr)
+            .skip((page - 1) * page_size)
+            .limit(page_size)
+            .to_list()
+        )
         return items, total
 
     # ---------- Writes ----------
-    def create(self, entity: ModelType) -> ModelType:
-        self.db.add(entity)
-        self.db.flush()
-        return entity
+    async def create(self, document: ModelType) -> ModelType:
+        await document.insert()
+        return document
 
-    def update(self, entity: ModelType, data: dict[str, Any]) -> ModelType:
+    async def update(self, document: ModelType, data: dict[str, Any]) -> ModelType:
         for field, value in data.items():
-            if hasattr(entity, field):
-                setattr(entity, field, value)
-        self.db.flush()
-        return entity
+            if hasattr(document, field):
+                setattr(document, field, value)
+        document.touch()
+        await document.save()
+        return document
 
-    def delete(self, entity: ModelType, *, hard: bool = False) -> None:
+    async def delete(self, document: ModelType, *, hard: bool = False) -> None:
         if hard:
-            self.db.delete(entity)
+            await document.delete()
         else:
-            entity.soft_delete()
-        self.db.flush()
-
-    def commit(self) -> None:
-        self.db.commit()
+            document.soft_delete()
+            await document.save()

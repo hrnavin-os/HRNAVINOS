@@ -1,30 +1,25 @@
-"""Login history model — records every authentication attempt for security auditing."""
+"""Login history document — records every authentication attempt for security auditing."""
 import uuid
-from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, String
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pymongo import IndexModel
+from pydantic import Field
 
-from app.database.base import BaseModel
-
-if TYPE_CHECKING:
-    from app.models.user import User
+from app.database.base import BaseDocument
 
 
-class LoginHistory(BaseModel):
+class LoginHistory(BaseDocument):
     """Records every login attempt (successful or not) for security auditing."""
 
-    user_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
-    )
-    email_attempted: Mapped[str] = mapped_column(String(255), nullable=False)
-    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    failure_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
-    user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    user_id: uuid.UUID | None = None
+    email_attempted: str = Field(max_length=255)
+    success: bool
+    failure_reason: str | None = Field(default=None, max_length=255)
+    ip_address: str | None = Field(default=None, max_length=45)
+    user_agent: str | None = Field(default=None, max_length=500)
 
-    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+    class Settings:
+        name = "login_histories"
+        indexes = [IndexModel([("user_id", 1)])]
 
     def __repr__(self) -> str:
         return f"<LoginHistory {self.email_attempted} success={self.success}>"

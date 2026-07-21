@@ -1,31 +1,33 @@
-"""Audit log model — immutable record of who changed what, where, and when."""
+"""Audit log document — immutable record of who changed what, where, and when."""
 import uuid
-from typing import TYPE_CHECKING
+from typing import Any
 
-from sqlalchemy import JSON, ForeignKey, String
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pymongo import IndexModel
+from pydantic import Field
 
-from app.database.base import BaseModel
-
-if TYPE_CHECKING:
-    from app.models.user import User
+from app.database.base import BaseDocument
 
 
-class AuditLog(BaseModel):
+class AuditLog(BaseDocument):
     """An immutable audit trail entry. Never updated or soft-deleted in practice."""
 
-    user_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
-    )
-    action: Mapped[str] = mapped_column(String(50), nullable=False, index=True)  # CREATE, UPDATE, DELETE, LOGIN...
-    entity_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    entity_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
-    changes: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
-    user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    user_id: uuid.UUID | None = None
+    action: str = Field(max_length=50)  # CREATE, UPDATE, DELETE, LOGIN...
+    entity_type: str = Field(max_length=100)
+    entity_id: str | None = Field(default=None, max_length=100)
+    changes: dict[str, Any] | None = None
+    ip_address: str | None = Field(default=None, max_length=45)
+    user_agent: str | None = Field(default=None, max_length=500)
 
-    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+    class Settings:
+        name = "audit_logs"
+        indexes = [
+            IndexModel([("user_id", 1)]),
+            IndexModel([("action", 1)]),
+            IndexModel([("entity_type", 1)]),
+            IndexModel([("entity_id", 1)]),
+            IndexModel([("created_at", -1)]),
+        ]
 
     def __repr__(self) -> str:
         return f"<AuditLog {self.action} {self.entity_type}:{self.entity_id}>"

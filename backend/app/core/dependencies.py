@@ -4,21 +4,19 @@ import uuid
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
-from sqlalchemy.orm import Session
 
 from app.core.security import TokenType, decode_token
-from app.database.session import get_db
 from app.exceptions.base import ForbiddenError, UnauthorizedError
+from app.models.role import Role
 from app.models.user import User
+from app.repositories.permission_repository import PermissionRepository
+from app.repositories.role_repository import RoleRepository
 from app.repositories.user_repository import UserRepository
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 
-def get_current_user(
-    token: str | None = Depends(oauth2_scheme),
-    db: Session = Depends(get_db),
-) -> User:
+async def get_current_user(token: str | None = Depends(oauth2_scheme)) -> User:
     if not token:
         raise UnauthorizedError("Not authenticated.")
 
@@ -34,8 +32,8 @@ def get_current_user(
     if not user_id:
         raise UnauthorizedError("Invalid token payload.")
 
-    user = UserRepository(db).get_by_id(uuid.UUID(user_id))
-    if not user or user.is_deleted:
+    user = await UserRepository().get_by_id(uuid.UUID(user_id))
+    if not user:
         raise UnauthorizedError("User no longer exists.")
     if not user.is_active:
         raise UnauthorizedError("User account is deactivated.")
@@ -43,8 +41,23 @@ def get_current_user(
     return user
 
 
-def get_current_active_user(user: User = Depends(get_current_user)) -> User:
+async def get_current_active_user(user: User = Depends(get_current_user)) -> User:
     return user
+
+
+async def get_user_role(user: User) -> Role | None:
+    """MongoDB has no joins: resolve a user's role with an explicit fetch
+    rather than a SQLAlchemy-style `user.role` relationship."""
+    if not user.role_id:
+        return None
+    return await RoleRepository().get_by_id(user.role_id)
+
+
+async def get_role_permission_codes(role: Role | None) -> set[str]:
+    if not role or not role.permission_ids:
+        return set()
+    permissions = await PermissionRepository().get_by_ids(role.permission_ids)
+    return {permission.code for permission in permissions}
 
 
 class RequirePermissions:
@@ -57,11 +70,12 @@ class RequirePermissions:
     def __init__(self, *permission_codes: str) -> None:
         self.permission_codes = set(permission_codes)
 
-    def __call__(self, user: User = Depends(get_current_user)) -> User:
-        if user.role and user.role.name == "Super Admin":
+    async def __call__(self, user: User = Depends(get_current_user)) -> User:
+        role = await get_user_role(user)
+        if role and role.name == "Super Admin":
             return user
 
-        granted = {perm.code for perm in (user.role.permissions if user.role else [])}
+        granted = await get_role_permission_codes(role)
         missing = self.permission_codes - granted
         if missing:
             raise ForbiddenError(
@@ -76,8 +90,9 @@ class RequireRoles:
     def __init__(self, *role_names: str) -> None:
         self.role_names = set(role_names)
 
-    def __call__(self, user: User = Depends(get_current_user)) -> User:
-        if user.role and user.role.name in self.role_names:
+    async def __call__(self, user: User = Depends(get_current_user)) -> User:
+        role = await get_user_role(user)
+        if role and role.name in self.role_names:
             return user
         raise ForbiddenError(
             f"This action requires one of the following roles: {', '.join(sorted(self.role_names))}"

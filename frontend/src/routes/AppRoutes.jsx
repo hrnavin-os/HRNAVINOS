@@ -13,10 +13,12 @@ import { TutorsPage } from '@/pages/tutors/TutorsPage'
 import { AttendancePage } from '@/pages/attendance/AttendancePage'
 import { PaymentsPage } from '@/pages/payments/PaymentsPage'
 import { PlacementsPage } from '@/pages/placements/PlacementsPage'
+import { CompaniesPage } from '@/pages/companies/CompaniesPage'
 import { TicketsPage } from '@/pages/tickets/TicketsPage'
 import { ReportsPage } from '@/pages/reports/ReportsPage'
 import { UsersPage } from '@/pages/users/UsersPage'
 import { RolesPage } from '@/pages/roles/RolesPage'
+import { SettingsPage } from '@/pages/settings/SettingsPage'
 import { NotFoundPage } from '@/pages/errors/NotFoundPage'
 import { UnauthorizedPage } from '@/pages/errors/UnauthorizedPage'
 import { PERMISSIONS } from '@/constants/permissions'
@@ -60,6 +62,7 @@ export function AppRoutes() {
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.PLACEMENTS_VIEW} />}>
             <Route path="/placements" element={<PlacementsPage />} />
+            <Route path="/companies" element={<CompaniesPage />} />
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.TICKETS_VIEW} />}>
             <Route path="/tickets" element={<TicketsPage />} />
@@ -72,6 +75,9 @@ export function AppRoutes() {
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.ROLES_VIEW} />}>
             <Route path="/roles" element={<RolesPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={PERMISSIONS.SETTINGS_VIEW} />}>
+            <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Route>
       </Route>

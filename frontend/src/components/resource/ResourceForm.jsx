@@ -13,8 +13,18 @@ export function ResourceForm({ fields, defaultValues = {}, onSubmit, onCancel, s
     formState: { errors, isSubmitting },
   } = useForm({ defaultValues })
 
+  // Untouched optional fields submit as "" from the DOM; treat that the same
+  // as "not provided" instead of sending an empty string (which fails e.g.
+  // EmailStr validation on the backend).
+  function handleValidSubmit(values) {
+    const cleaned = Object.fromEntries(
+      Object.entries(values).filter(([, value]) => value !== ''),
+    )
+    return onSubmit(cleaned)
+  }
+
   return (
-    <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+    <form className="space-y-4" onSubmit={handleSubmit(handleValidSubmit)}>
       <ErrorMessage message={submitError} />
       {fields.map((field) => {
         const validation = { required: field.required ? `${field.label} is required` : false, ...field.validation }

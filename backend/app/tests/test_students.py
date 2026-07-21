@@ -1,17 +1,18 @@
 """Tests for the Student Management module."""
 
 
-def _create_course(client, auth_headers):
-    return client.post(
+async def _create_course(client, auth_headers):
+    response = await client.post(
         "/api/v1/courses",
         headers=auth_headers,
         json={"name": "Full Stack Development", "code": "FSD-01", "duration_weeks": 12, "fee": "25000.00"},
-    ).json()["id"]
+    )
+    return response.json()["id"]
 
 
-def test_create_student(client, auth_headers):
-    course_id = _create_course(client, auth_headers)
-    response = client.post(
+async def test_create_student(client, auth_headers):
+    course_id = await _create_course(client, auth_headers)
+    response = await client.post(
         "/api/v1/students",
         headers=auth_headers,
         json={
@@ -26,15 +27,15 @@ def test_create_student(client, auth_headers):
     assert response.json()["status"] == "active"
 
 
-def test_duplicate_student_email_rejected(client, auth_headers):
+async def test_duplicate_student_email_rejected(client, auth_headers):
     payload = {"first_name": "Jane", "last_name": "Doe", "email": "jane.doe@example.com", "admission_date": "2026-07-01"}
-    client.post("/api/v1/students", headers=auth_headers, json=payload)
-    response = client.post("/api/v1/students", headers=auth_headers, json=payload)
+    await client.post("/api/v1/students", headers=auth_headers, json=payload)
+    response = await client.post("/api/v1/students", headers=auth_headers, json=payload)
     assert response.status_code == 409
 
 
-def test_create_student_with_unknown_course_returns_404(client, auth_headers):
-    response = client.post(
+async def test_create_student_with_unknown_course_returns_404(client, auth_headers):
+    response = await client.post(
         "/api/v1/students",
         headers=auth_headers,
         json={

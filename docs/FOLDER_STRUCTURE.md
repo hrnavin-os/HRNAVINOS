@@ -7,28 +7,26 @@ hrnavinos-erp/
 │   ├── app/
 │   │   ├── core/               Cross-cutting: security (JWT/hashing), logging config, current-user/permission dependencies
 │   │   ├── config/              Pydantic settings (env-var driven)
-│   │   ├── database/            Declarative Base, mixins (UUID PK, timestamps, audit, soft delete), session/engine
+│   │   ├── database/            Beanie BaseDocument (UUID id, timestamps, audit, soft delete), mongo.py (Motor client + init_beanie), types.py (MongoDecimal)
 │   │   ├── auth/                 (reserved for auth-specific helpers beyond core/security.py)
-│   │   ├── models/               SQLAlchemy ORM entities, one file per entity + enums.py + __init__.py (imports all)
+│   │   ├── models/               Beanie Document subclasses, one file per collection + enums.py + __init__.py (ALL_DOCUMENTS list)
 │   │   ├── schemas/              Pydantic request/response DTOs, one file per module
-│   │   ├── repositories/         Data access layer; base_repository.py + one file per entity
+│   │   ├── repositories/         Data access layer; base_repository.py + one file per collection
 │   │   ├── services/             Business logic layer; one file per module
-│   │   ├── routes/                FastAPI routers; one file per module + api_router.py (aggregator)
+│   │   ├── routes/                FastAPI routers (async); one file per module + api_router.py (aggregator)
 │   │   ├── middleware/           Request ID/access logging, rate limiter setup
 │   │   ├── permissions/          Permission code registry + default role→permission mapping
 │   │   ├── validators/           (reserved for cross-field/cross-entity validation helpers)
 │   │   ├── exceptions/           Domain exception hierarchy + centralized HTTP exception handlers
 │   │   ├── utils/                 (reserved for generic helpers)
-│   │   ├── tests/                 pytest suite + conftest.py (embedded-Postgres test harness)
+│   │   ├── tests/                 pytest suite + conftest.py (embedded-MongoDB test harness, async httpx client)
 │   │   ├── uploads/               local file storage (STORAGE_BACKEND=local)
 │   │   ├── logs/                  rotating file logs (JSON in prod, console in dev)
-│   │   └── main.py                FastAPI app factory: middleware, CORS, exception handlers, routers
-│   ├── migrations/                Alembic environment + versioned migration scripts
+│   │   └── main.py                FastAPI app factory: lifespan (Mongo connect/disconnect), middleware, CORS, exception handlers, routers
 │   ├── scripts/                   seed_db.py (idempotent permissions/roles/superuser seed)
 │   ├── requirements.txt           Runtime dependencies
-│   ├── requirements-dev.txt       + test-only deps (pgserver)
+│   ├── requirements-dev.txt       + test-only deps (pymongo-inmemory)
 │   ├── pytest.ini
-│   ├── alembic.ini
 │   ├── Dockerfile
 │   └── .env.example
 │
@@ -60,7 +58,7 @@ hrnavinos-erp/
 │   └── scripts/                    setup_server.sh, setup_nginx.sh, setup_ssl.sh, deploy.sh, backup.sh, restore.sh
 │
 ├── docker/
-│   └── docker-compose.prod.yml     Production compose variant (Postgres not host-exposed, resource limits)
+│   └── docker-compose.prod.yml     Production compose variant (MongoDB not host-exposed, resource limits)
 │
 ├── docs/                            This documentation set
 │

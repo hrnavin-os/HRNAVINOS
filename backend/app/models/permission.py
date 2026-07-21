@@ -1,26 +1,24 @@
-"""Permission model — a single grantable capability, e.g. `students.create`."""
-from typing import TYPE_CHECKING
+"""Permission document — a single grantable capability, e.g. `students.create`."""
+from pymongo import IndexModel
+from pydantic import Field
 
-from sqlalchemy import String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from app.database.base import BaseModel
-
-if TYPE_CHECKING:
-    from app.models.role import Role
+from app.database.base import BaseDocument
 
 
-class Permission(BaseModel):
-    """A single grantable capability. Code convention: `<module>.<action>`."""
+class Permission(BaseDocument):
+    """Code convention: `<module>.<action>`."""
 
-    code: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
-    module: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    action: Mapped[str] = mapped_column(String(50), nullable=False)
-    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    code: str = Field(max_length=100)
+    module: str = Field(max_length=100)
+    action: str = Field(max_length=50)
+    description: str | None = Field(default=None, max_length=255)
 
-    roles: Mapped[list["Role"]] = relationship(
-        "Role", secondary="role_permissions", back_populates="permissions"
-    )
+    class Settings:
+        name = "permissions"
+        indexes = [
+            IndexModel([("code", 1)], unique=True),
+            IndexModel([("module", 1)]),
+        ]
 
     def __repr__(self) -> str:
         return f"<Permission {self.code}>"

@@ -35,21 +35,18 @@ jobs:
       run:
         working-directory: backend
     services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: hrnavinos
-          POSTGRES_PASSWORD: hrnavinos
-          POSTGRES_DB: hrnavinos_erp_test
+      mongodb:
+        image: mongo:7
         ports:
-          - 5432:5432
+          - 27017:27017
         options: >-
-          --health-cmd "pg_isready -U hrnavinos"
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\")'"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
     env:
-      DATABASE_URL: postgresql+psycopg2://hrnavinos:hrnavinos@localhost:5432/hrnavinos_erp_test
+      MONGODB_URI: mongodb://localhost:27017
+      MONGODB_DB_NAME: hrnavinos_erp_test
       SECRET_KEY: ci-test-secret-key-at-least-32-characters-long
       APP_ENV: test
       RATE_LIMIT_ENABLED: "false"
@@ -61,12 +58,12 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements*.txt
       - run: pip install -r requirements.txt
-      - name: Run migrations
-        run: alembic upgrade head
       - name: Run tests
-        # DATABASE_URL is already set (the Postgres service container above),
-        # so conftest.py skips spinning up the embedded pgserver it uses for
-        # local runs and connects directly to this database instead.
+        # MONGODB_URI is already set (the MongoDB service container above),
+        # so conftest.py skips spinning up the embedded pymongo-inmemory
+        # instance it uses for local runs and connects directly to this
+        # database instead. Beanie creates indexes on app startup -- no
+        # separate migration step is needed.
         run: pytest -v
 
   frontend-lint-build:

@@ -12,8 +12,10 @@ export const NAV_ITEMS = [
   { label: 'Attendance', to: '/attendance', permission: PERMISSIONS.ATTENDANCE_VIEW },
   { label: 'Payments', to: '/payments', permission: PERMISSIONS.PAYMENTS_VIEW },
   { label: 'Placement', to: '/placements', permission: PERMISSIONS.PLACEMENTS_VIEW },
+  { label: 'Companies', to: '/companies', permission: PERMISSIONS.PLACEMENTS_VIEW },
   { label: 'Tickets', to: '/tickets', permission: PERMISSIONS.TICKETS_VIEW },
   { label: 'Reports', to: '/reports', permission: PERMISSIONS.REPORTS_VIEW },
   { label: 'Users', to: '/users', permission: PERMISSIONS.USERS_VIEW },
   { label: 'Roles', to: '/roles', permission: PERMISSIONS.ROLES_VIEW },
+  { label: 'Settings', to: '/settings', permission: PERMISSIONS.SETTINGS_VIEW },
 ]

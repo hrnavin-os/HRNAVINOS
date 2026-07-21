@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Restores the database and uploaded files from a backup produced by backup.sh.
-# Usage: bash deployment/scripts/restore.sh <db_backup.dump> [uploads_backup.tar.gz]
+# Usage: bash deployment/scripts/restore.sh <db_backup.archive> [uploads_backup.tar.gz]
 set -euo pipefail
 
-DB_BACKUP="${1:?Usage: restore.sh <db_backup.dump> [uploads_backup.tar.gz]}"
+DB_BACKUP="${1:?Usage: restore.sh <db_backup.archive> [uploads_backup.tar.gz]}"
 UPLOADS_BACKUP="${2:-}"
 
 APP_DIR="/var/www/hrnavinos-erp"
-DB_NAME="${POSTGRES_DB:-hrnavinos_erp}"
-DB_USER="${POSTGRES_USER:-hrnavinos}"
+DB_NAME="${MONGODB_DB_NAME:-hrnavinos_erp}"
+MONGO_URI="${MONGODB_URI:-mongodb://127.0.0.1:27017}"
 
 if [ ! -f "$DB_BACKUP" ]; then
     echo "ERROR: backup file not found: $DB_BACKUP" >&2
@@ -24,10 +24,11 @@ fi
 echo "==> Stopping backend service"
 sudo systemctl stop hrnavinos-backend || true
 
+echo "==> Dropping existing database '$DB_NAME'"
+mongosh "$MONGO_URI/$DB_NAME" --quiet --eval "db.dropDatabase()"
+
 echo "==> Restoring database from $DB_BACKUP"
-PGPASSWORD="${POSTGRES_PASSWORD:-}" dropdb -U "$DB_USER" -h 127.0.0.1 --if-exists "$DB_NAME"
-PGPASSWORD="${POSTGRES_PASSWORD:-}" createdb -U "$DB_USER" -h 127.0.0.1 "$DB_NAME"
-PGPASSWORD="${POSTGRES_PASSWORD:-}" pg_restore -U "$DB_USER" -h 127.0.0.1 -d "$DB_NAME" "$DB_BACKUP"
+mongorestore --uri="$MONGO_URI" --archive="$DB_BACKUP" --gzip
 
 if [ -n "$UPLOADS_BACKUP" ]; then
     if [ ! -f "$UPLOADS_BACKUP" ]; then
