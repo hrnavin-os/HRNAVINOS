@@ -9,13 +9,15 @@ async def test_create_lead(client, auth_headers):
     )
     assert response.status_code == 201
     body = response.json()
-    assert body["status"] == "new"
+    assert body["status"] == "new_lead"
     assert body["source"] == "website"
 
 
 async def test_assign_lead_to_user(client, auth_headers):
     create = await client.post(
-        "/api/v1/leads", headers=auth_headers, json={"name": "Ravi Kumar", "phone": "9876543210"}
+        "/api/v1/leads",
+        headers=auth_headers,
+        json={"name": "Ravi Kumar", "phone": "9876543210", "course_interest": "Data Science"},
     )
     lead_id = create.json()["id"]
 
@@ -30,23 +32,33 @@ async def test_assign_lead_to_user(client, auth_headers):
 
 async def test_update_lead_status(client, auth_headers):
     create = await client.post(
-        "/api/v1/leads", headers=auth_headers, json={"name": "Ravi Kumar", "phone": "9876543210"}
+        "/api/v1/leads",
+        headers=auth_headers,
+        json={"name": "Ravi Kumar", "phone": "9876543210", "course_interest": "Data Science"},
     )
     lead_id = create.json()["id"]
 
-    response = await client.put(f"/api/v1/leads/{lead_id}", headers=auth_headers, json={"status": "qualified"})
+    response = await client.put(f"/api/v1/leads/{lead_id}", headers=auth_headers, json={"status": "pre_screening"})
     assert response.status_code == 200
-    assert response.json()["status"] == "qualified"
+    assert response.json()["status"] == "pre_screening"
 
 
 async def test_filter_leads_by_status(client, auth_headers):
-    await client.post("/api/v1/leads", headers=auth_headers, json={"name": "Lead One", "phone": "1111111111"})
+    await client.post(
+        "/api/v1/leads",
+        headers=auth_headers,
+        json={"name": "Lead One", "phone": "1111111111", "course_interest": "Data Science"},
+    )
     lead_two = (
-        await client.post("/api/v1/leads", headers=auth_headers, json={"name": "Lead Two", "phone": "2222222222"})
+        await client.post(
+            "/api/v1/leads",
+            headers=auth_headers,
+            json={"name": "Lead Two", "phone": "2222222222", "course_interest": "Data Science"},
+        )
     ).json()["id"]
-    await client.put(f"/api/v1/leads/{lead_two}", headers=auth_headers, json={"status": "converted"})
+    await client.put(f"/api/v1/leads/{lead_two}", headers=auth_headers, json={"status": "pre_screening"})
 
-    response = await client.get("/api/v1/leads", headers=auth_headers, params={"status": "converted"})
+    response = await client.get("/api/v1/leads", headers=auth_headers, params={"status": "pre_screening"})
     assert response.status_code == 200
     body = response.json()
     assert body["total"] == 1
