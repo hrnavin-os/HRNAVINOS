@@ -1,6 +1,7 @@
 import { useForm } from 'react-hook-form'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
+import { Textarea } from '@/components/ui/Textarea'
 import { Button } from '@/components/ui/Button'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 
@@ -31,7 +32,13 @@ export function ResourceForm({ fields, defaultValues = {}, onSubmit, onCancel, s
 
         if (field.type === 'select') {
           return (
-            <Select key={field.name} label={field.label} error={errors[field.name]?.message} {...register(field.name, validation)}>
+            <Select
+              key={field.name}
+              label={field.label}
+              required={Boolean(field.required)}
+              error={errors[field.name]?.message}
+              {...register(field.name, validation)}
+            >
               <option value="">Select {field.label}</option>
               {field.options.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -42,12 +49,27 @@ export function ResourceForm({ fields, defaultValues = {}, onSubmit, onCancel, s
           )
         }
 
+        if (field.type === 'textarea') {
+          return (
+            <Textarea
+              key={field.name}
+              label={field.label}
+              placeholder={field.placeholder}
+              required={Boolean(field.required)}
+              error={errors[field.name]?.message}
+              {...register(field.name, validation)}
+            />
+          )
+        }
+
         return (
           <Input
             key={field.name}
             type={field.type ?? 'text'}
             step={field.type === 'number' ? 'any' : undefined}
             label={field.label}
+            placeholder={field.placeholder}
+            required={Boolean(field.required)}
             error={errors[field.name]?.message}
             {...register(field.name, validation)}
           />

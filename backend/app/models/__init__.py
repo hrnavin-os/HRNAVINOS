@@ -7,6 +7,7 @@ from app.models.batch import Batch
 from app.models.company import Company
 from app.models.course import Course
 from app.models.finance_verification import FinanceVerification
+from app.models.google_sheet_connection import GoogleSheetConnection
 from app.models.invoice import Invoice
 from app.models.lead import Lead
 from app.models.login_history import LoginHistory
@@ -31,6 +32,7 @@ ALL_DOCUMENTS = [
     Company,
     Course,
     FinanceVerification,
+    GoogleSheetConnection,
     Invoice,
     Lead,
     LoginHistory,
@@ -57,6 +59,7 @@ __all__ = [
     "Company",
     "Course",
     "FinanceVerification",
+    "GoogleSheetConnection",
     "Invoice",
     "Lead",
     "LoginHistory",

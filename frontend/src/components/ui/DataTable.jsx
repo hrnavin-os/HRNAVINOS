@@ -1,7 +1,7 @@
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 
-export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No records found.' }) {
+export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No records found.', onRowClick }) {
   if (isLoading) return <LoadingSpinner />
   if (error) return <ErrorMessage message={error} />
 
@@ -26,7 +26,11 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
         </thead>
         <tbody className="divide-y divide-slate-100 bg-white">
           {rows.map((row) => (
-            <tr key={row.id} className="hover:bg-slate-50">
+            <tr
+              key={row.id}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              className={`hover:bg-slate-50 ${onRowClick ? 'cursor-pointer' : ''}`}
+            >
               {columns.map((column) => (
                 <td key={column.key} className="px-4 py-3 text-sm text-slate-700">
                   {column.render ? column.render(row) : row[column.key]}

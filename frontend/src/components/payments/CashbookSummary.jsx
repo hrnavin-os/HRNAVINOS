@@ -1,0 +1,66 @@
+import { useQuery } from '@tanstack/react-query'
+import { ArrowDownLeft, ArrowUpRight, Wallet } from 'lucide-react'
+import { leadService } from '@/services/leadService'
+import { formatCurrency } from '@/utils/formatters'
+
+function StatCard({ label, value, subtitle, icon: Icon, borderColor, iconBg, iconColor, valueColor }) {
+  return (
+    <div className={`flex items-center justify-between rounded-xl border border-slate-200 border-l-4 ${borderColor} bg-white p-5 shadow-sm`}>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+        <p className={`mt-1 text-2xl font-bold ${valueColor}`}>{formatCurrency(value)}</p>
+        <p className="mt-1 text-xs text-slate-400">{subtitle}</p>
+      </div>
+      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${iconBg} ${iconColor}`}>
+        <Icon className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+      </span>
+    </div>
+  )
+}
+
+export function CashbookSummary() {
+  // Same queryKey as OverallIncomeTab so React Query shares one fetch instead of two.
+  const query = useQuery({
+    queryKey: ['overall-income'],
+    queryFn: () => leadService.list({ status: 'batch_confirmation', page_size: 100 }),
+  })
+
+  const totalIncome = (query.data?.items ?? []).reduce((sum, lead) => sum + Number(lead.paid_amount ?? 0), 0)
+  const totalExpense = 0 // No expense tracking exists yet — see Overall Expense / Expense Approvals placeholders.
+  const balance = totalIncome - totalExpense
+
+  return (
+    <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <StatCard
+        label="Overall Income"
+        value={totalIncome}
+        subtitle="For selected period"
+        icon={ArrowDownLeft}
+        borderColor="border-l-[#059669]"
+        iconBg="bg-[#DCFCE7]"
+        iconColor="text-[#059669]"
+        valueColor="text-[#059669]"
+      />
+      <StatCard
+        label="Expense"
+        value={totalExpense}
+        subtitle="For selected period"
+        icon={ArrowUpRight}
+        borderColor="border-l-[#DC2626]"
+        iconBg="bg-[#FEF2F2]"
+        iconColor="text-[#DC2626]"
+        valueColor="text-[#DC2626]"
+      />
+      <StatCard
+        label="Balance"
+        value={balance}
+        subtitle="Income − Expense (period)"
+        icon={Wallet}
+        borderColor="border-l-blue-600"
+        iconBg="bg-blue-50"
+        iconColor="text-blue-600"
+        valueColor="text-blue-600"
+      />
+    </div>
+  )
+}

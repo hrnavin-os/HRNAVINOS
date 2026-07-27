@@ -10,6 +10,7 @@ from app.routes import (
     company_routes,
     course_routes,
     dashboard_routes,
+    google_sheets_routes,
     invoice_routes,
     lead_routes,
     notification_routes,
@@ -34,6 +35,7 @@ api_router.include_router(permission_routes.router)
 api_router.include_router(audit_log_routes.router)
 api_router.include_router(dashboard_routes.router)
 api_router.include_router(lead_routes.router)
+api_router.include_router(google_sheets_routes.router)
 api_router.include_router(admission_routes.router)
 api_router.include_router(student_routes.router)
 api_router.include_router(course_routes.router)

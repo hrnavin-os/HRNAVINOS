@@ -54,5 +54,9 @@ apiClient.interceptors.response.use(
 )
 
 export function getApiErrorMessage(error) {
-  return error?.response?.data?.message || error?.message || 'Something went wrong. Please try again.'
+  const data = error?.response?.data
+  if (Array.isArray(data?.details) && data.details.length > 0) {
+    return data.details.map((detail) => detail.msg.replace(/^Value error, /, '')).join(' ')
+  }
+  return data?.message || error?.message || 'Something went wrong. Please try again.'
 }

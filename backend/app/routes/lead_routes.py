@@ -1,13 +1,24 @@
 """HTTP routes for the Lead Management (CRM / Pre-Sales) module."""
 import uuid
+from datetime import date
+from decimal import Decimal, InvalidOperation
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 
 from app.core.dependencies import RequirePermissions
+from app.exceptions.base import BadRequestError
+from app.models.enums import LeadSource, PaymentMethod
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.common import MessageResponse, PaginatedResponse, PaginationParams
-from app.schemas.lead_schema import LeadAssign, LeadCreate, LeadResponse, LeadUpdate
+from app.schemas.lead_schema import (
+    LeadAssign,
+    LeadCreate,
+    LeadResponse,
+    LeadStatsResponse,
+    LeadTimelineEntryResponse,
+    LeadUpdate,
+)
 from app.services.lead_service import LeadService
 
 router = APIRouter(prefix="/leads", tags=["Lead Management"])
@@ -18,7 +29,8 @@ async def create_lead(
     payload: LeadCreate,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_CREATE)),
 ) -> LeadResponse:
-    return LeadResponse.model_validate(await LeadService().create(payload, actor_id=actor.id))
+    service = LeadService()
+    return await service.to_response(await service.create(payload, actor_id=actor.id))
 
 
 @router.get("", response_model=PaginatedResponse[LeadResponse])
@@ -30,13 +42,55 @@ async def list_leads(
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     status_filter: str | None = Query(default=None, alias="status"),
     assigned_to: uuid.UUID | None = None,
+    source: LeadSource | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> PaginatedResponse[LeadResponse]:
     params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)
-    result = await LeadService().list(params, status=status_filter, assigned_to=assigned_to)
-    return PaginatedResponse[LeadResponse].build(
-        [LeadResponse.model_validate(lead) for lead in result.items], result.total, result.page, result.page_size
+    service = LeadService()
+    result = await service.list(
+        params, status=status_filter, assigned_to=assigned_to, source=source, date_from=date_from, date_to=date_to
     )
+    items = [await service.to_response(lead) for lead in result.items]
+    return PaginatedResponse[LeadResponse].build(items, result.total, result.page, result.page_size)
+
+
+@router.get("/stats", response_model=LeadStatsResponse)
+async def lead_stats(
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
+) -> LeadStatsResponse:
+    return await LeadService().stats()
+
+
+@router.get("/pending-review", response_model=list[LeadResponse])
+async def list_pending_review_leads(
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
+) -> list[LeadResponse]:
+    """Form Check queue: leads imported from an integration (e.g. Google Sheets)
+    that haven't been checked yet, so they aren't visible in Leads (CRM)."""
+    service = LeadService()
+    return [await service.to_response(lead) for lead in await service.list_pending_review()]
+
+
+@router.post("/{lead_id}/review", response_model=LeadResponse)
+async def review_lead(
+    lead_id: uuid.UUID,
+    payload: LeadUpdate,
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
+) -> LeadResponse:
+    """Approve a Form Check submission (with any corrections), admitting it
+    into the normal pipeline where it shows up in Leads (CRM) / New Lead."""
+    service = LeadService()
+    return await service.to_response(await service.review(lead_id, payload, actor_id=actor.id))
+
+
+@router.get("/{lead_id}/timeline", response_model=list[LeadTimelineEntryResponse])
+async def get_lead_timeline(
+    lead_id: uuid.UUID,
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
+) -> list[LeadTimelineEntryResponse]:
+    return await LeadService().timeline(lead_id)
 
 
 @router.get("/{lead_id}", response_model=LeadResponse)
@@ -44,7 +98,8 @@ async def get_lead(
     lead_id: uuid.UUID,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> LeadResponse:
-    return LeadResponse.model_validate(await LeadService().get(lead_id))
+    service = LeadService()
+    return await service.to_response(await service.get(lead_id))
 
 
 @router.put("/{lead_id}", response_model=LeadResponse)
@@ -53,7 +108,30 @@ async def update_lead(
     payload: LeadUpdate,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
 ) -> LeadResponse:
-    return LeadResponse.model_validate(await LeadService().update(lead_id, payload, actor_id=actor.id))
+    service = LeadService()
+    return await service.to_response(await service.update(lead_id, payload, actor_id=actor.id))
+
+
+@router.post("/{lead_id}/payment-image", response_model=LeadResponse)
+async def upload_payment_image(
+    lead_id: uuid.UUID,
+    file: UploadFile | None = File(default=None),
+    paid_amount: str | None = Form(default=None),
+    payment_mode: PaymentMethod | None = Form(default=None),
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
+) -> LeadResponse:
+    parsed_amount: Decimal | None = None
+    if paid_amount:
+        try:
+            parsed_amount = Decimal(paid_amount)
+        except InvalidOperation as exc:
+            raise BadRequestError("Paid amount must be a valid number.") from exc
+
+    service = LeadService()
+    lead = await service.update_payment_info(
+        lead_id, file=file, paid_amount=parsed_amount, payment_mode=payment_mode, actor_id=actor.id
+    )
+    return await service.to_response(lead)
 
 
 @router.post("/{lead_id}/assign", response_model=LeadResponse)
@@ -62,7 +140,8 @@ async def assign_lead(
     payload: LeadAssign,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_ASSIGN)),
 ) -> LeadResponse:
-    return LeadResponse.model_validate(await LeadService().assign(lead_id, payload, actor_id=actor.id))
+    service = LeadService()
+    return await service.to_response(await service.assign(lead_id, payload, actor_id=actor.id))
 
 
 @router.delete("/{lead_id}", response_model=MessageResponse)

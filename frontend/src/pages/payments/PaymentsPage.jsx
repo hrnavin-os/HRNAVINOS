@@ -1,93 +1,125 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ResourceListPage } from '@/components/resource/ResourceListPage'
-import { paymentService } from '@/services/paymentService'
-import { studentService } from '@/services/studentService'
-import { Badge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
-import { formatCurrency, titleCase } from '@/utils/formatters'
-import { PERMISSIONS } from '@/constants/permissions'
-import { useAuth } from '@/hooks/useAuth'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { ArrowDownLeft, ArrowUpRight } from 'lucide-react'
+import { leadService } from '@/services/leadService'
+import { IncomeApprovalsTab } from '@/components/payments/IncomeApprovalsTab'
+import { OverallIncomeTab } from '@/components/payments/OverallIncomeTab'
+import { CashbookSummary } from '@/components/payments/CashbookSummary'
 
-const STATUS_TONES = { pending: 'amber', verified: 'green', rejected: 'red' }
+const SPLIT_TAB_STYLES = {
+  income: { icon: ArrowDownLeft, active: 'bg-[#DCFCE7] text-[#059669]' },
+  expense: { icon: ArrowUpRight, active: 'bg-[#FEF2F2] text-[#DC2626]' },
+}
 
-const METHOD_OPTIONS = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'card', label: 'Card' },
-  { value: 'upi', label: 'UPI' },
-  { value: 'bank_transfer', label: 'Bank Transfer' },
-  { value: 'cheque', label: 'Cheque' },
-]
-
-function VerifyActions({ payment }) {
-  const { hasPermission } = useAuth()
-  const queryClient = useQueryClient()
-  const mutation = useMutation({
-    mutationFn: (approve) => paymentService.verify(payment.id, approve),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['payments'] }),
-  })
-
-  if (payment.status !== 'pending' || !hasPermission(PERMISSIONS.PAYMENTS_VERIFY)) return null
-
+function SplitTabs({ tabs, active, onChange }) {
   return (
-    <div className="flex gap-2">
-      <Button variant="secondary" className="!px-2 !py-1 text-xs" onClick={() => mutation.mutate(true)} disabled={mutation.isPending}>
-        Verify
-      </Button>
-      <Button variant="danger" className="!px-2 !py-1 text-xs" onClick={() => mutation.mutate(false)} disabled={mutation.isPending}>
-        Reject
-      </Button>
+    <div className="mb-4 flex overflow-hidden rounded-lg border border-slate-200">
+      {tabs.map((tab, index) => {
+        const style = SPLIT_TAB_STYLES[tab.key] ?? SPLIT_TAB_STYLES.income
+        const Icon = style.icon
+        const isActive = active === tab.key
+        return (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => onChange(tab.key)}
+            className={`flex flex-1 items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-semibold transition-colors ${
+              index > 0 ? 'border-l border-slate-200' : ''
+            } ${isActive ? style.active : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
+          >
+            <Icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+            {tab.label}
+          </button>
+        )
+      })}
     </div>
   )
 }
 
-const columns = [
-  { key: 'amount', header: 'Amount', render: (row) => formatCurrency(row.amount) },
-  { key: 'method', header: 'Method', render: (row) => titleCase(row.method) },
-  { key: 'payment_date', header: 'Date', render: (row) => row.payment_date },
-  {
-    key: 'status',
-    header: 'Status',
-    render: (row) => <Badge tone={STATUS_TONES[row.status] ?? 'slate'}>{titleCase(row.status)}</Badge>,
-  },
-  { key: 'actions', header: '', render: (row) => <VerifyActions payment={row} /> },
-]
+function ComingSoon({ label }) {
+  return (
+    <p className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">
+      {label} is coming soon.
+    </p>
+  )
+}
 
-export function PaymentsPage() {
-  const { data: students, isLoading } = useQuery({
-    queryKey: ['students-options'],
-    queryFn: () => studentService.list({ page_size: 100 }),
-  })
-
-  if (isLoading) return <LoadingSpinner />
-
-  const createFields = [
-    {
-      name: 'student_id',
-      label: 'Student',
-      type: 'select',
-      required: true,
-      options: (students?.items ?? []).map((student) => ({
-        value: student.id,
-        label: `${student.first_name} ${student.last_name}`,
-      })),
-    },
-    { name: 'amount', label: 'Amount', type: 'number', required: true },
-    { name: 'payment_date', label: 'Payment Date', type: 'date', required: true },
-    { name: 'method', label: 'Method', type: 'select', required: true, options: METHOD_OPTIONS },
-    { name: 'reference_number', label: 'Reference Number' },
-  ]
+function CashbookTab() {
+  const [cashbookTab, setCashbookTab] = useState('income')
+  const statsQuery = useQuery({ queryKey: ['leads-stats'], queryFn: leadService.getStats })
+  const incomeCount = statsQuery.data?.by_status?.batch_confirmation ?? 0
 
   return (
-    <ResourceListPage
-      title="Payments"
-      description="Student payments awaiting or completed finance verification."
-      queryKey="payments"
-      service={paymentService}
-      columns={columns}
-      createFields={createFields}
-      createPermission={PERMISSIONS.PAYMENTS_CREATE}
-      transformCreatePayload={(values) => ({ ...values, amount: String(values.amount) })}
-    />
+    <div>
+      <CashbookSummary />
+      <SplitTabs
+        tabs={[
+          { key: 'income', label: `Overall Income (${incomeCount})` },
+          { key: 'expense', label: 'Overall Expense (0)' },
+        ]}
+        active={cashbookTab}
+        onChange={setCashbookTab}
+      />
+      {cashbookTab === 'income' ? <OverallIncomeTab /> : <ComingSoon label="Overall Expense" />}
+    </div>
+  )
+}
+
+function ApprovalsTab() {
+  const [approvalTab, setApprovalTab] = useState('income')
+  const statsQuery = useQuery({ queryKey: ['leads-stats'], queryFn: leadService.getStats })
+  const incomeCount = statsQuery.data?.by_status?.financial_approval ?? 0
+
+  return (
+    <div>
+      <SplitTabs
+        tabs={[
+          { key: 'income', label: `Income Approvals (${incomeCount})` },
+          { key: 'expense', label: 'Expense Approvals (0)' },
+        ]}
+        active={approvalTab}
+        onChange={setApprovalTab}
+      />
+      {approvalTab === 'income' ? <IncomeApprovalsTab /> : <ComingSoon label="Expense Approvals" />}
+    </div>
+  )
+}
+
+export function PaymentsPage() {
+  const [mainTab, setMainTab] = useState('cashbook')
+
+  return (
+    <div>
+      <div className="mb-4">
+        <h1 className="text-xl font-semibold text-slate-900">Payments</h1>
+      </div>
+
+      <div className="mb-4 flex gap-1 border-b border-slate-200">
+        <button
+          type="button"
+          onClick={() => setMainTab('cashbook')}
+          className={`px-3 pb-2 text-sm font-semibold transition-colors ${
+            mainTab === 'cashbook'
+              ? 'border-b-2 border-brand-600 text-brand-600'
+              : 'border-b-2 border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Cashbook
+        </button>
+        <button
+          type="button"
+          onClick={() => setMainTab('approvals')}
+          className={`px-3 pb-2 text-sm font-semibold transition-colors ${
+            mainTab === 'approvals'
+              ? 'border-b-2 border-brand-600 text-brand-600'
+              : 'border-b-2 border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Approvals
+        </button>
+      </div>
+
+      {mainTab === 'cashbook' ? <CashbookTab /> : <ApprovalsTab />}
+    </div>
   )
 }

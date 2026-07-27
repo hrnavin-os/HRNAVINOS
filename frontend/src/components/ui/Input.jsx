@@ -1,9 +1,14 @@
 import { forwardRef } from 'react'
 
-export const Input = forwardRef(function Input({ label, error, className = '', ...props }, ref) {
+export const Input = forwardRef(function Input({ label, error, required, className = '', ...props }, ref) {
   return (
     <label className="block text-sm">
-      {label && <span className="mb-1 block font-medium text-slate-700">{label}</span>}
+      {label && (
+        <span className="mb-1 block font-medium text-slate-700">
+          {label}
+          {required && <span className="text-red-500"> *</span>}
+        </span>
+      )}
       <input
         ref={ref}
         className={`w-full rounded-md border px-3 py-2 text-sm text-slate-900 shadow-sm

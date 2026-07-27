@@ -38,6 +38,14 @@ class Settings(BaseSettings):
     # ---------- CORS ----------
     CORS_ORIGINS: list[AnyHttpUrl] | list[str] = ["http://localhost:5173"]
 
+    # ---------- Frontend (for post-OAuth redirects) ----------
+    FRONTEND_URL: str = "http://localhost:5173"
+
+    # ---------- Google OAuth (Marketing Board / Sheets integration) ----------
+    GOOGLE_OAUTH_CLIENT_ID: str | None = None
+    GOOGLE_OAUTH_CLIENT_SECRET: str | None = None
+    GOOGLE_OAUTH_REDIRECT_URI: str = "http://localhost:8000/api/v1/integrations/google-sheets/callback"
+
     # ---------- Rate Limiting ----------
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_DEFAULT: str = "100/minute"

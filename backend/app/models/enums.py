@@ -17,11 +17,11 @@ class LeadSource(StrEnum):
 
 
 class LeadStatus(StrEnum):
-    NEW = "new"
-    CONTACTED = "contacted"
-    QUALIFIED = "qualified"
-    NEGOTIATION = "negotiation"
-    CONVERTED = "converted"
+    NEW_LEAD = "new_lead"
+    RNR = "rnr"
+    PRE_SCREENING = "pre_screening"
+    FINANCIAL_APPROVAL = "financial_approval"
+    BATCH_CONFIRMATION = "batch_confirmation"
     LOST = "lost"
 
 

@@ -1,9 +1,11 @@
 """FastAPI application entrypoint."""
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
@@ -54,6 +56,11 @@ def create_application() -> FastAPI:
 
     # ---------- Exception handlers ----------
     register_exception_handlers(app)
+
+    # ---------- Uploaded files (local storage backend) ----------
+    upload_dir = Path(settings.UPLOAD_DIR)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=upload_dir), name="uploads")
 
     # ---------- Routes ----------
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)

@@ -3,8 +3,10 @@ import { AuthLayout } from '@/layouts/AuthLayout'
 import { DashboardLayout } from '@/layouts/DashboardLayout'
 import { ProtectedRoute } from '@/routes/ProtectedRoute'
 import { LoginPage } from '@/pages/auth/LoginPage'
-import { DashboardPage } from '@/pages/dashboard/DashboardPage'
+import { HomeRoute } from '@/routes/HomeRoute'
 import { LeadsPage } from '@/pages/leads/LeadsPage'
+import { FormCheckPage } from '@/pages/leads/FormCheckPage'
+import { MarketingBoardPage } from '@/pages/marketing/MarketingBoardPage'
 import { AdmissionsPage } from '@/pages/admissions/AdmissionsPage'
 import { StudentsPage } from '@/pages/students/StudentsPage'
 import { CoursesPage } from '@/pages/courses/CoursesPage'
@@ -34,10 +36,12 @@ export function AppRoutes() {
 
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
-          <Route path="/" element={<DashboardPage />} />
+          <Route path="/" element={<HomeRoute />} />
 
           <Route element={<ProtectedRoute permission={PERMISSIONS.LEADS_VIEW} />}>
             <Route path="/leads" element={<LeadsPage />} />
+            <Route path="/leads/form-check" element={<FormCheckPage />} />
+            <Route path="/marketing-board" element={<MarketingBoardPage />} />
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.ADMISSIONS_VIEW} />}>
             <Route path="/admissions" element={<AdmissionsPage />} />

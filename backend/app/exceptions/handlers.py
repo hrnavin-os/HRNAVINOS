@@ -3,6 +3,7 @@ import logging
 import uuid
 
 from fastapi import FastAPI, Request, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -39,7 +40,9 @@ def register_exception_handlers(app: FastAPI) -> None:
         request_id = getattr(request.state, "request_id", None)
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content=_error_body("VALIDATION_ERROR", "Request validation failed.", exc.errors(), request_id),
+            content=_error_body(
+                "VALIDATION_ERROR", "Request validation failed.", jsonable_encoder(exc.errors()), request_id
+            ),
         )
 
     @app.exception_handler(StarletteHTTPException)

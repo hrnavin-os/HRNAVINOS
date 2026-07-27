@@ -22,7 +22,7 @@ class DashboardRepository:
         return await Lead.find({"is_deleted": False}).count()
 
     async def new_leads(self) -> int:
-        return await Lead.find({"is_deleted": False, "status": LeadStatus.NEW}).count()
+        return await Lead.find({"is_deleted": False, "status": LeadStatus.NEW_LEAD}).count()
 
     async def total_batches(self) -> int:
         return await Batch.find({"is_deleted": False}).count()
