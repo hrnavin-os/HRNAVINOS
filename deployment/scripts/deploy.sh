@@ -39,6 +39,10 @@ npm ci
 npm run build
 
 echo "==> Restarting frontend process"
+# PM2 intercepts any script literally named `serve` into its own bundled
+# static-server module instead of the real npm `serve` binary, so the
+# ecosystem file points at this symlink under a different name.
+ln -sf "$(command -v serve)" /usr/local/bin/static-server
 pm2 startOrReload "$APP_DIR/deployment/pm2/ecosystem.config.cjs"
 pm2 save
 

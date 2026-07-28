@@ -6,10 +6,12 @@ module.exports = {
   apps: [
     {
       name: 'hrnavinos-frontend',
-      // Absolute path, not just 'serve' - PM2 intercepts the bare name 'serve'
-      // and routes it to its own internal static-server module instead of
-      // actually exec'ing the npm `serve` binary.
-      script: '/usr/bin/serve',
+      // PM2 intercepts any script whose basename is literally 'serve' and
+      // routes it to its own bundled static-server module (the `pm2 serve`
+      // feature) instead of exec'ing the real npm `serve` binary - even
+      // with an absolute path. /usr/local/bin/static-server must be a
+      // symlink to the real serve binary (see deployment/scripts/deploy.sh).
+      script: '/usr/local/bin/static-server',
       args: '-s dist -l 3000 -n',
       cwd: '/var/www/hrnavinos-erp/frontend',
       interpreter: 'none',
