@@ -7,7 +7,7 @@ module.exports = {
     {
       name: 'hrnavinos-frontend',
       script: 'serve',
-      args: '-s dist -l 3000',
+      args: '-s dist -l 3000 -n',
       cwd: '/var/www/hrnavinos-erp/frontend',
       interpreter: 'none',
       env: {
