@@ -47,6 +47,7 @@ pnpm-debug.log*
 .env.*
 !.env.example
 !.env.*.example
+!frontend/.env.production
 *.pem
 *.key
 !nginx/*.key.example
