@@ -9,6 +9,7 @@ import { leadService } from '@/services/leadService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { formatCurrency, formatDate, titleCase } from '@/utils/formatters'
 import { getLeadPaymentSummary } from '@/utils/leadPayment'
+import { PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
 import { MEDIA_BASE_URL } from '@/constants/config'
 import { useAuth } from '@/hooks/useAuth'
 import { PERMISSIONS } from '@/constants/permissions'
@@ -59,7 +60,12 @@ export function ReviewApprovalModal({ lead, onClose }) {
           <LeadAvatar name={lead.name} size="h-12 w-12" />
           <div className="min-w-0">
             <h2 className="truncate text-lg font-semibold text-slate-900">{lead.name}</h2>
-            <Badge tone="amber">● Awaiting Approval</Badge>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <Badge tone="amber">● Awaiting Approval</Badge>
+              {lead.payment_plan && (
+                <Badge tone="blue">{PAYMENT_PLAN_LABELS[lead.payment_plan] ?? lead.payment_plan}</Badge>
+              )}
+            </div>
           </div>
         </div>
 
