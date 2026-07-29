@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ArrowDownLeft, ArrowUpRight, Wallet } from 'lucide-react'
 import { leadService } from '@/services/leadService'
 import { formatCurrency } from '@/utils/formatters'
+import { getLeadPaymentSummary } from '@/utils/leadPayment'
 
 function StatCard({ label, value, subtitle, icon: Icon, borderColor, iconBg, iconColor, valueColor }) {
   return (
@@ -25,7 +26,10 @@ export function CashbookSummary() {
     queryFn: () => leadService.list({ status: 'batch_confirmation', page_size: 100 }),
   })
 
-  const totalIncome = (query.data?.items ?? []).reduce((sum, lead) => sum + Number(lead.paid_amount ?? 0), 0)
+  const totalIncome = (query.data?.items ?? []).reduce(
+    (sum, lead) => sum + Number(getLeadPaymentSummary(lead).paidAmount ?? 0),
+    0,
+  )
   const totalExpense = 0 // No expense tracking exists yet — see Overall Expense / Expense Approvals placeholders.
   const balance = totalIncome - totalExpense
 
