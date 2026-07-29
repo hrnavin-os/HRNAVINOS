@@ -26,9 +26,9 @@ import { Badge } from '@/components/ui/Badge'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { LEAD_STAGES } from '@/constants/leadStages'
-import { PAYMENT_METHOD_OPTIONS } from '@/constants/paymentMethods'
 import { INSTALLMENT_MODE_OPTIONS, PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
 import { leadService } from '@/services/leadService'
+import { foundationFormService } from '@/services/foundationFormService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { formatDateTime, titleCase } from '@/utils/formatters'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
@@ -104,68 +104,82 @@ const INFO_ITEMS = (lead) => [
   { icon: Calendar, label: 'Created', value: formatDateTime(lead.created_at) },
 ]
 
-// Fallback for leads not sourced from the Foundation Form (no payment_plan/
-// installments set) - a manually-created lead has no fixed plan to collect
-// against, just one generic amount/mode/proof.
-function LegacyPaymentSection({ lead, onUpload, isUploading }) {
-  const [file, setFile] = useState(null)
-  const [paidAmount, setPaidAmount] = useState(lead.paid_amount ?? '')
-  const [paymentMode, setPaymentMode] = useState(lead.payment_mode ?? '')
+// Fallback for leads without a payment_plan yet (manually created in the
+// CRM, or an older Foundation Form submission from before this field
+// existed) - staff pick the same program/plan a student would have, which
+// pre-populates installments from the same pricing table either way.
+function PlanAssignmentForm({ onAssign, isAssigning, error }) {
+  const pricingQuery = useQuery({ queryKey: ['foundation-form-pricing'], queryFn: foundationFormService.getPricing })
+  const [programInterest, setProgramInterest] = useState('')
+  const [paymentPlan, setPaymentPlan] = useState('')
 
-  const previewUrl = useMemo(() => {
-    if (file) return URL.createObjectURL(file)
-    if (lead.payment_image_url) return `${MEDIA_BASE_URL}${lead.payment_image_url}`
-    return null
-  }, [file, lead.payment_image_url])
+  if (pricingQuery.isLoading) return <LoadingSpinner />
+  if (pricingQuery.isError) return <ErrorMessage message={getApiErrorMessage(pricingQuery.error)} />
+
+  const { programs, categories } = pricingQuery.data
+  const selectedProgram = programs.find((program) => program.value === programInterest)
+  const category = selectedProgram ? categories[selectedProgram.category] : null
 
   return (
     <div>
-      <p className="mb-2 text-sm font-medium text-slate-700">Follow up call</p>
-      <div className="max-h-72 space-y-3 overflow-y-auto rounded-lg border border-slate-200 p-3">
-        <div>
-          <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700">
-            <ImagePlus className="h-4 w-4 text-slate-400" strokeWidth={2} aria-hidden="true" />
-            Payment Image
-          </label>
-          {previewUrl && (
-            <img
-              src={previewUrl}
-              alt="Payment proof"
-              className="mb-2 max-h-56 w-full rounded-md border border-slate-200 object-contain"
-            />
-          )}
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-            className="block w-full text-sm text-slate-600"
-          />
-        </div>
-
-        <Input
-          label="Paid Amount"
-          type="number"
-          step="0.01"
-          placeholder="Paid Amount"
-          value={paidAmount}
-          onChange={(event) => setPaidAmount(event.target.value)}
-        />
-
-        <Select label="Mode" value={paymentMode} onChange={(event) => setPaymentMode(event.target.value)}>
-          <option value="">Select Mode</option>
-          {PAYMENT_METHOD_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
+      <p className="mb-2 text-sm font-medium text-slate-700">
+        Follow-Up : payment selected by student in foundation form
+      </p>
+      <div className="space-y-3 rounded-lg border border-slate-200 p-3">
+        <Select
+          label="Program"
+          value={programInterest}
+          onChange={(event) => {
+            setProgramInterest(event.target.value)
+            setPaymentPlan('')
+          }}
+        >
+          <option value="">Select a program</option>
+          {programs.map((program) => (
+            <option key={program.value} value={program.value}>
+              {program.label}
             </option>
           ))}
         </Select>
 
+        {category && (
+          <fieldset>
+            <legend className="mb-2 block text-sm font-medium text-slate-700">Payment Plan</legend>
+            <div className="space-y-2">
+              {category.plans.map((plan) => (
+                <label
+                  key={plan.value}
+                  className="flex cursor-pointer items-start gap-3 rounded-md border border-slate-300 p-3 text-sm
+                    has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50"
+                >
+                  <input
+                    type="radio"
+                    name="payment_plan_choice"
+                    value={plan.value}
+                    checked={paymentPlan === plan.value}
+                    onChange={(event) => setPaymentPlan(event.target.value)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="font-medium text-slate-800">{plan.label}</span>
+                    {' - '}
+                    {plan.summary}
+                    {' | '}After Placement - {plan.after_placement}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
+
+        <ErrorMessage message={error} />
+
         <div className="flex justify-end">
           <Button
-            onClick={() => onUpload({ file, paidAmount, paymentMode })}
-            disabled={isUploading || (!file && !paidAmount && !paymentMode)}
+            onClick={() => onAssign({ programInterest, paymentPlan })}
+            disabled={isAssigning || !programInterest || !paymentPlan}
           >
-            {isUploading ? 'Saving…' : 'Save payment info'}
+            {isAssigning ? 'Saving…' : 'Assign Plan'}
           </Button>
         </div>
       </div>
@@ -273,9 +287,16 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving }) {
   )
 }
 
-function PaymentCollectionSection({ lead, onUploadLegacy, isUploadingLegacy, onSaveInstallment, savingIndex }) {
+function PaymentCollectionSection({
+  lead,
+  onAssignPlan,
+  isAssigningPlan,
+  assignPlanError,
+  onSaveInstallment,
+  savingIndex,
+}) {
   if (!lead.payment_plan) {
-    return <LegacyPaymentSection lead={lead} onUpload={onUploadLegacy} isUploading={isUploadingLegacy} />
+    return <PlanAssignmentForm onAssign={onAssignPlan} isAssigning={isAssigningPlan} error={assignPlanError} />
   }
 
   return (
@@ -304,8 +325,9 @@ function OverviewTab({
   lead,
   onSelectStage,
   isSaving,
-  onUploadPayment,
-  isUploadingPayment,
+  onAssignPlan,
+  isAssigningPlan,
+  assignPlanError,
   onSaveInstallment,
   savingInstallmentIndex,
 }) {
@@ -338,8 +360,9 @@ function OverviewTab({
       {lead.status === 'pre_screening' && (
         <PaymentCollectionSection
           lead={lead}
-          onUploadLegacy={onUploadPayment}
-          isUploadingLegacy={isUploadingPayment}
+          onAssignPlan={onAssignPlan}
+          isAssigningPlan={isAssigningPlan}
+          assignPlanError={assignPlanError}
           onSaveInstallment={onSaveInstallment}
           savingIndex={savingInstallmentIndex}
         />
@@ -481,8 +504,8 @@ export function LeadDetailModal({ lead, onClose }) {
     },
   })
 
-  const paymentMutation = useMutation({
-    mutationFn: ({ file, paidAmount }) => leadService.uploadPaymentInfo(lead.id, { file, paidAmount }),
+  const planMutation = useMutation({
+    mutationFn: (values) => leadService.assignPlan(lead.id, values),
     onSuccess: (updatedLead) => {
       setLiveLead(updatedLead)
       invalidateLeadQueries()
@@ -503,7 +526,7 @@ export function LeadDetailModal({ lead, onClose }) {
     installmentMutation.mutate({ index, values })
   }
 
-  const activeError = stageMutation.error || followUpMutation.error || paymentMutation.error || installmentMutation.error
+  const activeError = stageMutation.error || followUpMutation.error || installmentMutation.error
 
   return (
     <Modal title=" " isOpen onClose={onClose} maxWidth="max-w-2xl">
@@ -540,8 +563,9 @@ export function LeadDetailModal({ lead, onClose }) {
             lead={liveLead}
             onSelectStage={(newStatus) => stageMutation.mutate(newStatus)}
             isSaving={stageMutation.isPending}
-            onUploadPayment={(payload) => paymentMutation.mutate(payload)}
-            isUploadingPayment={paymentMutation.isPending}
+            onAssignPlan={(values) => planMutation.mutate(values)}
+            isAssigningPlan={planMutation.isPending}
+            assignPlanError={planMutation.error ? getApiErrorMessage(planMutation.error) : null}
             onSaveInstallment={handleSaveInstallment}
             savingInstallmentIndex={savingInstallmentIndex}
           />

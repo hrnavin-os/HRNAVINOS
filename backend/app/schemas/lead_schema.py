@@ -45,6 +45,11 @@ class LeadAssign(BaseModel):
     assigned_to: uuid.UUID
 
 
+class LeadPlanAssign(BaseModel):
+    program_interest: ProgramInterest
+    payment_plan: PaymentPlanOption
+
+
 class FollowUpEntryResponse(BaseModel):
     scheduled_at: datetime
     created_at: datetime

@@ -1,10 +1,8 @@
 """Business logic for the public Foundation Form (student-facing lead intake)."""
 from datetime import date, timedelta
-from decimal import Decimal
 
-from app.exceptions.base import BadRequestError
-from app.models.enums import LeadSource, PaymentPlanOption, PaymentTimeline
-from app.models.lead import Lead, PaymentInstallment
+from app.models.enums import LeadSource, PaymentTimeline
+from app.models.lead import Lead
 from app.repositories.lead_repository import LeadRepository
 from app.schemas.foundation_form_schema import (
     FoundationFormCategory,
@@ -13,13 +11,14 @@ from app.schemas.foundation_form_schema import (
     FoundationFormProgramOption,
     FoundationFormSubmit,
 )
-from app.services.foundation_form_pricing import CATEGORY_BY_PROGRAM, PRICING, PROGRAM_LABELS
-
-_INSTALLMENT_LABELS = {
-    PaymentPlanOption.SINGLE_SHOT: ["Payment"],
-    PaymentPlanOption.TWO_SHOT: ["Payment 1", "Payment 2"],
-    PaymentPlanOption.EMI_6_WEEKS: [f"Week {n}" for n in range(1, 7)],
-}
+from app.services.foundation_form_pricing import (
+    CATEGORY_BY_PROGRAM,
+    PRICING,
+    PROGRAM_LABELS,
+    build_installments,
+    build_payment_expected_summary,
+    get_plan_details,
+)
 
 _TIMELINE_OFFSET_DAYS = {
     PaymentTimeline.IMMEDIATE: 0,
@@ -66,22 +65,13 @@ class FoundationFormService:
         return date.today() + timedelta(days=_TIMELINE_OFFSET_DAYS[timeline])
 
     async def submit(self, data: FoundationFormSubmit) -> Lead:
-        category_code = CATEGORY_BY_PROGRAM[data.program_interest]
-        category = PRICING[category_code]
-        plan = category["plans"].get(data.payment_plan)
-        if plan is None:
-            raise BadRequestError("Selected payment plan is not valid for the chosen program.")
-
         payment_date = self._resolve_payment_date(data.payment_timeline)
         payment_expected = (
-            f"{plan['label']} - {plan['summary']} "
-            f"(After Placement: {plan['after_placement']}) | "
+            f"{build_payment_expected_summary(data.program_interest, data.payment_plan)} | "
             f"Pays on: {_TIMELINE_LABELS[data.payment_timeline]} ({payment_date.isoformat()})"
         )
-        installments = [
-            PaymentInstallment(label=label, amount=Decimal(amount))
-            for label, amount in zip(_INSTALLMENT_LABELS[data.payment_plan], plan["amounts"])
-        ]
+        installments = build_installments(data.program_interest, data.payment_plan)
+        plan = get_plan_details(data.program_interest, data.payment_plan)
 
         lead = Lead(
             name=data.name,

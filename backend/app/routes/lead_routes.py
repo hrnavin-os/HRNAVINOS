@@ -14,6 +14,7 @@ from app.schemas.common import MessageResponse, PaginatedResponse, PaginationPar
 from app.schemas.lead_schema import (
     LeadAssign,
     LeadCreate,
+    LeadPlanAssign,
     LeadResponse,
     LeadStatsResponse,
     LeadTimelineEntryResponse,
@@ -131,6 +132,17 @@ async def upload_payment_image(
     lead = await service.update_payment_info(
         lead_id, file=file, paid_amount=parsed_amount, payment_mode=payment_mode, actor_id=actor.id
     )
+    return await service.to_response(lead)
+
+
+@router.post("/{lead_id}/plan", response_model=LeadResponse)
+async def assign_lead_plan(
+    lead_id: uuid.UUID,
+    payload: LeadPlanAssign,
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
+) -> LeadResponse:
+    service = LeadService()
+    lead = await service.assign_plan(lead_id, payload, actor_id=actor.id)
     return await service.to_response(lead)
 
 

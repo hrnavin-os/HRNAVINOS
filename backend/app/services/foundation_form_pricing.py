@@ -4,8 +4,17 @@ Single source of truth for both rendering the form's info boxes (via the
 pricing endpoint) and validating a submission server-side, so the client
 can never submit an out-of-policy price. Business-defined figures, not
 derived from anything - change here if the offer changes.
+
+Also the single source for building a lead's payment installments from a
+(program, plan) pair, shared by Foundation Form submissions and manually
+assigning a plan to a CRM-created lead - both go through the same pricing
+so amounts always match the course the student picked.
 """
+from decimal import Decimal
+
+from app.exceptions.base import BadRequestError
 from app.models.enums import PaymentPlanOption, ProgramInterest
+from app.models.lead import PaymentInstallment
 
 PROGRAM_LABELS: dict[ProgramInterest, str] = {
     ProgramInterest.ONLY_RECRUITMENT: "Only Recruitment",
@@ -100,3 +109,28 @@ PRICING: dict[str, dict] = {
         },
     },
 }
+
+INSTALLMENT_LABELS: dict[PaymentPlanOption, list[str]] = {
+    PaymentPlanOption.SINGLE_SHOT: ["Payment"],
+    PaymentPlanOption.TWO_SHOT: ["Payment 1", "Payment 2"],
+    PaymentPlanOption.EMI_6_WEEKS: [f"Week {n}" for n in range(1, 7)],
+}
+
+
+def get_plan_details(program_interest: ProgramInterest, payment_plan: PaymentPlanOption) -> dict:
+    category_code = CATEGORY_BY_PROGRAM[program_interest]
+    plan = PRICING[category_code]["plans"].get(payment_plan)
+    if plan is None:
+        raise BadRequestError("Selected payment plan is not valid for the chosen program.")
+    return plan
+
+
+def build_installments(program_interest: ProgramInterest, payment_plan: PaymentPlanOption) -> list[PaymentInstallment]:
+    plan = get_plan_details(program_interest, payment_plan)
+    labels = INSTALLMENT_LABELS[payment_plan]
+    return [PaymentInstallment(label=label, amount=Decimal(amount)) for label, amount in zip(labels, plan["amounts"])]
+
+
+def build_payment_expected_summary(program_interest: ProgramInterest, payment_plan: PaymentPlanOption) -> str:
+    plan = get_plan_details(program_interest, payment_plan)
+    return f"{plan['label']} - {plan['summary']} (After Placement: {plan['after_placement']})"

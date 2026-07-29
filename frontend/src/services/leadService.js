@@ -23,15 +23,10 @@ export const leadService = {
     const { data } = await apiClient.post(`/leads/${id}/review`, values)
     return data
   },
-  uploadPaymentInfo: async (id, { file, paidAmount, paymentMode }) => {
-    const formData = new FormData()
-    if (file) formData.append('file', file)
-    if (paidAmount !== undefined && paidAmount !== null && paidAmount !== '') {
-      formData.append('paid_amount', paidAmount)
-    }
-    if (paymentMode) formData.append('payment_mode', paymentMode)
-    const { data } = await apiClient.post(`/leads/${id}/payment-image`, formData, {
-      headers: { 'Content-Type': undefined },
+  assignPlan: async (id, { programInterest, paymentPlan }) => {
+    const { data } = await apiClient.post(`/leads/${id}/plan`, {
+      program_interest: programInterest,
+      payment_plan: paymentPlan,
     })
     return data
   },

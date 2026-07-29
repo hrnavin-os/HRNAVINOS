@@ -17,6 +17,7 @@ from app.schemas.lead_schema import (
     FollowUpEntryResponse,
     LeadAssign,
     LeadCreate,
+    LeadPlanAssign,
     LeadResponse,
     LeadStatsResponse,
     LeadTimelineEntryResponse,
@@ -24,6 +25,7 @@ from app.schemas.lead_schema import (
     PaymentInstallmentResponse,
 )
 from app.services.audit_service import AuditService
+from app.services.foundation_form_pricing import PROGRAM_LABELS, build_installments, build_payment_expected_summary
 from app.services.storage_service import StorageService
 
 
@@ -212,6 +214,29 @@ class LeadService:
         await lead.save()
         if changes:
             await self.audit.record(user_id=actor_id, action="UPDATE", entity_type="Lead", entity_id=str(lead.id), changes=changes)
+        return lead
+
+    async def assign_plan(self, lead_id: uuid.UUID, data: LeadPlanAssign, *, actor_id: uuid.UUID | None) -> Lead:
+        """Attach a Foundation Form-style payment plan to a lead that didn't
+        arrive with one (e.g. created manually in the CRM), pre-populating
+        its installments from the same pricing table the public form uses."""
+        lead = await self.get(lead_id)
+        installments = build_installments(data.program_interest, data.payment_plan)
+        lead.program_interest = data.program_interest
+        lead.payment_plan = data.payment_plan
+        lead.installments = installments
+        lead.course_interest = PROGRAM_LABELS[data.program_interest]
+        lead.payment_expected = build_payment_expected_summary(data.program_interest, data.payment_plan)
+        lead.updated_by = actor_id
+        lead.touch(actor_id)
+        await lead.save()
+        await self.audit.record(
+            user_id=actor_id,
+            action="UPDATE",
+            entity_type="Lead",
+            entity_id=str(lead.id),
+            changes={"program_interest": data.program_interest, "payment_plan": data.payment_plan},
+        )
         return lead
 
     async def update_installment(
