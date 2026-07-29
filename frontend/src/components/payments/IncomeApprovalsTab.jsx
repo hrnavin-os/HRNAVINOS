@@ -8,6 +8,7 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { formatCurrency, formatDate, titleCase } from '@/utils/formatters'
+import { getLeadPaymentSummary } from '@/utils/leadPayment'
 import { ReviewApprovalModal } from '@/components/payments/ReviewApprovalModal'
 
 const columns = [
@@ -15,12 +16,29 @@ const columns = [
   { key: 'date', header: 'Date', render: (row) => formatDate(row.created_at) },
   { key: 'lead', header: 'Lead', render: (row) => <span className="font-medium text-slate-900">{row.name}</span> },
   { key: 'contact', header: 'Contact', render: (row) => row.phone },
-  { key: 'batch', header: 'Batch', render: (row) => row.batch_preference ?? '—' },
-  { key: 'amount', header: 'Amount', render: (row) => (row.paid_amount ? formatCurrency(row.paid_amount) : '—') },
+  {
+    key: 'amount',
+    header: 'Amount',
+    render: (row) => {
+      const { paidAmount } = getLeadPaymentSummary(row)
+      return paidAmount !== null ? formatCurrency(paidAmount) : '—'
+    },
+  },
   {
     key: 'mode',
     header: 'Mode',
-    render: (row) => (row.payment_mode ? <Badge outline tone="emerald">{titleCase(row.payment_mode)}</Badge> : '—'),
+    render: (row) => {
+      const { mode } = getLeadPaymentSummary(row)
+      return mode ? <Badge outline tone="emerald">{titleCase(mode)}</Badge> : '—'
+    },
+  },
+  {
+    key: 'due',
+    header: 'Due Amount',
+    render: (row) => {
+      const { hasPlan, dueAmount } = getLeadPaymentSummary(row)
+      return hasPlan ? formatCurrency(dueAmount) : '—'
+    },
   },
   {
     key: 'status',
