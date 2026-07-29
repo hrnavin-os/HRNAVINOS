@@ -219,8 +219,8 @@ export function LeadsPage() {
     <div>
       <div className="mb-4 flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Leads (CRM)</h1>
-          <p className="mt-1 text-sm text-slate-500">Prospective students tracked through the pre-sales pipeline.</p>
+          <h1 className="text-xl font-semibold text-slate-900">Admin</h1>
+          <p className="mt-1 text-sm text-slate-500">Prospective students tracked through the admin pipeline.</p>
         </div>
       </div>
 

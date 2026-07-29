@@ -21,7 +21,7 @@ export function FoundationFormAdminPage() {
         </h1>
         <p className="mt-1 text-sm text-slate-500">
           Share this link with prospective students on a call or meet. When they submit it, their details are
-          added straight to Leads (CRM).
+          added straight to Admin.
         </p>
       </div>
 

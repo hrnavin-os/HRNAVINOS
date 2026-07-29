@@ -34,7 +34,7 @@ export const NAV_ITEMS = [
   },
 
   {
-    label: 'Leads (CRM)',
+    label: 'Admin',
     to: '/leads',
     permission: PERMISSIONS.LEADS_VIEW,
     icon: Target,
