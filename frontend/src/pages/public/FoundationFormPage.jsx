@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { CheckCircle2 } from 'lucide-react'
+import { BadgePercent, BookOpen, Calendar, Check, CheckCircle2 } from 'lucide-react'
 import { foundationFormService } from '@/services/foundationFormService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { Input } from '@/components/ui/Input'
@@ -27,28 +27,41 @@ EMI Option (6 Weeks): (No Discounts)
 Training fees can be paid in 6 weekly equal installments.
 Example: If your training fee is ₹20,000, you will pay ₹3,300 per week for 6 weeks.`
 
-function InfoBox({ children }) {
+function InfoBox({ title, icon: Icon, children }) {
   return (
-    <div className="mb-5 whitespace-pre-line rounded-md border border-brand-200 bg-brand-50 p-4 text-sm text-slate-700">
-      {children}
+    <div className="mb-5 rounded-md border border-brand-200 bg-brand-50 p-4 text-sm text-slate-700">
+      {title && (
+        <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-brand-700">
+          {Icon && <Icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />}
+          {title}
+        </div>
+      )}
+      <div className="whitespace-pre-line">{children}</div>
     </div>
   )
 }
 
+const STEP_LABELS = ['Your Details', 'Payment Plan', 'Confirm & Submit']
+
 function StepIndicator({ step }) {
   return (
-    <div className="mb-6 flex items-center justify-center gap-2">
-      {[1, 2, 3].map((n) => (
-        <div key={n} className="flex items-center gap-2">
-          <div
-            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold
-              ${n <= step ? 'bg-brand-600 text-white' : 'bg-slate-200 text-slate-500'}`}
-          >
-            {n}
+    <div className="mb-6">
+      <div className="flex items-center justify-center gap-2">
+        {[1, 2, 3].map((n) => (
+          <div key={n} className="flex items-center gap-2">
+            <div
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold
+                ${n <= step ? 'bg-brand-600 text-white' : 'bg-slate-200 text-slate-500'}`}
+            >
+              {n < step ? <Check className="h-4 w-4" strokeWidth={3} aria-hidden="true" /> : n}
+            </div>
+            {n < 3 && <div className={`h-0.5 w-12 ${n < step ? 'bg-brand-600' : 'bg-slate-200'}`} />}
           </div>
-          {n < 3 && <div className={`h-0.5 w-12 ${n < step ? 'bg-brand-600' : 'bg-slate-200'}`} />}
-        </div>
-      ))}
+        ))}
+      </div>
+      <p className="mt-2 text-center text-xs font-medium text-slate-500">
+        Step {step} of 3 — {STEP_LABELS[step - 1]}
+      </p>
     </div>
   )
 }
@@ -146,6 +159,8 @@ export function FoundationFormPage() {
   const selectedProgramValue = watch('program_interest')
   const selectedProgram = programs.find((p) => p.value === selectedProgramValue)
   const category = selectedProgram ? categories[selectedProgram.category] : null
+  const watchedPaymentPlan = watch('payment_plan')
+  const watchedPaymentTimeline = watch('payment_timeline')
 
   return (
     <FormShell>
@@ -153,7 +168,9 @@ export function FoundationFormPage() {
       <form onSubmit={handleSubmit(onSubmit)}>
         {step === 1 && (
           <div className="space-y-4">
-            <InfoBox>{OFFER_INFO}</InfoBox>
+            <InfoBox title="Payment Offers" icon={BadgePercent}>
+              {OFFER_INFO}
+            </InfoBox>
             <Input
               label="Name"
               required
@@ -200,8 +217,9 @@ export function FoundationFormPage() {
 
         {step === 2 && category && (
           <div className="space-y-4">
-            <InfoBox>
-              {category.label}:{'\n'}Training Fee: {category.training_fee}{'  '}
+            <InfoBox title={category.label} icon={BookOpen}>
+              Training Fee: {category.training_fee}
+              {'   •   '}
               After Placement Fees: {category.after_placement_fee}
             </InfoBox>
             <fieldset>
@@ -213,7 +231,7 @@ export function FoundationFormPage() {
                   <label
                     key={plan.value}
                     className="flex cursor-pointer items-start gap-3 rounded-md border border-slate-300 p-3 text-sm
-                      has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50"
+                      has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50 has-[:checked]:ring-1 has-[:checked]:ring-brand-500"
                   >
                     <input
                       type="radio"
@@ -221,12 +239,15 @@ export function FoundationFormPage() {
                       className="mt-0.5"
                       {...register('payment_plan', { required: 'Please select a payment option' })}
                     />
-                    <span>
+                    <span className="flex-1">
                       <span className="font-medium text-slate-800">{plan.label}</span>
                       {' - '}
                       {plan.summary}
                       {' | '}After Placement - {plan.after_placement}
                     </span>
+                    {watchedPaymentPlan === plan.value && (
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" strokeWidth={2} aria-hidden="true" />
+                    )}
                   </label>
                 ))}
               </div>
@@ -246,7 +267,8 @@ export function FoundationFormPage() {
         {step === 3 && (
           <div className="space-y-4">
             <fieldset>
-              <legend className="mb-2 block text-sm font-medium text-slate-700">
+              <legend className="mb-2 flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                <Calendar className="h-4 w-4 text-slate-400" strokeWidth={2} aria-hidden="true" />
                 When will you make the payment? <span className="text-red-500">*</span>
               </legend>
               <div className="space-y-2">
@@ -254,17 +276,20 @@ export function FoundationFormPage() {
                   <label
                     key={option.value}
                     className="flex cursor-pointer items-center gap-3 rounded-md border border-slate-300 p-3 text-sm
-                      has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50"
+                      has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50 has-[:checked]:ring-1 has-[:checked]:ring-brand-500"
                   >
                     <input
                       type="radio"
                       value={option.value}
                       {...register('payment_timeline', { required: 'Please select when you will pay' })}
                     />
-                    <span>
+                    <span className="flex-1">
                       <span className="font-medium text-slate-800">{option.label}</span>{' '}
                       <span className="text-slate-500">({formatDate(option.date)})</span>
                     </span>
+                    {watchedPaymentTimeline === option.value && (
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-brand-600" strokeWidth={2} aria-hidden="true" />
+                    )}
                   </label>
                 ))}
               </div>
@@ -304,7 +329,7 @@ function FormShell({ children }) {
           <span className="text-2xl font-bold text-brand-700">HRNAVINOS</span>
           <span className="ml-1 text-2xl font-light text-slate-500">ERP</span>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-8 shadow-sm">{children}</div>
+        <div className="rounded-lg border border-slate-200 bg-white p-8 shadow-md">{children}</div>
       </div>
     </div>
   )

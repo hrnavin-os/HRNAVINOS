@@ -7,8 +7,10 @@ import {
   CalendarClock,
   Clock,
   ImagePlus,
+  Info,
   Mail,
   MessageSquare,
+  Milestone,
   Pencil,
   Phone,
   Plus,
@@ -25,7 +27,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { LEAD_STAGES } from '@/constants/leadStages'
+import { LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
 import { INSTALLMENT_MODE_OPTIONS, PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
 import { leadService } from '@/services/leadService'
 import { foundationFormService } from '@/services/foundationFormService'
@@ -82,9 +84,9 @@ const ACTION_TONES = {
 }
 
 const TABS = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'followup', label: 'Follow-up' },
-  { key: 'timeline', label: 'Timeline' },
+  { key: 'overview', label: 'Overview', icon: Info },
+  { key: 'followup', label: 'Follow-up', icon: CalendarClock },
+  { key: 'timeline', label: 'Timeline', icon: Clock },
 ]
 
 function toDateTimeInputValue(value) {
@@ -121,11 +123,16 @@ function PlanAssignmentForm({ onAssign, isAssigning, error }) {
   const category = selectedProgram ? categories[selectedProgram.category] : null
 
   return (
-    <div>
-      <p className="mb-2 text-sm font-medium text-slate-700">
-        Follow-Up : payment selected by student in foundation form
-      </p>
-      <div className="space-y-3 rounded-lg border border-slate-200 p-3">
+    <div className="rounded-lg border border-brand-200 bg-brand-50/50 p-4">
+      <div className="mb-3 flex items-center gap-2.5">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-brand-100 text-brand-600">
+          <Wallet className="h-4.5 w-4.5" strokeWidth={2} aria-hidden="true" />
+        </span>
+        <p className="text-sm font-semibold text-slate-800">
+          Follow-Up : payment selected by student in foundation form
+        </p>
+      </div>
+      <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3">
         <Select
           label="Program"
           value={programInterest}
@@ -204,9 +211,14 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving }) {
   }, [file, installment.proof_url])
 
   return (
-    <div className="rounded-lg border border-slate-200 p-3">
+    <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-sm font-semibold text-slate-800">{installment.label}</p>
+        <div className="flex items-center gap-2">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
+            {index + 1}
+          </span>
+          <p className="text-sm font-semibold text-slate-800">{installment.label}</p>
+        </div>
         {installment.paid && <Badge tone="green">Paid</Badge>}
       </div>
 
@@ -300,11 +312,18 @@ function PaymentCollectionSection({
   }
 
   return (
-    <div>
-      <p className="mb-1 text-sm font-medium text-slate-700">
-        Follow-Up : payment selected by student in foundation form
-      </p>
-      <p className="mb-3 text-xs text-slate-500">{PAYMENT_PLAN_LABELS[lead.payment_plan] ?? lead.payment_plan}</p>
+    <div className="rounded-lg border border-brand-200 bg-brand-50/50 p-4">
+      <div className="mb-3 flex items-center gap-2.5">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-brand-100 text-brand-600">
+          <Wallet className="h-4.5 w-4.5" strokeWidth={2} aria-hidden="true" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-800">
+            Follow-Up : payment selected by student in foundation form
+          </p>
+          <Badge tone="blue">{PAYMENT_PLAN_LABELS[lead.payment_plan] ?? lead.payment_plan}</Badge>
+        </div>
+      </div>
       <div className="max-h-96 space-y-3 overflow-y-auto pr-1">
         {lead.installments.map((installment, index) => (
           <InstallmentRow
@@ -335,12 +354,12 @@ function OverviewTab({
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2.5">
         {INFO_ITEMS(lead).map((item) => (
-          <div key={item.label} className="flex items-start gap-2.5 rounded-lg bg-slate-50 p-3">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white text-slate-400 shadow-sm">
+          <div key={item.label} className="flex items-start gap-2.5 rounded-lg border border-slate-100 bg-slate-50 p-3">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-50 text-brand-600">
               <item.icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
             </span>
             <div className="min-w-0">
-              <p className="text-xs text-slate-500">{item.label}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{item.label}</p>
               <p className="break-words text-sm font-semibold text-slate-900">{item.value}</p>
             </div>
           </div>
@@ -348,8 +367,8 @@ function OverviewTab({
       </div>
 
       {lead.notes && (
-        <div>
-          <p className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700">
+        <div className="border-t border-slate-100 pt-4">
+          <p className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-slate-700">
             <MessageSquare className="h-4 w-4 text-slate-400" strokeWidth={2} aria-hidden="true" />
             Notes
           </p>
@@ -358,18 +377,23 @@ function OverviewTab({
       )}
 
       {lead.status === 'pre_screening' && (
-        <PaymentCollectionSection
-          lead={lead}
-          onAssignPlan={onAssignPlan}
-          isAssigningPlan={isAssigningPlan}
-          assignPlanError={assignPlanError}
-          onSaveInstallment={onSaveInstallment}
-          savingIndex={savingInstallmentIndex}
-        />
+        <div className="border-t border-slate-100 pt-4">
+          <PaymentCollectionSection
+            lead={lead}
+            onAssignPlan={onAssignPlan}
+            isAssigningPlan={isAssigningPlan}
+            assignPlanError={assignPlanError}
+            onSaveInstallment={onSaveInstallment}
+            savingIndex={savingInstallmentIndex}
+          />
+        </div>
       )}
 
-      <div>
-        <p className="mb-2 text-sm font-medium text-slate-700">Move to Stage:</p>
+      <div className="border-t border-slate-100 pt-4">
+        <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+          <Milestone className="h-4 w-4 text-slate-400" strokeWidth={2} aria-hidden="true" />
+          Move to Stage
+        </p>
         <div className="grid grid-cols-3 gap-2">
           {LEAD_STAGES.map((stage) => {
             const isActive = lead.status === stage.value
@@ -527,18 +551,26 @@ export function LeadDetailModal({ lead, onClose }) {
   }
 
   const activeError = stageMutation.error || followUpMutation.error || installmentMutation.error
+  const stageInfo = LEAD_STAGE_BY_VALUE[liveLead.status]
+
+  const header = (
+    <div className="flex min-w-0 items-center gap-3">
+      <LeadAvatar name={lead.name} size="h-11 w-11" />
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="truncate text-base font-semibold text-slate-900">{lead.name}</h2>
+          <Badge outline tone={stageInfo?.tone ?? 'slate'}>
+            {stageInfo?.label ?? titleCase(liveLead.status)}
+          </Badge>
+        </div>
+        <p className="text-sm text-slate-500">{lead.phone}</p>
+      </div>
+    </div>
+  )
 
   return (
-    <Modal title=" " isOpen onClose={onClose} maxWidth="max-w-2xl">
-      <div className="-mt-2 space-y-4">
-        <div className="flex items-center gap-3">
-          <LeadAvatar name={lead.name} size="h-12 w-12" />
-          <div className="min-w-0">
-            <h2 className="truncate text-lg font-semibold text-slate-900">{lead.name}</h2>
-            <p className="text-sm text-slate-500">{lead.phone}</p>
-          </div>
-        </div>
-
+    <Modal header={header} isOpen onClose={onClose} maxWidth="max-w-2xl">
+      <div className="space-y-4">
         <ErrorMessage message={activeError ? getApiErrorMessage(activeError) : null} />
 
         <div className="flex gap-1 border-b border-slate-200">
@@ -547,12 +579,13 @@ export function LeadDetailModal({ lead, onClose }) {
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`px-3 pb-2 text-sm font-semibold transition-colors ${
+              className={`flex items-center gap-1.5 px-3 pb-2 text-sm font-semibold transition-colors ${
                 activeTab === tab.key
                   ? 'border-b-2 border-brand-600 text-brand-600'
                   : 'border-b-2 border-transparent text-slate-500 hover:text-slate-700'
               }`}
             >
+              <tab.icon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
               {tab.label}
             </button>
           ))}
