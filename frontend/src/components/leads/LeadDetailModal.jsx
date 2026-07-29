@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowRight,
   BookOpen,
   Calendar,
   CalendarClock,
+  CheckCircle2,
   Clock,
   ImagePlus,
   Info,
@@ -203,6 +204,8 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving }) {
   const [transactionId, setTransactionId] = useState(installment.transaction_id ?? '')
   const [upiId, setUpiId] = useState(installment.upi_id ?? '')
   const [scheduledAt, setScheduledAt] = useState(installment.scheduled_at ?? '')
+  const [validationError, setValidationError] = useState(null)
+  const fileInputRef = useRef(null)
 
   const previewUrl = useMemo(() => {
     if (file) return URL.createObjectURL(file)
@@ -210,16 +213,36 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving }) {
     return null
   }, [file, installment.proof_url])
 
+  function handleSaveSchedule() {
+    if (!scheduledAt) {
+      setValidationError('Please pick a scheduled date before saving.')
+      return
+    }
+    setValidationError(null)
+    onSave(index, { scheduledAt })
+  }
+
+  function handleSavePayment() {
+    const missing =
+      !amount ||
+      !mode ||
+      (mode === 'upi' ? !upiId : !transactionId) ||
+      (!file && !installment.proof_url)
+    if (missing) {
+      setValidationError('Please fill in the amount, mode, ID, and payment proof before saving.')
+      return
+    }
+    setValidationError(null)
+    onSave(index, { file, amount, mode, transactionId, upiId })
+  }
+
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
-            {index + 1}
-          </span>
-          <p className="text-sm font-semibold text-slate-800">{installment.label}</p>
-        </div>
-        {installment.paid && <Badge tone="green">Paid</Badge>}
+      <div className="mb-2 flex items-center gap-2">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
+          {index + 1}
+        </span>
+        <p className="text-sm font-semibold text-slate-800">{installment.label}</p>
       </div>
 
       {isTwoShotSecond && !showPaidFields ? (
@@ -230,11 +253,12 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving }) {
             value={scheduledAt}
             onChange={(event) => setScheduledAt(event.target.value)}
           />
+          <ErrorMessage message={validationError} />
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setShowPaidFields(true)}>
               Payment received — fill details
             </Button>
-            <Button onClick={() => onSave(index, { scheduledAt })} disabled={isSaving}>
+            <Button onClick={handleSaveSchedule} disabled={isSaving}>
               {isSaving ? 'Saving…' : 'Save schedule'}
             </Button>
           </div>
@@ -279,18 +303,42 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving }) {
               />
             )}
             <input
+              ref={fileInputRef}
               type="file"
               accept="image/*"
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-              className="block w-full text-sm text-slate-600"
+              className="hidden"
             />
+            <div className="flex items-center gap-3">
+              <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
+                <ImagePlus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                {file || installment.proof_url ? 'Change Image' : 'Upload Image'}
+              </Button>
+              {(file || installment.proof_url) && (
+                <span className="flex items-center gap-1 text-xs font-medium text-green-600">
+                  <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                  {file ? file.name : 'Uploaded'}
+                </span>
+              )}
+            </div>
           </div>
+          <ErrorMessage message={validationError} />
           <div className="flex justify-end">
             <Button
-              onClick={() => onSave(index, { file, amount, mode, transactionId, upiId })}
+              variant={installment.paid ? 'success' : 'primary'}
+              onClick={handleSavePayment}
               disabled={isSaving}
             >
-              {isSaving ? 'Saving…' : 'Save payment'}
+              {isSaving ? (
+                'Saving…'
+              ) : installment.paid ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                  Paid
+                </>
+              ) : (
+                'Save payment'
+              )}
             </Button>
           </div>
         </div>
@@ -318,9 +366,7 @@ function PaymentCollectionSection({
           <Wallet className="h-4.5 w-4.5" strokeWidth={2} aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-800">
-            Follow-Up : payment selected by student in foundation form
-          </p>
+          <p className="truncate text-sm font-semibold text-slate-800">{lead.course_interest}</p>
           <Badge tone="blue">{PAYMENT_PLAN_LABELS[lead.payment_plan] ?? lead.payment_plan}</Badge>
         </div>
       </div>

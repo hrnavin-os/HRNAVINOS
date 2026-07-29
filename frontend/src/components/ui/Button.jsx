@@ -2,6 +2,7 @@ const VARIANTS = {
   primary: 'bg-brand-600 text-white hover:bg-brand-700 focus-visible:outline-brand-600',
   secondary: 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 focus-visible:outline-slate-400',
   danger: 'bg-red-600 text-white hover:bg-red-700 focus-visible:outline-red-600',
+  success: 'bg-green-600 text-white hover:bg-green-700 focus-visible:outline-green-600',
   ghost: 'text-slate-600 hover:bg-slate-100 focus-visible:outline-slate-400',
   // Approve/Reject actions across the payments & approvals flow — soft-tone
   // buttons using the exact colors specified for those two actions.
