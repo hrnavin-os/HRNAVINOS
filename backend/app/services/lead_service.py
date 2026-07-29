@@ -7,7 +7,7 @@ from typing import List
 from fastapi import UploadFile
 
 from app.exceptions.base import BadRequestError, NotFoundError
-from app.models.enums import LeadSource, LeadStatus, PaymentMethod
+from app.models.enums import InstallmentPaymentMode, LeadSource, LeadStatus, PaymentMethod
 from app.models.lead import FollowUpEntry, Lead
 from app.repositories.audit_log_repository import AuditLogRepository
 from app.repositories.lead_repository import LeadRepository
@@ -21,6 +21,7 @@ from app.schemas.lead_schema import (
     LeadStatsResponse,
     LeadTimelineEntryResponse,
     LeadUpdate,
+    PaymentInstallmentResponse,
 )
 from app.services.audit_service import AuditService
 from app.services.storage_service import StorageService
@@ -60,6 +61,21 @@ class LeadService:
             payment_mode=lead.payment_mode,
             reviewed=lead.reviewed,
             raw_form_data=lead.raw_form_data,
+            program_interest=lead.program_interest,
+            payment_plan=lead.payment_plan,
+            installments=[
+                PaymentInstallmentResponse(
+                    label=installment.label,
+                    amount=installment.amount,
+                    mode=installment.mode,
+                    transaction_id=installment.transaction_id,
+                    upi_id=installment.upi_id,
+                    proof_url=installment.proof_url,
+                    scheduled_at=installment.scheduled_at,
+                    paid=installment.paid,
+                )
+                for installment in lead.installments
+            ],
             created_at=lead.created_at,
             updated_at=lead.updated_at,
         )
@@ -196,6 +212,50 @@ class LeadService:
         await lead.save()
         if changes:
             await self.audit.record(user_id=actor_id, action="UPDATE", entity_type="Lead", entity_id=str(lead.id), changes=changes)
+        return lead
+
+    async def update_installment(
+        self,
+        lead_id: uuid.UUID,
+        index: int,
+        *,
+        file: UploadFile | None,
+        amount: Decimal | None,
+        mode: InstallmentPaymentMode | None,
+        transaction_id: str | None,
+        upi_id: str | None,
+        scheduled_at: date | None,
+        actor_id: uuid.UUID | None,
+    ) -> Lead:
+        lead = await self.get(lead_id)
+        if index < 0 or index >= len(lead.installments):
+            raise BadRequestError("Invalid installment index for this lead's plan.")
+
+        installment = lead.installments[index]
+        if amount is not None:
+            installment.amount = amount
+        if mode is not None:
+            installment.mode = mode
+        if transaction_id is not None:
+            installment.transaction_id = transaction_id
+        if upi_id is not None:
+            installment.upi_id = upi_id
+        if scheduled_at is not None:
+            installment.scheduled_at = scheduled_at
+        if file is not None:
+            installment.proof_url = await self.storage.save_image(file, subdir=f"leads/{lead_id}/installments")
+        installment.paid = bool(installment.mode and (installment.transaction_id or installment.upi_id) and installment.proof_url)
+
+        lead.updated_by = actor_id
+        lead.touch(actor_id)
+        await lead.save()
+        await self.audit.record(
+            user_id=actor_id,
+            action="UPDATE",
+            entity_type="Lead",
+            entity_id=str(lead.id),
+            changes={"installment_index": index, "paid": installment.paid},
+        )
         return lead
 
     async def timeline(self, lead_id: uuid.UUID) -> List[LeadTimelineEntryResponse]:

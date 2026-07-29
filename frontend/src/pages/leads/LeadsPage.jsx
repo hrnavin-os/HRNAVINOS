@@ -187,11 +187,6 @@ export function LeadsPage() {
     },
     { key: 'source', header: 'Source', render: (row) => <Badge tone="slate">{titleCase(row.source)}</Badge> },
     {
-      key: 'batch',
-      header: 'Batch',
-      render: (row) => (row.batch_preference ? row.batch_preference : <span className="text-slate-400">—</span>),
-    },
-    {
       key: 'stage',
       header: 'Stage',
       render: (row) => {

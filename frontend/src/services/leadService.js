@@ -35,4 +35,17 @@ export const leadService = {
     })
     return data
   },
+  updateInstallment: async (id, index, { file, amount, mode, transactionId, upiId, scheduledAt }) => {
+    const formData = new FormData()
+    if (file) formData.append('file', file)
+    if (amount !== undefined && amount !== null && amount !== '') formData.append('amount', amount)
+    if (mode) formData.append('mode', mode)
+    if (transactionId) formData.append('transaction_id', transactionId)
+    if (upiId) formData.append('upi_id', upiId)
+    if (scheduledAt) formData.append('scheduled_at', scheduledAt)
+    const { data } = await apiClient.post(`/leads/${id}/installments/${index}`, formData, {
+      headers: { 'Content-Type': undefined },
+    })
+    return data
+  },
 }

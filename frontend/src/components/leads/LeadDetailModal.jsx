@@ -5,7 +5,6 @@ import {
   BookOpen,
   Calendar,
   CalendarClock,
-  CalendarRange,
   Clock,
   ImagePlus,
   Mail,
@@ -23,10 +22,12 @@ import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
+import { Badge } from '@/components/ui/Badge'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { LEAD_STAGES } from '@/constants/leadStages'
 import { PAYMENT_METHOD_OPTIONS } from '@/constants/paymentMethods'
+import { INSTALLMENT_MODE_OPTIONS, PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
 import { leadService } from '@/services/leadService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { formatDateTime, titleCase } from '@/utils/formatters'
@@ -98,13 +99,15 @@ const INFO_ITEMS = (lead) => [
   { icon: Mail, label: 'Email', value: lead.email ?? '—' },
   { icon: Tag, label: 'Source', value: titleCase(lead.source) },
   { icon: BookOpen, label: 'Course Interest', value: lead.course_interest ?? '—' },
-  { icon: CalendarRange, label: 'Batch', value: lead.batch_preference ?? '—' },
   { icon: Wallet, label: 'Payment Expected', value: lead.payment_expected ?? '—' },
   { icon: UserRound, label: 'Assigned To', value: lead.assigned_to_name ?? 'Unassigned' },
   { icon: Calendar, label: 'Created', value: formatDateTime(lead.created_at) },
 ]
 
-function PreScreeningSection({ lead, onUpload, isUploading }) {
+// Fallback for leads not sourced from the Foundation Form (no payment_plan/
+// installments set) - a manually-created lead has no fixed plan to collect
+// against, just one generic amount/mode/proof.
+function LegacyPaymentSection({ lead, onUpload, isUploading }) {
   const [file, setFile] = useState(null)
   const [paidAmount, setPaidAmount] = useState(lead.paid_amount ?? '')
   const [paymentMode, setPaymentMode] = useState(lead.payment_mode ?? '')
@@ -170,10 +173,145 @@ function PreScreeningSection({ lead, onUpload, isUploading }) {
   )
 }
 
-function OverviewTab({ lead, onSelectStage, isSaving, onUploadPayment, isUploadingPayment }) {
+function InstallmentRow({ lead, installment, index, onSave, isSaving }) {
+  const isTwoShotSecond = lead.payment_plan === 'two_shot' && index === 1
+  const [showPaidFields, setShowPaidFields] = useState(!isTwoShotSecond || installment.paid || Boolean(installment.mode))
+  const [file, setFile] = useState(null)
+  const [amount, setAmount] = useState(installment.amount ?? '')
+  const [mode, setMode] = useState(installment.mode ?? '')
+  const [transactionId, setTransactionId] = useState(installment.transaction_id ?? '')
+  const [upiId, setUpiId] = useState(installment.upi_id ?? '')
+  const [scheduledAt, setScheduledAt] = useState(installment.scheduled_at ?? '')
+
+  const previewUrl = useMemo(() => {
+    if (file) return URL.createObjectURL(file)
+    if (installment.proof_url) return `${MEDIA_BASE_URL}${installment.proof_url}`
+    return null
+  }, [file, installment.proof_url])
+
+  return (
+    <div className="rounded-lg border border-slate-200 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-800">{installment.label}</p>
+        {installment.paid && <Badge tone="green">Paid</Badge>}
+      </div>
+
+      {isTwoShotSecond && !showPaidFields ? (
+        <div className="space-y-3">
+          <Input
+            type="date"
+            label="Scheduled Date"
+            value={scheduledAt}
+            onChange={(event) => setScheduledAt(event.target.value)}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setShowPaidFields(true)}>
+              Payment received — fill details
+            </Button>
+            <Button onClick={() => onSave(index, { scheduledAt })} disabled={isSaving}>
+              {isSaving ? 'Saving…' : 'Save schedule'}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <Input
+            label="Payment Amount"
+            type="number"
+            step="0.01"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+          />
+          <Select label="Payment Mode" value={mode} onChange={(event) => setMode(event.target.value)}>
+            <option value="">Select Mode</option>
+            {INSTALLMENT_MODE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+          {(mode === 'card' || mode === 'netbanking') && (
+            <Input
+              label="Transaction ID"
+              value={transactionId}
+              onChange={(event) => setTransactionId(event.target.value)}
+            />
+          )}
+          {mode === 'upi' && (
+            <Input label="UPI ID" value={upiId} onChange={(event) => setUpiId(event.target.value)} />
+          )}
+          <div>
+            <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700">
+              <ImagePlus className="h-4 w-4 text-slate-400" strokeWidth={2} aria-hidden="true" />
+              Payment Proof
+            </label>
+            {previewUrl && (
+              <img
+                src={previewUrl}
+                alt="Payment proof"
+                className="mb-2 max-h-40 w-full rounded-md border border-slate-200 object-contain"
+              />
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+              className="block w-full text-sm text-slate-600"
+            />
+          </div>
+          <div className="flex justify-end">
+            <Button
+              onClick={() => onSave(index, { file, amount, mode, transactionId, upiId })}
+              disabled={isSaving}
+            >
+              {isSaving ? 'Saving…' : 'Save payment'}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PaymentCollectionSection({ lead, onUploadLegacy, isUploadingLegacy, onSaveInstallment, savingIndex }) {
+  if (!lead.payment_plan) {
+    return <LegacyPaymentSection lead={lead} onUpload={onUploadLegacy} isUploading={isUploadingLegacy} />
+  }
+
+  return (
+    <div>
+      <p className="mb-1 text-sm font-medium text-slate-700">
+        Follow-Up : payment selected by student in foundation form
+      </p>
+      <p className="mb-3 text-xs text-slate-500">{PAYMENT_PLAN_LABELS[lead.payment_plan] ?? lead.payment_plan}</p>
+      <div className="max-h-96 space-y-3 overflow-y-auto pr-1">
+        {lead.installments.map((installment, index) => (
+          <InstallmentRow
+            key={index}
+            lead={lead}
+            installment={installment}
+            index={index}
+            onSave={onSaveInstallment}
+            isSaving={savingIndex === index}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function OverviewTab({
+  lead,
+  onSelectStage,
+  isSaving,
+  onUploadPayment,
+  isUploadingPayment,
+  onSaveInstallment,
+  savingInstallmentIndex,
+}) {
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-2 gap-2.5">
         {INFO_ITEMS(lead).map((item) => (
           <div key={item.label} className="flex items-start gap-2.5 rounded-lg bg-slate-50 p-3">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white text-slate-400 shadow-sm">
@@ -181,7 +319,7 @@ function OverviewTab({ lead, onSelectStage, isSaving, onUploadPayment, isUploadi
             </span>
             <div className="min-w-0">
               <p className="text-xs text-slate-500">{item.label}</p>
-              <p className="truncate text-sm font-semibold text-slate-900">{item.value}</p>
+              <p className="break-words text-sm font-semibold text-slate-900">{item.value}</p>
             </div>
           </div>
         ))}
@@ -198,7 +336,13 @@ function OverviewTab({ lead, onSelectStage, isSaving, onUploadPayment, isUploadi
       )}
 
       {lead.status === 'pre_screening' && (
-        <PreScreeningSection lead={lead} onUpload={onUploadPayment} isUploading={isUploadingPayment} />
+        <PaymentCollectionSection
+          lead={lead}
+          onUploadLegacy={onUploadPayment}
+          isUploadingLegacy={isUploadingPayment}
+          onSaveInstallment={onSaveInstallment}
+          savingIndex={savingInstallmentIndex}
+        />
       )}
 
       <div>
@@ -308,6 +452,11 @@ export function LeadDetailModal({ lead, onClose }) {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState('overview')
   const [followUpAt, setFollowUpAt] = useState(toDateTimeInputValue(lead.follow_up_at))
+  // Mirrors the lead prop but gets refreshed from each mutation's response,
+  // so e.g. saving installment 1 of an EMI plan shows "Paid" on that row
+  // immediately instead of only after the modal is reopened.
+  const [liveLead, setLiveLead] = useState(lead)
+  const [savingInstallmentIndex, setSavingInstallmentIndex] = useState(null)
 
   function invalidateLeadQueries() {
     queryClient.invalidateQueries({ queryKey: ['leads'] })
@@ -334,10 +483,27 @@ export function LeadDetailModal({ lead, onClose }) {
 
   const paymentMutation = useMutation({
     mutationFn: ({ file, paidAmount }) => leadService.uploadPaymentInfo(lead.id, { file, paidAmount }),
-    onSuccess: () => invalidateLeadQueries(),
+    onSuccess: (updatedLead) => {
+      setLiveLead(updatedLead)
+      invalidateLeadQueries()
+    },
   })
 
-  const activeError = stageMutation.error || followUpMutation.error || paymentMutation.error
+  const installmentMutation = useMutation({
+    mutationFn: ({ index, values }) => leadService.updateInstallment(lead.id, index, values),
+    onSuccess: (updatedLead) => {
+      setLiveLead(updatedLead)
+      invalidateLeadQueries()
+    },
+    onSettled: () => setSavingInstallmentIndex(null),
+  })
+
+  function handleSaveInstallment(index, values) {
+    setSavingInstallmentIndex(index)
+    installmentMutation.mutate({ index, values })
+  }
+
+  const activeError = stageMutation.error || followUpMutation.error || paymentMutation.error || installmentMutation.error
 
   return (
     <Modal title=" " isOpen onClose={onClose} maxWidth="max-w-2xl">
@@ -371,18 +537,20 @@ export function LeadDetailModal({ lead, onClose }) {
 
         {activeTab === 'overview' && (
           <OverviewTab
-            lead={lead}
+            lead={liveLead}
             onSelectStage={(newStatus) => stageMutation.mutate(newStatus)}
             isSaving={stageMutation.isPending}
             onUploadPayment={(payload) => paymentMutation.mutate(payload)}
             isUploadingPayment={paymentMutation.isPending}
+            onSaveInstallment={handleSaveInstallment}
+            savingInstallmentIndex={savingInstallmentIndex}
           />
         )}
         {activeTab === 'followup' && (
           <FollowUpTab
             followUpAt={followUpAt}
             setFollowUpAt={setFollowUpAt}
-            history={lead.follow_up_history ?? []}
+            history={liveLead.follow_up_history ?? []}
             onSave={() => followUpMutation.mutate()}
             isSaving={followUpMutation.isPending}
             onClose={onClose}

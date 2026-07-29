@@ -36,6 +36,12 @@ class PaymentTimeline(StrEnum):
     DAY_AFTER_TOMORROW = "day_after_tomorrow"
 
 
+class InstallmentPaymentMode(StrEnum):
+    CARD = "card"
+    UPI = "upi"
+    NETBANKING = "netbanking"
+
+
 class LeadStatus(StrEnum):
     NEW_LEAD = "new_lead"
     RNR = "rnr"

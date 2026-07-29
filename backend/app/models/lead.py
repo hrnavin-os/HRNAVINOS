@@ -1,19 +1,43 @@
 """Lead document — a prospective student tracked through the CRM / Pre-Sales pipeline."""
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from pymongo import IndexModel
 from pydantic import BaseModel, Field
 
 from app.database.base import BaseDocument, utcnow
 from app.database.types import MongoDecimal
-from app.models.enums import LeadSource, LeadStatus, PaymentMethod
+from app.models.enums import (
+    InstallmentPaymentMode,
+    LeadSource,
+    LeadStatus,
+    PaymentMethod,
+    PaymentPlanOption,
+    ProgramInterest,
+)
 
 
 class FollowUpEntry(BaseModel):
     scheduled_at: datetime
     created_at: datetime = Field(default_factory=utcnow)
     created_by: uuid.UUID | None = None
+
+
+class PaymentInstallment(BaseModel):
+    """One payment in a Foundation Form lead's plan (1 for single shot, 2 for
+    two shot, 6 for EMI). Pre-populated with label/amount from the pricing
+    table at submission time; staff fill in the rest as each is collected."""
+
+    label: str
+    amount: MongoDecimal | None = None
+    mode: InstallmentPaymentMode | None = None
+    transaction_id: str | None = Field(default=None, max_length=100)
+    upi_id: str | None = Field(default=None, max_length=100)
+    proof_url: str | None = Field(default=None, max_length=500)
+    # Two-shot's 2nd installment starts as just a planned date before it's
+    # actually paid.
+    scheduled_at: date | None = None
+    paid: bool = False
 
 
 class Lead(BaseDocument):
@@ -42,6 +66,11 @@ class Lead(BaseDocument):
     # Full question->answer snapshot of the source row (e.g. every Google Form
     # column), so Form Check can show fields beyond name/phone/email.
     raw_form_data: dict[str, str] | None = Field(default=None)
+    # Set for Foundation Form submissions; drives the plan-specific payment
+    # collection UI (installments) instead of the generic single-amount one.
+    program_interest: ProgramInterest | None = None
+    payment_plan: PaymentPlanOption | None = None
+    installments: list[PaymentInstallment] = Field(default_factory=list)
 
     class Settings:
         name = "leads"

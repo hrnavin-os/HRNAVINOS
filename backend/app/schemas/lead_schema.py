@@ -1,11 +1,18 @@
 """Request/response DTOs for the Lead Management (CRM / Pre-Sales) module."""
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, EmailStr, Field
 
-from app.models.enums import LeadSource, LeadStatus, PaymentMethod
+from app.models.enums import (
+    InstallmentPaymentMode,
+    LeadSource,
+    LeadStatus,
+    PaymentMethod,
+    PaymentPlanOption,
+    ProgramInterest,
+)
 
 
 class LeadCreate(BaseModel):
@@ -43,6 +50,17 @@ class FollowUpEntryResponse(BaseModel):
     created_at: datetime
 
 
+class PaymentInstallmentResponse(BaseModel):
+    label: str
+    amount: Decimal | None
+    mode: InstallmentPaymentMode | None
+    transaction_id: str | None
+    upi_id: str | None
+    proof_url: str | None
+    scheduled_at: date | None
+    paid: bool
+
+
 class LeadResponse(BaseModel):
     id: uuid.UUID
     name: str
@@ -63,6 +81,9 @@ class LeadResponse(BaseModel):
     payment_mode: PaymentMethod | None
     reviewed: bool
     raw_form_data: dict[str, str] | None = None
+    program_interest: ProgramInterest | None = None
+    payment_plan: PaymentPlanOption | None = None
+    installments: list[PaymentInstallmentResponse] = []
     created_at: datetime
     updated_at: datetime
 

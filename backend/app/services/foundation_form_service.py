@@ -1,9 +1,10 @@
 """Business logic for the public Foundation Form (student-facing lead intake)."""
 from datetime import date, timedelta
+from decimal import Decimal
 
 from app.exceptions.base import BadRequestError
-from app.models.enums import LeadSource, PaymentTimeline
-from app.models.lead import Lead
+from app.models.enums import LeadSource, PaymentPlanOption, PaymentTimeline
+from app.models.lead import Lead, PaymentInstallment
 from app.repositories.lead_repository import LeadRepository
 from app.schemas.foundation_form_schema import (
     FoundationFormCategory,
@@ -13,6 +14,12 @@ from app.schemas.foundation_form_schema import (
     FoundationFormSubmit,
 )
 from app.services.foundation_form_pricing import CATEGORY_BY_PROGRAM, PRICING, PROGRAM_LABELS
+
+_INSTALLMENT_LABELS = {
+    PaymentPlanOption.SINGLE_SHOT: ["Payment"],
+    PaymentPlanOption.TWO_SHOT: ["Payment 1", "Payment 2"],
+    PaymentPlanOption.EMI_6_WEEKS: [f"Week {n}" for n in range(1, 7)],
+}
 
 _TIMELINE_OFFSET_DAYS = {
     PaymentTimeline.IMMEDIATE: 0,
@@ -42,7 +49,12 @@ class FoundationFormService:
                 training_fee=data["training_fee"],
                 after_placement_fee=data["after_placement_fee"],
                 plans=[
-                    FoundationFormPlanOption(value=plan_value, **plan_data)
+                    FoundationFormPlanOption(
+                        value=plan_value,
+                        label=plan_data["label"],
+                        summary=plan_data["summary"],
+                        after_placement=plan_data["after_placement"],
+                    )
                     for plan_value, plan_data in data["plans"].items()
                 ],
             )
@@ -66,6 +78,10 @@ class FoundationFormService:
             f"(After Placement: {plan['after_placement']}) | "
             f"Pays on: {_TIMELINE_LABELS[data.payment_timeline]} ({payment_date.isoformat()})"
         )
+        installments = [
+            PaymentInstallment(label=label, amount=Decimal(amount))
+            for label, amount in zip(_INSTALLMENT_LABELS[data.payment_plan], plan["amounts"])
+        ]
 
         lead = Lead(
             name=data.name,
@@ -76,6 +92,9 @@ class FoundationFormService:
             payment_expected=payment_expected,
             notes=data.queries,
             reviewed=True,
+            program_interest=data.program_interest,
+            payment_plan=data.payment_plan,
+            installments=installments,
             raw_form_data={
                 "name": data.name,
                 "mobile_number": data.mobile_number,

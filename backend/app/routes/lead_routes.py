@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 
 from app.core.dependencies import RequirePermissions
 from app.exceptions.base import BadRequestError
-from app.models.enums import LeadSource, PaymentMethod
+from app.models.enums import InstallmentPaymentMode, LeadSource, PaymentMethod
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.common import MessageResponse, PaginatedResponse, PaginationParams
@@ -130,6 +130,40 @@ async def upload_payment_image(
     service = LeadService()
     lead = await service.update_payment_info(
         lead_id, file=file, paid_amount=parsed_amount, payment_mode=payment_mode, actor_id=actor.id
+    )
+    return await service.to_response(lead)
+
+
+@router.post("/{lead_id}/installments/{index}", response_model=LeadResponse)
+async def update_installment(
+    lead_id: uuid.UUID,
+    index: int,
+    file: UploadFile | None = File(default=None),
+    amount: str | None = Form(default=None),
+    mode: InstallmentPaymentMode | None = Form(default=None),
+    transaction_id: str | None = Form(default=None),
+    upi_id: str | None = Form(default=None),
+    scheduled_at: date | None = Form(default=None),
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
+) -> LeadResponse:
+    parsed_amount: Decimal | None = None
+    if amount:
+        try:
+            parsed_amount = Decimal(amount)
+        except InvalidOperation as exc:
+            raise BadRequestError("Amount must be a valid number.") from exc
+
+    service = LeadService()
+    lead = await service.update_installment(
+        lead_id,
+        index,
+        file=file,
+        amount=parsed_amount,
+        mode=mode,
+        transaction_id=transaction_id,
+        upi_id=upi_id,
+        scheduled_at=scheduled_at,
+        actor_id=actor.id,
     )
     return await service.to_response(lead)
 
