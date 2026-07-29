@@ -37,16 +37,16 @@ function InfoBox({ children }) {
 
 function StepIndicator({ step }) {
   return (
-    <div className="mb-6 flex items-center gap-2">
+    <div className="mb-6 flex items-center justify-center gap-2">
       {[1, 2, 3].map((n) => (
-        <div key={n} className="flex flex-1 items-center gap-2">
+        <div key={n} className="flex items-center gap-2">
           <div
             className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold
               ${n <= step ? 'bg-brand-600 text-white' : 'bg-slate-200 text-slate-500'}`}
           >
             {n}
           </div>
-          {n < 3 && <div className={`h-0.5 flex-1 ${n < step ? 'bg-brand-600' : 'bg-slate-200'}`} />}
+          {n < 3 && <div className={`h-0.5 w-12 ${n < step ? 'bg-brand-600' : 'bg-slate-200'}`} />}
         </div>
       ))}
     </div>
@@ -63,11 +63,15 @@ function formatDate(date) {
   return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+function formatWeekday(date) {
+  return date.toLocaleDateString('en-IN', { weekday: 'long' })
+}
+
 const TIMELINE_OPTIONS = [
-  { value: 'immediate', label: 'Immediate', date: new Date() },
-  { value: 'tomorrow', label: 'Tomorrow', date: addDays(new Date(), 1) },
-  { value: 'day_after_tomorrow', label: 'Day after tomorrow', date: addDays(new Date(), 2) },
-]
+  { value: 'immediate', date: new Date() },
+  { value: 'tomorrow', date: addDays(new Date(), 1) },
+  { value: 'day_after_tomorrow', date: addDays(new Date(), 2) },
+].map((option) => ({ ...option, label: formatWeekday(option.date) }))
 
 export function FoundationFormPage() {
   const [step, setStep] = useState(1)

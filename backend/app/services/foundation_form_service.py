@@ -26,12 +26,6 @@ _TIMELINE_OFFSET_DAYS = {
     PaymentTimeline.DAY_AFTER_TOMORROW: 2,
 }
 
-_TIMELINE_LABELS = {
-    PaymentTimeline.IMMEDIATE: "Immediate",
-    PaymentTimeline.TOMORROW: "Tomorrow",
-    PaymentTimeline.DAY_AFTER_TOMORROW: "Day after tomorrow",
-}
-
 
 class FoundationFormService:
     def __init__(self) -> None:
@@ -66,9 +60,10 @@ class FoundationFormService:
 
     async def submit(self, data: FoundationFormSubmit) -> Lead:
         payment_date = self._resolve_payment_date(data.payment_timeline)
+        weekday_name = payment_date.strftime("%A")
         payment_expected = (
             f"{build_payment_expected_summary(data.program_interest, data.payment_plan)} | "
-            f"Pays on: {_TIMELINE_LABELS[data.payment_timeline]} ({payment_date.isoformat()})"
+            f"Pays on: {weekday_name} ({payment_date.isoformat()})"
         )
         installments = build_installments(data.program_interest, data.payment_plan)
         plan = get_plan_details(data.program_interest, data.payment_plan)
@@ -92,7 +87,7 @@ class FoundationFormService:
                 "program_interest": PROGRAM_LABELS[data.program_interest],
                 "payment_plan": f"{plan['label']} - {plan['summary']}",
                 "after_placement_fee": plan["after_placement"],
-                "payment_timeline": _TIMELINE_LABELS[data.payment_timeline],
+                "payment_timeline": weekday_name,
                 "payment_date": payment_date.isoformat(),
                 "queries": data.queries,
             },
