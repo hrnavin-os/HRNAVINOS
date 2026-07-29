@@ -30,7 +30,7 @@ export const NAV_ITEMS = [
     permission: null,
     icon: LayoutDashboard,
     group: null,
-    hiddenForRoles: ['Pre Sales Executive'],
+    hiddenForRoles: ['Admin'],
   },
 
   {
@@ -39,7 +39,7 @@ export const NAV_ITEMS = [
     permission: PERMISSIONS.LEADS_VIEW,
     icon: Target,
     group: 'CRM & Admissions',
-    hideGroupForRoles: ['Pre Sales Executive'],
+    hideGroupForRoles: ['Admin'],
   },
   { label: 'Foundation Form', to: '/leads/foundation-form', permission: PERMISSIONS.LEADS_VIEW, icon: FileCheck2 },
   { label: 'Marketing Board', to: '/marketing-board', permission: PERMISSIONS.LEADS_VIEW, icon: Megaphone },

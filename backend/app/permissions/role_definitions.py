@@ -11,7 +11,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.LEADS_DELETE, P.LEADS_ASSIGN,
         P.ADMISSIONS_VIEW, P.USERS_VIEW, P.REPORTS_VIEW,
     ],
-    "Pre Sales Executive": [
+    "Admin": [
         P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE,
     ],
     "Post Sales Executive": [

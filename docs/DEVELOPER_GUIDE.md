@@ -62,7 +62,7 @@ Follow the pattern used by every existing module (e.g. `course`):
   `students.create`).
 - `Role` — a named bundle of permissions, storing `permission_ids`
   (references into `permissions`). Seeded roles: Super Admin, Sales Head,
-  Pre Sales Executive, Post Sales Executive, Admin Head, Admin Executive,
+  Admin, Post Sales Executive, Admin Head, Admin Executive,
   Placement Head, Placement Executive, Finance, Tutor, Student.
 - `User.role_id` — each user has exactly one role.
 - **Super Admin bypasses all permission checks** (see
