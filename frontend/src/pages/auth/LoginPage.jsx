@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { Input } from '@/components/ui/Input'
@@ -12,6 +13,7 @@ export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const [loginError, setLoginError] = useState(null)
+  const [showPassword, setShowPassword] = useState(false)
 
   const {
     register,
@@ -32,8 +34,8 @@ export function LoginPage() {
 
   return (
     <div>
-      <h1 className="mb-1 text-lg font-semibold text-slate-900">Sign in</h1>
-      <p className="mb-6 text-sm text-slate-500">Welcome back. Please enter your details.</p>
+      <h1 className="mb-1 text-center text-lg font-semibold text-slate-900">Sign in</h1>
+      <p className="mb-6 text-center text-sm text-slate-500">Welcome back. Please enter your details.</p>
 
       <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
         <ErrorMessage message={loginError} />
@@ -46,9 +48,20 @@ export function LoginPage() {
         />
         <Input
           label="Password"
-          type="password"
+          type={showPassword ? 'text' : 'password'}
           autoComplete="current-password"
           error={errors.password?.message}
+          rightElement={
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              className="text-slate-400 hover:text-slate-600"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              tabIndex={-1}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          }
           {...register('password', { required: 'Password is required' })}
         />
         <Button type="submit" className="w-full" disabled={isSubmitting}>
