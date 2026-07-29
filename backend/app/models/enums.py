@@ -13,7 +13,27 @@ class LeadSource(StrEnum):
     WALK_IN = "walk_in"
     PHONE_INQUIRY = "phone_inquiry"
     ADVERTISEMENT = "advertisement"
+    FOUNDATION_FORM = "foundation_form"
     OTHER = "other"
+
+
+class ProgramInterest(StrEnum):
+    ONLY_RECRUITMENT = "only_recruitment"
+    RECRUITMENT_INTERNSHIP = "recruitment_internship"
+    RECRUITMENT_GENERALIST = "recruitment_generalist"
+    RECRUITMENT_GENERALIST_INTERNSHIP = "recruitment_generalist_internship"
+
+
+class PaymentPlanOption(StrEnum):
+    SINGLE_SHOT = "single_shot"
+    TWO_SHOT = "two_shot"
+    EMI_6_WEEKS = "emi_6_weeks"
+
+
+class PaymentTimeline(StrEnum):
+    IMMEDIATE = "immediate"
+    TOMORROW = "tomorrow"
+    DAY_AFTER_TOMORROW = "day_after_tomorrow"
 
 
 class LeadStatus(StrEnum):

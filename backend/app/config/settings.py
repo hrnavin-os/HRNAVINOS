@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_DEFAULT: str = "100/minute"
     RATE_LIMIT_LOGIN: str = "5/minute"
+    RATE_LIMIT_PUBLIC_FORM: str = "10/minute"
 
     # ---------- Redis (optional cache / rate limit backend) ----------
     REDIS_URL: str | None = None

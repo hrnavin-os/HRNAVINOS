@@ -5,7 +5,8 @@ import { ProtectedRoute } from '@/routes/ProtectedRoute'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { HomeRoute } from '@/routes/HomeRoute'
 import { LeadsPage } from '@/pages/leads/LeadsPage'
-import { FormCheckPage } from '@/pages/leads/FormCheckPage'
+import { FoundationFormAdminPage } from '@/pages/leads/FoundationFormAdminPage'
+import { FoundationFormPage } from '@/pages/public/FoundationFormPage'
 import { MarketingBoardPage } from '@/pages/marketing/MarketingBoardPage'
 import { AdmissionsPage } from '@/pages/admissions/AdmissionsPage'
 import { StudentsPage } from '@/pages/students/StudentsPage'
@@ -33,6 +34,7 @@ export function AppRoutes() {
       </Route>
 
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
+      <Route path="/foundation-form" element={<FoundationFormPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
@@ -40,7 +42,7 @@ export function AppRoutes() {
 
           <Route element={<ProtectedRoute permission={PERMISSIONS.LEADS_VIEW} />}>
             <Route path="/leads" element={<LeadsPage />} />
-            <Route path="/leads/form-check" element={<FormCheckPage />} />
+            <Route path="/leads/foundation-form" element={<FoundationFormAdminPage />} />
             <Route path="/marketing-board" element={<MarketingBoardPage />} />
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.ADMISSIONS_VIEW} />}>
