@@ -5,11 +5,10 @@ form's fields/questions, and the program/category/payment-plan pricing.
 Mirrors the AppSettings singleton pattern (app/models/settings.py) - fetched
 via find_one({}) with no filter, so there is exactly one document.
 """
-from decimal import Decimal
-
 from pydantic import BaseModel, Field
 
 from app.database.base import BaseDocument
+from app.database.types import MongoDecimal
 
 
 class FoundationFormField(BaseModel):
@@ -35,7 +34,7 @@ class FoundationFormPlan(BaseModel):
     label: str = Field(max_length=150)
     summary: str = Field(max_length=255)
     after_placement: str = Field(max_length=100)
-    amounts: list[Decimal] = Field(default_factory=list)
+    amounts: list[MongoDecimal] = Field(default_factory=list)
 
 
 class FoundationFormCategory(BaseModel):
