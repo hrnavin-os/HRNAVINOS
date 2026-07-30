@@ -14,11 +14,17 @@ router = APIRouter(prefix="/foundation-form/config", tags=["Foundation Form (Adm
 
 
 def _to_response(config) -> FoundationFormConfigResponse:
+    # config.fields/programs/categories are FoundationFormField/ProgramCfg/Category
+    # model instances (from app.models.foundation_form_config) - a different class
+    # than the FoundationFormFieldConfig/etc. response schema types, even though
+    # the field names match. Pydantic v2 won't auto-coerce one model instance into
+    # another; model_dump() to plain dicts first so validation has something it
+    # actually knows how to build the response schema from.
     return FoundationFormConfigResponse(
         offer_info=config.offer_info,
-        fields=config.fields,
-        programs=config.programs,
-        categories=config.categories,
+        fields=[f.model_dump() for f in config.fields],
+        programs=[p.model_dump() for p in config.programs],
+        categories=[c.model_dump() for c in config.categories],
         updated_at=config.updated_at,
     )
 
