@@ -97,15 +97,63 @@ function toDateTimeInputValue(value) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
+// Each info card gets its own accent color so the overview reads as a set of
+// distinct facts at a glance, rather than a monotone list.
+const INFO_TONE_CLASSES = {
+  blue: { icon: 'bg-blue-100 text-blue-600', label: 'text-blue-500' },
+  violet: { icon: 'bg-violet-100 text-violet-600', label: 'text-violet-500' },
+  emerald: { icon: 'bg-emerald-100 text-emerald-600', label: 'text-emerald-500' },
+  purple: { icon: 'bg-purple-100 text-purple-600', label: 'text-purple-500' },
+  cyan: { icon: 'bg-cyan-100 text-cyan-600', label: 'text-cyan-500' },
+  rose: { icon: 'bg-rose-100 text-rose-600', label: 'text-rose-500' },
+}
+
 const INFO_ITEMS = (lead) => [
-  { icon: Phone, label: 'Phone', value: lead.phone },
-  { icon: Mail, label: 'Email', value: lead.email ?? '—' },
-  { icon: Tag, label: 'Source', value: titleCase(lead.source) },
-  { icon: BookOpen, label: 'Course Interest', value: lead.course_interest ?? '—' },
-  { icon: Wallet, label: 'Payment Expected', value: lead.payment_expected ?? '—' },
-  { icon: UserRound, label: 'Assigned To', value: lead.assigned_to_name ?? 'Unassigned' },
-  { icon: Calendar, label: 'Created', value: formatDateTime(lead.created_at) },
+  { key: 'phone', icon: Phone, label: 'Phone', value: lead.phone, tone: 'blue' },
+  { key: 'email', icon: Mail, label: 'Email', value: lead.email ?? '—', tone: 'violet' },
+  { key: 'source', icon: Tag, label: 'Source', value: titleCase(lead.source), tone: 'emerald' },
+  { key: 'course_interest', icon: BookOpen, label: 'Course Interest', value: lead.course_interest ?? '—', tone: 'purple' },
 ]
+
+const TRAILING_INFO_ITEMS = (lead) => [
+  { key: 'assigned_to', icon: UserRound, label: 'Assigned To', value: lead.assigned_to_name ?? 'Unassigned', tone: 'cyan' },
+  { key: 'created', icon: Calendar, label: 'Created', value: formatDateTime(lead.created_at), tone: 'rose' },
+]
+
+function InfoCard({ item }) {
+  const tones = INFO_TONE_CLASSES[item.tone] ?? INFO_TONE_CLASSES.blue
+  return (
+    <div className="flex items-start gap-2.5 rounded-lg border border-slate-100 bg-white p-3 shadow-sm">
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${tones.icon}`}>
+        <item.icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+      </span>
+      <div className="min-w-0">
+        <p className={`text-xs font-semibold uppercase tracking-wide ${tones.label}`}>{item.label}</p>
+        <p className="break-words text-sm font-semibold text-slate-900">{item.value}</p>
+      </div>
+    </div>
+  )
+}
+
+// payment_expected arrives as "<plan summary> | Pays on: <weekday> (<date>)" from
+// the backend when a payment timeline was collected - split it so the "Pays on"
+// half reads as a secondary line instead of running on into the same sentence.
+function PaymentExpectedCard({ value }) {
+  const [main, ...rest] = value.split(' | ')
+  const paysOn = rest.join(' | ') || null
+  return (
+    <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 border-l-4 border-l-amber-400 bg-amber-50 p-3">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-600">
+        <Wallet className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-xs font-semibold uppercase tracking-wide text-amber-600">Payment Expected</p>
+        <p className="break-words text-sm font-semibold text-slate-900">{main}</p>
+        {paysOn && <p className="mt-0.5 break-words text-xs font-medium text-amber-700">{paysOn}</p>}
+      </div>
+    </div>
+  )
+}
 
 // Fallback for leads without a payment_plan yet (manually created in the
 // CRM, or an older Foundation Form submission from before this field
@@ -400,15 +448,15 @@ function OverviewTab({
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2.5">
         {INFO_ITEMS(lead).map((item) => (
-          <div key={item.label} className="flex items-start gap-2.5 rounded-lg border border-slate-100 bg-slate-50 p-3">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-50 text-brand-600">
-              <item.icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{item.label}</p>
-              <p className="break-words text-sm font-semibold text-slate-900">{item.value}</p>
-            </div>
-          </div>
+          <InfoCard key={item.key} item={item} />
+        ))}
+      </div>
+
+      {lead.payment_expected && <PaymentExpectedCard value={lead.payment_expected} />}
+
+      <div className="grid grid-cols-2 gap-2.5">
+        {TRAILING_INFO_ITEMS(lead).map((item) => (
+          <InfoCard key={item.key} item={item} />
         ))}
       </div>
 
