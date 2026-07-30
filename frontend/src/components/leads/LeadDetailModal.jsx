@@ -172,16 +172,16 @@ function PlanAssignmentForm({ onAssign, isAssigning, error }) {
   const category = selectedProgram ? categories[selectedProgram.category] : null
 
   return (
-    <div className="rounded-lg border border-brand-200 bg-brand-50/50 p-4">
+    <div className="rounded-2xl border border-brand-200 bg-brand-50 p-4">
       <div className="mb-3 flex items-center gap-2.5">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-brand-100 text-brand-600">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-100 text-brand-600">
           <Wallet className="h-4.5 w-4.5" strokeWidth={2} aria-hidden="true" />
         </span>
         <p className="text-sm font-semibold text-slate-800">
           Follow-Up : payment selected by student in foundation form
         </p>
       </div>
-      <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3">
+      <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
         <Select
           label="Program"
           value={programInterest}
@@ -285,12 +285,12 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving }) {
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="mb-2 flex items-center gap-2">
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-center gap-2">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
           {index + 1}
         </span>
-        <p className="text-sm font-semibold text-slate-800">{installment.label}</p>
+        <p className="text-base font-semibold text-slate-900">{installment.label}</p>
       </div>
 
       {isTwoShotSecond && !showPaidFields ? (
@@ -300,6 +300,7 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving }) {
             label="Scheduled Date"
             value={scheduledAt}
             onChange={(event) => setScheduledAt(event.target.value)}
+            className="rounded-xl!"
           />
           <ErrorMessage message={validationError} />
           <div className="flex justify-end gap-2">
@@ -319,8 +320,14 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving }) {
             step="0.01"
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
+            className="rounded-xl!"
           />
-          <Select label="Payment Mode" value={mode} onChange={(event) => setMode(event.target.value)}>
+          <Select
+            label="Payment Mode"
+            value={mode}
+            onChange={(event) => setMode(event.target.value)}
+            className="rounded-xl!"
+          >
             <option value="">Select Mode</option>
             {INSTALLMENT_MODE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -333,13 +340,19 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving }) {
               label="Transaction ID"
               value={transactionId}
               onChange={(event) => setTransactionId(event.target.value)}
+              className="rounded-xl!"
             />
           )}
           {mode === 'upi' && (
-            <Input label="UPI ID" value={upiId} onChange={(event) => setUpiId(event.target.value)} />
+            <Input
+              label="UPI ID"
+              value={upiId}
+              onChange={(event) => setUpiId(event.target.value)}
+              className="rounded-xl!"
+            />
           )}
           <div>
-            <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700">
+            <label className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-slate-800">
               <ImagePlus className="h-4 w-4 text-slate-400" strokeWidth={2} aria-hidden="true" />
               Payment Proof
             </label>
