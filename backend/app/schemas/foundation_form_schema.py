@@ -1,7 +1,27 @@
-"""Request/response DTOs for the public Foundation Form."""
+"""Request/response DTOs for the public Foundation Form and its admin config."""
+from datetime import datetime
+from decimal import Decimal
+from typing import Literal
+
 from pydantic import BaseModel, EmailStr, Field
 
 from app.models.enums import PaymentPlanOption, PaymentTimeline, ProgramInterest
+
+FieldType = Literal["text", "email", "tel", "textarea"]
+
+
+class FoundationFormFieldConfig(BaseModel):
+    """One question on page 1 or 3. Shared by the public pricing response
+    (so the form can render itself) and the admin config endpoints (so the
+    admin can edit it) - there's nothing sensitive in it either way."""
+
+    key: str = Field(min_length=1, max_length=100)
+    page: int = Field(ge=1, le=3)
+    type: FieldType
+    label: str = Field(min_length=1, max_length=200)
+    required: bool = True
+    order: int = 0
+    is_system: bool = False
 
 
 class FoundationFormProgramOption(BaseModel):
@@ -25,6 +45,8 @@ class FoundationFormCategory(BaseModel):
 
 
 class FoundationFormPricingResponse(BaseModel):
+    offer_info: str
+    fields: list[FoundationFormFieldConfig]
     programs: list[FoundationFormProgramOption]
     categories: dict[str, FoundationFormCategory]
 
@@ -32,12 +54,53 @@ class FoundationFormPricingResponse(BaseModel):
 class FoundationFormSubmit(BaseModel):
     name: str = Field(min_length=2, max_length=150)
     mobile_number: str = Field(min_length=6, max_length=20)
-    email: EmailStr
-    program_interest: ProgramInterest
-    payment_plan: PaymentPlanOption
-    payment_timeline: PaymentTimeline
-    queries: str = Field(min_length=1, max_length=2000)
+    email: EmailStr | None = None
+    program_interest: ProgramInterest | None = None
+    payment_plan: PaymentPlanOption | None = None
+    payment_timeline: PaymentTimeline | None = None
+    queries: str | None = Field(default=None, max_length=2000)
+    custom_fields: dict[str, str] = Field(default_factory=dict)
 
 
 class FoundationFormSubmitResponse(BaseModel):
     message: str
+
+
+# ---------- Admin config (edit fields, programs, pricing) ----------
+
+
+class FoundationFormPlanConfig(BaseModel):
+    value: PaymentPlanOption
+    label: str = Field(min_length=1, max_length=150)
+    summary: str = Field(min_length=1, max_length=255)
+    after_placement: str = Field(min_length=1, max_length=100)
+    amounts: list[Decimal]
+
+
+class FoundationFormCategoryConfig(BaseModel):
+    code: str = Field(min_length=1, max_length=50)
+    label: str = Field(min_length=1, max_length=255)
+    training_fee: str = Field(min_length=1, max_length=100)
+    after_placement_fee: str = Field(min_length=1, max_length=100)
+    plans: list[FoundationFormPlanConfig]
+
+
+class FoundationFormProgramConfig(BaseModel):
+    value: ProgramInterest
+    label: str = Field(min_length=1, max_length=255)
+    category: str
+
+
+class FoundationFormConfigResponse(BaseModel):
+    offer_info: str
+    fields: list[FoundationFormFieldConfig]
+    programs: list[FoundationFormProgramConfig]
+    categories: list[FoundationFormCategoryConfig]
+    updated_at: datetime
+
+
+class FoundationFormConfigUpdate(BaseModel):
+    offer_info: str
+    fields: list[FoundationFormFieldConfig]
+    programs: list[FoundationFormProgramConfig]
+    categories: list[FoundationFormCategoryConfig]

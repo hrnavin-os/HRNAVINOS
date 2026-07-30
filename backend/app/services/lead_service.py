@@ -10,6 +10,7 @@ from app.exceptions.base import BadRequestError, NotFoundError
 from app.models.enums import InstallmentPaymentMode, LeadSource, LeadStatus, PaymentMethod
 from app.models.lead import FollowUpEntry, Lead
 from app.repositories.audit_log_repository import AuditLogRepository
+from app.repositories.foundation_form_config_repository import FoundationFormConfigRepository
 from app.repositories.lead_repository import LeadRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.common import PaginatedResponse, PaginationParams
@@ -25,7 +26,7 @@ from app.schemas.lead_schema import (
     PaymentInstallmentResponse,
 )
 from app.services.audit_service import AuditService
-from app.services.foundation_form_pricing import PROGRAM_LABELS, build_installments, build_payment_expected_summary
+from app.services.foundation_form_pricing import build_installments, build_payment_expected_summary
 from app.services.storage_service import StorageService
 
 
@@ -36,6 +37,7 @@ class LeadService:
         self.audit = AuditService()
         self.audit_logs = AuditLogRepository()
         self.storage = StorageService()
+        self.foundation_form_config = FoundationFormConfigRepository()
 
     async def to_response(self, lead: Lead) -> LeadResponse:
         assignee = await self.users.get_by_id(lead.assigned_to) if lead.assigned_to else None
@@ -221,12 +223,16 @@ class LeadService:
         arrive with one (e.g. created manually in the CRM), pre-populating
         its installments from the same pricing table the public form uses."""
         lead = await self.get(lead_id)
-        installments = build_installments(data.program_interest, data.payment_plan)
+        config = await self.foundation_form_config.get_or_create()
+        program_cfg = next((p for p in config.programs if p.value == data.program_interest), None)
+        if program_cfg is None:
+            raise BadRequestError("Selected program is not valid.")
+        installments = build_installments(config, data.program_interest, data.payment_plan)
         lead.program_interest = data.program_interest
         lead.payment_plan = data.payment_plan
         lead.installments = installments
-        lead.course_interest = PROGRAM_LABELS[data.program_interest]
-        lead.payment_expected = build_payment_expected_summary(data.program_interest, data.payment_plan)
+        lead.course_interest = program_cfg.label
+        lead.payment_expected = build_payment_expected_summary(config, data.program_interest, data.payment_plan)
         lead.updated_by = actor_id
         lead.touch(actor_id)
         await lead.save()

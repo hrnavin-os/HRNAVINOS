@@ -1,19 +1,20 @@
 """Fixed pricing/copy for the public Foundation Form.
 
-Single source of truth for both rendering the form's info boxes (via the
-pricing endpoint) and validating a submission server-side, so the client
-can never submit an out-of-policy price. Business-defined figures, not
-derived from anything - change here if the offer changes.
+PROGRAM_LABELS / CATEGORY_BY_PROGRAM / PRICING below are the one-time seed
+values for the FoundationFormConfig singleton (app/models/foundation_form_config.py,
+app/repositories/foundation_form_config_repository.py) - the live source of
+truth is that document, editable by admins at runtime, not these module
+constants. They're kept here only so the seed data has one clear home.
 
-Also the single source for building a lead's payment installments from a
-(program, plan) pair, shared by Foundation Form submissions and manually
-assigning a plan to a CRM-created lead - both go through the same pricing
-so amounts always match the course the student picked.
+get_plan_details() / build_installments() / build_payment_expected_summary()
+take the current config as a parameter (instead of closing over these dicts)
+so they always reflect whatever an admin has configured - shared by
+Foundation Form submissions and manually assigning a plan to a CRM-created
+lead, so amounts always match the course the student picked either way.
 """
-from decimal import Decimal
-
 from app.exceptions.base import BadRequestError
 from app.models.enums import PaymentPlanOption, ProgramInterest
+from app.models.foundation_form_config import FoundationFormCategory, FoundationFormConfig, FoundationFormPlan
 from app.models.lead import PaymentInstallment
 
 PROGRAM_LABELS: dict[ProgramInterest, str] = {
@@ -110,6 +111,8 @@ PRICING: dict[str, dict] = {
     },
 }
 
+# Not admin-editable: installment labels are structural, tied to plan type
+# (how many installments it has), not content an admin would customize.
 INSTALLMENT_LABELS: dict[PaymentPlanOption, list[str]] = {
     PaymentPlanOption.SINGLE_SHOT: ["Payment"],
     PaymentPlanOption.TWO_SHOT: ["Payment 1", "Payment 2"],
@@ -117,20 +120,32 @@ INSTALLMENT_LABELS: dict[PaymentPlanOption, list[str]] = {
 }
 
 
-def get_plan_details(program_interest: ProgramInterest, payment_plan: PaymentPlanOption) -> dict:
-    category_code = CATEGORY_BY_PROGRAM[program_interest]
-    plan = PRICING[category_code]["plans"].get(payment_plan)
+def get_category_for_program(config: FoundationFormConfig, program_interest: str) -> FoundationFormCategory:
+    program_cfg = next((p for p in config.programs if p.value == program_interest), None)
+    if program_cfg is None:
+        raise BadRequestError("Selected program is not valid.")
+    category = next((c for c in config.categories if c.code == program_cfg.category), None)
+    if category is None:
+        raise BadRequestError("Selected program's pricing category is not configured.")
+    return category
+
+
+def get_plan_details(config: FoundationFormConfig, program_interest: str, payment_plan: str) -> FoundationFormPlan:
+    category = get_category_for_program(config, program_interest)
+    plan = next((p for p in category.plans if p.value == payment_plan), None)
     if plan is None:
         raise BadRequestError("Selected payment plan is not valid for the chosen program.")
     return plan
 
 
-def build_installments(program_interest: ProgramInterest, payment_plan: PaymentPlanOption) -> list[PaymentInstallment]:
-    plan = get_plan_details(program_interest, payment_plan)
+def build_installments(
+    config: FoundationFormConfig, program_interest: str, payment_plan: PaymentPlanOption
+) -> list[PaymentInstallment]:
+    plan = get_plan_details(config, program_interest, payment_plan)
     labels = INSTALLMENT_LABELS[payment_plan]
-    return [PaymentInstallment(label=label, amount=Decimal(amount)) for label, amount in zip(labels, plan["amounts"])]
+    return [PaymentInstallment(label=label, amount=amount) for label, amount in zip(labels, plan.amounts)]
 
 
-def build_payment_expected_summary(program_interest: ProgramInterest, payment_plan: PaymentPlanOption) -> str:
-    plan = get_plan_details(program_interest, payment_plan)
-    return f"{plan['label']} - {plan['summary']} (After Placement: {plan['after_placement']})"
+def build_payment_expected_summary(config: FoundationFormConfig, program_interest: str, payment_plan: str) -> str:
+    plan = get_plan_details(config, program_interest, payment_plan)
+    return f"{plan.label} - {plan.summary} (After Placement: {plan.after_placement})"

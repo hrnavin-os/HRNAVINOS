@@ -11,21 +11,11 @@ import { Button } from '@/components/ui/Button'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
-const STEP_FIELDS = {
-  1: ['name', 'mobile_number', 'email', 'program_interest'],
-  2: ['payment_plan'],
-  3: ['payment_timeline', 'queries'],
-}
+// Keys with dedicated typed handling on submit (backend FoundationFormSubmit
+// fields) - anything else registered on the form goes into custom_fields.
+const KNOWN_KEYS = new Set(['name', 'mobile_number', 'email', 'program_interest', 'payment_plan', 'payment_timeline', 'queries'])
 
-const OFFER_INFO = `Single Payment Offer:
-Flat ₹2,500 OFF in Post Placement fee
-
-Two-Payment Offer:
-Flat ₹1,500 OFF in Post Placement fee
-
-EMI Option (6 Weeks): (No Discounts)
-Training fees can be paid in 6 weekly equal installments.
-Example: If your training fee is ₹20,000, you will pay ₹3,300 per week for 6 weeks.`
+const STEP_TYPE_LABELS = { details: 'Your Details', plan: 'Payment Plan', page3: 'Confirm & Submit' }
 
 function InfoBox({ title, icon: Icon, children }) {
   return (
@@ -41,26 +31,28 @@ function InfoBox({ title, icon: Icon, children }) {
   )
 }
 
-const STEP_LABELS = ['Your Details', 'Payment Plan', 'Confirm & Submit']
-
-function StepIndicator({ step }) {
+function StepIndicator({ current, labels }) {
+  const total = labels.length
   return (
     <div className="mb-6">
       <div className="flex items-center justify-center gap-2">
-        {[1, 2, 3].map((n) => (
-          <div key={n} className="flex items-center gap-2">
-            <div
-              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold
-                ${n <= step ? 'bg-brand-600 text-white' : 'bg-slate-200 text-slate-500'}`}
-            >
-              {n < step ? <Check className="h-4 w-4" strokeWidth={3} aria-hidden="true" /> : n}
+        {labels.map((_, i) => {
+          const n = i + 1
+          return (
+            <div key={n} className="flex items-center gap-2">
+              <div
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold
+                  ${n <= current ? 'bg-brand-600 text-white' : 'bg-slate-200 text-slate-500'}`}
+              >
+                {n < current ? <Check className="h-4 w-4" strokeWidth={3} aria-hidden="true" /> : n}
+              </div>
+              {n < total && <div className={`h-0.5 w-12 ${n < current ? 'bg-brand-600' : 'bg-slate-200'}`} />}
             </div>
-            {n < 3 && <div className={`h-0.5 w-12 ${n < step ? 'bg-brand-600' : 'bg-slate-200'}`} />}
-          </div>
-        ))}
+          )
+        })}
       </div>
       <p className="mt-2 text-center text-xs font-medium text-slate-500">
-        Step {step} of 3 — {STEP_LABELS[step - 1]}
+        Step {current} of {total} — {labels[current - 1]}
       </p>
     </div>
   )
@@ -86,8 +78,79 @@ const TIMELINE_OPTIONS = [
   { value: 'day_after_tomorrow', date: addDays(new Date(), 2) },
 ].map((option) => ({ ...option, label: formatWeekday(option.date) }))
 
+// Generic renderer for any plain text/email/tel/textarea field - system
+// (Name/Mobile/Email/Queries) or admin-added custom ones alike.
+function DynamicField({ field, register, errors }) {
+  const validation = { required: field.required ? `${field.label} is required` : false }
+  if (field.type === 'textarea') {
+    return <Textarea label={field.label} required={field.required} error={errors[field.key]?.message} {...register(field.key, validation)} />
+  }
+  const inputType = field.type === 'email' ? 'email' : field.type === 'tel' ? 'tel' : 'text'
+  return (
+    <Input
+      type={inputType}
+      label={field.label}
+      required={field.required}
+      error={errors[field.key]?.message}
+      {...register(field.key, validation)}
+    />
+  )
+}
+
+function ProgramField({ field, programs, register, errors }) {
+  return (
+    <Select
+      label={field.label}
+      required={field.required}
+      error={errors.program_interest?.message}
+      {...register('program_interest', { required: field.required ? 'Please select a program' : false })}
+    >
+      <option value="">Select a program</option>
+      {programs.map((program) => (
+        <option key={program.value} value={program.value}>
+          {program.label}
+        </option>
+      ))}
+    </Select>
+  )
+}
+
+function PaymentTimelineField({ field, watchedValue, register, errors }) {
+  return (
+    <fieldset>
+      <legend className="mb-2 flex items-center gap-1.5 text-sm font-medium text-slate-700">
+        <Calendar className="h-4 w-4 text-slate-400" strokeWidth={2} aria-hidden="true" />
+        {field.label} {field.required && <span className="text-red-500">*</span>}
+      </legend>
+      <div className="space-y-2">
+        {TIMELINE_OPTIONS.map((option) => (
+          <label
+            key={option.value}
+            className="flex cursor-pointer items-center gap-3 rounded-md border border-slate-300 p-3 text-sm
+              has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50 has-[:checked]:ring-1 has-[:checked]:ring-brand-500"
+          >
+            <input
+              type="radio"
+              value={option.value}
+              {...register('payment_timeline', { required: field.required ? 'Please select when you will pay' : false })}
+            />
+            <span className="flex-1">
+              <span className="font-medium text-slate-800">{option.label}</span>{' '}
+              <span className="text-slate-500">({formatDate(option.date)})</span>
+            </span>
+            {watchedValue === option.value && (
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-brand-600" strokeWidth={2} aria-hidden="true" />
+            )}
+          </label>
+        ))}
+      </div>
+      {errors.payment_timeline && <p className="mt-1 text-xs text-red-600">{errors.payment_timeline.message}</p>}
+    </fieldset>
+  )
+}
+
 export function FoundationFormPage() {
-  const [step, setStep] = useState(1)
+  const [stepIndex, setStepIndex] = useState(0)
   const [submitted, setSubmitted] = useState(false)
 
   const pricingQuery = useQuery({ queryKey: ['foundation-form-pricing'], queryFn: foundationFormService.getPricing })
@@ -98,32 +161,12 @@ export function FoundationFormPage() {
     trigger,
     watch,
     formState: { errors, isSubmitting },
-  } = useForm({
-    mode: 'onChange',
-    defaultValues: {
-      name: '',
-      mobile_number: '',
-      email: '',
-      program_interest: '',
-      payment_plan: '',
-      payment_timeline: '',
-      queries: '',
-    },
-  })
+  } = useForm({ mode: 'onChange' })
 
   const submitMutation = useMutation({
     mutationFn: foundationFormService.submit,
     onSuccess: () => setSubmitted(true),
   })
-
-  async function handleNext() {
-    const valid = await trigger(STEP_FIELDS[step])
-    if (valid) setStep((s) => s + 1)
-  }
-
-  function onSubmit(values) {
-    submitMutation.mutate(values)
-  }
 
   if (pricingQuery.isLoading) {
     return (
@@ -155,67 +198,72 @@ export function FoundationFormPage() {
     )
   }
 
-  const { programs, categories } = pricingQuery.data
+  const { offer_info: offerInfo, fields, programs, categories } = pricingQuery.data
+  const page1Fields = fields.filter((f) => f.page === 1)
+  const page3Fields = fields.filter((f) => f.page === 3)
+  const hasProgramField = page1Fields.some((f) => f.key === 'program_interest')
+
+  const steps = ['details', ...(hasProgramField ? ['plan'] : []), ...(page3Fields.length > 0 ? ['page3'] : [])]
+  const stepLabels = steps.map((s) => STEP_TYPE_LABELS[s])
+  const currentStep = steps[stepIndex]
+  const isLastStep = stepIndex === steps.length - 1
+
   const selectedProgramValue = watch('program_interest')
   const selectedProgram = programs.find((p) => p.value === selectedProgramValue)
   const category = selectedProgram ? categories[selectedProgram.category] : null
   const watchedPaymentPlan = watch('payment_plan')
   const watchedPaymentTimeline = watch('payment_timeline')
 
+  const STEP_FIELD_KEYS = {
+    details: page1Fields.map((f) => f.key),
+    plan: ['payment_plan'],
+    page3: page3Fields.map((f) => f.key),
+  }
+
+  async function handleNext() {
+    const valid = await trigger(STEP_FIELD_KEYS[currentStep])
+    if (valid) setStepIndex((i) => i + 1)
+  }
+
+  function onSubmit(values) {
+    const payload = { name: values.name, mobile_number: values.mobile_number, custom_fields: {} }
+    for (const key of ['email', 'program_interest', 'payment_plan', 'payment_timeline', 'queries']) {
+      if (values[key]) payload[key] = values[key]
+    }
+    for (const [key, value] of Object.entries(values)) {
+      if (!KNOWN_KEYS.has(key) && value) payload.custom_fields[key] = value
+    }
+    submitMutation.mutate(payload)
+  }
+
   return (
     <FormShell>
-      <StepIndicator step={step} />
+      <StepIndicator current={stepIndex + 1} labels={stepLabels} />
       <form onSubmit={handleSubmit(onSubmit)}>
-        {step === 1 && (
+        {currentStep === 'details' && (
           <div className="space-y-4">
             <InfoBox title="Payment Offers" icon={BadgePercent}>
-              {OFFER_INFO}
+              {offerInfo}
             </InfoBox>
-            <Input
-              label="Name"
-              required
-              error={errors.name?.message}
-              {...register('name', { required: 'Name is required', minLength: { value: 2, message: 'Name is too short' } })}
-            />
-            <Input
-              label="Mobile Number"
-              required
-              error={errors.mobile_number?.message}
-              {...register('mobile_number', {
-                required: 'Mobile number is required',
-                pattern: { value: /^[0-9+\-\s]{6,20}$/, message: 'Enter a valid mobile number' },
-              })}
-            />
-            <Input
-              label="Email Address"
-              type="email"
-              required
-              error={errors.email?.message}
-              {...register('email', {
-                required: 'Email address is required',
-                pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Enter a valid email address' },
-              })}
-            />
-            <Select
-              label="Program you are planning to join?"
-              required
-              error={errors.program_interest?.message}
-              {...register('program_interest', { required: 'Please select a program' })}
+            {page1Fields.map((field) =>
+              field.key === 'program_interest' ? (
+                <ProgramField key={field.key} field={field} programs={programs} register={register} errors={errors} />
+              ) : (
+                <DynamicField key={field.key} field={field} register={register} errors={errors} />
+              ),
+            )}
+            <Button
+              type={isLastStep ? 'submit' : 'button'}
+              className="w-full"
+              onClick={isLastStep ? undefined : handleNext}
+              disabled={isLastStep && (isSubmitting || submitMutation.isPending)}
             >
-              <option value="">Select a program</option>
-              {programs.map((program) => (
-                <option key={program.value} value={program.value}>
-                  {program.label}
-                </option>
-              ))}
-            </Select>
-            <Button type="button" className="w-full" onClick={handleNext}>
-              Next
+              {isLastStep ? (submitMutation.isPending ? 'Submitting…' : 'Submit') : 'Next'}
             </Button>
           </div>
         )}
 
-        {step === 2 && category && (
+        {currentStep === 'plan' && category && (
           <div className="space-y-4">
             <InfoBox title={category.label} icon={BookOpen}>
               Training Fee: {category.training_fee}
@@ -254,60 +302,39 @@ export function FoundationFormPage() {
               {errors.payment_plan && <p className="mt-1 text-xs text-red-600">{errors.payment_plan.message}</p>}
             </fieldset>
             <div className="flex gap-3">
-              <Button type="button" variant="secondary" className="w-full" onClick={() => setStep(1)}>
+              <Button type="button" variant="secondary" className="w-full" onClick={() => setStepIndex((i) => i - 1)}>
                 Back
               </Button>
-              <Button type="button" className="w-full" onClick={handleNext}>
-                Next
+              <Button
+                type={isLastStep ? 'submit' : 'button'}
+                className="w-full"
+                onClick={isLastStep ? undefined : handleNext}
+                disabled={isLastStep && (isSubmitting || submitMutation.isPending)}
+              >
+                {isLastStep ? (submitMutation.isPending ? 'Submitting…' : 'Submit') : 'Next'}
               </Button>
             </div>
           </div>
         )}
 
-        {step === 3 && (
+        {currentStep === 'page3' && (
           <div className="space-y-4">
-            <fieldset>
-              <legend className="mb-2 flex items-center gap-1.5 text-sm font-medium text-slate-700">
-                <Calendar className="h-4 w-4 text-slate-400" strokeWidth={2} aria-hidden="true" />
-                When will you make the payment? <span className="text-red-500">*</span>
-              </legend>
-              <div className="space-y-2">
-                {TIMELINE_OPTIONS.map((option) => (
-                  <label
-                    key={option.value}
-                    className="flex cursor-pointer items-center gap-3 rounded-md border border-slate-300 p-3 text-sm
-                      has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50 has-[:checked]:ring-1 has-[:checked]:ring-brand-500"
-                  >
-                    <input
-                      type="radio"
-                      value={option.value}
-                      {...register('payment_timeline', { required: 'Please select when you will pay' })}
-                    />
-                    <span className="flex-1">
-                      <span className="font-medium text-slate-800">{option.label}</span>{' '}
-                      <span className="text-slate-500">({formatDate(option.date)})</span>
-                    </span>
-                    {watchedPaymentTimeline === option.value && (
-                      <CheckCircle2 className="h-4 w-4 shrink-0 text-brand-600" strokeWidth={2} aria-hidden="true" />
-                    )}
-                  </label>
-                ))}
-              </div>
-              {errors.payment_timeline && (
-                <p className="mt-1 text-xs text-red-600">{errors.payment_timeline.message}</p>
-              )}
-            </fieldset>
-            <Textarea
-              label="Any doubts or queries"
-              required
-              error={errors.queries?.message}
-              {...register('queries', { required: 'Please share your doubts or queries' })}
-            />
-            <ErrorMessage
-              message={submitMutation.isError ? getApiErrorMessage(submitMutation.error) : null}
-            />
+            {page3Fields.map((field) =>
+              field.key === 'payment_timeline' ? (
+                <PaymentTimelineField
+                  key={field.key}
+                  field={field}
+                  watchedValue={watchedPaymentTimeline}
+                  register={register}
+                  errors={errors}
+                />
+              ) : (
+                <DynamicField key={field.key} field={field} register={register} errors={errors} />
+              ),
+            )}
+            <ErrorMessage message={submitMutation.isError ? getApiErrorMessage(submitMutation.error) : null} />
             <div className="flex gap-3">
-              <Button type="button" variant="secondary" className="w-full" onClick={() => setStep(2)}>
+              <Button type="button" variant="secondary" className="w-full" onClick={() => setStepIndex((i) => i - 1)}>
                 Back
               </Button>
               <Button type="submit" className="w-full" disabled={isSubmitting || submitMutation.isPending}>
@@ -315,6 +342,10 @@ export function FoundationFormPage() {
               </Button>
             </div>
           </div>
+        )}
+
+        {isLastStep && currentStep !== 'page3' && (
+          <ErrorMessage message={submitMutation.isError ? getApiErrorMessage(submitMutation.error) : null} />
         )}
       </form>
     </FormShell>

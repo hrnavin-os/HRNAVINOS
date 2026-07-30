@@ -20,7 +20,7 @@ router = APIRouter(prefix="/public/foundation-form", tags=["Foundation Form (Pub
 @router.get("/pricing", response_model=FoundationFormPricingResponse)
 @limiter.limit(settings.RATE_LIMIT_PUBLIC_FORM)
 async def get_pricing(request: Request) -> FoundationFormPricingResponse:
-    return FoundationFormService().get_pricing()
+    return await FoundationFormService().get_pricing()
 
 
 @router.post("/submit", response_model=FoundationFormSubmitResponse, status_code=status.HTTP_201_CREATED)
