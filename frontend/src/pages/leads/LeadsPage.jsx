@@ -50,18 +50,18 @@ const createFields = [
   },
 ]
 
-// Shows just the first word + "…" so a long query doesn't blow out the row
-// height; hovering reveals the full text in a small popup.
+// Shows just the first 6 characters + "…" so a long query doesn't blow out
+// the row height; hovering reveals the full text in a small popup.
 function TruncatedText({ text }) {
   if (!text) return <span className="text-slate-400">—</span>
-  const words = text.trim().split(/\s+/)
-  if (words.length <= 1) return <span>{text}</span>
+  const trimmed = text.trim()
+  if (trimmed.length <= 6) return <span>{trimmed}</span>
 
   return (
     <span className="group relative inline-block cursor-help border-b border-dotted border-slate-300">
-      {words[0]}…
+      {trimmed.slice(0, 6)}…
       <span className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden w-max max-w-xs rounded-md border border-slate-200 bg-white p-2 text-xs font-normal text-slate-700 shadow-lg group-hover:block">
-        {text}
+        {trimmed}
       </span>
     </span>
   )
