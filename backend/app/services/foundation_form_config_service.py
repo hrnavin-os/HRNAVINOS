@@ -1,7 +1,7 @@
 """Business logic for the admin-editable Foundation Form config singleton."""
 import uuid
 
-from app.exceptions.base import BadRequestError
+from app.exceptions.base import BadRequestError, NotFoundError
 from app.models.enums import PaymentPlanOption, ProgramInterest
 from app.models.foundation_form_config import (
     FormCollectionSectionCfg,
@@ -12,6 +12,7 @@ from app.models.foundation_form_config import (
     FoundationFormProgramCfg,
 )
 from app.repositories.foundation_form_config_repository import FoundationFormConfigRepository
+from app.repositories.lead_repository import LeadRepository
 from app.schemas.foundation_form_schema import FoundationFormConfigUpdate
 from app.services.audit_service import AuditService
 from app.services.foundation_form_pricing import INSTALLMENT_LABELS
@@ -26,6 +27,7 @@ _STRUCTURAL_FIELD_KEYS = {"program_interest", "payment_timeline"}
 class FoundationFormConfigService:
     def __init__(self) -> None:
         self.repo = FoundationFormConfigRepository()
+        self.leads = LeadRepository()
         self.audit = AuditService()
 
     async def get_config(self) -> FoundationFormConfig:
@@ -123,5 +125,27 @@ class FoundationFormConfigService:
         await self.repo.save(config)
         await self.audit.record(
             user_id=actor_id, action="UPDATE", entity_type="FoundationFormConfig", entity_id=str(config.id)
+        )
+        return config
+
+    async def delete_section(self, code: str, *, actor_id: uuid.UUID | None) -> FoundationFormConfig:
+        config = await self.repo.get_or_create()
+        if not any(s.code == code for s in config.sections):
+            raise NotFoundError(f"Section '{code}' does not exist.")
+
+        lead_count = await self.leads.count_by_section(code)
+        if lead_count > 0:
+            raise BadRequestError(
+                f"Can't delete this section - {lead_count} lead(s) are still filed under it."
+            )
+
+        config.sections = [s for s in config.sections if s.code != code]
+        await self.repo.save(config)
+        await self.audit.record(
+            user_id=actor_id,
+            action="DELETE",
+            entity_type="FoundationFormConfig",
+            entity_id=str(config.id),
+            changes={"deleted_section": code},
         )
         return config

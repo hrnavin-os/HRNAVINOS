@@ -48,3 +48,12 @@ async def update_foundation_form_config(
 ) -> FoundationFormConfigResponse:
     config = await FoundationFormConfigService().update_config(payload, actor_id=actor.id)
     return _to_response(config)
+
+
+@router.delete("/sections/{code}", response_model=FoundationFormConfigResponse)
+async def delete_form_collection_section(
+    code: str,
+    actor: User = Depends(RequirePermissions(Permissions.FORM_COLLECTION_CONFIGURE)),
+) -> FoundationFormConfigResponse:
+    config = await FoundationFormConfigService().delete_section(code, actor_id=actor.id)
+    return _to_response(config)

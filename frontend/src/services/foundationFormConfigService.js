@@ -9,4 +9,8 @@ export const foundationFormConfigService = {
     const { data } = await apiClient.put('/foundation-form/config', payload)
     return data
   },
+  deleteSection: async (code) => {
+    const { data } = await apiClient.delete(`/foundation-form/config/sections/${code}`)
+    return data
+  },
 }

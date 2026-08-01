@@ -28,3 +28,6 @@ class LeadRepository(BaseRepository[Lead]):
 
     async def list_pending_review(self) -> list[Lead]:
         return await Lead.find({"is_deleted": False, "reviewed": False}).sort("-created_at").to_list()
+
+    async def count_by_section(self, code: str) -> int:
+        return await Lead.find({"is_deleted": False, "section": code}).count()

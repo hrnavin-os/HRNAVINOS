@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ClipboardCheck, Copy, ExternalLink, Pencil, Plus, Users } from 'lucide-react'
+import { ClipboardCheck, Copy, ExternalLink, Pencil, Plus, Trash2, Users } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -30,7 +30,7 @@ function nextSectionCode(sections) {
   return `section-${sections.length + 1}`
 }
 
-function SectionCard({ section, canConfigure, onEdit }) {
+function SectionCard({ section, canConfigure, onEdit, onDelete, isDeleting }) {
   const navigate = useNavigate()
   const [copied, setCopied] = useState(false)
   const formUrl = `${window.location.origin}/foundation-form/${section.code}`
@@ -99,6 +99,20 @@ function SectionCard({ section, canConfigure, onEdit }) {
             Edit
           </Button>
         )}
+        {canConfigure && (
+          <button
+            type="button"
+            title="Delete this form"
+            disabled={isDeleting}
+            onClick={(event) => {
+              event.stopPropagation()
+              onDelete()
+            }}
+            className="rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+          </button>
+        )}
       </div>
     </div>
   )
@@ -130,6 +144,16 @@ export function FormCollectionPage() {
     onSuccess: (updated) => queryClient.setQueryData(['foundation-form-config'], updated),
   })
 
+  const deleteSectionMutation = useMutation({
+    mutationFn: (code) => foundationFormConfigService.deleteSection(code),
+    onSuccess: (updated) => queryClient.setQueryData(['foundation-form-config'], updated),
+  })
+
+  function handleDelete(section) {
+    if (!window.confirm(`Delete "${section.label}"? Its public link will stop working immediately.`)) return
+    deleteSectionMutation.mutate(section.code)
+  }
+
   if (isLoading) return <LoadingSpinner />
   if (error) return <ErrorMessage message={getApiErrorMessage(error)} />
 
@@ -158,11 +182,26 @@ export function FormCollectionPage() {
         )}
       </div>
 
-      <ErrorMessage message={addSectionMutation.error ? getApiErrorMessage(addSectionMutation.error) : null} />
+      <ErrorMessage
+        message={
+          addSectionMutation.error
+            ? getApiErrorMessage(addSectionMutation.error)
+            : deleteSectionMutation.error
+              ? getApiErrorMessage(deleteSectionMutation.error)
+              : null
+        }
+      />
 
       <div className="mt-4 flex flex-col gap-3">
         {visibleSections.map((section) => (
-          <SectionCard key={section.code} section={section} canConfigure={canConfigure} onEdit={() => setIsEditOpen(true)} />
+          <SectionCard
+            key={section.code}
+            section={section}
+            canConfigure={canConfigure}
+            onEdit={() => setIsEditOpen(true)}
+            onDelete={() => handleDelete(section)}
+            isDeleting={deleteSectionMutation.isPending && deleteSectionMutation.variables === section.code}
+          />
         ))}
       </div>
 
