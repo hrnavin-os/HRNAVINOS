@@ -31,3 +31,20 @@ class LeadRepository(BaseRepository[Lead]):
 
     async def count_by_section(self, code: str) -> int:
         return await Lead.find({"is_deleted": False, "section": code}).count()
+
+    async def count_by_section_all(self) -> dict[str, int]:
+        counts = await Lead.aggregate(
+            [
+                {"$match": {"is_deleted": False, "reviewed": {"$ne": False}, "section": {"$ne": None}}},
+                {"$group": {"_id": "$section", "count": {"$sum": 1}}},
+            ]
+        ).to_list()
+        return {row["_id"]: row["count"] for row in counts}
+
+    async def distinct_course_interests(self) -> list[str]:
+        # Beanie's FindMany query builder has no .distinct() - go through the
+        # underlying Motor collection directly.
+        values = await Lead.get_motor_collection().distinct(
+            "course_interest", {"is_deleted": False, "reviewed": {"$ne": False}, "course_interest": {"$ne": None}}
+        )
+        return sorted({v for v in values if v})

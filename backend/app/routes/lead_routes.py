@@ -46,6 +46,7 @@ async def list_leads(
     assigned_to: uuid.UUID | None = None,
     source: LeadSource | None = None,
     section: str | None = None,
+    course_interest: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
@@ -60,6 +61,7 @@ async def list_leads(
         source=source,
         section=section,
         section_scope=scope,
+        course_interest=course_interest,
         date_from=date_from,
         date_to=date_to,
     )
@@ -72,6 +74,16 @@ async def lead_stats(
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> LeadStatsResponse:
     return await LeadService().stats()
+
+
+@router.get("/course-options", response_model=list[str])
+async def list_course_options(
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
+) -> list[str]:
+    """Distinct course_interest values currently in use, for the Leads page's
+    Course filter dropdown - not a closed enum, so this reflects real data
+    rather than a hardcoded list."""
+    return await LeadService().course_options()
 
 
 @router.get("/pending-review", response_model=list[LeadResponse])

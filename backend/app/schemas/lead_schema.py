@@ -26,6 +26,7 @@ class LeadCreate(BaseModel):
     notes: str | None = None
     assigned_to: uuid.UUID | None = None
     section: str | None = None
+    remarks: str | None = Field(default=None, max_length=2000)
 
 
 class LeadUpdate(BaseModel):
@@ -40,6 +41,7 @@ class LeadUpdate(BaseModel):
     notes: str | None = None
     follow_up_at: datetime | None = None
     paid_amount: Decimal | None = Field(default=None, ge=0)
+    remarks: str | None = Field(default=None, max_length=2000)
 
 
 class LeadAssign(BaseModel):
@@ -89,6 +91,7 @@ class LeadResponse(BaseModel):
     raw_form_data: dict[str, str] | None = None
     program_interest: ProgramInterest | None = None
     section: str | None = None
+    remarks: str | None = None
     payment_plan: PaymentPlanOption | None = None
     installments: list[PaymentInstallmentResponse] = []
     created_at: datetime
@@ -100,6 +103,7 @@ class LeadResponse(BaseModel):
 class LeadStatsResponse(BaseModel):
     total: int
     by_status: dict[str, int]
+    by_section: dict[str, int] = {}
 
 
 class LeadTimelineEntryResponse(BaseModel):

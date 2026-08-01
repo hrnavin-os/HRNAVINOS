@@ -8,9 +8,9 @@ import { leadService } from '@/services/leadService'
 import { googleSheetsService } from '@/services/googleSheetsService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
 import { getApiErrorMessage } from '@/services/apiClient'
-import { formatLeadSource, LEAD_SOURCE_OPTIONS, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
+import { LEAD_SOURCE_OPTIONS, LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
 import { PERMISSIONS } from '@/constants/permissions'
-import { titleCase, formatDate } from '@/utils/formatters'
+import { titleCase } from '@/utils/formatters'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -19,9 +19,10 @@ import { Modal } from '@/components/ui/Modal'
 import { DataTable } from '@/components/ui/DataTable'
 import { Pagination } from '@/components/ui/Pagination'
 import { ResourceForm } from '@/components/resource/ResourceForm'
-import { LeadStageStats } from '@/components/leads/LeadStageStats'
+import { LeadSectionStats } from '@/components/leads/LeadSectionStats'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { LeadDetailModal } from '@/components/leads/LeadDetailModal'
+import { PaymentDetailModal } from '@/components/payments/PaymentDetailModal'
 
 const createFields = [
   { name: 'name', label: 'Full Name', placeholder: 'Full Name', required: true },
@@ -51,20 +52,36 @@ const createFields = [
   },
 ]
 
-function AssignToMeButton({ lead }) {
-  const { user, hasPermission } = useAuth()
+// Inline-editable "staff notes" cell - distinct from the read-only Query
+// column (the student's own submitted text). Saves on blur/Enter, not on
+// every keystroke.
+function RemarksCell({ lead }) {
   const queryClient = useQueryClient()
+  const [value, setValue] = useState(lead.remarks ?? '')
+
   const mutation = useMutation({
-    mutationFn: () => leadService.assign(lead.id, user.id),
+    mutationFn: (remarks) => leadService.update(lead.id, { remarks }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['leads'] }),
   })
 
-  if (!hasPermission(PERMISSIONS.LEADS_ASSIGN) || lead.assigned_to === user.id) return null
+  function commit() {
+    if (value === (lead.remarks ?? '')) return
+    mutation.mutate(value)
+  }
 
   return (
-    <Button variant="ghost" className="!px-2 !py-1 text-xs" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
-      Assign to me
-    </Button>
+    <input
+      type="text"
+      value={value}
+      placeholder="Add remarks…"
+      onClick={(event) => event.stopPropagation()}
+      onChange={(event) => setValue(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') event.currentTarget.blur()
+      }}
+      className="w-full min-w-35 rounded-md border border-slate-200 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+    />
   )
 }
 
@@ -113,9 +130,11 @@ export function LeadsPage() {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [viewingLead, setViewingLead] = useState(null)
+  const [viewingPayment, setViewingPayment] = useState(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [sourceFilter, setSourceFilter] = useState('')
   const [sectionFilter, setSectionFilter] = useState(searchParams.get('section') || '')
+  const [courseFilter, setCourseFilter] = useState('')
   const [sortOrder, setSortOrder] = useState('desc')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -124,19 +143,23 @@ export function LeadsPage() {
 
   const statsQuery = useQuery({ queryKey: ['leads-stats'], queryFn: leadService.getStats })
   const total = statsQuery.data?.total ?? 0
-  const byStatus = statsQuery.data?.by_status ?? {}
+  const bySection = statsQuery.data?.by_section ?? {}
 
   // Sections are admin-managed and open-ended (see Form Collection's "Add
-  // Form"), so the filter dropdown and table badge read live from config
+  // Form"), so the top stat cards and filter dropdowns read live from config
   // rather than a fixed list.
   const configQuery = useQuery({ queryKey: ['foundation-form-config'], queryFn: foundationFormConfigService.get })
   const sectionOptions = configQuery.data?.sections ?? []
   const sectionByCode = Object.fromEntries(sectionOptions.map((section) => [section.code, section]))
 
+  const courseOptionsQuery = useQuery({ queryKey: ['lead-course-options'], queryFn: leadService.getCourseOptions })
+  const courseOptions = courseOptionsQuery.data ?? []
+
   const { items, page, setPage, search, setSearch, isLoading, error, totalPages } = usePaginatedQuery('leads', leadService, {
     status: statusFilter || undefined,
     source: sourceFilter || undefined,
     section: sectionFilter || undefined,
+    course_interest: courseFilter || undefined,
     sort_order: sortOrder,
     date_from: dateFrom || undefined,
     date_to: dateTo || undefined,
@@ -151,8 +174,8 @@ export function LeadsPage() {
     },
   })
 
-  function selectTab(value) {
-    setStatusFilter(value)
+  function selectSection(code) {
+    setSectionFilter(code)
     setPage(1)
   }
 
@@ -176,10 +199,12 @@ export function LeadsPage() {
     onError: (error) => setSyncMessage(getApiErrorMessage(error)),
   })
 
+  const viewingPaymentStage = viewingPayment ? LEAD_STAGE_BY_VALUE[viewingPayment.status] : null
+
   const columns = [
     {
-      key: 'lead',
-      header: 'Lead',
+      key: 'name',
+      header: 'Name',
       render: (row) => (
         <div className="flex items-center gap-3">
           <LeadAvatar name={row.name} />
@@ -187,21 +212,30 @@ export function LeadsPage() {
         </div>
       ),
     },
-    {
-      key: 'contact',
-      header: 'Contact',
-      render: (row) => (
-        <div>
-          <p className="text-slate-900">{row.phone}</p>
-          {row.email && <p className="text-xs text-slate-500">{row.email}</p>}
-        </div>
-      ),
-    },
-    { key: 'source', header: 'Source', render: (row) => <Badge tone="slate">{formatLeadSource(row.source)}</Badge> },
+    { key: 'phone', header: 'Ph.no', render: (row) => row.phone },
+    { key: 'email', header: 'Email', render: (row) => row.email ?? '—' },
+    { key: 'course', header: 'Course', render: (row) => row.course_interest ?? '—' },
     {
       key: 'section',
       header: 'Section',
       render: (row) => (row.section ? <Badge tone="blue">{sectionByCode[row.section]?.label ?? row.section}</Badge> : '—'),
+    },
+    {
+      key: 'payment',
+      header: 'Payment Details',
+      render: (row) => (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            setViewingPayment(row)
+          }}
+          className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+          aria-label={`View payment details for ${row.name}`}
+        >
+          <Eye className="h-4 w-4" strokeWidth={2} />
+        </button>
+      ),
     },
     {
       key: 'stage',
@@ -211,24 +245,11 @@ export function LeadsPage() {
         return <Badge outline tone={stage?.tone ?? 'slate'}>{stage?.label ?? titleCase(row.status)}</Badge>
       },
     },
-    { key: 'follow_up', header: 'Follow-up', render: (row) => formatDate(row.follow_up_at) },
-    { key: 'created', header: 'Created', render: (row) => formatDate(row.created_at) },
+    { key: 'query', header: 'Query', render: (row) => row.notes || '—' },
     {
-      key: 'actions',
-      header: '',
-      render: (row) => (
-        <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
-          <button
-            type="button"
-            onClick={() => setViewingLead(row)}
-            className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-            aria-label={`View ${row.name}`}
-          >
-            <Eye className="h-4 w-4" strokeWidth={2} />
-          </button>
-          <AssignToMeButton lead={row} />
-        </div>
-      ),
+      key: 'remarks',
+      header: 'Remarks',
+      render: (row) => <RemarksCell key={row.id} lead={row} />,
     },
   ]
 
@@ -241,14 +262,20 @@ export function LeadsPage() {
         </div>
       </div>
 
-      <LeadStageStats total={total} byStatus={byStatus} activeStatus={statusFilter} onSelect={selectTab} />
+      <LeadSectionStats
+        total={total}
+        sections={sectionOptions}
+        bySection={bySection}
+        activeSection={sectionFilter}
+        onSelect={selectSection}
+      />
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative min-w-[220px] flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
           <Input
             className="pl-9"
-            placeholder="Search leads by name, email, phone…"
+            placeholder="Search by name, course…"
             value={search}
             onChange={(event) => {
               setSearch(event.target.value)
@@ -273,16 +300,16 @@ export function LeadsPage() {
 
         <Select
           className="!w-auto"
-          value={sourceFilter}
+          value={courseFilter}
           onChange={(event) => {
-            setSourceFilter(event.target.value)
+            setCourseFilter(event.target.value)
             setPage(1)
           }}
         >
-          <option value="">All Sources</option>
-          {LEAD_SOURCE_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
+          <option value="">All Courses</option>
+          {courseOptions.map((course) => (
+            <option key={course} value={course}>
+              {course}
             </option>
           ))}
         </Select>
@@ -298,6 +325,38 @@ export function LeadsPage() {
           <option value="">All Sections</option>
           {sectionOptions.map((option) => (
             <option key={option.code} value={option.code}>
+              {option.label}
+            </option>
+          ))}
+        </Select>
+
+        <Select
+          className="!w-auto"
+          value={statusFilter}
+          onChange={(event) => {
+            setStatusFilter(event.target.value)
+            setPage(1)
+          }}
+        >
+          <option value="">All Stages</option>
+          {LEAD_STAGES.map((stage) => (
+            <option key={stage.value} value={stage.value}>
+              {stage.label}
+            </option>
+          ))}
+        </Select>
+
+        <Select
+          className="!w-auto"
+          value={sourceFilter}
+          onChange={(event) => {
+            setSourceFilter(event.target.value)
+            setPage(1)
+          }}
+        >
+          <option value="">All Sources</option>
+          {LEAD_SOURCE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
@@ -366,6 +425,19 @@ export function LeadsPage() {
       )}
 
       {viewingLead && <LeadDetailModal lead={viewingLead} onClose={() => setViewingLead(null)} />}
+
+      {viewingPayment && (
+        <PaymentDetailModal
+          lead={viewingPayment}
+          title="Payment Details"
+          statusBadge={
+            <Badge outline tone={viewingPaymentStage?.tone ?? 'slate'}>
+              {viewingPaymentStage?.label ?? titleCase(viewingPayment.status)}
+            </Badge>
+          }
+          onClose={() => setViewingPayment(null)}
+        />
+      )}
     </div>
   )
 }

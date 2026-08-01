@@ -11,6 +11,10 @@ export const leadService = {
     const { data } = await apiClient.get('/leads/stats')
     return data
   },
+  getCourseOptions: async () => {
+    const { data } = await apiClient.get('/leads/course-options')
+    return data
+  },
   getTimeline: async (id) => {
     const { data } = await apiClient.get(`/leads/${id}/timeline`)
     return data

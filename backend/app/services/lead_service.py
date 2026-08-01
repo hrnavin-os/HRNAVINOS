@@ -68,6 +68,7 @@ class LeadService:
             program_interest=lead.program_interest,
             payment_plan=lead.payment_plan,
             section=lead.section,
+            remarks=lead.remarks,
             installments=[
                 PaymentInstallmentResponse(
                     label=installment.label,
@@ -114,6 +115,7 @@ class LeadService:
         source: LeadSource | None = None,
         section: str | None = None,
         section_scope: str | None = None,
+        course_interest: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
     ) -> PaginatedResponse:
@@ -131,6 +133,8 @@ class LeadService:
             filters["section"] = section_scope
         elif section:
             filters["section"] = section
+        if course_interest:
+            filters["course_interest"] = course_interest
         if date_from or date_to:
             created_range: dict[str, datetime] = {}
             if date_from:
@@ -142,7 +146,7 @@ class LeadService:
             page=params.page,
             page_size=params.page_size,
             search=params.search,
-            search_fields=["name", "phone", "email"],
+            search_fields=["name", "phone", "email", "course_interest"],
             sort_by=params.sort_by,
             sort_order=params.sort_order,
             filters=filters or None,
@@ -176,7 +180,11 @@ class LeadService:
     async def stats(self) -> LeadStatsResponse:
         total = await self.leads.count_total()
         by_status = await self.leads.count_by_status()
-        return LeadStatsResponse(total=total, by_status=by_status)
+        by_section = await self.leads.count_by_section_all()
+        return LeadStatsResponse(total=total, by_status=by_status, by_section=by_section)
+
+    async def course_options(self) -> List[str]:
+        return await self.leads.distinct_course_interests()
 
     def _validate_stage_transition(self, current: LeadStatus, new: LeadStatus) -> None:
         """Financial Approval and Batch Confirmation are pipeline gates: each

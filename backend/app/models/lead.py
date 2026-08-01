@@ -76,6 +76,9 @@ class Lead(BaseDocument):
     # time, see FormCollectionSectionCfg). None covers every pre-existing
     # lead and submissions through the legacy, section-less public form link.
     section: str | None = None
+    # Free-form internal staff notes - distinct from `notes` (the student's
+    # own submitted query/doubts text from the public form).
+    remarks: str | None = Field(default=None, max_length=2000)
 
     class Settings:
         name = "leads"
