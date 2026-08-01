@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
-from app.models.enums import FormSection, PaymentPlanOption, PaymentTimeline, ProgramInterest
+from app.models.enums import PaymentPlanOption, PaymentTimeline, ProgramInterest
 
 FieldType = Literal["text", "email", "tel", "textarea"]
 
@@ -62,8 +62,11 @@ class FoundationFormSubmit(BaseModel):
     custom_fields: dict[str, str] = Field(default_factory=dict)
     # Which Form Collection section this came through - None for the legacy,
     # section-less public link (/foundation-form). Set by the frontend based
-    # on which of the /foundation-form/a|b|c routes the visitor is on.
-    section: FormSection | None = None
+    # on which of the /foundation-form/{code} routes the visitor is on. Not a
+    # closed enum - admins can add new sections at any time (see
+    # FormCollectionSectionConfig); validated against the live config in
+    # FoundationFormService.submit() instead.
+    section: str | None = None
 
 
 class FoundationFormSubmitResponse(BaseModel):
@@ -95,11 +98,17 @@ class FoundationFormProgramConfig(BaseModel):
     category: str
 
 
+class FormCollectionSectionConfig(BaseModel):
+    code: str = Field(min_length=1, max_length=50)
+    label: str = Field(min_length=1, max_length=255)
+
+
 class FoundationFormConfigResponse(BaseModel):
     offer_info: str
     fields: list[FoundationFormFieldConfig]
     programs: list[FoundationFormProgramConfig]
     categories: list[FoundationFormCategoryConfig]
+    sections: list[FormCollectionSectionConfig]
     updated_at: datetime
 
 
@@ -108,3 +117,4 @@ class FoundationFormConfigUpdate(BaseModel):
     fields: list[FoundationFormFieldConfig]
     programs: list[FoundationFormProgramConfig]
     categories: list[FoundationFormCategoryConfig]
+    sections: list[FormCollectionSectionConfig]

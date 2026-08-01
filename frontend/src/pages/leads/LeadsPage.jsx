@@ -6,14 +6,9 @@ import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
 import { useAuth } from '@/hooks/useAuth'
 import { leadService } from '@/services/leadService'
 import { googleSheetsService } from '@/services/googleSheetsService'
+import { foundationFormConfigService } from '@/services/foundationFormConfigService'
 import { getApiErrorMessage } from '@/services/apiClient'
-import {
-  FORM_SECTION_BY_VALUE,
-  FORM_SECTION_OPTIONS,
-  formatLeadSource,
-  LEAD_SOURCE_OPTIONS,
-  LEAD_STAGE_BY_VALUE,
-} from '@/constants/leadStages'
+import { formatLeadSource, LEAD_SOURCE_OPTIONS, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
 import { PERMISSIONS } from '@/constants/permissions'
 import { titleCase, formatDate } from '@/utils/formatters'
 import { Badge } from '@/components/ui/Badge'
@@ -131,6 +126,13 @@ export function LeadsPage() {
   const total = statsQuery.data?.total ?? 0
   const byStatus = statsQuery.data?.by_status ?? {}
 
+  // Sections are admin-managed and open-ended (see Form Collection's "Add
+  // Form"), so the filter dropdown and table badge read live from config
+  // rather than a fixed list.
+  const configQuery = useQuery({ queryKey: ['foundation-form-config'], queryFn: foundationFormConfigService.get })
+  const sectionOptions = configQuery.data?.sections ?? []
+  const sectionByCode = Object.fromEntries(sectionOptions.map((section) => [section.code, section]))
+
   const { items, page, setPage, search, setSearch, isLoading, error, totalPages } = usePaginatedQuery('leads', leadService, {
     status: statusFilter || undefined,
     source: sourceFilter || undefined,
@@ -199,7 +201,7 @@ export function LeadsPage() {
     {
       key: 'section',
       header: 'Section',
-      render: (row) => (row.section ? <Badge tone="blue">{FORM_SECTION_BY_VALUE[row.section]?.label ?? row.section}</Badge> : '—'),
+      render: (row) => (row.section ? <Badge tone="blue">{sectionByCode[row.section]?.label ?? row.section}</Badge> : '—'),
     },
     {
       key: 'stage',
@@ -294,8 +296,8 @@ export function LeadsPage() {
           }}
         >
           <option value="">All Sections</option>
-          {FORM_SECTION_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
+          {sectionOptions.map((option) => (
+            <option key={option.code} value={option.code}>
               {option.label}
             </option>
           ))}

@@ -29,11 +29,3 @@ const SOURCE_LABEL_OVERRIDES = { foundation_form: 'Form Collection' }
 export function formatLeadSource(source) {
   return SOURCE_LABEL_OVERRIDES[source] ?? titleCase(source)
 }
-
-export const FORM_SECTION_OPTIONS = [
-  { value: 'a', label: 'A Section' },
-  { value: 'b', label: 'B Section' },
-  { value: 'c', label: 'C Section' },
-]
-
-export const FORM_SECTION_BY_VALUE = Object.fromEntries(FORM_SECTION_OPTIONS.map((section) => [section.value, section]))

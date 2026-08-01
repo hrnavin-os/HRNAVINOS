@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 from app.database.base import BaseDocument, utcnow
 from app.database.types import MongoDecimal
 from app.models.enums import (
-    FormSection,
     InstallmentPaymentMode,
     LeadSource,
     LeadStatus,
@@ -72,10 +71,11 @@ class Lead(BaseDocument):
     program_interest: ProgramInterest | None = None
     payment_plan: PaymentPlanOption | None = None
     installments: list[PaymentInstallment] = Field(default_factory=list)
-    # Which Form Collection section (A/B/C) this lead came through, if any.
-    # None covers every pre-existing lead and submissions through the
-    # legacy, section-less public form link.
-    section: FormSection | None = None
+    # Which Form Collection section this lead came through, if any - an
+    # open-ended code (not a closed enum; admins can add new sections at any
+    # time, see FormCollectionSectionCfg). None covers every pre-existing
+    # lead and submissions through the legacy, section-less public form link.
+    section: str | None = None
 
     class Settings:
         name = "leads"

@@ -4,6 +4,7 @@ import uuid
 from app.exceptions.base import BadRequestError
 from app.models.enums import PaymentPlanOption, ProgramInterest
 from app.models.foundation_form_config import (
+    FormCollectionSectionCfg,
     FoundationFormCategory,
     FoundationFormConfig,
     FoundationFormField,
@@ -69,9 +70,26 @@ class FoundationFormConfigService:
                         f"'{plan.value}' plan in '{category.code}' needs exactly {expected_length} amount(s)."
                     )
 
+        section_codes = [s.code for s in data.sections]
+        if len(section_codes) != len(set(section_codes)):
+            raise BadRequestError("Form Collection sections must have unique codes.")
+
+    def _validate_sections_not_removed(
+        self, existing: FoundationFormConfig, data: FoundationFormConfigUpdate
+    ) -> None:
+        # Unlike programs/categories, sections are open-ended (admins add new
+        # ones over time) - but an existing code can't be dropped or renamed
+        # to a different code, since leads already reference it by code.
+        existing_codes = {s.code for s in existing.sections}
+        new_codes = {s.code for s in data.sections}
+        missing = existing_codes - new_codes
+        if missing:
+            raise BadRequestError(f"Existing section(s) can't be removed: {', '.join(sorted(missing))}.")
+
     async def update_config(self, data: FoundationFormConfigUpdate, *, actor_id: uuid.UUID | None) -> FoundationFormConfig:
         self._validate(data)
         config = await self.repo.get_or_create()
+        self._validate_sections_not_removed(config, data)
 
         config.offer_info = data.offer_info
         config.fields = [
@@ -100,6 +118,7 @@ class FoundationFormConfigService:
             )
             for c in data.categories
         ]
+        config.sections = [FormCollectionSectionCfg(code=s.code, label=s.label) for s in data.sections]
 
         await self.repo.save(config)
         await self.audit.record(

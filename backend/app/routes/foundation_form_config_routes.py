@@ -28,6 +28,7 @@ def _to_response(config) -> FoundationFormConfigResponse:
         fields=[f.model_dump() for f in config.fields],
         programs=[p.model_dump() for p in config.programs],
         categories=[c.model_dump() for c in config.categories],
+        sections=[s.model_dump() for s in config.sections],
         updated_at=config.updated_at,
     )
 

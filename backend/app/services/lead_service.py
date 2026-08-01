@@ -7,7 +7,7 @@ from typing import List
 from fastapi import UploadFile
 
 from app.exceptions.base import BadRequestError, ForbiddenError, NotFoundError
-from app.models.enums import FormSection, InstallmentPaymentMode, LeadSource, LeadStatus, PaymentMethod
+from app.models.enums import InstallmentPaymentMode, LeadSource, LeadStatus, PaymentMethod
 from app.models.lead import FollowUpEntry, Lead
 from app.repositories.audit_log_repository import AuditLogRepository
 from app.repositories.foundation_form_config_repository import FoundationFormConfigRepository
@@ -85,7 +85,7 @@ class LeadService:
             updated_at=lead.updated_at,
         )
 
-    async def create(self, data: LeadCreate, *, actor_id: uuid.UUID | None, scope: FormSection | None = None) -> Lead:
+    async def create(self, data: LeadCreate, *, actor_id: uuid.UUID | None, scope: str | None = None) -> Lead:
         if data.assigned_to and not await self.users.get_by_id(data.assigned_to):
             raise NotFoundError("Specified assignee does not exist.")
         lead = Lead(**data.model_dump(), created_by=actor_id, updated_by=actor_id)
@@ -97,7 +97,7 @@ class LeadService:
         await self.audit.record(user_id=actor_id, action="CREATE", entity_type="Lead", entity_id=str(lead.id))
         return lead
 
-    async def get(self, lead_id: uuid.UUID, *, scope: FormSection | None = None) -> Lead:
+    async def get(self, lead_id: uuid.UUID, *, scope: str | None = None) -> Lead:
         lead = await self.leads.get_by_id(lead_id)
         if not lead:
             raise NotFoundError("Lead not found.")
@@ -112,8 +112,8 @@ class LeadService:
         status: str | None = None,
         assigned_to: uuid.UUID | None = None,
         source: LeadSource | None = None,
-        section: FormSection | None = None,
-        section_scope: FormSection | None = None,
+        section: str | None = None,
+        section_scope: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
     ) -> PaginatedResponse:
@@ -153,7 +153,7 @@ class LeadService:
         return await self.leads.list_pending_review()
 
     async def review(
-        self, lead_id: uuid.UUID, data: LeadUpdate, *, actor_id: uuid.UUID | None, scope: FormSection | None = None
+        self, lead_id: uuid.UUID, data: LeadUpdate, *, actor_id: uuid.UUID | None, scope: str | None = None
     ) -> Lead:
         """Apply the Pre Sales staffer's corrections to a Form Check submission
         and admit it into the normal pipeline (visible in Leads / New Lead)."""
@@ -193,7 +193,7 @@ class LeadService:
             raise BadRequestError("A lead can only move to Financial Approval from Pre Screening.")
 
     async def update(
-        self, lead_id: uuid.UUID, data: LeadUpdate, *, actor_id: uuid.UUID | None, scope: FormSection | None = None
+        self, lead_id: uuid.UUID, data: LeadUpdate, *, actor_id: uuid.UUID | None, scope: str | None = None
     ) -> Lead:
         lead = await self.get(lead_id, scope=scope)
         if data.status is not None:
@@ -218,7 +218,7 @@ class LeadService:
         paid_amount: Decimal | None,
         payment_mode: PaymentMethod | None = None,
         actor_id: uuid.UUID | None,
-        scope: FormSection | None = None,
+        scope: str | None = None,
     ) -> Lead:
         lead = await self.get(lead_id, scope=scope)
         changes: dict = {}
@@ -244,7 +244,7 @@ class LeadService:
         data: LeadPlanAssign,
         *,
         actor_id: uuid.UUID | None,
-        scope: FormSection | None = None,
+        scope: str | None = None,
     ) -> Lead:
         """Attach a Foundation Form-style payment plan to a lead that didn't
         arrive with one (e.g. created manually in the CRM), pre-populating
@@ -284,7 +284,7 @@ class LeadService:
         upi_id: str | None,
         scheduled_at: date | None,
         actor_id: uuid.UUID | None,
-        scope: FormSection | None = None,
+        scope: str | None = None,
     ) -> Lead:
         lead = await self.get(lead_id, scope=scope)
         if index < 0 or index >= len(lead.installments):
@@ -317,7 +317,7 @@ class LeadService:
         )
         return lead
 
-    async def timeline(self, lead_id: uuid.UUID, *, scope: FormSection | None = None) -> List[LeadTimelineEntryResponse]:
+    async def timeline(self, lead_id: uuid.UUID, *, scope: str | None = None) -> List[LeadTimelineEntryResponse]:
         await self.get(lead_id, scope=scope)  # 404s / 403s if the lead doesn't exist or isn't in scope
         entries, _ = await self.audit_logs.list(
             page=1,
@@ -338,7 +338,7 @@ class LeadService:
         return results
 
     async def assign(
-        self, lead_id: uuid.UUID, data: LeadAssign, *, actor_id: uuid.UUID | None, scope: FormSection | None = None
+        self, lead_id: uuid.UUID, data: LeadAssign, *, actor_id: uuid.UUID | None, scope: str | None = None
     ) -> Lead:
         lead = await self.get(lead_id, scope=scope)
         if not await self.users.get_by_id(data.assigned_to):
@@ -355,7 +355,7 @@ class LeadService:
         )
         return lead
 
-    async def delete(self, lead_id: uuid.UUID, *, actor_id: uuid.UUID | None, scope: FormSection | None = None) -> None:
+    async def delete(self, lead_id: uuid.UUID, *, actor_id: uuid.UUID | None, scope: str | None = None) -> None:
         lead = await self.get(lead_id, scope=scope)
         await self.leads.delete(lead)
         await self.audit.record(user_id=actor_id, action="DELETE", entity_type="Lead", entity_id=str(lead.id))

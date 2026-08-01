@@ -17,12 +17,6 @@ class LeadSource(StrEnum):
     OTHER = "other"
 
 
-class FormSection(StrEnum):
-    A = "a"
-    B = "b"
-    C = "c"
-
-
 class ProgramInterest(StrEnum):
     ONLY_RECRUITMENT = "only_recruitment"
     RECRUITMENT_INTERNSHIP = "recruitment_internship"

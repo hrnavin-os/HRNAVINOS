@@ -65,6 +65,9 @@ class FoundationFormService:
         config = await self.config_repo.get_or_create()
         field_by_key = {f.key: f for f in config.fields}
 
+        if data.section is not None and not any(s.code == data.section for s in config.sections):
+            raise BadRequestError("Selected Form Collection section is not valid.")
+
         def _require(key: str, value) -> None:
             field = field_by_key.get(key)
             if field is not None and field.required and not value:

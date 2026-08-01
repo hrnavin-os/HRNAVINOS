@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 
 from app.core.dependencies import RequirePermissions, get_actor_scope
 from app.exceptions.base import BadRequestError
-from app.models.enums import FormSection, InstallmentPaymentMode, LeadSource, PaymentMethod
+from app.models.enums import InstallmentPaymentMode, LeadSource, PaymentMethod
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.common import MessageResponse, PaginatedResponse, PaginationParams
@@ -45,7 +45,7 @@ async def list_leads(
     status_filter: str | None = Query(default=None, alias="status"),
     assigned_to: uuid.UUID | None = None,
     source: LeadSource | None = None,
-    section: FormSection | None = None,
+    section: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),

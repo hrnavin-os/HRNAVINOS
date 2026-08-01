@@ -174,6 +174,10 @@ export function FormCollectionEditModal({ onClose }) {
       fields: values.fields,
       programs: values.programs,
       categories: values.categories,
+      // Sections aren't edited from this modal (they're managed via "Add
+      // Form" on the Form Collection landing page) - pass the latest fetched
+      // list through unchanged so this save doesn't drop it.
+      sections: data.sections,
     })
   }
 

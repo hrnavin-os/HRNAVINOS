@@ -5,6 +5,7 @@ time it's read, so the live form behaves identically to before this feature
 existed until an admin actually edits something.
 """
 from app.models.foundation_form_config import (
+    FormCollectionSectionCfg,
     FoundationFormCategory,
     FoundationFormConfig,
     FoundationFormField,
@@ -12,6 +13,12 @@ from app.models.foundation_form_config import (
     FoundationFormProgramCfg,
 )
 from app.services.foundation_form_pricing import CATEGORY_BY_PROGRAM, PRICING, PROGRAM_LABELS
+
+_DEFAULT_SECTIONS = [
+    FormCollectionSectionCfg(code="a", label="A Section"),
+    FormCollectionSectionCfg(code="b", label="B Section"),
+    FormCollectionSectionCfg(code="c", label="C Section"),
+]
 
 _SEED_OFFER_INFO = """Single Payment Offer:
 Flat ₹2,500 OFF in Post Placement fee
@@ -74,6 +81,7 @@ def _seed_config() -> FoundationFormConfig:
         fields=fields,
         programs=programs,
         categories=categories,
+        sections=list(_DEFAULT_SECTIONS),
     )
 
 
@@ -83,6 +91,13 @@ class FoundationFormConfigRepository:
         if config is None:
             config = _seed_config()
             await config.insert()
+            return config
+        # A config document created before `sections` existed loads with an
+        # empty list (Pydantic default) - lazily backfill the same default
+        # sections a fresh install would have gotten, once, on first read.
+        if not config.sections:
+            config.sections = list(_DEFAULT_SECTIONS)
+            await self.save(config)
         return config
 
     async def save(self, config: FoundationFormConfig) -> FoundationFormConfig:

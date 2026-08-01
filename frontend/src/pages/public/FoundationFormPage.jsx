@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { BadgePercent, BookOpen, Calendar, Check, CheckCircle2 } from 'lucide-react'
@@ -149,7 +150,8 @@ function PaymentTimelineField({ field, watchedValue, register, errors }) {
   )
 }
 
-export function FoundationFormPage({ section } = {}) {
+export function FoundationFormPage() {
+  const { section } = useParams()
   const [stepIndex, setStepIndex] = useState(0)
   const [submitted, setSubmitted] = useState(false)
 

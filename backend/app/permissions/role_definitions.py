@@ -3,7 +3,6 @@
 Super Admin is granted every permission implicitly by `RequirePermissions`
 (see app/core/dependencies.py) and does not need an explicit list here.
 """
-from app.models.enums import FormSection
 from app.permissions.permission_codes import Permissions as P
 
 DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
@@ -61,10 +60,12 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
 
 SYSTEM_ROLES = {"Super Admin"}
 
-# Which Form Collection section (if any) a role's members are restricted to.
-# Absent/None for every other role = unscoped, sees every lead.
-ROLE_SCOPED_SECTION: dict[str, FormSection] = {
-    "A-Section Admin": FormSection.A,
-    "B-Section Admin": FormSection.B,
-    "C-Section Admin": FormSection.C,
+# Which Form Collection section (if any) a role's members are restricted to -
+# an open-ended section code (not a closed enum; admins can add new sections
+# from the Form Collection page). Absent/None for every other role = unscoped,
+# sees every lead.
+ROLE_SCOPED_SECTION: dict[str, str] = {
+    "A-Section Admin": "a",
+    "B-Section Admin": "b",
+    "C-Section Admin": "c",
 }

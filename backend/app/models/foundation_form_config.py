@@ -51,11 +51,24 @@ class FoundationFormProgramCfg(BaseModel):
     category: str = Field(max_length=50)
 
 
+class FormCollectionSectionCfg(BaseModel):
+    """One Form Collection section (A/B/C/...). Unlike programs/categories,
+    this list is open-ended - admins can add new sections at any time from
+    the Form Collection landing page. `code` is the stable identifier stored
+    on Lead.section and Role.scoped_section; once created it's never reused
+    for a different section, and existing codes can't be removed via the
+    config update (see FoundationFormConfigService._validate)."""
+
+    code: str = Field(max_length=50)
+    label: str = Field(max_length=255)
+
+
 class FoundationFormConfig(BaseDocument):
     offer_info: str = ""
     fields: list[FoundationFormField] = Field(default_factory=list)
     programs: list[FoundationFormProgramCfg] = Field(default_factory=list)
     categories: list[FoundationFormCategory] = Field(default_factory=list)
+    sections: list[FormCollectionSectionCfg] = Field(default_factory=list)
 
     class Settings:
         name = "foundation_form_config"

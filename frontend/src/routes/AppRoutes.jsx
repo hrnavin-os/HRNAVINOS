@@ -35,9 +35,10 @@ export function AppRoutes() {
 
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
       <Route path="/foundation-form" element={<FoundationFormPage />} />
-      <Route path="/foundation-form/a" element={<FoundationFormPage section="a" />} />
-      <Route path="/foundation-form/b" element={<FoundationFormPage section="b" />} />
-      <Route path="/foundation-form/c" element={<FoundationFormPage section="c" />} />
+      {/* Sections are admin-managed and open-ended (Form Collection's "Add Form"
+          button can create new ones at any time), so this is a dynamic route
+          rather than one static entry per section. */}
+      <Route path="/foundation-form/:section" element={<FoundationFormPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>

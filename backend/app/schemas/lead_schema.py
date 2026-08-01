@@ -6,7 +6,6 @@ from decimal import Decimal
 from pydantic import BaseModel, EmailStr, Field
 
 from app.models.enums import (
-    FormSection,
     InstallmentPaymentMode,
     LeadSource,
     LeadStatus,
@@ -26,7 +25,7 @@ class LeadCreate(BaseModel):
     payment_expected: str | None = Field(default=None, max_length=150)
     notes: str | None = None
     assigned_to: uuid.UUID | None = None
-    section: FormSection | None = None
+    section: str | None = None
 
 
 class LeadUpdate(BaseModel):
@@ -89,7 +88,7 @@ class LeadResponse(BaseModel):
     reviewed: bool
     raw_form_data: dict[str, str] | None = None
     program_interest: ProgramInterest | None = None
-    section: FormSection | None = None
+    section: str | None = None
     payment_plan: PaymentPlanOption | None = None
     installments: list[PaymentInstallmentResponse] = []
     created_at: datetime
