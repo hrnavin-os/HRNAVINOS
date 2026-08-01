@@ -1,14 +1,12 @@
 import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Calendar, Eye, LayoutGrid, List as ListIcon, Plus, RefreshCw, Search } from 'lucide-react'
+import { Calendar, Eye, Plus, Search } from 'lucide-react'
 import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
 import { useAuth } from '@/hooks/useAuth'
 import { leadService } from '@/services/leadService'
-import { googleSheetsService } from '@/services/googleSheetsService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
 import { getApiErrorMessage } from '@/services/apiClient'
-import { LEAD_SOURCE_OPTIONS, LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
+import { LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
 import { PERMISSIONS } from '@/constants/permissions'
 import { titleCase } from '@/utils/formatters'
 import { Badge } from '@/components/ui/Badge'
@@ -51,6 +49,23 @@ const createFields = [
     type: 'textarea',
   },
 ]
+
+// Shows just the first word + "…" so a long query doesn't blow out the row
+// height; hovering reveals the full text in a small popup.
+function TruncatedText({ text }) {
+  if (!text) return <span className="text-slate-400">—</span>
+  const words = text.trim().split(/\s+/)
+  if (words.length <= 1) return <span>{text}</span>
+
+  return (
+    <span className="group relative inline-block cursor-help border-b border-dotted border-slate-300">
+      {words[0]}…
+      <span className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden w-max max-w-xs rounded-md border border-slate-200 bg-white p-2 text-xs font-normal text-slate-700 shadow-lg group-hover:block">
+        {text}
+      </span>
+    </span>
+  )
+}
 
 // Inline-editable "staff notes" cell - distinct from the read-only Query
 // column (the student's own submitted text). Saves on blur/Enter, not on
@@ -126,40 +141,28 @@ export function LeadsPage() {
   const { hasPermission } = useAuth()
   const queryClient = useQueryClient()
   const canCreate = hasPermission(PERMISSIONS.LEADS_CREATE)
-  const [searchParams] = useSearchParams()
 
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [viewingLead, setViewingLead] = useState(null)
   const [viewingPayment, setViewingPayment] = useState(null)
-  const [statusFilter, setStatusFilter] = useState('')
-  const [sourceFilter, setSourceFilter] = useState('')
-  const [sectionFilter, setSectionFilter] = useState(searchParams.get('section') || '')
-  const [courseFilter, setCourseFilter] = useState('')
+  const [sectionFilter, setSectionFilter] = useState('')
   const [sortOrder, setSortOrder] = useState('desc')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const [view, setView] = useState('list')
-  const [syncMessage, setSyncMessage] = useState('')
 
   const statsQuery = useQuery({ queryKey: ['leads-stats'], queryFn: leadService.getStats })
   const total = statsQuery.data?.total ?? 0
   const bySection = statsQuery.data?.by_section ?? {}
 
   // Sections are admin-managed and open-ended (see Form Collection's "Add
-  // Form"), so the top stat cards and filter dropdowns read live from config
+  // Form"), so the top stat cards and Section badge read live from config
   // rather than a fixed list.
   const configQuery = useQuery({ queryKey: ['foundation-form-config'], queryFn: foundationFormConfigService.get })
   const sectionOptions = configQuery.data?.sections ?? []
   const sectionByCode = Object.fromEntries(sectionOptions.map((section) => [section.code, section]))
 
-  const courseOptionsQuery = useQuery({ queryKey: ['lead-course-options'], queryFn: leadService.getCourseOptions })
-  const courseOptions = courseOptionsQuery.data ?? []
-
   const { items, page, setPage, search, setSearch, isLoading, error, totalPages } = usePaginatedQuery('leads', leadService, {
-    status: statusFilter || undefined,
-    source: sourceFilter || undefined,
     section: sectionFilter || undefined,
-    course_interest: courseFilter || undefined,
     sort_order: sortOrder,
     date_from: dateFrom || undefined,
     date_to: dateTo || undefined,
@@ -184,20 +187,6 @@ export function LeadsPage() {
     setDateTo(nextTo)
     setPage(1)
   }
-
-  const syncMutation = useMutation({
-    mutationFn: googleSheetsService.syncNow,
-    onSuccess: (data) => {
-      setSyncMessage(
-        data.leads_created > 0
-          ? `Sync complete — ${data.leads_created} new submission(s) waiting in Form Check.`
-          : 'Sync complete — no new submissions.',
-      )
-      queryClient.invalidateQueries({ queryKey: ['leads-pending-review'] })
-      setTimeout(() => setSyncMessage(''), 4000)
-    },
-    onError: (error) => setSyncMessage(getApiErrorMessage(error)),
-  })
 
   const viewingPaymentStage = viewingPayment ? LEAD_STAGE_BY_VALUE[viewingPayment.status] : null
 
@@ -245,7 +234,7 @@ export function LeadsPage() {
         return <Badge outline tone={stage?.tone ?? 'slate'}>{stage?.label ?? titleCase(row.status)}</Badge>
       },
     },
-    { key: 'query', header: 'Query', render: (row) => row.notes || '—' },
+    { key: 'query', header: 'Query', render: (row) => <TruncatedText text={row.notes} /> },
     {
       key: 'remarks',
       header: 'Remarks',
@@ -298,120 +287,18 @@ export function LeadsPage() {
 
         <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onChange={handleDateChange} />
 
-        <Select
-          className="!w-auto"
-          value={courseFilter}
-          onChange={(event) => {
-            setCourseFilter(event.target.value)
-            setPage(1)
-          }}
-        >
-          <option value="">All Courses</option>
-          {courseOptions.map((course) => (
-            <option key={course} value={course}>
-              {course}
-            </option>
-          ))}
-        </Select>
-
-        <Select
-          className="!w-auto"
-          value={sectionFilter}
-          onChange={(event) => {
-            setSectionFilter(event.target.value)
-            setPage(1)
-          }}
-        >
-          <option value="">All Sections</option>
-          {sectionOptions.map((option) => (
-            <option key={option.code} value={option.code}>
-              {option.label}
-            </option>
-          ))}
-        </Select>
-
-        <Select
-          className="!w-auto"
-          value={statusFilter}
-          onChange={(event) => {
-            setStatusFilter(event.target.value)
-            setPage(1)
-          }}
-        >
-          <option value="">All Stages</option>
-          {LEAD_STAGES.map((stage) => (
-            <option key={stage.value} value={stage.value}>
-              {stage.label}
-            </option>
-          ))}
-        </Select>
-
-        <Select
-          className="!w-auto"
-          value={sourceFilter}
-          onChange={(event) => {
-            setSourceFilter(event.target.value)
-            setPage(1)
-          }}
-        >
-          <option value="">All Sources</option>
-          {LEAD_SOURCE_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </Select>
-
         {canCreate && (
           <Button onClick={() => setIsCreateOpen(true)}>
             <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
             Create Lead
           </Button>
         )}
-
-        <Button variant="secondary" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending}>
-          <RefreshCw className={`h-4 w-4 ${syncMutation.isPending ? 'animate-spin' : ''}`} strokeWidth={2} aria-hidden="true" />
-          {syncMutation.isPending ? 'Syncing…' : 'Sync Sheets'}
-        </Button>
-
-        <div className="flex overflow-hidden rounded-md border border-slate-300">
-          <button
-            type="button"
-            onClick={() => setView('kanban')}
-            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium ${
-              view === 'kanban' ? 'bg-slate-100 text-slate-900' : 'bg-white text-slate-500 hover:bg-slate-50'
-            }`}
-          >
-            <LayoutGrid className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-            Kanban
-          </button>
-          <button
-            type="button"
-            onClick={() => setView('list')}
-            className={`flex items-center gap-1.5 border-l border-slate-300 px-3 py-2 text-sm font-medium ${
-              view === 'list' ? 'bg-brand-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'
-            }`}
-          >
-            <ListIcon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-            List
-          </button>
-        </div>
       </div>
 
-      {syncMessage && (
-        <div className="mb-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-700">{syncMessage}</div>
-      )}
-
-      {view === 'kanban' ? (
-        <div className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-16 text-center text-sm text-slate-500">
-          Kanban view is coming soon. Switch to List to manage leads for now.
-        </div>
-      ) : (
-        <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-          <DataTable columns={columns} rows={items} isLoading={isLoading} error={error} onRowClick={(row) => setViewingLead(row)} />
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
-        </div>
-      )}
+      <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+        <DataTable columns={columns} rows={items} isLoading={isLoading} error={error} onRowClick={(row) => setViewingLead(row)} />
+        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+      </div>
 
       {isCreateOpen && (
         <Modal title="New Lead" isOpen onClose={() => setIsCreateOpen(false)}>
