@@ -11,11 +11,18 @@ from app.models.foundation_form_config import (
     FoundationFormPlan,
     FoundationFormProgramCfg,
 )
+from app.permissions.permission_codes import Permissions
 from app.repositories.foundation_form_config_repository import FoundationFormConfigRepository
 from app.repositories.lead_repository import LeadRepository
+from app.repositories.permission_repository import PermissionRepository
+from app.repositories.role_repository import RoleRepository
 from app.schemas.foundation_form_schema import FoundationFormConfigUpdate
+from app.schemas.role_schema import RoleCreate
 from app.services.audit_service import AuditService
 from app.services.foundation_form_pricing import INSTALLMENT_LABELS
+from app.services.role_service import RoleService
+
+_SECTION_ROLE_PERMISSIONS = [Permissions.LEADS_VIEW, Permissions.LEADS_UPDATE]
 
 _REQUIRED_CATEGORY_CODES = {"only_recruitment", "internship_or_generalist", "generalist_internship"}
 _REQUIRED_PLAN_VALUES = set(PaymentPlanOption)
@@ -28,6 +35,9 @@ class FoundationFormConfigService:
     def __init__(self) -> None:
         self.repo = FoundationFormConfigRepository()
         self.leads = LeadRepository()
+        self.roles = RoleRepository()
+        self.permissions = PermissionRepository()
+        self.role_service = RoleService()
         self.audit = AuditService()
 
     async def get_config(self) -> FoundationFormConfig:
@@ -125,6 +135,52 @@ class FoundationFormConfigService:
         await self.repo.save(config)
         await self.audit.record(
             user_id=actor_id, action="UPDATE", entity_type="FoundationFormConfig", entity_id=str(config.id)
+        )
+        return config
+
+    def _next_section_code(self, existing_codes: set[str]) -> str:
+        for offset in range(26):
+            code = chr(ord("a") + offset)
+            if code not in existing_codes:
+                return code
+        return f"section-{len(existing_codes) + 1}"
+
+    def _role_name_for_section(self, code: str) -> str:
+        return f"Admin {code.upper()}-Section"
+
+    async def _ensure_section_role(self, code: str, *, actor_id: uuid.UUID | None) -> None:
+        """Every Form Collection section gets its own scoped admin role,
+        auto-created the moment the section exists - matches this session's
+        naming convention (e.g. "Admin D-Section") and grants exactly the
+        lead-management rights (not FORM_COLLECTION_CONFIGURE) a Section
+        Admin needs. Idempotent: a no-op if the role already exists, so this
+        is also safe to call for sections that predate this feature."""
+        role_name = self._role_name_for_section(code)
+        if await self.roles.get_by_name(role_name):
+            return
+        permissions = await self.permissions.get_by_codes([p.value for p in _SECTION_ROLE_PERMISSIONS])
+        await self.role_service.create(
+            RoleCreate(
+                name=role_name,
+                description=f"Manages leads filed under Form Collection's {code.upper()} section.",
+                permission_ids=[p.id for p in permissions],
+                scoped_section=code,
+            ),
+            actor_id=actor_id,
+        )
+
+    async def add_section(self, *, actor_id: uuid.UUID | None) -> FoundationFormConfig:
+        config = await self.repo.get_or_create()
+        code = self._next_section_code({s.code for s in config.sections})
+        config.sections.append(FormCollectionSectionCfg(code=code, label=f"{code.upper()} Section"))
+        await self.repo.save(config)
+        await self._ensure_section_role(code, actor_id=actor_id)
+        await self.audit.record(
+            user_id=actor_id,
+            action="CREATE",
+            entity_type="FoundationFormConfig",
+            entity_id=str(config.id),
+            changes={"added_section": code},
         )
         return config
 

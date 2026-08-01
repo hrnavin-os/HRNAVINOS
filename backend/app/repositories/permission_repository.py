@@ -14,6 +14,11 @@ class PermissionRepository(BaseRepository[Permission]):
     async def get_by_code(self, code: str) -> Permission | None:
         return await Permission.find_one({"code": code, "is_deleted": False})
 
+    async def get_by_codes(self, codes: list[str]) -> list[Permission]:
+        if not codes:
+            return []
+        return await Permission.find({"code": {"$in": codes}, "is_deleted": False}).to_list()
+
     async def get_by_ids(self, ids: list[uuid.UUID]) -> list[Permission]:
         if not ids:
             return []

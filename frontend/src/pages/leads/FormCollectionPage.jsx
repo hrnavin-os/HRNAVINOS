@@ -12,22 +12,11 @@ import { useAuth } from '@/hooks/useAuth'
 import { PERMISSIONS } from '@/constants/permissions'
 import { FormCollectionEditModal } from '@/components/leads/FormCollectionEditModal'
 
-// Sections are open-ended - admins can add new ones ("Add Form") at any
-// time, so unlike the built-in A/B/C, this expects a role literally named
-// "<CODE>-Section Admin" (e.g. "D-Section Admin") to exist before a new
-// section can be scoped to its own admin. Until then, only Admin/Super
-// Admin (unscoped) manage that section's leads.
+// The backend auto-creates a matching "Admin <CODE>-Section" role (scoped
+// to just that section's leads) the moment a section is added - see
+// FoundationFormConfigService.add_section / _ensure_section_role.
 function roleNameForSection(code) {
-  return `${code.toUpperCase()}-Section Admin`
-}
-
-function nextSectionCode(sections) {
-  const used = new Set(sections.map((s) => s.code))
-  for (let charCode = 'a'.charCodeAt(0); charCode <= 'z'.charCodeAt(0); charCode += 1) {
-    const code = String.fromCharCode(charCode)
-    if (!used.has(code)) return code
-  }
-  return `section-${sections.length + 1}`
+  return `Admin ${code.toUpperCase()}-Section`
 }
 
 function SectionCard({ section, canConfigure, onEdit, onDelete, isDeleting }) {
@@ -130,17 +119,7 @@ export function FormCollectionPage() {
   })
 
   const addSectionMutation = useMutation({
-    mutationFn: () => {
-      const code = nextSectionCode(config.sections)
-      const sections = [...config.sections, { code, label: `${code.toUpperCase()} Section` }]
-      return foundationFormConfigService.update({
-        offer_info: config.offer_info,
-        fields: config.fields,
-        programs: config.programs,
-        categories: config.categories,
-        sections,
-      })
-    },
+    mutationFn: () => foundationFormConfigService.addSection(),
     onSuccess: (updated) => queryClient.setQueryData(['foundation-form-config'], updated),
   })
 

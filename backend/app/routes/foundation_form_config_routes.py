@@ -5,7 +5,7 @@ dedicated FORM_COLLECTION_CONFIGURE permission, deliberately separate from
 LEADS_UPDATE - Section Admins need LEADS_UPDATE to manage their own
 section's leads, but must not be able to edit the shared form every section
 uses."""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 
 from app.core.dependencies import RequirePermissions
 from app.models.user import User
@@ -47,6 +47,16 @@ async def update_foundation_form_config(
     actor: User = Depends(RequirePermissions(Permissions.FORM_COLLECTION_CONFIGURE)),
 ) -> FoundationFormConfigResponse:
     config = await FoundationFormConfigService().update_config(payload, actor_id=actor.id)
+    return _to_response(config)
+
+
+@router.post("/sections", response_model=FoundationFormConfigResponse, status_code=status.HTTP_201_CREATED)
+async def add_form_collection_section(
+    actor: User = Depends(RequirePermissions(Permissions.FORM_COLLECTION_CONFIGURE)),
+) -> FoundationFormConfigResponse:
+    # Also auto-creates a matching "Admin <CODE>-Section" role (scoped to
+    # just this section's leads) if one doesn't already exist.
+    config = await FoundationFormConfigService().add_section(actor_id=actor.id)
     return _to_response(config)
 
 

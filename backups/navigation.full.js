@@ -1,9 +1,23 @@
+// Backup of frontend/src/constants/navigation.js taken 2026-08-01, before
+// removing the Academics, Placement, and Support & Insights sidebar groups
+// (per user request: "remove ... for now ... when i ask this you need to
+// add it"). To restore, copy the NAV_ITEMS array below back into
+// frontend/src/constants/navigation.js (and its matching import list).
 import {
   LayoutDashboard,
   Target,
   Megaphone,
   UserPlus,
+  Users,
+  BookOpen,
+  CalendarRange,
+  GraduationCap,
+  ClipboardCheck,
   Wallet,
+  Briefcase,
+  Building2,
+  LifeBuoy,
+  BarChart3,
   UserCog,
   ShieldCheck,
   Settings,
@@ -36,7 +50,19 @@ export const NAV_ITEMS = [
   { label: 'Marketing Board', to: '/marketing-board', permission: PERMISSIONS.LEADS_VIEW, icon: Megaphone },
   { label: 'Admissions', to: '/admissions', permission: PERMISSIONS.ADMISSIONS_VIEW, icon: UserPlus },
 
+  { label: 'Students', to: '/students', permission: PERMISSIONS.STUDENTS_VIEW, icon: Users, group: 'Academics' },
+  { label: 'Courses', to: '/courses', permission: PERMISSIONS.COURSES_VIEW, icon: BookOpen },
+  { label: 'Batches', to: '/batches', permission: PERMISSIONS.BATCHES_VIEW, icon: CalendarRange },
+  { label: 'Tutors', to: '/tutors', permission: PERMISSIONS.TUTORS_VIEW, icon: GraduationCap },
+  { label: 'Attendance', to: '/attendance', permission: PERMISSIONS.ATTENDANCE_VIEW, icon: ClipboardCheck },
+
   { label: 'Payments', to: '/payments', permission: PERMISSIONS.PAYMENTS_VIEW, icon: Wallet, group: 'Finance' },
+
+  { label: 'Placement', to: '/placements', permission: PERMISSIONS.PLACEMENTS_VIEW, icon: Briefcase, group: 'Placement' },
+  { label: 'Companies', to: '/companies', permission: PERMISSIONS.PLACEMENTS_VIEW, icon: Building2 },
+
+  { label: 'Tickets', to: '/tickets', permission: PERMISSIONS.TICKETS_VIEW, icon: LifeBuoy, group: 'Support & Insights' },
+  { label: 'Reports', to: '/reports', permission: PERMISSIONS.REPORTS_VIEW, icon: BarChart3 },
 
   { label: 'Users', to: '/users', permission: PERMISSIONS.USERS_VIEW, icon: UserCog, group: 'Administration' },
   { label: 'Roles', to: '/roles', permission: PERMISSIONS.ROLES_VIEW, icon: ShieldCheck },

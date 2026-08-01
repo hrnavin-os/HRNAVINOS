@@ -11,12 +11,16 @@ class RoleCreate(BaseModel):
     name: str = Field(min_length=2, max_length=100)
     description: str | None = Field(default=None, max_length=255)
     permission_ids: list[uuid.UUID] = Field(default_factory=list)
+    # Restricts members of this role to one Form Collection section's leads
+    # (see app/core/dependencies.py:get_actor_scope). None = unscoped.
+    scoped_section: str | None = None
 
 
 class RoleUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=100)
     description: str | None = Field(default=None, max_length=255)
     permission_ids: list[uuid.UUID] | None = None
+    scoped_section: str | None = None
 
 
 class RoleResponse(BaseModel):
@@ -24,6 +28,7 @@ class RoleResponse(BaseModel):
     name: str
     description: str | None
     is_system: bool
+    scoped_section: str | None = None
     permissions: list[PermissionResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime

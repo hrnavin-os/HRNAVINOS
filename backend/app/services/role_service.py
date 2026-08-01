@@ -26,6 +26,7 @@ class RoleService:
             name=role.name,
             description=role.description,
             is_system=role.is_system,
+            scoped_section=role.scoped_section,
             permissions=[PermissionResponse.model_validate(p) for p in permissions],
             created_at=role.created_at,
             updated_at=role.updated_at,
@@ -39,6 +40,7 @@ class RoleService:
             name=data.name,
             description=data.description,
             permission_ids=data.permission_ids,
+            scoped_section=data.scoped_section,
             created_by=actor_id,
             updated_by=actor_id,
         )
