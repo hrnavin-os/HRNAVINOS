@@ -19,7 +19,11 @@ from app.models.permission import Permission  # noqa: E402
 from app.models.role import Role  # noqa: E402
 from app.models.user import User  # noqa: E402
 from app.permissions.permission_codes import all_permission_definitions  # noqa: E402
-from app.permissions.role_definitions import DEFAULT_ROLE_PERMISSIONS, SYSTEM_ROLES  # noqa: E402
+from app.permissions.role_definitions import (  # noqa: E402
+    DEFAULT_ROLE_PERMISSIONS,
+    ROLE_SCOPED_SECTION,
+    SYSTEM_ROLES,
+)
 
 
 async def seed_permissions() -> dict[str, Permission]:
@@ -37,12 +41,19 @@ async def seed_roles(permissions_by_code: dict[str, Permission]) -> dict[str, Ro
     for role_name, permission_codes in DEFAULT_ROLE_PERMISSIONS.items():
         role = existing.get(role_name)
         permission_ids = [permissions_by_code[code].id for code in permission_codes if code in permissions_by_code]
+        scoped_section = ROLE_SCOPED_SECTION.get(role_name)
         if not role:
-            role = Role(name=role_name, is_system=role_name in SYSTEM_ROLES, permission_ids=permission_ids)
+            role = Role(
+                name=role_name,
+                is_system=role_name in SYSTEM_ROLES,
+                permission_ids=permission_ids,
+                scoped_section=scoped_section,
+            )
             await role.insert()
             existing[role_name] = role
         else:
             role.permission_ids = permission_ids
+            role.scoped_section = scoped_section
             await role.save()
     return existing
 

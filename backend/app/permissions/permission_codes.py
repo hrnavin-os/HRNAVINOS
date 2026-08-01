@@ -105,6 +105,9 @@ class Permissions(StrEnum):
     SETTINGS_VIEW = "settings.view"
     SETTINGS_UPDATE = "settings.update"
 
+    # ---------- Form Collection ----------
+    FORM_COLLECTION_CONFIGURE = "form_collection.configure"
+
 
 def all_permission_definitions() -> list[dict[str, str]]:
     """Returns [{code, module, action}, ...] for every permission, derived from the enum."""

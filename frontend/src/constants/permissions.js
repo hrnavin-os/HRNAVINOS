@@ -58,4 +58,6 @@ export const PERMISSIONS = {
 
   SETTINGS_VIEW: 'settings.view',
   SETTINGS_UPDATE: 'settings.update',
+
+  FORM_COLLECTION_CONFIGURE: 'form_collection.configure',
 }

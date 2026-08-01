@@ -3,6 +3,7 @@
 Super Admin is granted every permission implicitly by `RequirePermissions`
 (see app/core/dependencies.py) and does not need an explicit list here.
 """
+from app.models.enums import FormSection
 from app.permissions.permission_codes import Permissions as P
 
 DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
@@ -12,8 +13,14 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         P.ADMISSIONS_VIEW, P.USERS_VIEW, P.REPORTS_VIEW,
     ],
     "Admin": [
-        P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE,
+        P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.FORM_COLLECTION_CONFIGURE,
     ],
+    # Form Collection Section Admins: manage leads within their own section
+    # only (enforced via Role.scoped_section below), no rights to edit the
+    # shared form/pricing structure itself - that's Admin/Super Admin only.
+    "A-Section Admin": [P.LEADS_VIEW, P.LEADS_UPDATE],
+    "B-Section Admin": [P.LEADS_VIEW, P.LEADS_UPDATE],
+    "C-Section Admin": [P.LEADS_VIEW, P.LEADS_UPDATE],
     "Post Sales Executive": [
         P.STUDENTS_VIEW, P.STUDENTS_UPDATE, P.TICKETS_VIEW, P.TICKETS_UPDATE, P.NOTIFICATIONS_VIEW,
     ],
@@ -53,3 +60,11 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
 }
 
 SYSTEM_ROLES = {"Super Admin"}
+
+# Which Form Collection section (if any) a role's members are restricted to.
+# Absent/None for every other role = unscoped, sees every lead.
+ROLE_SCOPED_SECTION: dict[str, FormSection] = {
+    "A-Section Admin": FormSection.A,
+    "B-Section Admin": FormSection.B,
+    "C-Section Admin": FormSection.C,
+}

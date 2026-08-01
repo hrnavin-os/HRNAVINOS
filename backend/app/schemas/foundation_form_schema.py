@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
-from app.models.enums import PaymentPlanOption, PaymentTimeline, ProgramInterest
+from app.models.enums import FormSection, PaymentPlanOption, PaymentTimeline, ProgramInterest
 
 FieldType = Literal["text", "email", "tel", "textarea"]
 
@@ -60,6 +60,10 @@ class FoundationFormSubmit(BaseModel):
     payment_timeline: PaymentTimeline | None = None
     queries: str | None = Field(default=None, max_length=2000)
     custom_fields: dict[str, str] = Field(default_factory=dict)
+    # Which Form Collection section this came through - None for the legacy,
+    # section-less public link (/foundation-form). Set by the frontend based
+    # on which of the /foundation-form/a|b|c routes the visitor is on.
+    section: FormSection | None = None
 
 
 class FoundationFormSubmitResponse(BaseModel):

@@ -28,7 +28,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
+import { formatLeadSource, LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
 import { INSTALLMENT_MODE_OPTIONS, PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
 import { leadService } from '@/services/leadService'
 import { foundationFormService } from '@/services/foundationFormService'
@@ -111,7 +111,7 @@ const INFO_TONE_CLASSES = {
 const INFO_ITEMS = (lead) => [
   { key: 'phone', icon: Phone, label: 'Phone', value: lead.phone, tone: 'blue' },
   { key: 'email', icon: Mail, label: 'Email', value: lead.email ?? '—', tone: 'violet' },
-  { key: 'source', icon: Tag, label: 'Source', value: titleCase(lead.source), tone: 'emerald' },
+  { key: 'source', icon: Tag, label: 'Source', value: formatLeadSource(lead.source), tone: 'emerald' },
   { key: 'course_interest', icon: BookOpen, label: 'Course Interest', value: lead.course_interest ?? '—', tone: 'purple' },
 ]
 

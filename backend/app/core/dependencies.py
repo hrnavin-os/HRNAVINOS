@@ -7,6 +7,7 @@ from jose import JWTError
 
 from app.core.security import TokenType, decode_token
 from app.exceptions.base import ForbiddenError, UnauthorizedError
+from app.models.enums import FormSection
 from app.models.role import Role
 from app.models.user import User
 from app.repositories.permission_repository import PermissionRepository
@@ -58,6 +59,14 @@ async def get_role_permission_codes(role: Role | None) -> set[str]:
         return set()
     permissions = await PermissionRepository().get_by_ids(role.permission_ids)
     return {permission.code for permission in permissions}
+
+
+async def get_actor_scope(user: User) -> FormSection | None:
+    """Which Form Collection section (if any) this user's role restricts them
+    to. None means unscoped - sees every lead, matching every pre-existing
+    role's behavior."""
+    role = await get_user_role(user)
+    return role.scoped_section if role else None
 
 
 class RequirePermissions:

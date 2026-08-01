@@ -41,7 +41,7 @@ export const NAV_ITEMS = [
     group: 'CRM & Admissions',
     hideGroupForRoles: ['Admin'],
   },
-  { label: 'Foundation Form', to: '/leads/foundation-form', permission: PERMISSIONS.LEADS_VIEW, icon: FileCheck2 },
+  { label: 'Form Collection', to: '/leads/form-collection', permission: PERMISSIONS.LEADS_VIEW, icon: FileCheck2 },
   { label: 'Marketing Board', to: '/marketing-board', permission: PERMISSIONS.LEADS_VIEW, icon: Megaphone },
   { label: 'Admissions', to: '/admissions', permission: PERMISSIONS.ADMISSIONS_VIEW, icon: UserPlus },
 

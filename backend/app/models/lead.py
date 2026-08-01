@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from app.database.base import BaseDocument, utcnow
 from app.database.types import MongoDecimal
 from app.models.enums import (
+    FormSection,
     InstallmentPaymentMode,
     LeadSource,
     LeadStatus,
@@ -71,6 +72,10 @@ class Lead(BaseDocument):
     program_interest: ProgramInterest | None = None
     payment_plan: PaymentPlanOption | None = None
     installments: list[PaymentInstallment] = Field(default_factory=list)
+    # Which Form Collection section (A/B/C) this lead came through, if any.
+    # None covers every pre-existing lead and submissions through the
+    # legacy, section-less public form link.
+    section: FormSection | None = None
 
     class Settings:
         name = "leads"
@@ -79,6 +84,7 @@ class Lead(BaseDocument):
             IndexModel([("phone", 1)]),
             IndexModel([("status", 1)]),
             IndexModel([("assigned_to", 1)]),
+            IndexModel([("section", 1)]),
             # Not unique: MongoDB stores this as `null` (not "missing") on every
             # regular lead, since Beanie always writes declared fields, so a
             # unique+sparse index would collide across all non-synced leads.

@@ -5,7 +5,7 @@ import { ProtectedRoute } from '@/routes/ProtectedRoute'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { HomeRoute } from '@/routes/HomeRoute'
 import { LeadsPage } from '@/pages/leads/LeadsPage'
-import { FoundationFormAdminPage } from '@/pages/leads/FoundationFormAdminPage'
+import { FormCollectionPage } from '@/pages/leads/FormCollectionPage'
 import { FoundationFormPage } from '@/pages/public/FoundationFormPage'
 import { MarketingBoardPage } from '@/pages/marketing/MarketingBoardPage'
 import { AdmissionsPage } from '@/pages/admissions/AdmissionsPage'
@@ -35,6 +35,9 @@ export function AppRoutes() {
 
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
       <Route path="/foundation-form" element={<FoundationFormPage />} />
+      <Route path="/foundation-form/a" element={<FoundationFormPage section="a" />} />
+      <Route path="/foundation-form/b" element={<FoundationFormPage section="b" />} />
+      <Route path="/foundation-form/c" element={<FoundationFormPage section="c" />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
@@ -42,7 +45,8 @@ export function AppRoutes() {
 
           <Route element={<ProtectedRoute permission={PERMISSIONS.LEADS_VIEW} />}>
             <Route path="/leads" element={<LeadsPage />} />
-            <Route path="/leads/foundation-form" element={<FoundationFormAdminPage />} />
+            <Route path="/leads/form-collection" element={<FormCollectionPage />} />
+            <Route path="/leads/foundation-form" element={<Navigate to="/leads/form-collection" replace />} />
             <Route path="/marketing-board" element={<MarketingBoardPage />} />
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.ADMISSIONS_VIEW} />}>

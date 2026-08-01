@@ -149,7 +149,7 @@ function PaymentTimelineField({ field, watchedValue, register, errors }) {
   )
 }
 
-export function FoundationFormPage() {
+export function FoundationFormPage({ section } = {}) {
   const [stepIndex, setStepIndex] = useState(0)
   const [submitted, setSubmitted] = useState(false)
 
@@ -233,6 +233,7 @@ export function FoundationFormPage() {
     for (const [key, value] of Object.entries(values)) {
       if (!KNOWN_KEYS.has(key) && value) payload.custom_fields[key] = value
     }
+    if (section) payload.section = section
     submitMutation.mutate(payload)
   }
 

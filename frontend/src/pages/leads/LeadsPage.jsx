@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Calendar, Eye, LayoutGrid, List as ListIcon, Plus, RefreshCw, Search } from 'lucide-react'
 import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
@@ -6,7 +7,13 @@ import { useAuth } from '@/hooks/useAuth'
 import { leadService } from '@/services/leadService'
 import { googleSheetsService } from '@/services/googleSheetsService'
 import { getApiErrorMessage } from '@/services/apiClient'
-import { LEAD_SOURCE_OPTIONS, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
+import {
+  FORM_SECTION_BY_VALUE,
+  FORM_SECTION_OPTIONS,
+  formatLeadSource,
+  LEAD_SOURCE_OPTIONS,
+  LEAD_STAGE_BY_VALUE,
+} from '@/constants/leadStages'
 import { PERMISSIONS } from '@/constants/permissions'
 import { titleCase, formatDate } from '@/utils/formatters'
 import { Badge } from '@/components/ui/Badge'
@@ -107,11 +114,13 @@ export function LeadsPage() {
   const { hasPermission } = useAuth()
   const queryClient = useQueryClient()
   const canCreate = hasPermission(PERMISSIONS.LEADS_CREATE)
+  const [searchParams] = useSearchParams()
 
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [viewingLead, setViewingLead] = useState(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [sourceFilter, setSourceFilter] = useState('')
+  const [sectionFilter, setSectionFilter] = useState(searchParams.get('section') || '')
   const [sortOrder, setSortOrder] = useState('desc')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -125,6 +134,7 @@ export function LeadsPage() {
   const { items, page, setPage, search, setSearch, isLoading, error, totalPages } = usePaginatedQuery('leads', leadService, {
     status: statusFilter || undefined,
     source: sourceFilter || undefined,
+    section: sectionFilter || undefined,
     sort_order: sortOrder,
     date_from: dateFrom || undefined,
     date_to: dateTo || undefined,
@@ -185,7 +195,12 @@ export function LeadsPage() {
         </div>
       ),
     },
-    { key: 'source', header: 'Source', render: (row) => <Badge tone="slate">{titleCase(row.source)}</Badge> },
+    { key: 'source', header: 'Source', render: (row) => <Badge tone="slate">{formatLeadSource(row.source)}</Badge> },
+    {
+      key: 'section',
+      header: 'Section',
+      render: (row) => (row.section ? <Badge tone="blue">{FORM_SECTION_BY_VALUE[row.section]?.label ?? row.section}</Badge> : '—'),
+    },
     {
       key: 'stage',
       header: 'Stage',
@@ -264,6 +279,22 @@ export function LeadsPage() {
         >
           <option value="">All Sources</option>
           {LEAD_SOURCE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </Select>
+
+        <Select
+          className="!w-auto"
+          value={sectionFilter}
+          onChange={(event) => {
+            setSectionFilter(event.target.value)
+            setPage(1)
+          }}
+        >
+          <option value="">All Sections</option>
+          {FORM_SECTION_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>

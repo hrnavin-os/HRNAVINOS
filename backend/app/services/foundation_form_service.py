@@ -124,6 +124,7 @@ class FoundationFormService:
             payment_plan=data.payment_plan,
             installments=installments,
             raw_form_data=raw_form_data,
+            section=data.section,
         )
         await self.leads.create(lead)
         return lead

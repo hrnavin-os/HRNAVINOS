@@ -1,7 +1,10 @@
-"""Admin HTTP routes for editing the Foundation Form's fields, offer text,
-and program/pricing config. Gated by the same Leads permission the admin
-page (/leads/foundation-form) already requires - no dedicated permission
-code exists for this feature, matching how narrowly-scoped it is."""
+"""Admin HTTP routes for editing the Form Collection form's fields, offer
+text, and program/pricing config. GET is gated by the same Leads permission
+the admin page already requires (harmless to read); PUT requires the
+dedicated FORM_COLLECTION_CONFIGURE permission, deliberately separate from
+LEADS_UPDATE - Section Admins need LEADS_UPDATE to manage their own
+section's leads, but must not be able to edit the shared form every section
+uses."""
 from fastapi import APIRouter, Depends
 
 from app.core.dependencies import RequirePermissions
@@ -40,7 +43,7 @@ async def get_foundation_form_config(
 @router.put("", response_model=FoundationFormConfigResponse)
 async def update_foundation_form_config(
     payload: FoundationFormConfigUpdate,
-    actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
+    actor: User = Depends(RequirePermissions(Permissions.FORM_COLLECTION_CONFIGURE)),
 ) -> FoundationFormConfigResponse:
     config = await FoundationFormConfigService().update_config(payload, actor_id=actor.id)
     return _to_response(config)
