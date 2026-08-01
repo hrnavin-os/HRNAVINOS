@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Calendar, Eye, Plus, Search } from 'lucide-react'
+import { Calendar, ChevronDown, Eye, Plus, Search } from 'lucide-react'
 import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
 import { useAuth } from '@/hooks/useAuth'
 import { leadService } from '@/services/leadService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
 import { getApiErrorMessage } from '@/services/apiClient'
-import { LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
+import { LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
 import { PERMISSIONS } from '@/constants/permissions'
 import { titleCase } from '@/utils/formatters'
 import { Badge } from '@/components/ui/Badge'
@@ -100,6 +100,64 @@ function RemarksCell({ lead }) {
   )
 }
 
+// A column header that's also its own filter dropdown - click the label to
+// pick a value, "All <Label>s" clears it. Renders in place of a plain
+// string `header`, since DataTable just puts whatever it's given into <th>.
+function FilterableHeader({ label, value, options, onChange }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const isActive = Boolean(value)
+  const selectedLabel = options.find((option) => option.value === value)?.label
+
+  return (
+    <div className="relative inline-block normal-case">
+      <button
+        type="button"
+        onClick={() => setIsOpen((open) => !open)}
+        className={`flex items-center gap-1 text-xs font-semibold uppercase tracking-wide ${
+          isActive ? 'text-brand-600' : 'text-slate-500'
+        }`}
+      >
+        {isActive ? selectedLabel : label}
+        <ChevronDown className="h-3 w-3 shrink-0" strokeWidth={2.5} aria-hidden="true" />
+      </button>
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+          <div className="absolute left-0 z-50 mt-1 max-h-64 w-52 overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+            <button
+              type="button"
+              onClick={() => {
+                onChange('')
+                setIsOpen(false)
+              }}
+              className={`block w-full px-3 py-1.5 text-left text-sm font-normal ${
+                !value ? 'bg-brand-50 text-brand-700' : 'text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              All {label}s
+            </button>
+            {options.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  onChange(option.value)
+                  setIsOpen(false)
+                }}
+                className={`block w-full truncate px-3 py-1.5 text-left text-sm font-normal ${
+                  value === option.value ? 'bg-brand-50 text-brand-700' : 'text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function DateRangeFilter({ dateFrom, dateTo, onChange }) {
   const [isOpen, setIsOpen] = useState(false)
   const hasValue = Boolean(dateFrom || dateTo)
@@ -146,6 +204,8 @@ export function LeadsPage() {
   const [viewingLead, setViewingLead] = useState(null)
   const [viewingPayment, setViewingPayment] = useState(null)
   const [sectionFilter, setSectionFilter] = useState('')
+  const [courseFilter, setCourseFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
   const [sortOrder, setSortOrder] = useState('desc')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -161,8 +221,13 @@ export function LeadsPage() {
   const sectionOptions = configQuery.data?.sections ?? []
   const sectionByCode = Object.fromEntries(sectionOptions.map((section) => [section.code, section]))
 
+  const courseOptionsQuery = useQuery({ queryKey: ['lead-course-options'], queryFn: leadService.getCourseOptions })
+  const courseOptions = courseOptionsQuery.data ?? []
+
   const { items, page, setPage, search, setSearch, isLoading, error, totalPages } = usePaginatedQuery('leads', leadService, {
     section: sectionFilter || undefined,
+    course_interest: courseFilter || undefined,
+    status: statusFilter || undefined,
     sort_order: sortOrder,
     date_from: dateFrom || undefined,
     date_to: dateTo || undefined,
@@ -203,10 +268,31 @@ export function LeadsPage() {
     },
     { key: 'phone', header: 'Ph.no', render: (row) => row.phone },
     { key: 'email', header: 'Email', render: (row) => row.email ?? '—' },
-    { key: 'course', header: 'Course', render: (row) => row.course_interest ?? '—' },
+    {
+      key: 'course',
+      header: (
+        <FilterableHeader
+          label="Course"
+          value={courseFilter}
+          options={courseOptions.map((course) => ({ value: course, label: course }))}
+          onChange={(value) => {
+            setCourseFilter(value)
+            setPage(1)
+          }}
+        />
+      ),
+      render: (row) => row.course_interest ?? '—',
+    },
     {
       key: 'section',
-      header: 'Section',
+      header: (
+        <FilterableHeader
+          label="Section"
+          value={sectionFilter}
+          options={sectionOptions.map((section) => ({ value: section.code, label: section.label }))}
+          onChange={selectSection}
+        />
+      ),
       render: (row) => (row.section ? <Badge tone="blue">{sectionByCode[row.section]?.label ?? row.section}</Badge> : '—'),
     },
     {
@@ -228,7 +314,17 @@ export function LeadsPage() {
     },
     {
       key: 'stage',
-      header: 'Stage',
+      header: (
+        <FilterableHeader
+          label="Stage"
+          value={statusFilter}
+          options={LEAD_STAGES.map((stage) => ({ value: stage.value, label: stage.label }))}
+          onChange={(value) => {
+            setStatusFilter(value)
+            setPage(1)
+          }}
+        />
+      ),
       render: (row) => {
         const stage = LEAD_STAGE_BY_VALUE[row.status]
         return <Badge outline tone={stage?.tone ?? 'slate'}>{stage?.label ?? titleCase(row.status)}</Badge>
