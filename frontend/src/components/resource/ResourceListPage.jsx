@@ -22,6 +22,10 @@ export function ResourceListPage({
   createPermission,
   transformCreatePayload = (values) => values,
   extraParams = {},
+  // For creation flows too complex for ResourceForm's simple field list
+  // (e.g. grouped permission checkboxes) - fully replaces the built-in
+  // "+ New" button and modal. Receives { onCreated } to invalidate the list.
+  renderCreateAction,
 }) {
   const { hasPermission } = useAuth()
   const queryClient = useQueryClient()
@@ -50,7 +54,9 @@ export function ResourceListPage({
           <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
           {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
         </div>
-        {canCreate && createFields && <Button onClick={() => setIsModalOpen(true)}>+ New</Button>}
+        {renderCreateAction
+          ? renderCreateAction({ onCreated: () => queryClient.invalidateQueries({ queryKey: [queryKey] }) })
+          : canCreate && createFields && <Button onClick={() => setIsModalOpen(true)}>+ New</Button>}
       </div>
 
       <div className="mb-4 max-w-xs">
