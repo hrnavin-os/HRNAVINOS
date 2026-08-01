@@ -102,5 +102,21 @@ class FoundationFormConfigRepository:
 
     async def save(self, config: FoundationFormConfig) -> FoundationFormConfig:
         config.touch()
-        await config.save()
+        # A targeted $set of exactly the fields this repository manages,
+        # rather than Document.save()'s full-document replace: during a
+        # rolling deploy, a worker still running the previous release's
+        # model (missing a field added in the new release, e.g. `sections`)
+        # would otherwise silently drop that field from the stored document
+        # the moment it writes - $set only ever touches the keys listed here.
+        await config.set(
+            {
+                FoundationFormConfig.offer_info: config.offer_info,
+                FoundationFormConfig.fields: config.fields,
+                FoundationFormConfig.programs: config.programs,
+                FoundationFormConfig.categories: config.categories,
+                FoundationFormConfig.sections: config.sections,
+                FoundationFormConfig.updated_at: config.updated_at,
+                FoundationFormConfig.updated_by: config.updated_by,
+            }
+        )
         return config
