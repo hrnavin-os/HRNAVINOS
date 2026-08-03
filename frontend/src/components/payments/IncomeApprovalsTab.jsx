@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { formatCurrency, formatDate, titleCase } from '@/utils/formatters'
 import { getLeadPaymentSummary } from '@/utils/leadPayment'
+import { PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
 import { ReviewApprovalModal } from '@/components/payments/ReviewApprovalModal'
 
 const columns = [
@@ -16,6 +17,20 @@ const columns = [
   { key: 'date', header: 'Date', render: (row) => formatDate(row.created_at) },
   { key: 'lead', header: 'Lead', render: (row) => <span className="font-medium text-slate-900">{row.name}</span> },
   { key: 'contact', header: 'Contact', render: (row) => row.phone },
+  {
+    // Which plan the student picked on the Form Collection payment step.
+    // Older/manually-created leads carry no plan at all.
+    key: 'payment_details',
+    header: 'Payment Details',
+    render: (row) =>
+      row.payment_plan ? (
+        <Badge outline tone="blue">
+          {PAYMENT_PLAN_LABELS[row.payment_plan] ?? titleCase(row.payment_plan)}
+        </Badge>
+      ) : (
+        '—'
+      ),
+  },
   {
     key: 'amount',
     header: 'Amount',
