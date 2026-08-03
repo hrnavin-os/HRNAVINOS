@@ -43,9 +43,19 @@ function PermissionGroup({ module, permissions, selected, onToggle, onToggleAll 
   )
 }
 
-function AddRoleModal({ onClose, onCreated }) {
-  const [selected, setSelected] = useState(new Set())
-  const { register, handleSubmit, formState: { errors } } = useForm()
+// Create and edit share one modal: both need the same grouped permission
+// picker, which is far too much for ResourceForm's flat field list. Pass a
+// `role` to edit it, omit it to create a new one.
+export function RoleFormModal({ role, onClose, onSaved }) {
+  const isEdit = Boolean(role)
+  const [selected, setSelected] = useState(() => new Set((role?.permissions ?? []).map((p) => p.id)))
+  const { register, handleSubmit, formState: { errors } } = useForm({
+    defaultValues: {
+      name: role?.name ?? '',
+      description: role?.description ?? '',
+      scoped_section: role?.scoped_section ?? '',
+    },
+  })
 
   const permissionsQuery = useQuery({
     queryKey: ['permissions', 'all'],
@@ -83,16 +93,22 @@ function AddRoleModal({ onClose, onCreated }) {
     })
   }
 
-  const createMutation = useMutation({
-    mutationFn: (values) =>
-      roleService.create({
+  const saveMutation = useMutation({
+    mutationFn: (values) => {
+      // RoleUpdate is applied with exclude_unset, so clearing a field means
+      // sending an explicit null - `undefined` would drop it from the payload
+      // and leave the old value in place.
+      const empty = isEdit ? null : undefined
+      const payload = {
         name: values.name,
-        description: values.description || undefined,
+        description: values.description || empty,
         permission_ids: [...selected],
-        scoped_section: values.scoped_section || undefined,
-      }),
+        scoped_section: values.scoped_section || empty,
+      }
+      return isEdit ? roleService.update(role.id, payload) : roleService.create(payload)
+    },
     onSuccess: () => {
-      onCreated()
+      onSaved()
       onClose()
     },
   })
@@ -100,12 +116,12 @@ function AddRoleModal({ onClose, onCreated }) {
   const isLoading = permissionsQuery.isLoading || configQuery.isLoading
 
   return (
-    <Modal title="New Role" isOpen onClose={onClose} maxWidth="max-w-2xl">
+    <Modal title={isEdit ? `Edit ${role.name}` : 'New Role'} isOpen onClose={onClose} maxWidth="max-w-2xl">
       {isLoading ? (
         <LoadingSpinner />
       ) : (
-        <form className="space-y-4" onSubmit={handleSubmit((values) => createMutation.mutate(values))}>
-          <ErrorMessage message={createMutation.error ? getApiErrorMessage(createMutation.error) : null} />
+        <form className="space-y-4" onSubmit={handleSubmit((values) => saveMutation.mutate(values))}>
+          <ErrorMessage message={saveMutation.error ? getApiErrorMessage(saveMutation.error) : null} />
 
           <Input
             label="Role Name"
@@ -146,8 +162,8 @@ function AddRoleModal({ onClose, onCreated }) {
             <Button type="button" variant="secondary" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? 'Saving…' : 'Save Role'}
+            <Button type="submit" disabled={saveMutation.isPending}>
+              {saveMutation.isPending ? 'Saving…' : isEdit ? 'Save Changes' : 'Save Role'}
             </Button>
           </div>
         </form>
@@ -168,7 +184,7 @@ export function AddRoleAction({ onCreated }) {
         <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
         Add Role
       </Button>
-      {isOpen && <AddRoleModal onClose={() => setIsOpen(false)} onCreated={onCreated} />}
+      {isOpen && <RoleFormModal onClose={() => setIsOpen(false)} onSaved={onCreated} />}
     </>
   )
 }

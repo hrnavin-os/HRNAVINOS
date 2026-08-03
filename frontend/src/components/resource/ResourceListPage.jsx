@@ -9,6 +9,10 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { ResourceForm } from '@/components/resource/ResourceForm'
+import { RowActions } from '@/components/resource/RowActions'
+import { ResourceViewModal } from '@/components/resource/ResourceViewModal'
+import { ResourceEditModal } from '@/components/resource/ResourceEditModal'
+import { ConfirmDeleteModal } from '@/components/resource/ConfirmDeleteModal'
 
 // Shared "list + search + paginate + create" page shell used by every
 // straightforward CRUD module (Courses, Batches, Tutors, Placements, ...).
@@ -26,10 +30,21 @@ export function ResourceListPage({
   // (e.g. grouped permission checkboxes) - fully replaces the built-in
   // "+ New" button and modal. Receives { onCreated } to invalidate the list.
   renderCreateAction,
+  // Opt-in per-row View / Edit / Delete column. Omit it and the table renders
+  // exactly as before, so pages that don't ask for actions don't get them.
+  //   view:   { title?, fields: [{ label, value(record) }] }
+  //   edit:   { title?, permission?, fields, defaults?, transform? }
+  //           or { title?, permission?, render({ row, onClose, onSaved }) }
+  //   remove: { permission?, describe(row), lockedReason?(row) }
+  //   lockedReason?(row) -> string disables BOTH edit and delete with a tooltip
+  rowActions,
 }) {
   const { hasPermission } = useAuth()
   const queryClient = useQueryClient()
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [viewingRow, setViewingRow] = useState(null)
+  const [editingRow, setEditingRow] = useState(null)
+  const [deletingRow, setDeletingRow] = useState(null)
 
   const { items, total, page, setPage, search, setSearch, isLoading, error, totalPages } = usePaginatedQuery(
     queryKey,
@@ -45,7 +60,62 @@ export function ResourceListPage({
     },
   })
 
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: [queryKey] })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, values }) => service.update(id, values),
+    onSuccess: () => {
+      invalidate()
+      setEditingRow(null)
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => service.remove(id),
+    onSuccess: () => {
+      invalidate()
+      setDeletingRow(null)
+    },
+  })
+
   const canCreate = !createPermission || hasPermission(createPermission)
+  const canEdit = Boolean(rowActions?.edit) && (!rowActions.edit.permission || hasPermission(rowActions.edit.permission))
+  const canDelete =
+    Boolean(rowActions?.remove) && (!rowActions.remove.permission || hasPermission(rowActions.remove.permission))
+
+  // Clear any previous failure before reopening, so a 403 from one row doesn't
+  // greet you on the next.
+  function openEdit(row) {
+    updateMutation.reset()
+    setEditingRow(row)
+  }
+
+  function openDelete(row) {
+    deleteMutation.reset()
+    setDeletingRow(row)
+  }
+
+  // Nothing this user is allowed to do -> don't render a dead column.
+  const hasRowActions = Boolean(rowActions) && (Boolean(rowActions.view) || canEdit || canDelete)
+
+  const tableColumns = hasRowActions
+    ? [
+        ...columns,
+        {
+          key: '__actions',
+          header: 'Actions',
+          render: (row) => (
+            <RowActions
+              onView={rowActions.view ? () => setViewingRow(row) : undefined}
+              onEdit={canEdit ? () => openEdit(row) : undefined}
+              onDelete={canDelete ? () => openDelete(row) : undefined}
+              lockedReason={rowActions.lockedReason?.(row) ?? null}
+              deleteLockedReason={rowActions.remove?.lockedReason?.(row) ?? null}
+            />
+          ),
+        },
+      ]
+    : columns
 
   return (
     <div>
@@ -64,7 +134,7 @@ export function ResourceListPage({
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-        <DataTable columns={columns} rows={items} isLoading={isLoading} error={error} />
+        <DataTable columns={tableColumns} rows={items} isLoading={isLoading} error={error} />
         <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
       </div>
       <p className="mt-2 text-xs text-slate-400">{total} total record{total === 1 ? '' : 's'}</p>
@@ -78,6 +148,56 @@ export function ResourceListPage({
             submitError={createMutation.error ? getApiErrorMessage(createMutation.error) : null}
           />
         </Modal>
+      )}
+
+      {viewingRow && rowActions?.view && (
+        <ResourceViewModal
+          title={rowActions.view.title?.(viewingRow) ?? 'Details'}
+          queryKey={queryKey}
+          service={service}
+          row={viewingRow}
+          fields={rowActions.view.fields}
+          onClose={() => setViewingRow(null)}
+        />
+      )}
+
+      {editingRow &&
+        (rowActions.edit.render ? (
+          rowActions.edit.render({
+            row: editingRow,
+            onClose: () => setEditingRow(null),
+            onSaved: () => {
+              invalidate()
+              setEditingRow(null)
+            },
+          })
+        ) : (
+          <ResourceEditModal
+            title={rowActions.edit.title?.(editingRow) ?? 'Edit'}
+            queryKey={queryKey}
+            service={service}
+            row={editingRow}
+            fields={rowActions.edit.fields}
+            defaults={rowActions.edit.defaults}
+            onSubmit={(values) =>
+              updateMutation.mutateAsync({
+                id: editingRow.id,
+                values: rowActions.edit.transform ? rowActions.edit.transform(values) : values,
+              })
+            }
+            onClose={() => setEditingRow(null)}
+            submitError={updateMutation.error ? getApiErrorMessage(updateMutation.error) : null}
+          />
+        ))}
+
+      {deletingRow && (
+        <ConfirmDeleteModal
+          describe={rowActions.remove.describe(deletingRow)}
+          error={deleteMutation.error ? getApiErrorMessage(deleteMutation.error) : null}
+          isPending={deleteMutation.isPending}
+          onConfirm={() => deleteMutation.mutate(deletingRow.id)}
+          onClose={() => setDeletingRow(null)}
+        />
       )}
     </div>
   )
