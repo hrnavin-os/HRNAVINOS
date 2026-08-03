@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Calendar, ChevronDown, Eye, Plus, Search } from 'lucide-react'
+import { Calendar, ChevronDown, Plus, Search } from 'lucide-react'
 import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
 import { useAuth } from '@/hooks/useAuth'
 import { leadService } from '@/services/leadService'
@@ -20,7 +20,7 @@ import { ResourceForm } from '@/components/resource/ResourceForm'
 import { LeadSectionStageStats, LeadSectionStats } from '@/components/leads/LeadSectionStats'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { LeadDetailModal } from '@/components/leads/LeadDetailModal'
-import { PaymentDetailModal } from '@/components/payments/PaymentDetailModal'
+import { PAYMENT_OPTIONS, CALL_REMARK_OPTIONS } from '@/constants/paymentOptions'
 
 const createFields = [
   { name: 'name', label: 'Full Name', placeholder: 'Full Name', required: true },
@@ -125,6 +125,75 @@ function RemarksCell({ lead }) {
   )
 }
 
+// Inline-editable colored-tag cell - shows the lead's current value as a
+// Badge (or a muted placeholder if unset); clicking it opens a portaled
+// menu of every option, each previewed as its own colored Badge, matching
+// the Google Sheets dropdown this replaces. Used for both Payment Option
+// and Payment Call Remarks, which only differ by field name and options.
+function SelectBadgeCell({ lead, field, options, placeholder }) {
+  const queryClient = useQueryClient()
+  const buttonRef = useRef(null)
+  const [menuPosition, setMenuPosition] = useState(null)
+  const current = options.find((option) => option.value === lead[field])
+
+  const mutation = useMutation({
+    mutationFn: (value) => leadService.update(lead.id, { [field]: value }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['leads'] }),
+  })
+
+  function toggle(event) {
+    event.stopPropagation()
+    if (menuPosition) {
+      setMenuPosition(null)
+      return
+    }
+    const rect = buttonRef.current.getBoundingClientRect()
+    setMenuPosition({ top: rect.bottom + 4, left: rect.left })
+  }
+
+  function close() {
+    setMenuPosition(null)
+  }
+
+  return (
+    <div className="inline-block">
+      <button ref={buttonRef} type="button" onClick={toggle} className="rounded-md hover:bg-slate-50">
+        {current ? (
+          <Badge tone={current.tone}>{current.label}</Badge>
+        ) : (
+          <span className="px-1 text-sm text-slate-400">{placeholder}</span>
+        )}
+      </button>
+      {menuPosition &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-40" onClick={close} />
+            <div
+              style={{ top: menuPosition.top, left: menuPosition.left }}
+              className="fixed z-50 max-h-72 w-64 overflow-y-auto rounded-md border border-slate-200 bg-white p-1.5 shadow-lg"
+            >
+              {options.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    mutation.mutate(option.value)
+                    close()
+                  }}
+                  className="block w-full rounded px-1 py-1 text-left hover:bg-slate-50"
+                >
+                  <Badge tone={option.tone}>{option.label}</Badge>
+                </button>
+              ))}
+            </div>
+          </>,
+          document.body,
+        )}
+    </div>
+  )
+}
+
 const SORT_OPTIONS = [
   { value: 'desc', label: 'Newest first' },
   { value: 'asc', label: 'Oldest first' },
@@ -188,13 +257,12 @@ function SortOrderSelect({ value, onChange }) {
   )
 }
 
-// A column header that's also its own filter dropdown - click the label to
-// pick a value, "All <Label>s" clears it. Renders in place of a plain
-// string `header`, since DataTable just puts whatever it's given into <th>.
-// The menu is portaled to <body> (positioned from the button's own
-// bounding rect) rather than rendered inline, because DataTable wraps rows
-// in an overflow-x-auto container that would otherwise clip it.
-function FilterableHeader({ label, value, options, onChange }) {
+// A filter-row button that opens a dropdown - click it to pick a value,
+// "All <Label>s" clears it. Lives next to the search bar rather than in a
+// column header. The menu is portaled to <body> (positioned from the
+// button's own bounding rect) so it isn't clipped by DataTable's
+// overflow-x-auto row container.
+function FilterDropdown({ label, value, options, onChange }) {
   const buttonRef = useRef(null)
   const [menuPosition, setMenuPosition] = useState(null)
   const isActive = Boolean(value)
@@ -214,17 +282,19 @@ function FilterableHeader({ label, value, options, onChange }) {
   }
 
   return (
-    <div className="inline-block normal-case">
+    <div className="inline-block">
       <button
         ref={buttonRef}
         type="button"
         onClick={toggle}
-        className={`flex items-center gap-1 text-xs font-semibold uppercase tracking-wide ${
-          isActive ? 'text-brand-600' : 'text-slate-500'
+        className={`inline-flex items-center gap-2 rounded-md border px-3.5 py-2 text-sm font-medium transition-colors ${
+          isActive
+            ? 'border-brand-300 bg-brand-50 text-brand-700 hover:bg-brand-100'
+            : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
         }`}
       >
         {isActive ? selectedLabel : label}
-        <ChevronDown className="h-3 w-3 shrink-0" strokeWidth={2.5} aria-hidden="true" />
+        <ChevronDown className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
       </button>
       {menuPosition &&
         createPortal(
@@ -319,7 +389,6 @@ export function LeadsPage() {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [viewingLead, setViewingLead] = useState(null)
-  const [viewingPayment, setViewingPayment] = useState(null)
   const [sectionFilter, setSectionFilter] = useState('')
   const [courseFilter, setCourseFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -384,8 +453,6 @@ export function LeadsPage() {
     setPage(1)
   }
 
-  const viewingPaymentStage = viewingPayment ? LEAD_STAGE_BY_VALUE[viewingPayment.status] : null
-
   const columns = [
     {
       key: 'name',
@@ -399,21 +466,7 @@ export function LeadsPage() {
     },
     { key: 'phone', header: 'Ph.no', render: (row) => row.phone },
     { key: 'email', header: 'Email', render: (row) => row.email ?? '—' },
-    {
-      key: 'course',
-      header: (
-        <FilterableHeader
-          label="Course"
-          value={courseFilter}
-          options={courseOptions.map((course) => ({ value: course, label: course }))}
-          onChange={(value) => {
-            setCourseFilter(value)
-            setPage(1)
-          }}
-        />
-      ),
-      render: (row) => row.course_interest ?? '—',
-    },
+    { key: 'course', header: 'Course', render: (row) => row.course_interest ?? '—' },
     // Redundant once a section is already active (every visible row is that
     // section by definition) - only shown in the unscoped "All Sections"
     // view, and never for a Section Admin.
@@ -422,47 +475,27 @@ export function LeadsPage() {
       : [
           {
             key: 'section',
-            header: (
-              <FilterableHeader
-                label="Section"
-                value={sectionFilter}
-                options={sectionOptions.map((section) => ({ value: section.code, label: section.label }))}
-                onChange={selectSection}
-              />
-            ),
+            header: 'Section',
             render: (row) => (row.section ? <Badge tone="blue">{sectionByCode[row.section]?.label ?? row.section}</Badge> : '—'),
           },
         ]),
     {
-      key: 'payment',
-      header: 'Payment Details',
+      key: 'payment_option',
+      header: 'Payment Option',
       render: (row) => (
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation()
-            setViewingPayment(row)
-          }}
-          className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-          aria-label={`View payment details for ${row.name}`}
-        >
-          <Eye className="h-4 w-4" strokeWidth={2} />
-        </button>
+        <SelectBadgeCell key={row.id} lead={row} field="payment_option" options={PAYMENT_OPTIONS} placeholder="Select…" />
+      ),
+    },
+    {
+      key: 'payment_call_remarks',
+      header: 'Payment Call Remarks',
+      render: (row) => (
+        <SelectBadgeCell key={row.id} lead={row} field="payment_call_remarks" options={CALL_REMARK_OPTIONS} placeholder="Select…" />
       ),
     },
     {
       key: 'stage',
-      header: (
-        <FilterableHeader
-          label="Stage"
-          value={statusFilter}
-          options={LEAD_STAGES.map((stage) => ({ value: stage.value, label: stage.label }))}
-          onChange={(value) => {
-            setStatusFilter(value)
-            setPage(1)
-          }}
-        />
-      ),
+      header: 'Stage',
       render: (row) => {
         const stage = LEAD_STAGE_BY_VALUE[row.status]
         return <Badge outline tone={stage?.tone ?? 'slate'}>{stage?.label ?? titleCase(row.status)}</Badge>
@@ -522,6 +555,35 @@ export function LeadsPage() {
           />
         </div>
 
+        <FilterDropdown
+          label="Course"
+          value={courseFilter}
+          options={courseOptions.map((course) => ({ value: course, label: course }))}
+          onChange={(value) => {
+            setCourseFilter(value)
+            setPage(1)
+          }}
+        />
+
+        {!scopedSection && (
+          <FilterDropdown
+            label="Section"
+            value={sectionFilter}
+            options={sectionOptions.map((section) => ({ value: section.code, label: section.label }))}
+            onChange={selectSection}
+          />
+        )}
+
+        <FilterDropdown
+          label="Stage"
+          value={statusFilter}
+          options={LEAD_STAGES.map((stage) => ({ value: stage.value, label: stage.label }))}
+          onChange={(value) => {
+            setStatusFilter(value)
+            setPage(1)
+          }}
+        />
+
         <SortOrderSelect
           value={sortOrder}
           onChange={(nextOrder) => {
@@ -557,19 +619,6 @@ export function LeadsPage() {
       )}
 
       {viewingLead && <LeadDetailModal lead={viewingLead} onClose={() => setViewingLead(null)} />}
-
-      {viewingPayment && (
-        <PaymentDetailModal
-          lead={viewingPayment}
-          title="Payment Details"
-          statusBadge={
-            <Badge outline tone={viewingPaymentStage?.tone ?? 'slate'}>
-              {viewingPaymentStage?.label ?? titleCase(viewingPayment.status)}
-            </Badge>
-          }
-          onClose={() => setViewingPayment(null)}
-        />
-      )}
     </div>
   )
 }

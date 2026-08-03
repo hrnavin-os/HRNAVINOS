@@ -30,6 +30,32 @@ class PaymentPlanOption(StrEnum):
     EMI_6_WEEKS = "emi_6_weeks"
 
 
+# Manually-tracked pricing tier a staffer records on a call - independent of
+# PaymentPlanOption/installments (which drive the structured Foundation Form
+# payment-collection flow with real computed amounts).
+class PaymentOption(StrEnum):
+    SINGLE_10K = "single_10k"
+    SINGLE_15K = "single_15k"
+    SINGLE_17_5K = "single_17_5k"
+    TWO_10K = "two_10k"
+    TWO_15K = "two_15k"
+    TWO_18_5K = "two_18_5k"
+    EMI_3300 = "emi_3300"
+    EMI_2500 = "emi_2500"
+    EMI_1500 = "emi_1500"
+
+
+# Sales call disposition, set by whoever is following up with the lead.
+class PaymentCallRemark(StrEnum):
+    CONFIRMED_TO_PAY = "confirmed_to_pay"
+    ONBOARDED = "onboarded"
+    QUIT = "quit"
+    WILL_PAY_PENDING = "will_pay_pending"
+    DNP = "dnp"
+    CALL_BACK = "call_back"
+    NEED_TO_DISCUSS = "need_to_discuss"
+
+
 class PaymentTimeline(StrEnum):
     IMMEDIATE = "immediate"
     TOMORROW = "tomorrow"

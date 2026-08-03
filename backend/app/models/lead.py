@@ -11,7 +11,9 @@ from app.models.enums import (
     InstallmentPaymentMode,
     LeadSource,
     LeadStatus,
+    PaymentCallRemark,
     PaymentMethod,
+    PaymentOption,
     PaymentPlanOption,
     ProgramInterest,
 )
@@ -79,6 +81,11 @@ class Lead(BaseDocument):
     # Free-form internal staff notes - distinct from `notes` (the student's
     # own submitted query/doubts text from the public form).
     remarks: str | None = Field(default=None, max_length=2000)
+    # Manually-tracked pricing tier + call disposition, set by whoever is
+    # working the lead's payment on the phone - independent of payment_plan/
+    # installments (the structured Foundation Form payment-collection flow).
+    payment_option: PaymentOption | None = None
+    payment_call_remarks: PaymentCallRemark | None = None
     # Ticked by an HR Coordinator to record that they've dealt with this lead
     # in the batch queue. Purely their own working marker - it doesn't move the
     # lead's stage or affect allocation.

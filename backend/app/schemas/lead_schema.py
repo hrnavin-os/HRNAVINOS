@@ -9,7 +9,9 @@ from app.models.enums import (
     InstallmentPaymentMode,
     LeadSource,
     LeadStatus,
+    PaymentCallRemark,
     PaymentMethod,
+    PaymentOption,
     PaymentPlanOption,
     ProgramInterest,
 )
@@ -42,6 +44,8 @@ class LeadUpdate(BaseModel):
     follow_up_at: datetime | None = None
     paid_amount: Decimal | None = Field(default=None, ge=0)
     remarks: str | None = Field(default=None, max_length=2000)
+    payment_option: PaymentOption | None = None
+    payment_call_remarks: PaymentCallRemark | None = None
 
 
 class LeadAssign(BaseModel):
@@ -92,6 +96,8 @@ class LeadResponse(BaseModel):
     program_interest: ProgramInterest | None = None
     section: str | None = None
     remarks: str | None = None
+    payment_option: PaymentOption | None = None
+    payment_call_remarks: PaymentCallRemark | None = None
     payment_plan: PaymentPlanOption | None = None
     installments: list[PaymentInstallmentResponse] = []
     created_at: datetime

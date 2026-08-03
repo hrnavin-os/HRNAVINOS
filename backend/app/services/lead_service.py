@@ -69,6 +69,8 @@ class LeadService:
             payment_plan=lead.payment_plan,
             section=lead.section,
             remarks=lead.remarks,
+            payment_option=lead.payment_option,
+            payment_call_remarks=lead.payment_call_remarks,
             installments=[
                 PaymentInstallmentResponse(
                     label=installment.label,
