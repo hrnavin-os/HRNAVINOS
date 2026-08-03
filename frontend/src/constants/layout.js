@@ -1,2 +1,3 @@
-// Roles that get a full-width page with no left sidebar (see DashboardLayout, Topbar).
-export const ROLES_WITHOUT_SIDEBAR = ['Admin']
+// Roles with no use for the generic overview Dashboard page - sent straight
+// to their actual working page instead (see HomeRoute).
+export const ROLES_WITHOUT_DASHBOARD = ['Admin']

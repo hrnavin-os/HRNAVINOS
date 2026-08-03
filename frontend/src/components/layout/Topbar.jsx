@@ -1,9 +1,8 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { GraduationCap, LogOut } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/Button'
 import { NAV_ITEMS } from '@/constants/navigation'
-import { ROLES_WITHOUT_SIDEBAR } from '@/constants/layout'
 
 function useCurrentPageTitle() {
   const { pathname } = useLocation()
@@ -19,7 +18,6 @@ export function Topbar() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const pageTitle = useCurrentPageTitle()
-  const showLogo = ROLES_WITHOUT_SIDEBAR.includes(user?.role)
 
   async function handleLogout() {
     await logout()
@@ -29,17 +27,6 @@ export function Topbar() {
   return (
     <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-6">
       <div className="flex items-center gap-4">
-        {showLogo && (
-          <div className="flex items-center gap-2 border-r border-slate-200 pr-4">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white">
-              <GraduationCap className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
-            </span>
-            <span>
-              <span className="text-base font-bold leading-none text-slate-900">HRNAVINOS</span>
-              <span className="ml-1 text-base font-light leading-none text-slate-400">ERP</span>
-            </span>
-          </div>
-        )}
         <h1 className="text-base font-semibold text-slate-900">{pageTitle}</h1>
       </div>
       <div className="flex items-center gap-4">
