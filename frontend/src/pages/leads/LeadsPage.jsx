@@ -12,7 +12,6 @@ import { titleCase } from '@/utils/formatters'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
 import { DataTable } from '@/components/ui/DataTable'
 import { Pagination } from '@/components/ui/Pagination'
@@ -97,6 +96,69 @@ function RemarksCell({ lead }) {
       }}
       className="w-full min-w-35 rounded-md border border-slate-200 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
     />
+  )
+}
+
+const SORT_OPTIONS = [
+  { value: 'desc', label: 'Newest first' },
+  { value: 'asc', label: 'Oldest first' },
+]
+
+// Sort filter for the lead table. A custom listbox rather than a native
+// <select> because the browser draws the native option list itself - the
+// milk-white/light-gray palette, the 5px radius and the Lexend face below
+// would all be dropped on the open list (and the OS blue highlight kept).
+function SortOrderSelect({ value, onChange }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const selectedLabel = SORT_OPTIONS.find((option) => option.value === value)?.label
+
+  return (
+    <div className="relative font-lexend">
+      <button
+        type="button"
+        onClick={() => setIsOpen((open) => !open)}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        className="flex w-[150px] items-center justify-between gap-2 rounded-[5px] border border-[#DCDCD8]
+          bg-[#FAFAF7] px-3 py-2 text-sm font-normal text-[#4A4A46] shadow-sm
+          hover:bg-[#F2F2EE] focus:outline-none focus:ring-1 focus:ring-[#C9C9C4]"
+      >
+        {selectedLabel}
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-[#8C8C86] transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          strokeWidth={2}
+          aria-hidden="true"
+        />
+      </button>
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+          <div
+            role="listbox"
+            className="absolute left-0 z-50 mt-1 w-[150px] overflow-hidden rounded-[5px]
+              border border-[#DCDCD8] bg-[#FAFAF7] py-1 shadow-lg"
+          >
+            {SORT_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={value === option.value}
+                onClick={() => {
+                  onChange(option.value)
+                  setIsOpen(false)
+                }}
+                className={`block w-full px-3 py-1.5 text-left text-sm font-normal text-[#4A4A46] ${
+                  value === option.value ? 'bg-[#E8E8E3]' : 'hover:bg-[#F0F0EC]'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 
@@ -407,17 +469,13 @@ export function LeadsPage() {
           />
         </div>
 
-        <Select
-          className="!w-auto"
+        <SortOrderSelect
           value={sortOrder}
-          onChange={(event) => {
-            setSortOrder(event.target.value)
+          onChange={(nextOrder) => {
+            setSortOrder(nextOrder)
             setPage(1)
           }}
-        >
-          <option value="desc">Newest first</option>
-          <option value="asc">Oldest first</option>
-        </Select>
+        />
 
         <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onChange={handleDateChange} />
 

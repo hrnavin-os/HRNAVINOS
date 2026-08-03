@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
 @theme {
+  /* Opt-in only (`font-lexend`) - the app default stays the system stack. */
+  --font-lexend: 'Lexend', ui-sans-serif, system-ui, sans-serif;
+
   --color-brand-50: #eff6ff;
   --color-brand-100: #dbeafe;
   --color-brand-500: #3b82f6;
