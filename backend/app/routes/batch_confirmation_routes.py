@@ -1,13 +1,14 @@
 """HTTP routes for the Batch Confirmation module (HR Coordinator dashboard)."""
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 
 from app.core.dependencies import RequirePermissions
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.batch_confirmation_schema import (
     AllocateRequest,
+    BatchFormOptionsResponse,
     BatchReadinessDetailResponse,
     BatchReadinessResponse,
     ConfirmBatchResponse,
@@ -15,6 +16,7 @@ from app.schemas.batch_confirmation_schema import (
     PendingLeadResponse,
     WithdrawRequest,
 )
+from app.schemas.batch_schema import BatchCreate, BatchResponse
 from app.schemas.common import MessageResponse
 from app.services.batch_confirmation_service import BatchConfirmationService
 
@@ -26,6 +28,23 @@ async def get_summary(
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
 ) -> CoordinatorSummaryResponse:
     return await BatchConfirmationService().summary()
+
+
+@router.get("/options", response_model=BatchFormOptionsResponse)
+async def get_form_options(
+    actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
+) -> BatchFormOptionsResponse:
+    return await BatchConfirmationService().form_options()
+
+
+@router.post("/batches", response_model=BatchResponse, status_code=status.HTTP_201_CREATED)
+async def create_batch_group(
+    payload: BatchCreate,
+    actor: User = Depends(RequirePermissions(Permissions.BATCHES_CREATE)),
+) -> BatchResponse:
+    """Lets the coordinator form a batch group without leaving the dashboard."""
+    batch = await BatchConfirmationService().create_batch(payload, actor_id=actor.id)
+    return BatchResponse.model_validate(batch)
 
 
 @router.get("/pending-leads", response_model=list[PendingLeadResponse])

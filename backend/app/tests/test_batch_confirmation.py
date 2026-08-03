@@ -95,6 +95,47 @@ async def _fill_batch(client, auth_headers, batch_id, count=MINIMUM, *, paid=Tru
     return lead_ids
 
 
+# ---------- Forming the group ----------
+
+
+async def test_form_options_resolves_tutor_names(client, auth_headers):
+    await _make_course(client, auth_headers)
+    await _make_tutor(client, auth_headers)
+
+    response = await client.get(f"{BASE}/options", headers=auth_headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [course["label"] for course in body["courses"]] == ["Full Stack"]
+    # The point of this endpoint: a name, not the bare user_id TutorResponse carries.
+    assert body["tutors"][0]["label"] == "Asha Rao"
+    assert body["tutors"][0]["detail"] == "Backend"
+
+
+async def test_coordinator_can_create_a_batch_group(client, auth_headers):
+    course_id = await _make_course(client, auth_headers)
+    tutor_id = await _make_tutor(client, auth_headers)
+
+    response = await client.post(
+        f"{BASE}/batches",
+        headers=auth_headers,
+        json={
+            "course_id": course_id,
+            "tutor_id": tutor_id,
+            "name": "Morning Batch",
+            "start_date": str(date.today() + timedelta(days=7)),
+            "end_date": str(date.today() + timedelta(days=90)),
+            "capacity": 20,
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["name"] == "Morning Batch"
+
+    # It shows up on the dashboard straight away, ready to be filled.
+    batches = (await client.get(f"{BASE}/batches", headers=auth_headers)).json()
+    assert [batch["batch_name"] for batch in batches] == ["Morning Batch"]
+    assert batches[0]["tutor_name"] == "Asha Rao"
+
+
 # ---------- Queue ----------
 
 

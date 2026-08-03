@@ -92,6 +92,24 @@ class ConfirmBatchResponse(BaseModel):
     message: str
 
 
+class OptionItem(BaseModel):
+    id: uuid.UUID
+    label: str
+    detail: str | None = None
+
+
+class BatchFormOptionsResponse(BaseModel):
+    """Course and tutor pickers for the coordinator's own batch form.
+
+    Served from this module rather than read off /tutors directly, because
+    TutorResponse carries only user_id - resolving a tutor's name needs
+    users.view, which the HR Coordinator role deliberately doesn't hold.
+    """
+
+    courses: list[OptionItem]
+    tutors: list[OptionItem]
+
+
 class CoordinatorSummaryResponse(BaseModel):
     """Headline counters for the dashboard's stat cards."""
 

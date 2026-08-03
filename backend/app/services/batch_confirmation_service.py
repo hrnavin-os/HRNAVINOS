@@ -17,7 +17,14 @@ from app.exceptions.base import ConflictError, NotFoundError, ValidationAppError
 from app.models.admission import Admission
 from app.models.batch import Batch
 from app.models.batch_allocation import BatchAllocation
-from app.models.enums import AdmissionStatus, AllocationStatus, BatchStatus, LeadStatus, StudentStatus
+from app.models.enums import (
+    AdmissionStatus,
+    AllocationStatus,
+    BatchStatus,
+    LeadStatus,
+    StudentStatus,
+    TutorStatus,
+)
 from app.models.lead import Lead
 from app.models.student import Student
 from app.repositories.admission_repository import AdmissionRepository
@@ -30,14 +37,18 @@ from app.repositories.tutor_repository import TutorRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.batch_confirmation_schema import (
     AllocatedLeadResponse,
+    BatchFormOptionsResponse,
     BatchReadinessDetailResponse,
     BatchReadinessResponse,
     ConfirmBatchResponse,
     CoordinatorSummaryResponse,
+    OptionItem,
     PendingLeadResponse,
     ReadinessCheck,
 )
+from app.schemas.batch_schema import BatchCreate
 from app.services.audit_service import AuditService
+from app.services.batch_service import BatchService
 
 # Smallest roster the institute will run a batch with. Deliberately a single
 # constant rather than per-course config: the rule is operational, not
@@ -243,6 +254,26 @@ class BatchConfirmationService:
                 )
             )
         return BatchReadinessDetailResponse(**readiness.model_dump(), allocations=roster)
+
+    async def form_options(self) -> BatchFormOptionsResponse:
+        """Dropdown data for the coordinator's "New Batch" form."""
+        courses, _ = await self.courses.list(page=1, page_size=100, filters={"is_active": True})
+        tutors, _ = await self.tutors.list(page=1, page_size=100, filters={"status": TutorStatus.ACTIVE})
+
+        tutor_options = []
+        for tutor in tutors:
+            name = await self._tutor_name(tutor.id)
+            tutor_options.append(OptionItem(id=tutor.id, label=name or "Unnamed tutor", detail=tutor.specialization))
+
+        return BatchFormOptionsResponse(
+            courses=[OptionItem(id=course.id, label=course.name, detail=course.code) for course in courses],
+            tutors=tutor_options,
+        )
+
+    async def create_batch(self, data: BatchCreate, *, actor_id: uuid.UUID | None) -> Batch:
+        """Delegates to BatchService so course/tutor validation and the audit
+        entry stay in one place rather than being duplicated here."""
+        return await BatchService().create(data, actor_id=actor_id)
 
     async def summary(self) -> CoordinatorSummaryResponse:
         pending = await self.list_pending_leads()

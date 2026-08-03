@@ -25,7 +25,10 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     # creates the Student and Admission records) once the batch is ready.
     "HR Coordinator": [
         P.BATCH_CONFIRMATION_VIEW, P.BATCH_CONFIRMATION_ALLOCATE, P.BATCH_CONFIRMATION_CONFIRM,
-        P.LEADS_VIEW, P.BATCHES_VIEW, P.COURSES_VIEW, P.TUTORS_VIEW,
+        # Forming the batch groups is the coordinator's own job, so they create
+        # and adjust batches rather than waiting on Admin Head to make one.
+        P.BATCHES_VIEW, P.BATCHES_CREATE, P.BATCHES_UPDATE,
+        P.LEADS_VIEW, P.COURSES_VIEW, P.TUTORS_VIEW,
         P.STUDENTS_VIEW, P.ADMISSIONS_VIEW, P.REPORTS_VIEW,
     ],
     "Post Sales Executive": [

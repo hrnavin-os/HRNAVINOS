@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Search, UserMinus, UserPlus } from 'lucide-react'
+import { CheckCircle2, Plus, Search, UserMinus, UserPlus } from 'lucide-react'
 import { batchConfirmationService } from '@/services/batchConfirmationService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { useAuth } from '@/hooks/useAuth'
@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { BatchReadinessCard } from '@/components/hr/BatchReadinessCard'
+import { NewBatchGroupModal } from '@/components/hr/NewBatchGroupModal'
 
 const QUERY_KEY = 'batch-confirmation'
 
@@ -71,9 +72,11 @@ export function HRCoordinatorPage() {
   const [selectedBatchId, setSelectedBatchId] = useState(null)
   const [search, setSearch] = useState('')
   const [banner, setBanner] = useState(null)
+  const [isNewBatchOpen, setIsNewBatchOpen] = useState(false)
 
   const canAllocate = hasPermission(PERMISSIONS.BATCH_CONFIRMATION_ALLOCATE)
   const canConfirm = hasPermission(PERMISSIONS.BATCH_CONFIRMATION_CONFIRM)
+  const canCreateBatch = hasPermission(PERMISSIONS.BATCHES_CREATE)
 
   const summaryQuery = useQuery({ queryKey: [QUERY_KEY, 'summary'], queryFn: batchConfirmationService.summary })
   const leadsQuery = useQuery({ queryKey: [QUERY_KEY, 'pending'], queryFn: batchConfirmationService.pendingLeads })
@@ -106,6 +109,21 @@ export function HRCoordinatorPage() {
     onError: (error) => setBanner({ tone: 'error', text: getApiErrorMessage(error) }),
   })
 
+  const createBatchMutation = useMutation({
+    mutationFn: (values) =>
+      batchConfirmationService.createBatch({
+        ...values,
+        capacity: Number(values.capacity),
+      }),
+    onSuccess: (batch) => {
+      setBanner({ tone: 'success', text: `Batch group '${batch.name}' created.` })
+      setIsNewBatchOpen(false)
+      // Pre-select it so the queue's Allocate buttons come alive immediately.
+      setSelectedBatchId(batch.id)
+      refreshAll()
+    },
+  })
+
   const confirmMutation = useMutation({
     mutationFn: (batchId) => batchConfirmationService.confirm(batchId),
     onSuccess: (data) => {
@@ -132,11 +150,19 @@ export function HRCoordinatorPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-slate-900">HR Coordinator</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Place financially approved leads into batches, then lock the roster to enrol them as students.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">HR Coordinator</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Group financially approved leads into batches, then lock the roster to enrol them as students.
+          </p>
+        </div>
+        {canCreateBatch && (
+          <Button onClick={() => setIsNewBatchOpen(true)}>
+            <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+            New Batch
+          </Button>
+        )}
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
@@ -210,7 +236,11 @@ export function HRCoordinatorPage() {
           </div>
 
           {!selectedBatch && leads.length > 0 && canAllocate && (
-            <p className="mt-2 text-xs text-slate-400">Select a batch on the right to start allocating.</p>
+            <p className="mt-2 text-xs text-slate-400">
+              {batches.length === 0
+                ? 'Create a batch group first, then allocate these leads into it.'
+                : 'Select a batch on the right to start allocating.'}
+            </p>
           )}
         </section>
 
@@ -223,8 +253,14 @@ export function HRCoordinatorPage() {
           {batchesQuery.isLoading ? (
             <LoadingSpinner />
           ) : batches.length === 0 ? (
-            <div className="rounded-lg border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500">
-              No upcoming batches. Create one under Batches first.
+            <div className="rounded-lg border border-slate-200 bg-white px-4 py-10 text-center">
+              <p className="text-sm text-slate-500">No batch groups yet.</p>
+              {canCreateBatch && (
+                <Button variant="secondary" className="mt-3" onClick={() => setIsNewBatchOpen(true)}>
+                  <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                  Create the first one
+                </Button>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -293,6 +329,17 @@ export function HRCoordinatorPage() {
           )}
         </section>
       </div>
+
+      {isNewBatchOpen && (
+        <NewBatchGroupModal
+          error={createBatchMutation.error}
+          onSubmit={(values) => createBatchMutation.mutateAsync(values)}
+          onClose={() => {
+            createBatchMutation.reset()
+            setIsNewBatchOpen(false)
+          }}
+        />
+      )}
     </div>
   )
 }
