@@ -22,6 +22,7 @@ const columns = [
     // Older/manually-created leads carry no plan at all.
     key: 'payment_details',
     header: 'Payment Details',
+    align: 'center',
     render: (row) =>
       row.payment_plan ? (
         <Badge outline tone="blue">
@@ -42,6 +43,7 @@ const columns = [
   {
     key: 'mode',
     header: 'Mode',
+    align: 'center',
     render: (row) => {
       const { mode } = getLeadPaymentSummary(row)
       return mode ? <Badge outline tone="emerald">{titleCase(mode)}</Badge> : '—'
