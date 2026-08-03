@@ -7,8 +7,8 @@ export const leadService = {
     const { data } = await apiClient.post(`/leads/${id}/assign`, { assigned_to: assignedTo })
     return data
   },
-  getStats: async () => {
-    const { data } = await apiClient.get('/leads/stats')
+  getStats: async (section) => {
+    const { data } = await apiClient.get('/leads/stats', { params: section ? { section } : undefined })
     return data
   },
   getCourseOptions: async () => {

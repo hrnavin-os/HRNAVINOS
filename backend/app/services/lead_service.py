@@ -177,10 +177,13 @@ class LeadService:
         )
         return lead
 
-    async def stats(self) -> LeadStatsResponse:
-        total = await self.leads.count_total()
-        by_status = await self.leads.count_by_status()
-        by_section = await self.leads.count_by_section_all()
+    async def stats(self, *, section: str | None = None) -> LeadStatsResponse:
+        total = await self.leads.count_total(section=section)
+        by_status = await self.leads.count_by_status(section=section)
+        # The section breakdown only makes sense for the unscoped "All
+        # Sections" view - once a caller is already looking at one section's
+        # stage counts, there's nothing else to break down by section.
+        by_section = await self.leads.count_by_section_all() if section is None else {}
         return LeadStatsResponse(total=total, by_status=by_status, by_section=by_section)
 
     async def course_options(self) -> List[str]:

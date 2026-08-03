@@ -13,13 +13,19 @@ class LeadRepository(BaseRepository[Lead]):
     # Leads inserted before the `reviewed` field existed have no such key stored in
     # Mongo at all, so we match "not explicitly False" rather than "== True" —
     # otherwise an exact-match query would silently exclude every pre-existing lead.
-    async def count_total(self) -> int:
-        return await Lead.find({"is_deleted": False, "reviewed": {"$ne": False}}).count()
+    async def count_total(self, *, section: str | None = None) -> int:
+        query = {"is_deleted": False, "reviewed": {"$ne": False}}
+        if section:
+            query["section"] = section
+        return await Lead.find(query).count()
 
-    async def count_by_status(self) -> dict[str, int]:
+    async def count_by_status(self, *, section: str | None = None) -> dict[str, int]:
+        match = {"is_deleted": False, "reviewed": {"$ne": False}}
+        if section:
+            match["section"] = section
         counts = await Lead.aggregate(
             [
-                {"$match": {"is_deleted": False, "reviewed": {"$ne": False}}},
+                {"$match": match},
                 {"$group": {"_id": "$status", "count": {"$sum": 1}}},
             ]
         ).to_list()

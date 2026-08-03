@@ -71,9 +71,11 @@ async def list_leads(
 
 @router.get("/stats", response_model=LeadStatsResponse)
 async def lead_stats(
+    section: str | None = None,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> LeadStatsResponse:
-    return await LeadService().stats()
+    scope = await get_actor_scope(actor)
+    return await LeadService().stats(section=scope or section)
 
 
 @router.get("/course-options", response_model=list[str])

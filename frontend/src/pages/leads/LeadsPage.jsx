@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Calendar, ChevronDown, Eye, Plus, Search } from 'lucide-react'
+import { ArrowLeft, Calendar, ChevronDown, Eye, Plus, Search } from 'lucide-react'
 import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
 import { useAuth } from '@/hooks/useAuth'
 import { leadService } from '@/services/leadService'
@@ -17,7 +17,7 @@ import { Modal } from '@/components/ui/Modal'
 import { DataTable } from '@/components/ui/DataTable'
 import { Pagination } from '@/components/ui/Pagination'
 import { ResourceForm } from '@/components/resource/ResourceForm'
-import { LeadSectionStats } from '@/components/leads/LeadSectionStats'
+import { LeadSectionStageStats, LeadSectionStats } from '@/components/leads/LeadSectionStats'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { LeadDetailModal } from '@/components/leads/LeadDetailModal'
 import { PaymentDetailModal } from '@/components/payments/PaymentDetailModal'
@@ -210,9 +210,15 @@ export function LeadsPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
 
-  const statsQuery = useQuery({ queryKey: ['leads-stats'], queryFn: leadService.getStats })
+  // Scoped to the active section once one is selected, so this becomes each
+  // section's own stage breakdown instead of the global one.
+  const statsQuery = useQuery({
+    queryKey: ['leads-stats', sectionFilter],
+    queryFn: () => leadService.getStats(sectionFilter || undefined),
+  })
   const total = statsQuery.data?.total ?? 0
   const bySection = statsQuery.data?.by_section ?? {}
+  const byStatus = statsQuery.data?.by_status ?? {}
 
   // Sections are admin-managed and open-ended (see Form Collection's "Add
   // Form"), so the top stat cards and Section badge read live from config
@@ -283,18 +289,25 @@ export function LeadsPage() {
       ),
       render: (row) => row.course_interest ?? '—',
     },
-    {
-      key: 'section',
-      header: (
-        <FilterableHeader
-          label="Section"
-          value={sectionFilter}
-          options={sectionOptions.map((section) => ({ value: section.code, label: section.label }))}
-          onChange={selectSection}
-        />
-      ),
-      render: (row) => (row.section ? <Badge tone="blue">{sectionByCode[row.section]?.label ?? row.section}</Badge> : '—'),
-    },
+    // Redundant once a section is already selected (every visible row is
+    // that section by definition) - only shown in the unscoped "All
+    // Sections" view.
+    ...(sectionFilter
+      ? []
+      : [
+          {
+            key: 'section',
+            header: (
+              <FilterableHeader
+                label="Section"
+                value={sectionFilter}
+                options={sectionOptions.map((section) => ({ value: section.code, label: section.label }))}
+                onChange={selectSection}
+              />
+            ),
+            render: (row) => (row.section ? <Badge tone="blue">{sectionByCode[row.section]?.label ?? row.section}</Badge> : '—'),
+          },
+        ]),
     {
       key: 'payment',
       header: 'Payment Details',
@@ -338,22 +351,49 @@ export function LeadsPage() {
     },
   ]
 
+  const activeSection = sectionFilter ? sectionByCode[sectionFilter] : null
+
   return (
     <div>
       <div className="mb-4 flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Admin</h1>
+          {activeSection && (
+            <button
+              type="button"
+              onClick={() => selectSection('')}
+              className="mb-1 flex items-center gap-1 text-sm font-medium text-brand-600 hover:text-brand-700"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+              All Sections
+            </button>
+          )}
+          <h1 className="text-xl font-semibold text-slate-900">
+            {activeSection ? `Admin ${sectionFilter.toUpperCase()}-Section` : 'Admin'}
+          </h1>
           <p className="mt-1 text-sm text-slate-500">Prospective students tracked through the admin pipeline.</p>
         </div>
       </div>
 
-      <LeadSectionStats
-        total={total}
-        sections={sectionOptions}
-        bySection={bySection}
-        activeSection={sectionFilter}
-        onSelect={selectSection}
-      />
+      {activeSection ? (
+        <LeadSectionStageStats
+          total={total}
+          stages={LEAD_STAGES}
+          byStatus={byStatus}
+          activeStage={statusFilter}
+          onSelect={(value) => {
+            setStatusFilter(value)
+            setPage(1)
+          }}
+        />
+      ) : (
+        <LeadSectionStats
+          total={total}
+          sections={sectionOptions}
+          bySection={bySection}
+          activeSection={sectionFilter}
+          onSelect={selectSection}
+        />
+      )}
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative min-w-[220px] flex-1">
