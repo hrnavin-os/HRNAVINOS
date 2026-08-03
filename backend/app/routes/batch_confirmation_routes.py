@@ -1,18 +1,21 @@
 """HTTP routes for the Batch Confirmation module (HR Coordinator dashboard)."""
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 
 from app.core.dependencies import RequirePermissions
+from app.models.enums import AllocationStatus
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.batch_confirmation_schema import (
     AllocateRequest,
+    AllocationRowResponse,
     BatchFormOptionsResponse,
     BatchReadinessDetailResponse,
     BatchReadinessResponse,
     ConfirmBatchResponse,
     CoordinatorSummaryResponse,
+    MarkRequest,
     PendingLeadResponse,
     WithdrawRequest,
 )
@@ -52,6 +55,24 @@ async def list_pending_leads(
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
 ) -> list[PendingLeadResponse]:
     return await BatchConfirmationService().list_pending_leads()
+
+
+@router.get("/allocations", response_model=list[AllocationRowResponse])
+async def list_allocations(
+    status_filter: AllocationStatus | None = Query(default=None, alias="status"),
+    actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
+) -> list[AllocationRowResponse]:
+    return await BatchConfirmationService().list_allocations(status=status_filter)
+
+
+@router.post("/leads/{lead_id}/mark", response_model=MessageResponse)
+async def mark_lead(
+    lead_id: uuid.UUID,
+    payload: MarkRequest,
+    actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
+) -> MessageResponse:
+    await BatchConfirmationService().mark_lead(lead_id, marked=payload.marked, actor_id=actor.id)
+    return MessageResponse(message="Lead marked." if payload.marked else "Mark cleared.")
 
 
 @router.get("/batches", response_model=list[BatchReadinessResponse])

@@ -37,6 +37,7 @@ from app.repositories.tutor_repository import TutorRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.batch_confirmation_schema import (
     AllocatedLeadResponse,
+    AllocationRowResponse,
     BatchFormOptionsResponse,
     BatchReadinessDetailResponse,
     BatchReadinessResponse,
@@ -122,10 +123,65 @@ class BatchConfirmationService:
                     fully_paid=fully_paid,
                     paid_installments=paid,
                     total_installments=total,
+                    hr_marked=lead.hr_marked,
                     created_at=lead.created_at,
                 )
             )
         return pending
+
+    async def list_allocations(self, *, status: AllocationStatus | None = None) -> list[AllocationRowResponse]:
+        """Every seat across all batches, optionally narrowed to one status."""
+        query: dict = {"is_deleted": False}
+        if status:
+            query["status"] = status
+        else:
+            query["status"] = {"$in": [AllocationStatus.ALLOCATED, AllocationStatus.CONFIRMED]}
+
+        allocations = await BatchAllocation.find(query).sort("-created_at").to_list()
+
+        rows = []
+        for allocation in allocations:
+            lead = await self.leads.get_by_id(allocation.lead_id)
+            batch = await self.batches.get_by_id(allocation.batch_id)
+            if not lead or not batch:
+                continue
+            rows.append(
+                AllocationRowResponse(
+                    allocation_id=allocation.id,
+                    lead_id=lead.id,
+                    name=lead.name,
+                    email=lead.email,
+                    phone=lead.phone,
+                    course_interest=lead.course_interest,
+                    batch_id=batch.id,
+                    batch_name=batch.name,
+                    status=allocation.status,
+                    fully_paid=_is_fully_paid(lead)[0],
+                    student_id=allocation.student_id,
+                    allocated_at=allocation.created_at,
+                    confirmed_at=allocation.confirmed_at,
+                )
+            )
+        return rows
+
+    async def mark_lead(self, lead_id: uuid.UUID, *, marked: bool, actor_id: uuid.UUID | None) -> Lead:
+        """Ticks the coordinator's own working marker on a queued lead."""
+        lead = await self.leads.get_by_id(lead_id)
+        if not lead:
+            raise NotFoundError("Lead not found.")
+
+        await self.leads.update(
+            lead,
+            {"hr_marked": marked, "hr_marked_at": utcnow() if marked else None, "updated_by": actor_id},
+        )
+        await self.audit.record(
+            user_id=actor_id,
+            action="UPDATE",
+            entity_type="Lead",
+            entity_id=str(lead.id),
+            changes={"hr_marked": marked},
+        )
+        return lead
 
     async def _tutor_name(self, tutor_id: uuid.UUID | None) -> str | None:
         if not tutor_id:

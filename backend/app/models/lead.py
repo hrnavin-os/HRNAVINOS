@@ -79,6 +79,11 @@ class Lead(BaseDocument):
     # Free-form internal staff notes - distinct from `notes` (the student's
     # own submitted query/doubts text from the public form).
     remarks: str | None = Field(default=None, max_length=2000)
+    # Ticked by an HR Coordinator to record that they've dealt with this lead
+    # in the batch queue. Purely their own working marker - it doesn't move the
+    # lead's stage or affect allocation.
+    hr_marked: bool = Field(default=False)
+    hr_marked_at: datetime | None = None
 
     class Settings:
         name = "leads"

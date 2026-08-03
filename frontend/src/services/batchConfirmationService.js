@@ -22,6 +22,14 @@ export const batchConfirmationService = {
     const { data } = await apiClient.get(`${BASE}/batches/${batchId}`)
     return data
   },
+  allocations: async (status) => {
+    const { data } = await apiClient.get(`${BASE}/allocations`, { params: status ? { status } : {} })
+    return data
+  },
+  markLead: async (leadId, marked) => {
+    const { data } = await apiClient.post(`${BASE}/leads/${leadId}/mark`, { marked })
+    return data
+  },
   options: async () => {
     const { data } = await apiClient.get(`${BASE}/options`)
     return data

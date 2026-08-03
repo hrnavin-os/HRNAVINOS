@@ -241,6 +241,68 @@ async def test_withdraw_returns_lead_to_queue(client, auth_headers):
     assert [lead["id"] for lead in queue.json()] == [lead_id]
 
 
+# ---------- Coordinator's own marker ----------
+
+
+async def test_mark_and_unmark_a_queued_lead(client, auth_headers):
+    lead_id = await _make_ready_lead(
+        client, auth_headers, name="Ready Lead", phone="9222222222", email="ready@example.com"
+    )
+
+    queue = (await client.get(f"{BASE}/pending-leads", headers=auth_headers)).json()
+    assert queue[0]["hr_marked"] is False
+
+    mark = await client.post(f"{BASE}/leads/{lead_id}/mark", headers=auth_headers, json={"marked": True})
+    assert mark.status_code == 200, mark.text
+    queue = (await client.get(f"{BASE}/pending-leads", headers=auth_headers)).json()
+    assert queue[0]["hr_marked"] is True
+
+    await client.post(f"{BASE}/leads/{lead_id}/mark", headers=auth_headers, json={"marked": False})
+    queue = (await client.get(f"{BASE}/pending-leads", headers=auth_headers)).json()
+    assert queue[0]["hr_marked"] is False
+
+
+async def test_marking_does_not_move_the_lead_out_of_the_queue(client, auth_headers):
+    """The mark is the coordinator's own note, not a stage change."""
+    lead_id = await _make_ready_lead(
+        client, auth_headers, name="Ready Lead", phone="9222222222", email="ready@example.com"
+    )
+    await client.post(f"{BASE}/leads/{lead_id}/mark", headers=auth_headers, json={"marked": True})
+
+    queue = (await client.get(f"{BASE}/pending-leads", headers=auth_headers)).json()
+    assert [lead["id"] for lead in queue] == [lead_id]
+
+    lead = (await client.get(f"/api/v1/leads/{lead_id}", headers=auth_headers)).json()
+    assert lead["status"] == "batch_confirmation"
+
+
+# ---------- Allocation rows (the Allocated / Total Students views) ----------
+
+
+async def test_allocations_list_filters_by_status(client, auth_headers):
+    course_id = await _make_course(client, auth_headers)
+    tutor_id = await _make_tutor(client, auth_headers)
+    batch_id = await _make_batch(client, auth_headers, course_id, tutor_id=tutor_id, name="Morning Batch")
+    await _fill_batch(client, auth_headers, batch_id)
+
+    allocated = (await client.get(f"{BASE}/allocations", headers=auth_headers, params={"status": "allocated"})).json()
+    assert len(allocated) == MINIMUM
+    assert allocated[0]["batch_name"] == "Morning Batch"
+    assert allocated[0]["student_id"] is None
+
+    confirmed = (await client.get(f"{BASE}/allocations", headers=auth_headers, params={"status": "confirmed"})).json()
+    assert confirmed == []
+
+    await client.post(f"{BASE}/batches/{batch_id}/confirm", headers=auth_headers)
+
+    after = (await client.get(f"{BASE}/allocations", headers=auth_headers, params={"status": "confirmed"})).json()
+    assert len(after) == MINIMUM
+    # Confirmed seats carry the Student they became, plus when it happened.
+    assert all(row["student_id"] for row in after)
+    assert all(row["confirmed_at"] for row in after)
+    assert (await client.get(f"{BASE}/allocations", headers=auth_headers, params={"status": "allocated"})).json() == []
+
+
 # ---------- Readiness + confirmation ----------
 
 

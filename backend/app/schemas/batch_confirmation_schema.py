@@ -32,6 +32,7 @@ class PendingLeadResponse(BaseModel):
     fully_paid: bool
     paid_installments: int
     total_installments: int
+    hr_marked: bool
     created_at: datetime
 
 
@@ -47,6 +48,32 @@ class AllocatedLeadResponse(BaseModel):
     fully_paid: bool
     notes: str | None
     allocated_at: datetime
+
+
+class MarkRequest(BaseModel):
+    marked: bool
+
+
+class AllocationRowResponse(BaseModel):
+    """A seat listed on its own, carrying the batch it belongs to.
+
+    Backs the dashboard's Allocated and Total Students views, which show seats
+    across every batch rather than one batch's roster.
+    """
+
+    allocation_id: uuid.UUID
+    lead_id: uuid.UUID
+    name: str
+    email: str | None
+    phone: str
+    course_interest: str | None
+    batch_id: uuid.UUID
+    batch_name: str
+    status: AllocationStatus
+    fully_paid: bool
+    student_id: uuid.UUID | None
+    allocated_at: datetime
+    confirmed_at: datetime | None
 
 
 class ReadinessCheck(BaseModel):
