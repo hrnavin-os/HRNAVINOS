@@ -52,6 +52,10 @@ class CurrentUserResponse(BaseModel):
     last_name: str
     role: str | None = None
     permissions: list[str] = Field(default_factory=list)
+    # Which Form Collection section (if any) this user's role restricts them
+    # to - lets the frontend branch generically on "is this a Section Admin"
+    # without hardcoding role names, since sections/roles are open-ended.
+    scoped_section: str | None = None
     is_active: bool
     is_verified: bool
 

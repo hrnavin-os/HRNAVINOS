@@ -6,7 +6,10 @@ import { useAuth } from '@/hooks/useAuth'
 export function Sidebar() {
   const { user, hasPermission } = useAuth()
   const items = NAV_ITEMS.filter(
-    (item) => (!item.permission || hasPermission(item.permission)) && !item.hiddenForRoles?.includes(user?.role),
+    (item) =>
+      (!item.permission || hasPermission(item.permission)) &&
+      !item.hiddenForRoles?.includes(user?.role) &&
+      !(item.hiddenForScopedUsers && user?.scoped_section),
   )
 
   return (
@@ -23,7 +26,7 @@ export function Sidebar() {
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
         {items.map((item) => (
           <div key={item.to}>
-            {item.group && !item.hideGroupForRoles?.includes(user?.role) && (
+            {item.group && (
               <h3 className="mb-1.5 mt-4 px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 first:mt-0">
                 {item.group}
               </h3>

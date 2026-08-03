@@ -13,6 +13,8 @@ import { PERMISSIONS } from '@/constants/permissions'
 
 // permission: null means "visible to any authenticated user"
 // hiddenForRoles: role names that should never see this item, regardless of permission
+// hiddenForScopedUsers: hide this item for any user whose role carries a scoped_section
+// (Section Admins) - section names/roles are open-ended, so this can't be a hiddenForRoles list.
 // Grouped for the sidebar; `group` labels a section header (omit to continue the previous group).
 export const NAV_ITEMS = [
   {
@@ -22,18 +24,18 @@ export const NAV_ITEMS = [
     icon: LayoutDashboard,
     group: null,
     hiddenForRoles: ['Admin'],
+    hiddenForScopedUsers: true,
   },
 
   {
-    label: 'Admin',
+    label: 'Lead Dashboard',
     to: '/leads',
     permission: PERMISSIONS.LEADS_VIEW,
     icon: Target,
-    group: 'CRM & Admissions',
-    hideGroupForRoles: ['Admin'],
+    group: 'Admin',
   },
   { label: 'Form Collection', to: '/leads/form-collection', permission: PERMISSIONS.LEADS_VIEW, icon: FileCheck2 },
-  { label: 'Marketing Board', to: '/marketing-board', permission: PERMISSIONS.LEADS_VIEW, icon: Megaphone },
+  { label: 'Marketing Board', to: '/marketing-board', permission: PERMISSIONS.LEADS_VIEW, icon: Megaphone, hiddenForRoles: ['Admin'], hiddenForScopedUsers: true },
   { label: 'Admissions', to: '/admissions', permission: PERMISSIONS.ADMISSIONS_VIEW, icon: UserPlus },
 
   { label: 'Payments', to: '/payments', permission: PERMISSIONS.PAYMENTS_VIEW, icon: Wallet, group: 'Finance' },

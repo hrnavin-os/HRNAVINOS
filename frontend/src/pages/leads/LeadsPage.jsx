@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Calendar, ChevronDown, Eye, Plus, Search } from 'lucide-react'
+import { Calendar, ChevronDown, Eye, Plus, Search } from 'lucide-react'
 import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
 import { useAuth } from '@/hooks/useAuth'
 import { leadService } from '@/services/leadService'
@@ -196,9 +196,15 @@ function DateRangeFilter({ dateFrom, dateTo, onChange }) {
 }
 
 export function LeadsPage() {
-  const { hasPermission } = useAuth()
+  const { hasPermission, user } = useAuth()
   const queryClient = useQueryClient()
   const canCreate = hasPermission(PERMISSIONS.LEADS_CREATE)
+
+  // Section Admins are permanently locked to their own section - the role
+  // itself carries this, not a UI selection, so it can never be navigated
+  // away from. Admin/Super Admin have no scoped_section and keep the same
+  // unrestricted board regardless of which tab they click.
+  const scopedSection = user?.scoped_section || null
 
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [viewingLead, setViewingLead] = useState(null)
@@ -210,11 +216,15 @@ export function LeadsPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
 
+  // A Section Admin's section always wins over (and preempts) any tab
+  // selection - for Admin/Super Admin this is just whichever tab is active.
+  const effectiveSectionFilter = scopedSection || sectionFilter
+
   // Scoped to the active section once one is selected, so this becomes each
   // section's own stage breakdown instead of the global one.
   const statsQuery = useQuery({
-    queryKey: ['leads-stats', sectionFilter],
-    queryFn: () => leadService.getStats(sectionFilter || undefined),
+    queryKey: ['leads-stats', effectiveSectionFilter],
+    queryFn: () => leadService.getStats(effectiveSectionFilter || undefined),
   })
   const total = statsQuery.data?.total ?? 0
   const bySection = statsQuery.data?.by_section ?? {}
@@ -231,7 +241,7 @@ export function LeadsPage() {
   const courseOptions = courseOptionsQuery.data ?? []
 
   const { items, page, setPage, search, setSearch, isLoading, error, totalPages } = usePaginatedQuery('leads', leadService, {
-    section: sectionFilter || undefined,
+    section: effectiveSectionFilter || undefined,
     course_interest: courseFilter || undefined,
     status: statusFilter || undefined,
     sort_order: sortOrder,
@@ -289,10 +299,10 @@ export function LeadsPage() {
       ),
       render: (row) => row.course_interest ?? '—',
     },
-    // Redundant once a section is already selected (every visible row is
-    // that section by definition) - only shown in the unscoped "All
-    // Sections" view.
-    ...(sectionFilter
+    // Redundant once a section is already active (every visible row is that
+    // section by definition) - only shown in the unscoped "All Sections"
+    // view, and never for a Section Admin.
+    ...(effectiveSectionFilter
       ? []
       : [
           {
@@ -351,30 +361,18 @@ export function LeadsPage() {
     },
   ]
 
-  const activeSection = sectionFilter ? sectionByCode[sectionFilter] : null
-
   return (
     <div>
       <div className="mb-4 flex items-start justify-between">
         <div>
-          {activeSection && (
-            <button
-              type="button"
-              onClick={() => selectSection('')}
-              className="mb-1 flex items-center gap-1 text-sm font-medium text-brand-600 hover:text-brand-700"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-              All Sections
-            </button>
-          )}
           <h1 className="text-xl font-semibold text-slate-900">
-            {activeSection ? `Admin ${sectionFilter.toUpperCase()}-Section` : 'Admin'}
+            {scopedSection ? `Admin ${scopedSection.toUpperCase()}-Section` : 'Admin'}
           </h1>
           <p className="mt-1 text-sm text-slate-500">Prospective students tracked through the admin pipeline.</p>
         </div>
       </div>
 
-      {activeSection ? (
+      {scopedSection ? (
         <LeadSectionStageStats
           total={total}
           stages={LEAD_STAGES}

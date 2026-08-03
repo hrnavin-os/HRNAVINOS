@@ -82,6 +82,7 @@ async def me(user: User = Depends(get_current_user)) -> CurrentUserResponse:
         last_name=user.last_name,
         role=role.name if role else None,
         permissions=sorted(permission_codes),
+        scoped_section=role.scoped_section if role else None,
         is_active=user.is_active,
         is_verified=user.is_verified,
     )

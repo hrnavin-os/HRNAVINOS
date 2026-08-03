@@ -12,13 +12,6 @@ import { useAuth } from '@/hooks/useAuth'
 import { PERMISSIONS } from '@/constants/permissions'
 import { FormCollectionEditModal } from '@/components/leads/FormCollectionEditModal'
 
-// The backend auto-creates a matching "Admin <CODE>-Section" role (scoped
-// to just that section's leads) the moment a section is added - see
-// FoundationFormConfigService.add_section / _ensure_section_role.
-function roleNameForSection(code) {
-  return `Admin ${code.toUpperCase()}-Section`
-}
-
 function SectionCard({ section, canConfigure, onEdit, onDelete, isDeleting }) {
   const navigate = useNavigate()
   const [copied, setCopied] = useState(false)
@@ -137,7 +130,7 @@ export function FormCollectionPage() {
   if (error) return <ErrorMessage message={getApiErrorMessage(error)} />
 
   const sections = config?.sections ?? []
-  const ownSection = sections.find((section) => roleNameForSection(section.code) === user?.role)
+  const ownSection = sections.find((section) => section.code === user?.scoped_section)
   const visibleSections = ownSection ? [ownSection] : sections
 
   return (
