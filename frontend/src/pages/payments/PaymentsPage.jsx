@@ -91,7 +91,7 @@ export function PaymentsPage() {
   return (
     <div>
       <div className="mb-4">
-        <h1 className="text-xl font-semibold text-slate-900">Payments</h1>
+        <h1 className="text-xl font-semibold text-slate-900">Finance</h1>
       </div>
 
       <div className="mb-4 flex gap-1 border-b border-slate-200">

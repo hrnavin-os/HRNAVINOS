@@ -27,7 +27,7 @@ export const NAV_ITEMS = [
     permission: null,
     icon: LayoutDashboard,
     group: null,
-    hiddenForRoles: ['Admin'],
+    hiddenForRoles: ['Admin', 'Finance'],
     hiddenForScopedUsers: true,
   },
 
@@ -37,18 +37,27 @@ export const NAV_ITEMS = [
     permission: PERMISSIONS.LEADS_VIEW,
     icon: Target,
     group: 'Admin',
+    hiddenForRoles: ['Finance'],
   },
   {
     label: 'Form Collection',
     to: '/leads/form-collection',
     permission: PERMISSIONS.LEADS_VIEW,
     icon: FileCheck2,
+    hiddenForRoles: ['Finance'],
     hiddenForScopedUsers: true,
   },
-  { label: 'Marketing Board', to: '/marketing-board', permission: PERMISSIONS.LEADS_VIEW, icon: Megaphone, hiddenForRoles: ['Admin'], hiddenForScopedUsers: true },
+  {
+    label: 'Marketing Board',
+    to: '/marketing-board',
+    permission: PERMISSIONS.LEADS_VIEW,
+    icon: Megaphone,
+    hiddenForRoles: ['Admin', 'Finance'],
+    hiddenForScopedUsers: true,
+  },
   { label: 'Admissions', to: '/admissions', permission: PERMISSIONS.ADMISSIONS_VIEW, icon: UserPlus },
 
-  { label: 'Payments', to: '/payments', permission: PERMISSIONS.PAYMENTS_VIEW, icon: Wallet, group: 'Finance' },
+  { label: 'Finance', to: '/payments', permission: PERMISSIONS.PAYMENTS_VIEW, icon: Wallet, group: 'Finance' },
 
   {
     label: 'Employee',
