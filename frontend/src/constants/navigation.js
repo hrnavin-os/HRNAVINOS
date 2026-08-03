@@ -34,7 +34,13 @@ export const NAV_ITEMS = [
     icon: Target,
     group: 'Admin',
   },
-  { label: 'Form Collection', to: '/leads/form-collection', permission: PERMISSIONS.LEADS_VIEW, icon: FileCheck2 },
+  {
+    label: 'Form Collection',
+    to: '/leads/form-collection',
+    permission: PERMISSIONS.LEADS_VIEW,
+    icon: FileCheck2,
+    hiddenForScopedUsers: true,
+  },
   { label: 'Marketing Board', to: '/marketing-board', permission: PERMISSIONS.LEADS_VIEW, icon: Megaphone, hiddenForRoles: ['Admin'], hiddenForScopedUsers: true },
   { label: 'Admissions', to: '/admissions', permission: PERMISSIONS.ADMISSIONS_VIEW, icon: UserPlus },
 

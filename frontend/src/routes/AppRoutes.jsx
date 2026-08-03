@@ -46,9 +46,11 @@ export function AppRoutes() {
 
           <Route element={<ProtectedRoute permission={PERMISSIONS.LEADS_VIEW} />}>
             <Route path="/leads" element={<LeadsPage />} />
+            <Route path="/marketing-board" element={<MarketingBoardPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={PERMISSIONS.LEADS_VIEW} blockScoped />}>
             <Route path="/leads/form-collection" element={<FormCollectionPage />} />
             <Route path="/leads/foundation-form" element={<Navigate to="/leads/form-collection" replace />} />
-            <Route path="/marketing-board" element={<MarketingBoardPage />} />
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.ADMISSIONS_VIEW} />}>
             <Route path="/admissions" element={<AdmissionsPage />} />
