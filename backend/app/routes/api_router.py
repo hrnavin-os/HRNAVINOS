@@ -6,6 +6,7 @@ from app.routes import (
     attendance_routes,
     audit_log_routes,
     auth_routes,
+    batch_confirmation_routes,
     batch_routes,
     company_routes,
     course_routes,
@@ -44,6 +45,7 @@ api_router.include_router(admission_routes.router)
 api_router.include_router(student_routes.router)
 api_router.include_router(course_routes.router)
 api_router.include_router(batch_routes.router)
+api_router.include_router(batch_confirmation_routes.router)
 api_router.include_router(tutor_routes.router)
 api_router.include_router(attendance_routes.router)
 api_router.include_router(payment_routes.router)

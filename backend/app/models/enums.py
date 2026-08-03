@@ -66,9 +66,21 @@ class StudentStatus(StrEnum):
 
 class BatchStatus(StrEnum):
     UPCOMING = "upcoming"
+    # Roster locked by an HR Coordinator: every allocated lead has become a
+    # Student and no further allocations are accepted. Sits between UPCOMING
+    # and ONGOING, which still means "currently running".
+    CONFIRMED = "confirmed"
     ONGOING = "ongoing"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+
+
+class AllocationStatus(StrEnum):
+    """State of one lead's seat in a batch, before and after confirmation."""
+
+    ALLOCATED = "allocated"
+    CONFIRMED = "confirmed"
+    WITHDRAWN = "withdrawn"
 
 
 class TutorStatus(StrEnum):

@@ -4,6 +4,7 @@ from app.models.admission import Admission
 from app.models.attendance import Attendance
 from app.models.audit_log import AuditLog
 from app.models.batch import Batch
+from app.models.batch_allocation import BatchAllocation
 from app.models.company import Company
 from app.models.course import Course
 from app.models.finance_verification import FinanceVerification
@@ -30,6 +31,7 @@ ALL_DOCUMENTS = [
     Attendance,
     AuditLog,
     Batch,
+    BatchAllocation,
     Company,
     Course,
     FinanceVerification,
@@ -58,6 +60,7 @@ __all__ = [
     "Attendance",
     "AuditLog",
     "Batch",
+    "BatchAllocation",
     "Company",
     "Course",
     "FinanceVerification",

@@ -20,6 +20,14 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     "A-Section Admin": [P.LEADS_VIEW, P.LEADS_UPDATE],
     "B-Section Admin": [P.LEADS_VIEW, P.LEADS_UPDATE],
     "C-Section Admin": [P.LEADS_VIEW, P.LEADS_UPDATE],
+    # Owns the hand-off from CRM to classroom: allocates leads that reached the
+    # Batch Confirmation stage into batches, then confirms the roster (which
+    # creates the Student and Admission records) once the batch is ready.
+    "HR Coordinator": [
+        P.BATCH_CONFIRMATION_VIEW, P.BATCH_CONFIRMATION_ALLOCATE, P.BATCH_CONFIRMATION_CONFIRM,
+        P.LEADS_VIEW, P.BATCHES_VIEW, P.COURSES_VIEW, P.TUTORS_VIEW,
+        P.STUDENTS_VIEW, P.ADMISSIONS_VIEW, P.REPORTS_VIEW,
+    ],
     "Post Sales Executive": [
         P.STUDENTS_VIEW, P.STUDENTS_UPDATE, P.TICKETS_VIEW, P.TICKETS_UPDATE, P.NOTIFICATIONS_VIEW,
     ],

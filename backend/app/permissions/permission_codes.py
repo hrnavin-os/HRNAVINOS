@@ -60,6 +60,11 @@ class Permissions(StrEnum):
     BATCHES_UPDATE = "batches.update"
     BATCHES_DELETE = "batches.delete"
 
+    # ---------- Batch Confirmation (HR Coordinator) ----------
+    BATCH_CONFIRMATION_VIEW = "batch_confirmation.view"
+    BATCH_CONFIRMATION_ALLOCATE = "batch_confirmation.allocate"
+    BATCH_CONFIRMATION_CONFIRM = "batch_confirmation.confirm"
+
     # ---------- Tutors ----------
     TUTORS_VIEW = "tutors.view"
     TUTORS_CREATE = "tutors.create"

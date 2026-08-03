@@ -5,6 +5,10 @@ export const PERMISSIONS = {
   USERS_UPDATE: 'users.update',
   USERS_DELETE: 'users.delete',
 
+  BATCH_CONFIRMATION_VIEW: 'batch_confirmation.view',
+  BATCH_CONFIRMATION_ALLOCATE: 'batch_confirmation.allocate',
+  BATCH_CONFIRMATION_CONFIRM: 'batch_confirmation.confirm',
+
   ROLES_VIEW: 'roles.view',
   ROLES_CREATE: 'roles.create',
   ROLES_UPDATE: 'roles.update',

@@ -3,6 +3,7 @@ import {
   Target,
   Megaphone,
   UserPlus,
+  ClipboardCheck,
   Wallet,
   Users,
   UserCog,
@@ -56,6 +57,14 @@ export const NAV_ITEMS = [
     hiddenForScopedUsers: true,
   },
   { label: 'Admissions', to: '/admissions', permission: PERMISSIONS.ADMISSIONS_VIEW, icon: UserPlus },
+
+  {
+    label: 'Batch Confirmation',
+    to: '/batch-confirmation',
+    permission: PERMISSIONS.BATCH_CONFIRMATION_VIEW,
+    icon: ClipboardCheck,
+    group: 'HR Coordinator',
+  },
 
   { label: 'Finance', to: '/payments', permission: PERMISSIONS.PAYMENTS_VIEW, icon: Wallet, group: 'Finance' },
 
