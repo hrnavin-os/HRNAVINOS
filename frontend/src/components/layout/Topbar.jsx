@@ -2,11 +2,11 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { LogOut } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/Button'
-import { NAV_ITEMS } from '@/constants/navigation'
+import { NAV_LEAF_ITEMS } from '@/constants/navigation'
 
 function useCurrentPageTitle() {
   const { pathname } = useLocation()
-  const match = NAV_ITEMS.find((item) => (item.to === '/' ? pathname === '/' : pathname.startsWith(item.to)))
+  const match = NAV_LEAF_ITEMS.find((item) => (item.to === '/' ? pathname === '/' : pathname.startsWith(item.to)))
   return match?.label ?? 'HRNAVINOS ERP'
 }
 
