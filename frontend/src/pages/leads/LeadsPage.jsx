@@ -331,11 +331,15 @@ export function LeadsPage() {
   // selection - for Admin/Super Admin this is just whichever tab is active.
   const effectiveSectionFilter = scopedSection || sectionFilter
 
-  // Scoped to the active section once one is selected, so this becomes each
-  // section's own stage breakdown instead of the global one.
+  // Scoped to the user's own section for a Section Admin (so this becomes
+  // that section's stage breakdown), but NOT to whichever tab an Admin/Super
+  // Admin happens to have selected - their stat row always shows every
+  // section's true count, tab selection only filters the table beneath it.
+  // The backend clears by_section whenever a section is passed in, so
+  // passing the tab selection here would zero out the other cards.
   const statsQuery = useQuery({
-    queryKey: ['leads-stats', effectiveSectionFilter],
-    queryFn: () => leadService.getStats(effectiveSectionFilter || undefined),
+    queryKey: ['leads-stats', scopedSection],
+    queryFn: () => leadService.getStats(scopedSection || undefined),
   })
   const total = statsQuery.data?.total ?? 0
   const bySection = statsQuery.data?.by_section ?? {}
