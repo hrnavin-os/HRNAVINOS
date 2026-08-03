@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Calendar, ChevronDown, Eye, Plus, Search } from 'lucide-react'
 import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
@@ -50,19 +51,44 @@ const createFields = [
 ]
 
 // Shows just the first 6 characters + "…" so a long query doesn't blow out
-// the row height; hovering reveals the full text in a small popup.
+// the row height; hovering reveals the full text in a floating popup.
+// Portaled to <body> (positioned from the trigger's own bounding rect)
+// rather than rendered inline, because DataTable wraps rows in an
+// overflow-x-auto container that would otherwise clip it.
 function TruncatedText({ text }) {
+  const triggerRef = useRef(null)
+  const [popupPosition, setPopupPosition] = useState(null)
+
   if (!text) return <span className="text-slate-400">—</span>
   const trimmed = text.trim()
   if (trimmed.length <= 6) return <span>{trimmed}</span>
 
+  function show() {
+    const rect = triggerRef.current.getBoundingClientRect()
+    setPopupPosition({ top: rect.bottom + 4, left: rect.left })
+  }
+
   return (
-    <span className="group relative inline-block cursor-help border-b border-dotted border-slate-300">
-      {trimmed.slice(0, 6)}…
-      <span className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden w-max max-w-xs rounded-md border border-slate-200 bg-white p-2 text-xs font-normal text-slate-700 shadow-lg group-hover:block">
-        {trimmed}
+    <>
+      <span
+        ref={triggerRef}
+        onMouseEnter={show}
+        onMouseLeave={() => setPopupPosition(null)}
+        className="inline-block cursor-help border-b border-dotted border-slate-300"
+      >
+        {trimmed.slice(0, 6)}…
       </span>
-    </span>
+      {popupPosition &&
+        createPortal(
+          <div
+            style={{ top: popupPosition.top, left: popupPosition.left }}
+            className="pointer-events-none fixed z-100 w-max max-w-xs rounded-md border border-slate-200 bg-white p-2 text-xs font-normal text-slate-700 shadow-lg"
+          >
+            {trimmed}
+          </div>,
+          document.body,
+        )}
+    </>
   )
 }
 
@@ -165,16 +191,34 @@ function SortOrderSelect({ value, onChange }) {
 // A column header that's also its own filter dropdown - click the label to
 // pick a value, "All <Label>s" clears it. Renders in place of a plain
 // string `header`, since DataTable just puts whatever it's given into <th>.
+// The menu is portaled to <body> (positioned from the button's own
+// bounding rect) rather than rendered inline, because DataTable wraps rows
+// in an overflow-x-auto container that would otherwise clip it.
 function FilterableHeader({ label, value, options, onChange }) {
-  const [isOpen, setIsOpen] = useState(false)
+  const buttonRef = useRef(null)
+  const [menuPosition, setMenuPosition] = useState(null)
   const isActive = Boolean(value)
   const selectedLabel = options.find((option) => option.value === value)?.label
 
+  function toggle() {
+    if (menuPosition) {
+      setMenuPosition(null)
+      return
+    }
+    const rect = buttonRef.current.getBoundingClientRect()
+    setMenuPosition({ top: rect.bottom + 4, left: rect.left })
+  }
+
+  function close() {
+    setMenuPosition(null)
+  }
+
   return (
-    <div className="relative inline-block normal-case">
+    <div className="inline-block normal-case">
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={toggle}
         className={`flex items-center gap-1 text-xs font-semibold uppercase tracking-wide ${
           isActive ? 'text-brand-600' : 'text-slate-500'
         }`}
@@ -182,40 +226,45 @@ function FilterableHeader({ label, value, options, onChange }) {
         {isActive ? selectedLabel : label}
         <ChevronDown className="h-3 w-3 shrink-0" strokeWidth={2.5} aria-hidden="true" />
       </button>
-      {isOpen && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute left-0 z-50 mt-1 max-h-64 w-52 overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg">
-            <button
-              type="button"
-              onClick={() => {
-                onChange('')
-                setIsOpen(false)
-              }}
-              className={`block w-full px-3 py-1.5 text-left text-sm font-normal ${
-                !value ? 'bg-brand-50 text-brand-700' : 'text-slate-700 hover:bg-slate-50'
-              }`}
+      {menuPosition &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-40" onClick={close} />
+            <div
+              style={{ top: menuPosition.top, left: menuPosition.left }}
+              className="fixed z-50 max-h-64 w-52 overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg"
             >
-              All {label}s
-            </button>
-            {options.map((option) => (
               <button
-                key={option.value}
                 type="button"
                 onClick={() => {
-                  onChange(option.value)
-                  setIsOpen(false)
+                  onChange('')
+                  close()
                 }}
-                className={`block w-full truncate px-3 py-1.5 text-left text-sm font-normal ${
-                  value === option.value ? 'bg-brand-50 text-brand-700' : 'text-slate-700 hover:bg-slate-50'
+                className={`block w-full px-3 py-1.5 text-left text-sm font-normal ${
+                  !value ? 'bg-brand-50 text-brand-700' : 'text-slate-700 hover:bg-slate-50'
                 }`}
               >
-                {option.label}
+                All {label}s
               </button>
-            ))}
-          </div>
-        </>
-      )}
+              {options.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    onChange(option.value)
+                    close()
+                  }}
+                  className={`block w-full truncate px-3 py-1.5 text-left text-sm font-normal ${
+                    value === option.value ? 'bg-brand-50 text-brand-700' : 'text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </>,
+          document.body,
+        )}
     </div>
   )
 }
