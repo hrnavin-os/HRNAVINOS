@@ -1,17 +1,13 @@
 import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Plus, Search, UserMinus, UserPlus } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Search } from 'lucide-react'
 import { batchConfirmationService } from '@/services/batchConfirmationService'
 import { getApiErrorMessage } from '@/services/apiClient'
-import { useAuth } from '@/hooks/useAuth'
-import { PERMISSIONS } from '@/constants/permissions'
 import { Badge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { ErrorMessage } from '@/components/ui/ErrorMessage'
+import { DataTable } from '@/components/ui/DataTable'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { BatchReadinessCard } from '@/components/hr/BatchReadinessCard'
-import { NewBatchGroupModal } from '@/components/hr/NewBatchGroupModal'
+import { formatDate } from '@/utils/formatters'
 
 const QUERY_KEY = 'batch-confirmation'
 
@@ -30,113 +26,43 @@ function StatCard({ label, value, tone = 'slate' }) {
   )
 }
 
-function PendingLeadRow({ lead, canAllocate, selectedBatch, onAllocate, isAllocating }) {
-  return (
-    <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0">
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium text-slate-900">{lead.name}</p>
-        <p className="truncate text-xs text-slate-500">
-          {lead.phone}
-          {lead.course_interest && ` · ${lead.course_interest}`}
-        </p>
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          <Badge tone={lead.fully_paid ? 'green' : 'amber'}>
-            {lead.fully_paid
-              ? 'Fees cleared'
-              : lead.total_installments
-                ? `${lead.paid_installments}/${lead.total_installments} paid`
-                : 'Unpaid'}
-          </Badge>
-          {lead.section && <Badge tone="violet">{lead.section.toUpperCase()}</Badge>}
-          {!lead.email && <Badge tone="red">No email</Badge>}
-        </div>
-      </div>
-      {canAllocate && (
-        <Button
-          variant="secondary"
-          disabled={!selectedBatch || isAllocating}
-          onClick={onAllocate}
-          title={selectedBatch ? `Allocate to ${selectedBatch.batch_name}` : 'Select a batch first'}
-        >
-          <UserPlus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-          Allocate
-        </Button>
-      )}
-    </div>
-  )
+function paymentBadge(lead) {
+  if (lead.fully_paid) return <Badge tone="green">Fees cleared</Badge>
+  if (lead.total_installments) {
+    return (
+      <Badge tone="amber">
+        {lead.paid_installments}/{lead.total_installments} paid
+      </Badge>
+    )
+  }
+  return <Badge tone="slate">Unpaid</Badge>
 }
 
-export function HRCoordinatorPage() {
-  const { hasPermission } = useAuth()
-  const queryClient = useQueryClient()
-  const [selectedBatchId, setSelectedBatchId] = useState(null)
-  const [search, setSearch] = useState('')
-  const [banner, setBanner] = useState(null)
-  const [isNewBatchOpen, setIsNewBatchOpen] = useState(false)
+const columns = [
+  { key: 'name', header: 'Name', render: (lead) => <span className="font-medium text-slate-900">{lead.name}</span> },
+  { key: 'phone', header: 'Ph.No' },
+  { key: 'email', header: 'Email', render: (lead) => lead.email ?? <span className="text-slate-400">—</span> },
+  {
+    key: 'course_interest',
+    header: 'Course',
+    render: (lead) => lead.course_interest ?? <span className="text-slate-400">—</span>,
+  },
+  {
+    key: 'section',
+    header: 'Section',
+    render: (lead) => (lead.section ? <Badge tone="violet">{lead.section.toUpperCase()}</Badge> : '—'),
+  },
+  { key: 'payment', header: 'Payment', render: paymentBadge },
+  { key: 'created_at', header: 'Added', render: (lead) => formatDate(lead.created_at) },
+]
 
-  const canAllocate = hasPermission(PERMISSIONS.BATCH_CONFIRMATION_ALLOCATE)
-  const canConfirm = hasPermission(PERMISSIONS.BATCH_CONFIRMATION_CONFIRM)
-  const canCreateBatch = hasPermission(PERMISSIONS.BATCHES_CREATE)
+export function HRCoordinatorPage() {
+  const [search, setSearch] = useState('')
 
   const summaryQuery = useQuery({ queryKey: [QUERY_KEY, 'summary'], queryFn: batchConfirmationService.summary })
   const leadsQuery = useQuery({ queryKey: [QUERY_KEY, 'pending'], queryFn: batchConfirmationService.pendingLeads })
-  const batchesQuery = useQuery({ queryKey: [QUERY_KEY, 'batches'], queryFn: batchConfirmationService.batches })
-  const detailQuery = useQuery({
-    queryKey: [QUERY_KEY, 'batch', selectedBatchId],
-    queryFn: () => batchConfirmationService.batch(selectedBatchId),
-    enabled: Boolean(selectedBatchId),
-  })
-
-  // Allocating changes the queue, the batch's roster and every counter at once,
-  // so each mutation refreshes the whole module rather than patching caches.
-  const refreshAll = () => queryClient.invalidateQueries({ queryKey: [QUERY_KEY] })
-
-  const allocateMutation = useMutation({
-    mutationFn: (leadId) => batchConfirmationService.allocate({ lead_id: leadId, batch_id: selectedBatchId }),
-    onSuccess: () => {
-      setBanner(null)
-      refreshAll()
-    },
-    onError: (error) => setBanner({ tone: 'error', text: getApiErrorMessage(error) }),
-  })
-
-  const withdrawMutation = useMutation({
-    mutationFn: (allocationId) => batchConfirmationService.withdraw(allocationId, null),
-    onSuccess: () => {
-      setBanner(null)
-      refreshAll()
-    },
-    onError: (error) => setBanner({ tone: 'error', text: getApiErrorMessage(error) }),
-  })
-
-  const createBatchMutation = useMutation({
-    mutationFn: (values) =>
-      batchConfirmationService.createBatch({
-        ...values,
-        capacity: Number(values.capacity),
-      }),
-    onSuccess: (batch) => {
-      setBanner({ tone: 'success', text: `Batch group '${batch.name}' created.` })
-      setIsNewBatchOpen(false)
-      // Pre-select it so the queue's Allocate buttons come alive immediately.
-      setSelectedBatchId(batch.id)
-      refreshAll()
-    },
-  })
-
-  const confirmMutation = useMutation({
-    mutationFn: (batchId) => batchConfirmationService.confirm(batchId),
-    onSuccess: (data) => {
-      setBanner({ tone: 'success', text: data.message })
-      refreshAll()
-    },
-    onError: (error) => setBanner({ tone: 'error', text: getApiErrorMessage(error) }),
-  })
 
   const summary = summaryQuery.data
-  const batches = batchesQuery.data ?? []
-  const selectedBatch = batches.find((batch) => batch.batch_id === selectedBatchId) ?? null
-  const roster = detailQuery.data?.allocations ?? []
 
   const leads = (leadsQuery.data ?? []).filter((lead) => {
     const term = search.trim().toLowerCase()
@@ -150,19 +76,11 @@ export function HRCoordinatorPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">HR Coordinator</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Group financially approved leads into batches, then lock the roster to enrol them as students.
-          </p>
-        </div>
-        {canCreateBatch && (
-          <Button onClick={() => setIsNewBatchOpen(true)}>
-            <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-            New Batch
-          </Button>
-        )}
+      <div className="mb-6">
+        <h1 className="text-xl font-semibold text-slate-900">HR Coordinator</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Financially approved leads waiting to be grouped into a batch.
+        </p>
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
@@ -170,176 +88,39 @@ export function HRCoordinatorPage() {
         <StatCard label="Allocated" value={summary?.allocated_awaiting_confirmation ?? 0} tone="amber" />
         <StatCard label="Ready to Confirm" value={summary?.batches_ready_to_confirm ?? 0} tone="green" />
         <StatCard label="Batches Confirmed" value={summary?.batches_confirmed ?? 0} />
-        <StatCard label="Students Placed" value={summary?.students_placed ?? 0} />
+        <StatCard label="Total Students" value={summary?.students_placed ?? 0} />
       </div>
 
-      {banner && (
-        <div
-          className={`mb-4 flex items-start gap-2 rounded-md border px-4 py-3 text-sm ${
-            banner.tone === 'success'
-              ? 'border-green-200 bg-green-50 text-green-800'
-              : 'border-red-200 bg-red-50 text-red-800'
-          }`}
-        >
-          {banner.tone === 'success' && (
-            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
-          )}
-          <span>{banner.text}</span>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold text-slate-900">
+          Allocation Queue <span className="font-normal text-slate-400">({leads.length})</span>
+        </h2>
+        <div className="relative w-full max-w-xs">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+            aria-hidden="true"
+          />
+          <Input
+            className="pl-9"
+            placeholder="Search by name, phone, course…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
         </div>
-      )}
-
-      <div className="grid gap-5 lg:grid-cols-2">
-        {/* ---------- Allocation queue ---------- */}
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-900">
-              Allocation Queue <span className="font-normal text-slate-400">({leads.length})</span>
-            </h2>
-          </div>
-
-          <div className="relative mb-3">
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-              aria-hidden="true"
-            />
-            <Input
-              className="pl-9"
-              placeholder="Search by name, phone, course…"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </div>
-
-          <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-            {leadsQuery.isLoading ? (
-              <LoadingSpinner />
-            ) : leadsQuery.error ? (
-              <div className="p-4">
-                <ErrorMessage message={getApiErrorMessage(leadsQuery.error)} />
-              </div>
-            ) : leads.length === 0 ? (
-              <p className="px-4 py-10 text-center text-sm text-slate-500">
-                No leads waiting for a seat. Leads appear here once they reach the Batch Confirmation stage.
-              </p>
-            ) : (
-              leads.map((lead) => (
-                <PendingLeadRow
-                  key={lead.id}
-                  lead={lead}
-                  canAllocate={canAllocate}
-                  selectedBatch={selectedBatch}
-                  isAllocating={allocateMutation.isPending}
-                  onAllocate={() => allocateMutation.mutate(lead.id)}
-                />
-              ))
-            )}
-          </div>
-
-          {!selectedBatch && leads.length > 0 && canAllocate && (
-            <p className="mt-2 text-xs text-slate-400">
-              {batches.length === 0
-                ? 'Create a batch group first, then allocate these leads into it.'
-                : 'Select a batch on the right to start allocating.'}
-            </p>
-          )}
-        </section>
-
-        {/* ---------- Batches + roster ---------- */}
-        <section>
-          <h2 className="mb-3 text-sm font-semibold text-slate-900">
-            Batches <span className="font-normal text-slate-400">({batches.length})</span>
-          </h2>
-
-          {batchesQuery.isLoading ? (
-            <LoadingSpinner />
-          ) : batches.length === 0 ? (
-            <div className="rounded-lg border border-slate-200 bg-white px-4 py-10 text-center">
-              <p className="text-sm text-slate-500">No batch groups yet.</p>
-              {canCreateBatch && (
-                <Button variant="secondary" className="mt-3" onClick={() => setIsNewBatchOpen(true)}>
-                  <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                  Create the first one
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {batches.map((batch) => (
-                <BatchReadinessCard
-                  key={batch.batch_id}
-                  batch={batch}
-                  isSelected={batch.batch_id === selectedBatchId}
-                  canConfirm={canConfirm}
-                  isConfirming={confirmMutation.isPending}
-                  onSelect={() => setSelectedBatchId(batch.batch_id === selectedBatchId ? null : batch.batch_id)}
-                  onConfirm={() => confirmMutation.mutate(batch.batch_id)}
-                />
-              ))}
-            </div>
-          )}
-
-          {selectedBatchId && (
-            <div className="mt-4">
-              <h3 className="mb-2 text-sm font-semibold text-slate-900">
-                Roster <span className="font-normal text-slate-400">({roster.length})</span>
-              </h3>
-              <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-                {detailQuery.isLoading ? (
-                  <LoadingSpinner />
-                ) : roster.length === 0 ? (
-                  <p className="px-4 py-8 text-center text-sm text-slate-500">
-                    No one allocated yet. Pick leads from the queue on the left.
-                  </p>
-                ) : (
-                  roster.map((seat) => (
-                    <div
-                      key={seat.allocation_id}
-                      className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-2.5 last:border-b-0"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm text-slate-900">{seat.name}</p>
-                        <p className="truncate text-xs text-slate-500">{seat.email ?? seat.phone}</p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <Badge tone={seat.fully_paid ? 'green' : 'amber'}>
-                          {seat.fully_paid ? 'Paid' : 'Pending'}
-                        </Badge>
-                        {seat.status === 'confirmed' ? (
-                          <Badge tone="blue">Enrolled</Badge>
-                        ) : (
-                          canAllocate && (
-                            <button
-                              type="button"
-                              onClick={() => withdrawMutation.mutate(seat.allocation_id)}
-                              disabled={withdrawMutation.isPending}
-                              title="Withdraw from batch"
-                              aria-label="Withdraw from batch"
-                              className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
-                            >
-                              <UserMinus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                            </button>
-                          )
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-        </section>
       </div>
 
-      {isNewBatchOpen && (
-        <NewBatchGroupModal
-          error={createBatchMutation.error}
-          onSubmit={(values) => createBatchMutation.mutateAsync(values)}
-          onClose={() => {
-            createBatchMutation.reset()
-            setIsNewBatchOpen(false)
-          }}
+      <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+        <DataTable
+          columns={columns}
+          rows={leads}
+          isLoading={leadsQuery.isLoading}
+          error={leadsQuery.error ? getApiErrorMessage(leadsQuery.error) : null}
+          emptyMessage="No leads waiting for a batch. They appear here once they reach the Batch Confirmation stage."
         />
-      )}
+      </div>
+      <p className="mt-2 text-xs text-slate-400">
+        {leads.length} record{leads.length === 1 ? '' : 's'}
+      </p>
     </div>
   )
 }
