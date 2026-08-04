@@ -60,8 +60,15 @@ export const batchConfirmationService = {
     })
     return data
   },
-  markGroupAssigned: async (leadId) => {
-    const { data } = await apiClient.post(`${BASE}/students/${leadId}/group-assigned`)
+  markGroupAssigned: async (leadId, assigned = true) => {
+    const { data } = await apiClient.post(`${BASE}/students/${leadId}/group-assigned`, { assigned })
+    return data
+  },
+  setHrStage: async (leadId, status, lostReason) => {
+    const { data } = await apiClient.post(`${BASE}/students/${leadId}/stage`, {
+      status,
+      lost_reason: lostReason ?? null,
+    })
     return data
   },
   whatsappLinks: async () => {

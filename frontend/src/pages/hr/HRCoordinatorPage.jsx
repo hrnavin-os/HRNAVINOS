@@ -10,6 +10,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Toast } from '@/components/ui/Toast'
 import { StatCard } from '@/components/ui/StatCard'
 import { DataTable } from '@/components/ui/DataTable'
+import { HRStudentDetailModal } from '@/components/hr/HRStudentDetailModal'
 import { formatDate } from '@/utils/formatters'
 
 const QUERY_KEY = 'batch-confirmation'
@@ -57,6 +58,7 @@ function BatchNumberCell({ row, onError }) {
       type="text"
       value={value}
       placeholder="e.g. 27"
+      onClick={(event) => event.stopPropagation()}
       onChange={(event) => setValue(event.target.value)}
       onBlur={commit}
       onKeyDown={(event) => {
@@ -75,6 +77,7 @@ export function HRCoordinatorPage() {
   // Held between opening the invite link and the coordinator confirming the
   // student actually joined - the open itself proves nothing.
   const [confirming, setConfirming] = useState(null)
+  const [viewingStudent, setViewingStudent] = useState(null)
 
   // All four tabs are fetched, not just the active one - the cards show a
   // count, so every tab's total has to be known up front. Switching tabs is
@@ -146,7 +149,10 @@ export function HRCoordinatorPage() {
         render: (row) => (
           <button
             type="button"
-            onClick={() => handleGroupAssign(row)}
+            onClick={(event) => {
+              event.stopPropagation()
+              handleGroupAssign(row)
+            }}
             title="Open this section's WhatsApp group"
             aria-label={`Open the WhatsApp group for ${row.name}`}
             className="rounded-md p-1.5 text-green-600 transition-colors hover:bg-green-50"
@@ -265,6 +271,7 @@ export function HRCoordinatorPage() {
           isLoading={studentsQuery.isLoading}
           error={studentsQuery.error ? getApiErrorMessage(studentsQuery.error) : null}
           emptyMessage={EMPTY_MESSAGE[tab]}
+          onRowClick={(row) => setViewingStudent(row)}
         />
       </div>
       <p className="mt-2 text-xs text-slate-400">
@@ -286,6 +293,14 @@ export function HRCoordinatorPage() {
             </Button>
           </div>
         </Modal>
+      )}
+
+      {viewingStudent && (
+        <HRStudentDetailModal
+          student={viewingStudent}
+          sectionLabel={viewingStudent.section ? linkBySection[viewingStudent.section]?.label : null}
+          onClose={() => setViewingStudent(null)}
+        />
       )}
 
       <Toast message={error} onDismiss={() => setError(null)} />

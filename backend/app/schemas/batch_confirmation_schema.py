@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import AllocationStatus, BatchStatus
+from app.models.enums import AllocationStatus, BatchStatus, LeadStatus
 
 
 class AllocateRequest(BaseModel):
@@ -158,6 +158,9 @@ class HRStudentResponse(BaseModel):
     phone: str
     course_interest: str | None
     section: str | None
+    # The pipeline stage behind the tab, so the detail popup can work out
+    # which moves are allowed rather than re-deriving it from the tab.
+    status: LeadStatus
     batch_number: str | None
     group_assigned_at: datetime | None
     lost_reason: str | None
@@ -167,3 +170,15 @@ class HRStudentResponse(BaseModel):
 
 class BatchNumberRequest(BaseModel):
     batch_number: str = Field(default="", max_length=50)
+
+
+class GroupAssignRequest(BaseModel):
+    # False clears the assignment, sending the student back to the
+    # "Approved by Finance" queue.
+    assigned: bool = True
+
+
+class HRStageRequest(BaseModel):
+    status: LeadStatus
+    # Required by LeadService.update when the move is to Lost.
+    lost_reason: str | None = Field(default=None, max_length=500)

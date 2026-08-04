@@ -222,26 +222,57 @@ class BatchConfirmationService:
         )
         return lead
 
-    async def set_group_assigned(self, lead_id: uuid.UUID, *, actor_id: uuid.UUID | None) -> Lead:
+    async def set_group_assigned(
+        self, lead_id: uuid.UUID, *, assigned: bool = True, actor_id: uuid.UUID | None
+    ) -> Lead:
         """Records that the student joined their section's WhatsApp group,
         which is what moves them from 'Approved by Finance' to 'Group
-        Assigned'. Only meaningful once they've reached the batch stage."""
+        Assigned'. Only meaningful once they've reached the batch stage.
+
+        Clearing it (assigned=False) sends them back to 'Approved by Finance'
+        - the way to undo an assignment recorded by mistake, and a plain
+        timestamp change rather than a stage move.
+        """
         lead = await self.leads.get_by_id(lead_id)
         if not lead:
             raise NotFoundError("Lead not found.")
-        if lead.status != LeadStatus.BATCH_CONFIRMATION:
+        if assigned and lead.status != LeadStatus.BATCH_CONFIRMATION:
             raise BadRequestError("Only leads at the Batch Confirmation stage can be marked group-assigned.")
 
-        assigned_at = utcnow()
+        assigned_at = utcnow() if assigned else None
         await self.leads.update(lead, {"group_assigned_at": assigned_at, "updated_by": actor_id})
         await self.audit.record(
             user_id=actor_id,
             action="UPDATE",
             entity_type="Lead",
             entity_id=str(lead.id),
-            changes={"group_assigned_at": assigned_at.isoformat()},
+            changes={"group_assigned_at": assigned_at.isoformat() if assigned_at else None},
         )
         return lead
+
+    async def set_hr_stage(
+        self,
+        lead_id: uuid.UUID,
+        *,
+        status: LeadStatus,
+        lost_reason: str | None,
+        actor_id: uuid.UUID | None,
+    ) -> Lead:
+        """Stage moves made from the coordinator's own tabs.
+
+        Delegates to LeadService so the pipeline's rules (and the Lost-reason
+        requirement) apply exactly as they do from the Admin board - this
+        exists only so the move is reachable with the coordinator's
+        permissions, which don't include leads.update.
+        """
+        # Imported here rather than at module scope: LeadService is a heavier
+        # dependency only this one path needs.
+        from app.schemas.lead_schema import LeadUpdate
+        from app.services.lead_service import LeadService
+
+        return await LeadService().update(
+            lead_id, LeadUpdate(status=status, lost_reason=lost_reason), actor_id=actor_id
+        )
 
     async def _tutor_name(self, tutor_id: uuid.UUID | None) -> str | None:
         if not tutor_id:

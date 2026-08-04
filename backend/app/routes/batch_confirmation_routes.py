@@ -16,6 +16,8 @@ from app.schemas.batch_confirmation_schema import (
     BatchReadinessResponse,
     ConfirmBatchResponse,
     CoordinatorSummaryResponse,
+    GroupAssignRequest,
+    HRStageRequest,
     HRStudentResponse,
     MarkRequest,
     PendingLeadResponse,
@@ -160,6 +162,7 @@ def _to_hr_student(lead) -> HRStudentResponse:
         phone=lead.phone,
         course_interest=lead.course_interest,
         section=lead.section,
+        status=lead.status,
         batch_number=lead.batch_number,
         group_assigned_at=lead.group_assigned_at,
         lost_reason=lead.lost_reason,
@@ -192,7 +195,22 @@ async def set_batch_number(
 @router.post("/students/{lead_id}/group-assigned", response_model=HRStudentResponse)
 async def mark_group_assigned(
     lead_id: uuid.UUID,
+    payload: GroupAssignRequest | None = None,
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_ALLOCATE)),
 ) -> HRStudentResponse:
-    lead = await BatchConfirmationService().set_group_assigned(lead_id, actor_id=actor.id)
+    lead = await BatchConfirmationService().set_group_assigned(
+        lead_id, assigned=payload.assigned if payload else True, actor_id=actor.id
+    )
+    return _to_hr_student(lead)
+
+
+@router.post("/students/{lead_id}/stage", response_model=HRStudentResponse)
+async def set_hr_stage(
+    lead_id: uuid.UUID,
+    payload: HRStageRequest,
+    actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_ALLOCATE)),
+) -> HRStudentResponse:
+    lead = await BatchConfirmationService().set_hr_stage(
+        lead_id, status=payload.status, lost_reason=payload.lost_reason, actor_id=actor.id
+    )
     return _to_hr_student(lead)
