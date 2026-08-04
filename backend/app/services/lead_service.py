@@ -172,7 +172,7 @@ class LeadService:
         and admit it into the normal pipeline (visible in Leads / New Lead)."""
         lead = await self.get(lead_id, scope=scope)
         if data.status is not None:
-            self._validate_stage_transition(lead.status, data.status)
+            self._validate_stage_transition(lead, data.status)
         update_data = data.model_dump(exclude_unset=True)
         update_data["reviewed"] = True
         update_data["updated_by"] = actor_id
@@ -198,26 +198,56 @@ class LeadService:
     async def course_options(self) -> List[str]:
         return await self.leads.distinct_course_interests()
 
-    def _validate_stage_transition(self, current: LeadStatus, new: LeadStatus) -> None:
+    def _validate_stage_transition(self, lead: Lead, new: LeadStatus) -> None:
         """Financial Approval and Batch Confirmation are pipeline gates: each
-        can only be entered from the stage directly before it. Once a lead
-        reaches Batch Confirmation it can't move back (Lost stays reachable
-        as an exit)."""
+        can only be entered from the stage directly before it, and only once
+        the money backing it has actually arrived. Once a lead reaches Batch
+        Confirmation it can't move back (Lost stays reachable as an exit)."""
+        current = lead.status
         if current == new:
             return
         if current == LeadStatus.BATCH_CONFIRMATION and new != LeadStatus.LOST:
             raise BadRequestError("A lead in Batch Confirmation can't be moved back to an earlier stage.")
         if new == LeadStatus.BATCH_CONFIRMATION and current != LeadStatus.FINANCIAL_APPROVAL:
             raise BadRequestError("A lead can only move to Batch Confirmation from Financial Approval.")
-        if new == LeadStatus.FINANCIAL_APPROVAL and current != LeadStatus.PRE_SCREENING:
-            raise BadRequestError("A lead can only move to Financial Approval from Pre Screening.")
+        if new == LeadStatus.FINANCIAL_APPROVAL:
+            if current != LeadStatus.PRE_SCREENING:
+                raise BadRequestError("A lead can only move to Financial Approval from Pre Screening.")
+            self._require_first_payment(lead)
+
+    def _require_first_payment(self, lead: Lead) -> None:
+        """Financial Approval means "Finance has seen money" - so at least the
+        first payment must be on record before the stage can be entered.
+
+        Deliberately only the *first* payment, not the full fee: EMI and
+        two-shot leads are meant to progress mid-plan. Clearing the whole
+        balance is a separate, later gate - BatchConfirmationService's
+        `fees_cleared` readiness check, which blocks confirming a batch until
+        every allocated lead has paid in full.
+
+        Mirrors the two payment representations that `_is_fully_paid` in that
+        service also has to handle: a structured installment plan, or the
+        older single `paid_amount` field on manually-created leads.
+        """
+        if lead.installments:
+            if not lead.installments[0].paid:
+                raise BadRequestError(
+                    "The first installment must be recorded as paid (amount, mode, reference and proof) "
+                    "before this lead can move to Financial Approval."
+                )
+            return
+        if lead.paid_amount is None or lead.paid_amount <= 0:
+            raise BadRequestError(
+                "Record a payment before moving this lead to Financial Approval - either assign a payment "
+                "plan and collect its first installment, or set the amount received."
+            )
 
     async def update(
         self, lead_id: uuid.UUID, data: LeadUpdate, *, actor_id: uuid.UUID | None, scope: str | None = None
     ) -> Lead:
         lead = await self.get(lead_id, scope=scope)
         if data.status is not None:
-            self._validate_stage_transition(lead.status, data.status)
+            self._validate_stage_transition(lead, data.status)
         update_data = data.model_dump(exclude_unset=True)
         update_data["updated_by"] = actor_id
         if update_data.get("follow_up_at"):

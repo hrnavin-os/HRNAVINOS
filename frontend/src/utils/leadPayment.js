@@ -32,6 +32,14 @@ export function getLeadPaymentSummary(lead) {
   }
 }
 
+// Mirrors LeadService._require_first_payment on the backend: has any money
+// actually landed for this lead? Handles both representations - a structured
+// installment plan, or the older single paid_amount on manual leads.
+export function hasFirstPayment(lead) {
+  if (lead.installments?.length) return Boolean(lead.installments[0].paid)
+  return Number(lead.paid_amount ?? 0) > 0
+}
+
 // Reads a multi-installment plan's due dates against today to flag missed
 // EMI/two-shot payments: an installment counts as missed once its whole due
 // date has passed with no payment recorded (same-day grace - due today is

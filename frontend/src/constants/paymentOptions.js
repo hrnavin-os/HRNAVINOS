@@ -16,14 +16,26 @@ export const PAYMENT_OPTIONS = [
 export const PAYMENT_OPTION_BY_VALUE = Object.fromEntries(PAYMENT_OPTIONS.map((option) => [option.value, option]))
 
 // Sales call disposition, set by whoever is following up with the lead.
+// Deliberately excludes "Onboarded" and "QUIT": those describe where the
+// lead sits in the pipeline, which Stage already owns (batch_confirmation /
+// lost). Letting a caller set them here too created a second, contradictable
+// source of truth for "is this candidate still alive?".
 export const CALL_REMARK_OPTIONS = [
   { value: 'confirmed_to_pay', label: 'Confirmed to pay', tone: 'emerald' },
-  { value: 'onboarded', label: 'Onboarded', tone: 'green' },
-  { value: 'quit', label: 'QUIT', tone: 'red' },
   { value: 'will_pay_pending', label: 'Will Pay-Pending', tone: 'violet' },
   { value: 'dnp', label: 'DNP', tone: 'amber' },
   { value: 'call_back', label: 'Call Back', tone: 'blue' },
   { value: 'need_to_discuss', label: 'Need to discuss', tone: 'slate' },
 ]
 
-export const CALL_REMARK_BY_VALUE = Object.fromEntries(CALL_REMARK_OPTIONS.map((option) => [option.value, option]))
+// Retired values stay renderable so leads tagged before the split above still
+// display their stored remark - they just can't be picked again. The backend
+// enum keeps them too, so existing documents continue to deserialize.
+const RETIRED_CALL_REMARKS = [
+  { value: 'onboarded', label: 'Onboarded', tone: 'green' },
+  { value: 'quit', label: 'QUIT', tone: 'red' },
+]
+
+export const CALL_REMARK_BY_VALUE = Object.fromEntries(
+  [...CALL_REMARK_OPTIONS, ...RETIRED_CALL_REMARKS].map((option) => [option.value, option]),
+)

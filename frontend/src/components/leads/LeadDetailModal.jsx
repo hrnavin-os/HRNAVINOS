@@ -33,27 +33,32 @@ import { INSTALLMENT_MODE_OPTIONS, PAYMENT_PLAN_LABELS } from '@/constants/insta
 import { leadService } from '@/services/leadService'
 import { foundationFormService } from '@/services/foundationFormService'
 import { PaymentDetailContent } from '@/components/payments/PaymentDetailModal'
+import { hasFirstPayment } from '@/utils/leadPayment'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { formatDateTime, titleCase } from '@/utils/formatters'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { MEDIA_BASE_URL } from '@/constants/config'
 
 // Financial Approval and Batch Confirmation are pipeline gates: each is only
-// reachable from the stage directly before it, and once a lead reaches
-// Batch Confirmation it can't move back (Lost stays reachable as an exit).
-// Mirrors the backend's validation in LeadService._validate_stage_transition.
-function isStageBlocked(currentStatus, targetStatus) {
-  if (currentStatus === targetStatus) return false
-  if (currentStatus === 'batch_confirmation') return targetStatus !== 'lost'
-  if (targetStatus === 'batch_confirmation') return currentStatus !== 'financial_approval'
-  if (targetStatus === 'financial_approval') return currentStatus !== 'pre_screening'
-  return false
-}
-
-function stageBlockedReason(targetStatus) {
-  if (targetStatus === 'batch_confirmation') return 'Move through Financial Approval first'
-  if (targetStatus === 'financial_approval') return 'Complete Follow up call first'
-  return "A lead in Batch Confirmation can't move back to an earlier stage"
+// reachable from the stage directly before it, Financial Approval also needs
+// a first payment on record, and once a lead reaches Batch Confirmation it
+// can't move back (Lost stays reachable as an exit). Mirrors the backend's
+// LeadService._validate_stage_transition so a blocked button explains itself
+// up front instead of failing the request after the click.
+// Returns the reason a move is blocked, or null when it's allowed.
+function stageBlockReason(lead, targetStatus) {
+  if (lead.status === targetStatus) return null
+  if (lead.status === 'batch_confirmation') {
+    return targetStatus === 'lost' ? null : "A lead in Batch Confirmation can't move back to an earlier stage"
+  }
+  if (targetStatus === 'batch_confirmation') {
+    return lead.status === 'financial_approval' ? null : 'Move through Financial Approval first'
+  }
+  if (targetStatus === 'financial_approval') {
+    if (lead.status !== 'pre_screening') return 'Complete Follow up call first'
+    if (!hasFirstPayment(lead)) return 'Record the first payment before moving to Financial Approval'
+  }
+  return null
 }
 
 const STAGE_BUTTON_TONES = {
@@ -507,14 +512,14 @@ function OverviewTab({
           {LEAD_STAGES.map((stage) => {
             const isActive = lead.status === stage.value
             const tones = STAGE_BUTTON_TONES[stage.tone] ?? STAGE_BUTTON_TONES.slate
-            const blockedByFlow = isStageBlocked(lead.status, stage.value)
+            const blockReason = stageBlockReason(lead, stage.value)
             return (
               <button
                 key={stage.value}
                 type="button"
                 onClick={() => onSelectStage(stage.value)}
-                disabled={isSaving || blockedByFlow}
-                title={blockedByFlow ? stageBlockedReason(stage.value) : undefined}
+                disabled={isSaving || Boolean(blockReason)}
+                title={blockReason ?? undefined}
                 className={`inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md border px-2 py-1.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                   isActive ? tones.active : tones.inactive
                 }`}

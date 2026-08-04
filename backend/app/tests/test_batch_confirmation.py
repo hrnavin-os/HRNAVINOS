@@ -54,7 +54,12 @@ async def _make_ready_lead(client, auth_headers, *, name, phone, email, paid=Tru
     Financial Approval and Batch Confirmation are gates - each can only be
     entered from the stage directly before it (see
     LeadService._validate_stage_transition), so this has to step through
-    rather than jump straight to the end.
+    rather than jump straight to the end. Financial Approval additionally
+    requires a first payment on record, hence the amount recorded before it.
+
+    `paid=False` still pays to get through that gate, then zeroes the amount
+    again, leaving a lead parked at batch_confirmation with nothing cleared -
+    which is what the `fees_cleared` readiness check is meant to catch.
     """
     create = await client.post(
         "/api/v1/leads",
@@ -64,15 +69,18 @@ async def _make_ready_lead(client, auth_headers, *, name, phone, email, paid=Tru
     assert create.status_code == 201, create.text
     lead_id = create.json()["id"]
 
-    for stage in ("pre_screening", "financial_approval"):
-        step = await client.put(f"/api/v1/leads/{lead_id}", headers=auth_headers, json={"status": stage})
-        assert step.status_code == 200, step.text
+    steps = [
+        {"status": "pre_screening", "paid_amount": "50000"},
+        {"status": "financial_approval"},
+        {"status": "batch_confirmation"},
+    ]
+    for step in steps:
+        response = await client.put(f"/api/v1/leads/{lead_id}", headers=auth_headers, json=step)
+        assert response.status_code == 200, response.text
 
-    update = {"status": "batch_confirmation"}
-    if paid:
-        update["paid_amount"] = "50000"
-    response = await client.put(f"/api/v1/leads/{lead_id}", headers=auth_headers, json=update)
-    assert response.status_code == 200, response.text
+    if not paid:
+        response = await client.put(f"/api/v1/leads/{lead_id}", headers=auth_headers, json={"paid_amount": "0"})
+        assert response.status_code == 200, response.text
     return lead_id
 
 

@@ -14,13 +14,14 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
+import { Toast } from '@/components/ui/Toast'
 import { DataTable } from '@/components/ui/DataTable'
 import { Pagination } from '@/components/ui/Pagination'
 import { ResourceForm } from '@/components/resource/ResourceForm'
 import { LeadSectionStageStats, LeadSectionStats } from '@/components/leads/LeadSectionStats'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { LeadDetailModal } from '@/components/leads/LeadDetailModal'
-import { PAYMENT_OPTIONS, CALL_REMARK_OPTIONS } from '@/constants/paymentOptions'
+import { PAYMENT_OPTIONS, PAYMENT_OPTION_BY_VALUE, CALL_REMARK_OPTIONS, CALL_REMARK_BY_VALUE } from '@/constants/paymentOptions'
 
 // Anchors a portaled popup under its trigger, clamped so it never runs off
 // the right edge of the viewport (the table's own rightmost columns - View,
@@ -56,33 +57,54 @@ const STAGE_CELL_STYLES = {
   lost: 'border-orange-300 bg-orange-100 text-orange-700',
 }
 
-const createFields = [
-  { name: 'name', label: 'Full Name', placeholder: 'Full Name', required: true },
-  { name: 'phone', label: 'Mobile Number', placeholder: 'Mobile Number', required: true },
-  { name: 'email', label: 'E-Mail ID', placeholder: 'E-Mail ID', type: 'email' },
-  {
-    name: 'course_interest',
-    label: 'Program you are planning to join?',
-    placeholder: 'Program you are planning to join?',
-    required: true,
-  },
-  {
-    name: 'batch_preference',
-    label: 'Batch',
-    placeholder: 'Batch',
-  },
-  {
-    name: 'payment_expected',
-    label: 'When will you make the payment?',
-    placeholder: 'When will you make the payment?',
-  },
-  {
-    name: 'notes',
-    label: 'Any doubts or queries',
-    placeholder: 'Any doubts or queries',
-    type: 'textarea',
-  },
-]
+// Matches Lead.remarks' server-side cap, so an over-long paste is stopped at
+// the textarea instead of coming back as an opaque 422.
+const REMARKS_MAX_LENGTH = 2000
+
+// Section is required for anyone who can choose one: a lead created without
+// it lands outside every A/B/C tab and is invisible to Section Admins, so it
+// would silently never get worked. Section Admins don't get the field at all
+// - the server pins new leads to their own section regardless of what's sent.
+function buildCreateFields({ sectionOptions, isSectionScoped }) {
+  return [
+    { name: 'name', label: 'Full Name', placeholder: 'Full Name', required: true },
+    { name: 'phone', label: 'Mobile Number', placeholder: 'Mobile Number', required: true },
+    { name: 'email', label: 'E-Mail ID', placeholder: 'E-Mail ID', type: 'email' },
+    {
+      name: 'course_interest',
+      label: 'Program you are planning to join?',
+      placeholder: 'Program you are planning to join?',
+      required: true,
+    },
+    ...(isSectionScoped
+      ? []
+      : [
+          {
+            name: 'section',
+            label: 'Section',
+            type: 'select',
+            required: true,
+            options: sectionOptions.map((section) => ({ value: section.code, label: section.label })),
+          },
+        ]),
+    {
+      name: 'batch_preference',
+      label: 'Batch',
+      placeholder: 'Batch',
+    },
+    {
+      name: 'payment_expected',
+      label: 'When will you make the payment?',
+      placeholder: 'When will you make the payment?',
+    },
+    {
+      name: 'notes',
+      label: 'Any doubts or queries',
+      placeholder: 'Any doubts or queries',
+      type: 'textarea',
+    },
+  ]
+}
 
 // Shows just the first 6 characters + "…" so a long query doesn't blow out
 // the row height; hovering reveals the full text in a floating popup.
@@ -132,15 +154,21 @@ function TruncatedText({ text }) {
 // student's own submitted text). Shows as a pen icon (filled once a
 // remark exists) rather than a persistent text box; clicking it opens a
 // small popover to type into, submitted with the tick button.
-function RemarksCell({ lead }) {
+function RemarksCell({ lead, onError }) {
   const queryClient = useQueryClient()
   const buttonRef = useRef(null)
   const [popupPosition, setPopupPosition] = useState(null)
   const [value, setValue] = useState(lead.remarks ?? '')
 
+  // Closes only once the save lands, so a failed request leaves the popup
+  // open with the typed text intact to retry rather than silently losing it.
   const mutation = useMutation({
     mutationFn: (remarks) => leadService.update(lead.id, { remarks }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['leads'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      setPopupPosition(null)
+    },
+    onError: (error) => onError(`Couldn't save remarks for ${lead.name}: ${getApiErrorMessage(error)}`),
   })
 
   function open(event) {
@@ -157,7 +185,6 @@ function RemarksCell({ lead }) {
   function submit(event) {
     event.stopPropagation()
     mutation.mutate(value)
-    close()
   }
 
   return (
@@ -183,17 +210,22 @@ function RemarksCell({ lead }) {
               <textarea
                 autoFocus
                 rows={3}
+                maxLength={REMARKS_MAX_LENGTH}
                 value={value}
                 onChange={(event) => setValue(event.target.value)}
                 placeholder="Add remarks…"
                 className="w-full resize-none rounded-md border border-slate-200 px-2 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
-              <div className="mt-2 flex justify-end">
+              <div className="mt-2 flex items-center justify-between">
+                <span className="text-xs text-slate-400">
+                  {value.length}/{REMARKS_MAX_LENGTH}
+                </span>
                 <button
                   type="button"
                   onClick={submit}
+                  disabled={mutation.isPending}
                   aria-label="Save remarks"
-                  className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-600 text-white hover:bg-brand-700"
+                  className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50"
                 >
                   <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
                 </button>
@@ -211,15 +243,21 @@ function RemarksCell({ lead }) {
 // menu of every option, each previewed as its own colored Badge, matching
 // the Google Sheets dropdown this replaces. Used for both Payment Option
 // and Payment Call Remarks, which only differ by field name and options.
-function SelectBadgeCell({ lead, field, options, placeholder }) {
+//
+// `displayByValue` is looked up before `options` so a value that's been
+// retired from the picker still renders its own label instead of falling
+// back to the "Select…" placeholder, which would read as empty data.
+function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, onError }) {
   const queryClient = useQueryClient()
   const buttonRef = useRef(null)
   const [menuPosition, setMenuPosition] = useState(null)
-  const current = options.find((option) => option.value === lead[field])
+  const stored = lead[field]
+  const current = displayByValue?.[stored] ?? options.find((option) => option.value === stored)
 
   const mutation = useMutation({
     mutationFn: (value) => leadService.update(lead.id, { [field]: value }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['leads'] }),
+    onError: (error) => onError(`Couldn't update ${lead.name}: ${getApiErrorMessage(error)}`),
   })
 
   function toggle(event) {
@@ -474,6 +512,9 @@ export function LeadsPage() {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [viewingLead, setViewingLead] = useState(null)
+  // Inline cell edits have no form to hang an error on, so failures surface
+  // here instead of the cell silently reverting as if nothing happened.
+  const [editError, setEditError] = useState(null)
   const [sectionFilter, setSectionFilter] = useState('')
   const [courseFilter, setCourseFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -583,7 +624,15 @@ export function LeadsPage() {
       header: 'Payment Option',
       align: 'center',
       render: (row) => (
-        <SelectBadgeCell key={row.id} lead={row} field="payment_option" options={PAYMENT_OPTIONS} placeholder="Select…" />
+        <SelectBadgeCell
+          key={row.id}
+          lead={row}
+          field="payment_option"
+          options={PAYMENT_OPTIONS}
+          displayByValue={PAYMENT_OPTION_BY_VALUE}
+          placeholder="Select…"
+          onError={setEditError}
+        />
       ),
     },
     {
@@ -591,7 +640,15 @@ export function LeadsPage() {
       header: 'Payment Remarks',
       align: 'center',
       render: (row) => (
-        <SelectBadgeCell key={row.id} lead={row} field="payment_call_remarks" options={CALL_REMARK_OPTIONS} placeholder="Select…" />
+        <SelectBadgeCell
+          key={row.id}
+          lead={row}
+          field="payment_call_remarks"
+          options={CALL_REMARK_OPTIONS}
+          displayByValue={CALL_REMARK_BY_VALUE}
+          placeholder="Select…"
+          onError={setEditError}
+        />
       ),
     },
     {
@@ -613,7 +670,7 @@ export function LeadsPage() {
       key: 'remarks',
       header: 'Remarks',
       align: 'center',
-      render: (row) => <RemarksCell key={row.id} lead={row} />,
+      render: (row) => <RemarksCell key={row.id} lead={row} onError={setEditError} />,
     },
     {
       key: 'view',
@@ -736,7 +793,7 @@ export function LeadsPage() {
       {isCreateOpen && (
         <Modal title="New Lead" isOpen onClose={() => setIsCreateOpen(false)}>
           <ResourceForm
-            fields={createFields}
+            fields={buildCreateFields({ sectionOptions, isSectionScoped: Boolean(scopedSection) })}
             onSubmit={(values) => createMutation.mutateAsync(values)}
             onCancel={() => setIsCreateOpen(false)}
             submitError={createMutation.error ? getApiErrorMessage(createMutation.error) : null}
@@ -745,6 +802,8 @@ export function LeadsPage() {
       )}
 
       {viewingLead && <LeadDetailModal lead={viewingLead} onClose={() => setViewingLead(null)} />}
+
+      <Toast message={editError} onDismiss={() => setEditError(null)} />
     </div>
   )
 }
