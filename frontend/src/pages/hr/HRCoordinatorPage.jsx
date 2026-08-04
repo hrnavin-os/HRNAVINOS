@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Link2, Search, XCircle } from 'lucide-react'
 import { batchConfirmationService } from '@/services/batchConfirmationService'
 import { getApiErrorMessage } from '@/services/apiClient'
@@ -8,16 +8,17 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { Toast } from '@/components/ui/Toast'
+import { StatCard } from '@/components/ui/StatCard'
 import { DataTable } from '@/components/ui/DataTable'
 import { formatDate } from '@/utils/formatters'
 
 const QUERY_KEY = 'batch-confirmation'
 
 const TABS = [
-  { key: 'approved', label: 'Approved by Finance' },
-  { key: 'pending_hr', label: 'Pending HR' },
-  { key: 'group_assigned', label: 'Group Assigned' },
-  { key: 'lost', label: 'Lost Students' },
+  { key: 'approved', label: 'Approved by Finance', tone: 'brand' },
+  { key: 'pending_hr', label: 'Pending HR', tone: 'amber' },
+  { key: 'group_assigned', label: 'Group Assigned', tone: 'emerald' },
+  { key: 'lost', label: 'Lost Students', tone: 'red' },
 ]
 
 const EMPTY_MESSAGE = {
@@ -75,10 +76,17 @@ export function HRCoordinatorPage() {
   // student actually joined - the open itself proves nothing.
   const [confirming, setConfirming] = useState(null)
 
-  const studentsQuery = useQuery({
-    queryKey: [QUERY_KEY, 'students', tab],
-    queryFn: () => batchConfirmationService.hrStudents(tab),
+  // All four tabs are fetched, not just the active one - the cards show a
+  // count, so every tab's total has to be known up front. Switching tabs is
+  // then instant, since the data is already in cache.
+  const tabQueries = useQueries({
+    queries: TABS.map((item) => ({
+      queryKey: [QUERY_KEY, 'students', item.key],
+      queryFn: () => batchConfirmationService.hrStudents(item.key),
+    })),
   })
+  const activeIndex = TABS.findIndex((item) => item.key === tab)
+  const studentsQuery = tabQueries[activeIndex]
   const linksQuery = useQuery({ queryKey: ['whatsapp-links'], queryFn: batchConfirmationService.whatsappLinks })
 
   const assignMutation = useMutation({
@@ -215,23 +223,19 @@ export function HRCoordinatorPage() {
         </p>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-1 border-b border-slate-200">
-        {TABS.map((item) => (
-          <button
+      <div className="mb-4 flex flex-wrap gap-3">
+        {TABS.map((item, index) => (
+          <StatCard
             key={item.key}
-            type="button"
+            label={item.label}
+            value={tabQueries[index].data?.length ?? 0}
+            toneName={item.tone}
+            isActive={tab === item.key}
             onClick={() => {
               setTab(item.key)
               setSearch('')
             }}
-            className={`px-3 pb-2 text-sm font-semibold transition-colors ${
-              tab === item.key
-                ? 'border-b-2 border-brand-600 text-brand-600'
-                : 'border-b-2 border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            {item.label}
-          </button>
+          />
         ))}
       </div>
 
