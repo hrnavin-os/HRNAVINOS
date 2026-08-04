@@ -88,7 +88,7 @@ function StatCard({ label, value, toneName, isActive, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className={`w-40 shrink-0 rounded-xl border p-4 text-center shadow-sm transition-colors ${isActive ? tone.active : tone.inactive}`}
+      className={`flex-1 rounded-xl border p-4 text-center shadow-sm transition-colors ${isActive ? tone.active : tone.inactive}`}
     >
       <p className={`text-sm font-medium ${isActive ? tone.activeLabel : tone.inactiveLabel}`}>{label}</p>
       <p className={`mt-1 text-2xl font-bold ${isActive ? tone.activeText : tone.inactiveText}`}>{value}</p>
@@ -98,13 +98,10 @@ function StatCard({ label, value, toneName, isActive, onClick }) {
 
 // Top-of-board stat cards: "All Leads" + one per Form Collection section
 // (open-ended - reads live from config, same as the Section column filter).
-// Each card doubles as a quick filter into that section. A single scrollable
-// row rather than flex-wrap, so an open-ended number of sections/stages
-// never wraps to a cramped second line - it scrolls horizontally instead,
-// matching the table beneath it.
+// Each card doubles as a quick filter into that section.
 export function LeadSectionStats({ total, sections, bySection, activeSection, onSelect }) {
   return (
-    <div className="mb-4 flex gap-3 overflow-x-auto pb-1">
+    <div className="mb-4 flex flex-wrap gap-3">
       <StatCard label="All Leads" value={total} toneName="brand" isActive={activeSection === ''} onClick={() => onSelect('')} />
       {sections.map((section, index) => (
         <StatCard
@@ -125,7 +122,7 @@ export function LeadSectionStats({ total, sections, bySection, activeSection, on
 // at the top level - just scoped to the current section.
 export function LeadSectionStageStats({ total, stages, byStatus, activeStage, onSelect }) {
   return (
-    <div className="mb-4 flex gap-3 overflow-x-auto pb-1">
+    <div className="mb-4 flex flex-wrap gap-3">
       <StatCard label="All Leads" value={total} toneName="brand" isActive={activeStage === ''} onClick={() => onSelect('')} />
       {stages.map((stage) => (
         <StatCard
