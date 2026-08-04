@@ -178,7 +178,11 @@ function RemarksCell({ lead, onError }) {
     setPopupPosition(popupPositionFor(rect, 288))
   }
 
-  function close() {
+  // React routes events from a portal up the *component* tree, not the DOM
+  // tree, so a click on this backdrop still reaches whatever the table row
+  // has bound unless it's stopped here. Dismissing should only dismiss.
+  function close(event) {
+    event?.stopPropagation()
     setPopupPosition(null)
   }
 
@@ -270,7 +274,10 @@ function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, on
     setMenuPosition(popupPositionFor(rect, 256))
   }
 
-  function close() {
+  // See RemarksCell.close - portal clicks bubble through the component tree,
+  // so the backdrop has to stop the event from reaching the row behind it.
+  function close(event) {
+    event?.stopPropagation()
     setMenuPosition(null)
   }
 
@@ -293,6 +300,7 @@ function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, on
             <div className="fixed inset-0 z-40" onClick={close} />
             <div
               style={{ top: menuPosition.top, left: menuPosition.left }}
+              onClick={(event) => event.stopPropagation()}
               className="fixed z-50 max-h-72 w-64 overflow-y-auto rounded-md border border-slate-200 bg-white p-1.5 shadow-lg"
             >
               {options.map((option) => (
@@ -786,7 +794,11 @@ export function LeadsPage() {
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-        <DataTable columns={columns} rows={items} isLoading={isLoading} error={error} onRowClick={(row) => setViewingLead(row)} />
+        {/* No onRowClick: the row carries inline editors (payment selects,
+            remarks) whose dismiss-backdrops sit in portals, and a portal
+            click still reaches the row through React's component tree. The
+            View column's eye icon is the one deliberate way in. */}
+        <DataTable columns={columns} rows={items} isLoading={isLoading} error={error} />
         <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
       </div>
 
