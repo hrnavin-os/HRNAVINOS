@@ -303,6 +303,21 @@ function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, on
               onClick={(event) => event.stopPropagation()}
               className="fixed z-50 max-h-72 w-64 overflow-y-auto rounded-md border border-slate-200 bg-white p-1.5 shadow-lg"
             >
+              {/* Clears the field back to unset - without it a value picked
+                  by mistake could never be taken off the lead again. */}
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  mutation.mutate(null)
+                  close()
+                }}
+                className={`block w-full rounded px-2 py-1.5 text-left text-sm ${
+                  stored ? 'text-slate-500 hover:bg-slate-50' : 'bg-slate-50 font-medium text-slate-600'
+                }`}
+              >
+                {placeholder}
+              </button>
               {options.map((option) => (
                 <button
                   key={option.value}
@@ -312,7 +327,9 @@ function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, on
                     mutation.mutate(option.value)
                     close()
                   }}
-                  className="block w-full rounded px-1 py-1 text-left hover:bg-slate-50"
+                  className={`block w-full rounded px-1 py-1 text-left hover:bg-slate-50 ${
+                    stored === option.value ? 'bg-slate-50' : ''
+                  }`}
                 >
                   <Badge tone={option.tone}>{option.label}</Badge>
                 </button>
