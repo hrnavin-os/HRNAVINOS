@@ -280,8 +280,8 @@ function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, on
         ref={buttonRef}
         type="button"
         onClick={toggle}
-        className={`flex items-center gap-1.5 rounded-md px-1 py-1 hover:bg-slate-50 ${
-          current ? '' : 'w-full min-w-36 justify-between border border-slate-200 bg-slate-50 px-2.5 py-1.5 hover:bg-slate-100'
+        className={`flex items-center gap-1.5 rounded-full px-1 py-1 hover:bg-slate-50 ${
+          current ? '' : 'w-full min-w-36 justify-between border border-slate-200 bg-slate-50 px-3 py-1.5 hover:bg-slate-100'
         }`}
       >
         {current ? <Badge tone={current.tone}>{current.label}</Badge> : <span className="text-sm text-slate-400">{placeholder}</span>}
