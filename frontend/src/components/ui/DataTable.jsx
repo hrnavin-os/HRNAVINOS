@@ -11,7 +11,7 @@ const ALIGN = { left: 'text-left', center: 'text-center', right: 'text-right' }
 // doesn't take the whole table with it.
 export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No records found.', onRowClick }) {
   return (
-    <div className="w-full overflow-x-auto">
+    <div className="table-scroll w-full overflow-x-auto">
       <table className="min-w-full divide-y divide-slate-200">
         <thead className="bg-slate-50">
           <tr>
