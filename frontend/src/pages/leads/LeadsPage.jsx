@@ -9,7 +9,7 @@ import { foundationFormConfigService } from '@/services/foundationFormConfigServ
 import { getApiErrorMessage } from '@/services/apiClient'
 import { LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
 import { PERMISSIONS } from '@/constants/permissions'
-import { titleCase } from '@/utils/formatters'
+import { formatDate, titleCase } from '@/utils/formatters'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -21,7 +21,8 @@ import { ResourceForm } from '@/components/resource/ResourceForm'
 import { LeadSectionStageStats, LeadSectionStats } from '@/components/leads/LeadSectionStats'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { LeadDetailModal } from '@/components/leads/LeadDetailModal'
-import { PAYMENT_OPTIONS, PAYMENT_OPTION_BY_VALUE, CALL_REMARK_OPTIONS, CALL_REMARK_BY_VALUE } from '@/constants/paymentOptions'
+import { PAYMENT_PLAN_TONES, CALL_REMARK_OPTIONS, CALL_REMARK_BY_VALUE } from '@/constants/paymentOptions'
+import { PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
 
 // Anchors a portaled popup under its trigger, clamped so it never runs off
 // the right edge of the viewport (the table's own rightmost columns - View,
@@ -644,21 +645,23 @@ export function LeadsPage() {
             render: (row) => (row.section ? <Badge tone="blue">{sectionByCode[row.section]?.label ?? row.section}</Badge> : '—'),
           },
         ]),
+    { key: 'date', header: 'Date', align: 'center', render: (row) => formatDate(row.created_at) },
+    // Read-only on purpose: changing a plan rebuilds its installments from
+    // the pricing table (LeadService.assign_plan), which would discard any
+    // amounts, proofs and dates already collected against the old one. The
+    // Lead Detail modal owns assigning/changing it, where that's explicit.
     {
-      key: 'payment_option',
-      header: 'Payment Option',
+      key: 'payment_plan',
+      header: 'Payment Method',
       align: 'center',
-      render: (row) => (
-        <SelectBadgeCell
-          key={row.id}
-          lead={row}
-          field="payment_option"
-          options={PAYMENT_OPTIONS}
-          displayByValue={PAYMENT_OPTION_BY_VALUE}
-          placeholder="Select…"
-          onError={setEditError}
-        />
-      ),
+      render: (row) =>
+        row.payment_plan ? (
+          <Badge tone={PAYMENT_PLAN_TONES[row.payment_plan] ?? 'slate'}>
+            {PAYMENT_PLAN_LABELS[row.payment_plan] ?? titleCase(row.payment_plan)}
+          </Badge>
+        ) : (
+          <span className="text-sm text-slate-400">—</span>
+        ),
     },
     {
       key: 'payment_call_remarks',
