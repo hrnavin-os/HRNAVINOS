@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { ChevronDown, GraduationCap } from 'lucide-react'
-import { NAV_ITEMS } from '@/constants/navigation'
+import { getVisibleNavItems } from '@/constants/navigation'
 import { useAuth } from '@/hooks/useAuth'
 
 const LINK_BASE = `group flex items-center gap-3 rounded-md border-l-2 py-2 text-sm font-medium transition-colors`
@@ -84,15 +84,7 @@ function NavGroup({ item }) {
 
 export function Sidebar() {
   const { user, hasPermission } = useAuth()
-
-  const isVisible = (item) =>
-    (!item.permission || hasPermission(item.permission)) &&
-    !item.hiddenForRoles?.includes(user?.role) &&
-    !(item.hiddenForScopedUsers && user?.scoped_section)
-
-  const items = NAV_ITEMS.map((item) =>
-    item.children ? { ...item, children: item.children.filter(isVisible) } : item,
-  ).filter((item) => (item.children ? item.children.length > 0 : isVisible(item)))
+  const items = getVisibleNavItems({ user, hasPermission })
 
   return (
     <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white md:flex md:flex-col">

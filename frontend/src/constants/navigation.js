@@ -28,7 +28,7 @@ export const NAV_ITEMS = [
     permission: null,
     icon: LayoutDashboard,
     group: null,
-    hiddenForRoles: ['Admin', 'Finance'],
+    hiddenForRoles: ['Admin', 'Finance', 'HR Coordinator'],
     hiddenForScopedUsers: true,
   },
 
@@ -84,3 +84,30 @@ export const NAV_ITEMS = [
 // Use this for path lookups (e.g. the Topbar's page title) - walking NAV_ITEMS
 // directly would miss anything nested under a parent.
 export const NAV_LEAF_ITEMS = NAV_ITEMS.flatMap((item) => item.children ?? [item])
+
+// One visibility rule, shared by the sidebar and by wherever a user gets sent
+// on landing. Keeping these on the same source of truth is what stops a role
+// being routed to a page its own sidebar refuses to show.
+export function isNavItemVisible(item, { user, hasPermission }) {
+  return (
+    (!item.permission || hasPermission(item.permission)) &&
+    !item.hiddenForRoles?.includes(user?.role) &&
+    !(item.hiddenForScopedUsers && user?.scoped_section)
+  )
+}
+
+export function getVisibleNavItems(context) {
+  return NAV_ITEMS.map((item) =>
+    item.children ? { ...item, children: item.children.filter((child) => isNavItemVisible(child, context)) } : item,
+  ).filter((item) => (item.children ? item.children.length > 0 : isNavItemVisible(item, context)))
+}
+
+// The first page this user can actually open - their home. Excludes the
+// Dashboard's own "/" so a role that can't see the Dashboard never gets
+// redirected back to the route it was just sent away from.
+export function getLandingPath(context) {
+  const firstOpenable = getVisibleNavItems(context)
+    .flatMap((item) => item.children ?? [item])
+    .find((item) => item.to && item.to !== '/')
+  return firstOpenable?.to ?? null
+}

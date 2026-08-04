@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { getApiErrorMessage } from '@/services/apiClient'
@@ -11,7 +11,6 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage'
 export function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
-  const location = useLocation()
   const [loginError, setLoginError] = useState(null)
   const [showPassword, setShowPassword] = useState(false)
 
@@ -25,8 +24,12 @@ export function LoginPage() {
     setLoginError(null)
     try {
       await login(values.email, values.password)
-      const redirectTo = location.state?.from?.pathname ?? '/'
-      navigate(redirectTo, { replace: true })
+      // Always land on "/" and let HomeRoute pick the right page for this
+      // role. Returning to the URL that triggered the login sent whoever
+      // logged in next to a page the *previous* session was on - a stale or
+      // bookmarked address the new user often had no permission for, which
+      // surfaced as a 403 immediately after a successful sign-in.
+      navigate('/', { replace: true })
     } catch (error) {
       setLoginError(getApiErrorMessage(error))
     }

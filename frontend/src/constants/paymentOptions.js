@@ -25,7 +25,7 @@ export const CALL_REMARK_OPTIONS = [
   { value: 'dnp', label: 'DNP', tone: 'amber' },
   { value: 'call_back', label: 'Call Back', tone: 'blue' },
   { value: 'need_to_discuss', label: 'Need to discuss', tone: 'slate' },
-  { value: 'quit', label: 'QUIT', tone: 'red' },
+  { value: 'quit', label: 'Quit', tone: 'red' },
 ]
 
 // Retired values stay renderable so leads tagged before this list changed

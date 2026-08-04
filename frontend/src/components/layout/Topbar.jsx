@@ -4,9 +4,13 @@ import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/Button'
 import { NAV_LEAF_ITEMS } from '@/constants/navigation'
 
+// Longest matching path wins: "/leads/form-collection" also starts with
+// "/leads", so a plain find() would title the Form Collection page "Lead
+// Dashboard" purely because that entry is listed first.
 function useCurrentPageTitle() {
   const { pathname } = useLocation()
-  const match = NAV_LEAF_ITEMS.find((item) => (item.to === '/' ? pathname === '/' : pathname.startsWith(item.to)))
+  const match = NAV_LEAF_ITEMS.filter((item) => (item.to === '/' ? pathname === '/' : pathname.startsWith(item.to)))
+    .sort((a, b) => b.to.length - a.to.length)[0]
   return match?.label ?? 'HRNAVINOS ERP'
 }
 
