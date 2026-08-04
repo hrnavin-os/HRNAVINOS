@@ -77,6 +77,10 @@ class LeadService:
             remarks=lead.remarks,
             payment_option=lead.payment_option,
             payment_call_remarks=lead.payment_call_remarks,
+            batch_number=lead.batch_number,
+            group_assigned_at=lead.group_assigned_at,
+            lost_reason=lead.lost_reason,
+            lost_at=lead.lost_at,
             installments=[
                 PaymentInstallmentResponse(
                     label=installment.label,
@@ -250,6 +254,14 @@ class LeadService:
             self._validate_stage_transition(lead, data.status)
         update_data = data.model_dump(exclude_unset=True)
         update_data["updated_by"] = actor_id
+        # Losing a lead has to say why - otherwise the Lost list records that
+        # it happened with no way to tell churn reasons apart afterwards.
+        if data.status == LeadStatus.LOST and lead.status != LeadStatus.LOST:
+            reason = (data.lost_reason or "").strip()
+            if not reason:
+                raise BadRequestError("Give a reason when marking a lead as Lost.")
+            update_data["lost_reason"] = reason
+            update_data["lost_at"] = utcnow()
         if update_data.get("follow_up_at"):
             lead.follow_up_history.insert(
                 0, FollowUpEntry(scheduled_at=update_data["follow_up_at"], created_by=actor_id)
@@ -378,6 +390,10 @@ class LeadService:
         drop the candidate from their active batch-confirmation queue."""
         lead = await self.get(lead_id, scope=scope)
         lead.status = LeadStatus.LOST
+        # This path has its own fixed reason rather than prompting, since the
+        # button that reaches it only appears for exactly this situation.
+        lead.lost_reason = "Non-payment - 2 consecutive missed EMI payments"
+        lead.lost_at = utcnow()
         lead.updated_by = actor_id
         lead.touch(actor_id)
         await lead.save()

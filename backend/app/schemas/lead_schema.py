@@ -46,6 +46,9 @@ class LeadUpdate(BaseModel):
     remarks: str | None = Field(default=None, max_length=2000)
     payment_option: PaymentOption | None = None
     payment_call_remarks: PaymentCallRemark | None = None
+    batch_number: str | None = Field(default=None, max_length=50)
+    # Required by LeadService.update whenever status moves to Lost.
+    lost_reason: str | None = Field(default=None, max_length=500)
 
 
 class LeadAssign(BaseModel):
@@ -99,6 +102,10 @@ class LeadResponse(BaseModel):
     remarks: str | None = None
     payment_option: PaymentOption | None = None
     payment_call_remarks: PaymentCallRemark | None = None
+    batch_number: str | None = None
+    group_assigned_at: datetime | None = None
+    lost_reason: str | None = None
+    lost_at: datetime | None = None
     payment_plan: PaymentPlanOption | None = None
     installments: list[PaymentInstallmentResponse] = []
     created_at: datetime

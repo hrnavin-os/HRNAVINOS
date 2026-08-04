@@ -631,6 +631,8 @@ export function LeadDetailModal({ lead, onClose }) {
   // immediately instead of only after the modal is reopened.
   const [liveLead, setLiveLead] = useState(lead)
   const [savingInstallmentIndex, setSavingInstallmentIndex] = useState(null)
+  const [pendingLostStage, setPendingLostStage] = useState(false)
+  const [lostReason, setLostReason] = useState('')
 
   function invalidateLeadQueries() {
     queryClient.invalidateQueries({ queryKey: ['leads'] })
@@ -639,12 +641,23 @@ export function LeadDetailModal({ lead, onClose }) {
   }
 
   const stageMutation = useMutation({
-    mutationFn: (newStatus) => leadService.update(lead.id, { status: newStatus }),
+    mutationFn: ({ status, lostReason }) =>
+      leadService.update(lead.id, lostReason ? { status, lost_reason: lostReason } : { status }),
     onSuccess: () => {
       invalidateLeadQueries()
       onClose()
     },
   })
+
+  // Moving to Lost needs a reason (the server rejects it without one), so
+  // that stage alone routes through a prompt instead of firing immediately.
+  function selectStage(newStatus) {
+    if (newStatus === 'lost') {
+      setPendingLostStage(true)
+      return
+    }
+    stageMutation.mutate({ status: newStatus })
+  }
 
   const followUpMutation = useMutation({
     mutationFn: () =>
@@ -721,7 +734,7 @@ export function LeadDetailModal({ lead, onClose }) {
         {activeTab === 'overview' && (
           <OverviewTab
             lead={liveLead}
-            onSelectStage={(newStatus) => stageMutation.mutate(newStatus)}
+            onSelectStage={selectStage}
             isSaving={stageMutation.isPending}
             onAssignPlan={(values) => planMutation.mutate(values)}
             isAssigningPlan={planMutation.isPending}
@@ -742,6 +755,36 @@ export function LeadDetailModal({ lead, onClose }) {
           />
         )}
         {activeTab === 'timeline' && <TimelineTab leadId={lead.id} />}
+
+        {pendingLostStage && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+            <p className="mb-2 text-sm font-semibold text-red-700">Why is this lead being marked Lost?</p>
+            <Input
+              autoFocus
+              placeholder="e.g. Joined elsewhere, not interested, unreachable…"
+              value={lostReason}
+              onChange={(event) => setLostReason(event.target.value)}
+            />
+            <div className="mt-3 flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setPendingLostStage(false)
+                  setLostReason('')
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                disabled={!lostReason.trim() || stageMutation.isPending}
+                onClick={() => stageMutation.mutate({ status: 'lost', lostReason: lostReason.trim() })}
+              >
+                {stageMutation.isPending ? 'Saving…' : 'Mark Lost'}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </Modal>
   )

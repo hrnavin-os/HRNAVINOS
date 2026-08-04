@@ -11,10 +11,12 @@ from app.schemas.batch_confirmation_schema import (
     AllocateRequest,
     AllocationRowResponse,
     BatchFormOptionsResponse,
+    BatchNumberRequest,
     BatchReadinessDetailResponse,
     BatchReadinessResponse,
     ConfirmBatchResponse,
     CoordinatorSummaryResponse,
+    HRStudentResponse,
     MarkRequest,
     PendingLeadResponse,
     WithdrawRequest,
@@ -148,3 +150,49 @@ async def update_whatsapp_link(
     return WhatsAppGroupLinkResponse(
         code=section.code, label=section.label, whatsapp_group_url=section.whatsapp_group_url
     )
+
+
+def _to_hr_student(lead) -> HRStudentResponse:
+    return HRStudentResponse(
+        id=lead.id,
+        name=lead.name,
+        email=lead.email,
+        phone=lead.phone,
+        course_interest=lead.course_interest,
+        section=lead.section,
+        batch_number=lead.batch_number,
+        group_assigned_at=lead.group_assigned_at,
+        lost_reason=lead.lost_reason,
+        lost_at=lead.lost_at,
+        created_at=lead.created_at,
+    )
+
+
+@router.get("/students", response_model=list[HRStudentResponse])
+async def list_hr_students(
+    tab: str = Query(default="approved", pattern="^(approved|pending_hr|group_assigned|lost)$"),
+    actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
+) -> list[HRStudentResponse]:
+    leads = await BatchConfirmationService().list_hr_students(tab)
+    return [_to_hr_student(lead) for lead in leads]
+
+
+@router.put("/students/{lead_id}/batch-number", response_model=HRStudentResponse)
+async def set_batch_number(
+    lead_id: uuid.UUID,
+    payload: BatchNumberRequest,
+    actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_ALLOCATE)),
+) -> HRStudentResponse:
+    lead = await BatchConfirmationService().set_batch_number(
+        lead_id, batch_number=payload.batch_number, actor_id=actor.id
+    )
+    return _to_hr_student(lead)
+
+
+@router.post("/students/{lead_id}/group-assigned", response_model=HRStudentResponse)
+async def mark_group_assigned(
+    lead_id: uuid.UUID,
+    actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_ALLOCATE)),
+) -> HRStudentResponse:
+    lead = await BatchConfirmationService().set_group_assigned(lead_id, actor_id=actor.id)
+    return _to_hr_student(lead)

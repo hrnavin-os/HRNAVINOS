@@ -50,6 +50,20 @@ export const batchConfirmationService = {
     const { data } = await apiClient.post(`${BASE}/batches/${batchId}/confirm`)
     return data
   },
+  hrStudents: async (tab) => {
+    const { data } = await apiClient.get(`${BASE}/students`, { params: { tab } })
+    return data
+  },
+  setBatchNumber: async (leadId, batchNumber) => {
+    const { data } = await apiClient.put(`${BASE}/students/${leadId}/batch-number`, {
+      batch_number: batchNumber,
+    })
+    return data
+  },
+  markGroupAssigned: async (leadId) => {
+    const { data } = await apiClient.post(`${BASE}/students/${leadId}/group-assigned`)
+    return data
+  },
   whatsappLinks: async () => {
     const { data } = await apiClient.get(`${BASE}/whatsapp-links`)
     return data

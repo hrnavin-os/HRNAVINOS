@@ -93,6 +93,18 @@ class Lead(BaseDocument):
     # lead's stage or affect allocation.
     hr_marked: bool = Field(default=False)
     hr_marked_at: datetime | None = None
+    # The batch the coordinator writes in by hand (e.g. "27") - free text, and
+    # separate from `batch_preference` (what the student asked for on the form)
+    # and from the Batch documents the allocation flow uses.
+    batch_number: str | None = Field(default=None, max_length=50)
+    # Set once the coordinator confirms the student actually joined their
+    # section's WhatsApp group; doubles as the flag that moves them out of the
+    # "Approved by Finance" queue and into "Group Assigned".
+    group_assigned_at: datetime | None = None
+    # Captured at the moment a lead is moved to Lost, so the Lost list can say
+    # why rather than just that it happened.
+    lost_reason: str | None = Field(default=None, max_length=500)
+    lost_at: datetime | None = None
 
     class Settings:
         name = "leads"

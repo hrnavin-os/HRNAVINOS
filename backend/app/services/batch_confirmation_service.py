@@ -13,7 +13,7 @@ import uuid
 from datetime import date
 
 from app.database.base import utcnow
-from app.exceptions.base import ConflictError, NotFoundError, ValidationAppError
+from app.exceptions.base import BadRequestError, ConflictError, NotFoundError, ValidationAppError
 from app.models.admission import Admission
 from app.models.batch import Batch
 from app.models.batch_allocation import BatchAllocation
@@ -180,6 +180,66 @@ class BatchConfirmationService:
             entity_type="Lead",
             entity_id=str(lead.id),
             changes={"hr_marked": marked},
+        )
+        return lead
+
+    # ---------- HR student tabs ----------
+
+    async def list_hr_students(self, tab: str) -> list[Lead]:
+        """The four HR Coordinator tabs, each a plain query over Lead.
+
+        `pending_hr` is everything Finance has approved but not yet released
+        to the batch stage; `approved` is at the batch stage and still waiting
+        on a WhatsApp group; assigning that group is what moves a lead into
+        `group_assigned`, which is why it filters on the timestamp rather than
+        on stage.
+        """
+        base: dict = {"is_deleted": False, "reviewed": {"$ne": False}}
+        queries = {
+            "pending_hr": {**base, "status": LeadStatus.FINANCIAL_APPROVAL},
+            "approved": {**base, "status": LeadStatus.BATCH_CONFIRMATION, "group_assigned_at": None},
+            "group_assigned": {**base, "group_assigned_at": {"$ne": None}},
+            "lost": {**base, "status": LeadStatus.LOST},
+        }
+        if tab not in queries:
+            raise BadRequestError(f"Unknown tab '{tab}'.")
+        return await Lead.find(queries[tab]).sort("+created_at").to_list()
+
+    async def set_batch_number(
+        self, lead_id: uuid.UUID, *, batch_number: str, actor_id: uuid.UUID | None
+    ) -> Lead:
+        lead = await self.leads.get_by_id(lead_id)
+        if not lead:
+            raise NotFoundError("Lead not found.")
+        value = batch_number.strip() or None
+        await self.leads.update(lead, {"batch_number": value, "updated_by": actor_id})
+        await self.audit.record(
+            user_id=actor_id,
+            action="UPDATE",
+            entity_type="Lead",
+            entity_id=str(lead.id),
+            changes={"batch_number": value},
+        )
+        return lead
+
+    async def set_group_assigned(self, lead_id: uuid.UUID, *, actor_id: uuid.UUID | None) -> Lead:
+        """Records that the student joined their section's WhatsApp group,
+        which is what moves them from 'Approved by Finance' to 'Group
+        Assigned'. Only meaningful once they've reached the batch stage."""
+        lead = await self.leads.get_by_id(lead_id)
+        if not lead:
+            raise NotFoundError("Lead not found.")
+        if lead.status != LeadStatus.BATCH_CONFIRMATION:
+            raise BadRequestError("Only leads at the Batch Confirmation stage can be marked group-assigned.")
+
+        assigned_at = utcnow()
+        await self.leads.update(lead, {"group_assigned_at": assigned_at, "updated_by": actor_id})
+        await self.audit.record(
+            user_id=actor_id,
+            action="UPDATE",
+            entity_type="Lead",
+            entity_id=str(lead.id),
+            changes={"group_assigned_at": assigned_at.isoformat()},
         )
         return lead
 

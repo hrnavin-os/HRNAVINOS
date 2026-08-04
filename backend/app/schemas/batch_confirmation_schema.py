@@ -145,3 +145,25 @@ class CoordinatorSummaryResponse(BaseModel):
     batches_ready_to_confirm: int
     batches_confirmed: int
     students_placed: int
+
+
+class HRStudentResponse(BaseModel):
+    """One row in any of the four HR Coordinator tabs. A single shape across
+    all of them - each tab just renders the subset of columns it cares about,
+    so a student keeps their details as they move between tabs."""
+
+    id: uuid.UUID
+    name: str
+    email: str | None
+    phone: str
+    course_interest: str | None
+    section: str | None
+    batch_number: str | None
+    group_assigned_at: datetime | None
+    lost_reason: str | None
+    lost_at: datetime | None
+    created_at: datetime
+
+
+class BatchNumberRequest(BaseModel):
+    batch_number: str = Field(default="", max_length=50)
