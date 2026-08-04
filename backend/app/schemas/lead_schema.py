@@ -71,6 +71,7 @@ class PaymentInstallmentResponse(BaseModel):
     proof_url: str | None
     scheduled_at: date | None
     paid: bool
+    paid_at: date | None
 
 
 class LeadResponse(BaseModel):

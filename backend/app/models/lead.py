@@ -40,6 +40,8 @@ class PaymentInstallment(BaseModel):
     # actually paid.
     scheduled_at: date | None = None
     paid: bool = False
+    # Set once, the moment `paid` first flips to True - LeadService.update_installment.
+    paid_at: date | None = None
 
 
 class Lead(BaseDocument):

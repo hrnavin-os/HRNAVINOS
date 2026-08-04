@@ -22,6 +22,40 @@ import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { LeadDetailModal } from '@/components/leads/LeadDetailModal'
 import { PAYMENT_OPTIONS, CALL_REMARK_OPTIONS } from '@/constants/paymentOptions'
 
+// Anchors a portaled popup under its trigger, clamped so it never runs off
+// the right edge of the viewport (the table's own rightmost columns - View,
+// Remarks - would otherwise push it past screen bounds).
+function popupPositionFor(rect, popupWidth, gap = 4) {
+  const maxLeft = window.innerWidth - popupWidth - 8
+  return { top: rect.bottom + gap, left: Math.max(8, Math.min(rect.left, maxLeft)) }
+}
+
+// Splits text into lines of at most `n` words each, so a long query wraps
+// predictably instead of running the popup wide.
+function wrapEveryNWords(text, n) {
+  const words = text.split(/\s+/)
+  const lines = []
+  for (let i = 0; i < words.length; i += n) {
+    lines.push(words.slice(i, i + n).join(' '))
+  }
+  return lines
+}
+
+const EXCLUDED_COURSE_OPTIONS = ['HR Recruitment', 'Nothing']
+
+// A brighter, more differentiated palette for this table's Stage column
+// specifically - independent of each stage's shared `tone` name, which the
+// stat cards and the Lead Detail modal's stage-picker buttons key their own
+// (different) color maps off of, so changing it here can't affect them.
+const STAGE_CELL_STYLES = {
+  new_lead: 'border-transparent bg-gradient-to-r from-blue-500 to-blue-600 text-white',
+  rnr: 'border-red-300 bg-red-100 text-red-700',
+  pre_screening: 'border-yellow-300 bg-yellow-100 text-yellow-700',
+  financial_approval: 'border-purple-300 bg-purple-100 text-purple-700',
+  batch_confirmation: 'border-green-300 bg-green-100 text-green-700',
+  lost: 'border-orange-300 bg-orange-100 text-orange-700',
+}
+
 const createFields = [
   { name: 'name', label: 'Full Name', placeholder: 'Full Name', required: true },
   { name: 'phone', label: 'Mobile Number', placeholder: 'Mobile Number', required: true },
@@ -65,7 +99,7 @@ function TruncatedText({ text }) {
 
   function show() {
     const rect = triggerRef.current.getBoundingClientRect()
-    setPopupPosition({ top: rect.bottom + 4, left: rect.left })
+    setPopupPosition(popupPositionFor(rect, 200))
   }
 
   return (
@@ -82,9 +116,11 @@ function TruncatedText({ text }) {
         createPortal(
           <div
             style={{ top: popupPosition.top, left: popupPosition.left }}
-            className="pointer-events-none fixed z-100 w-max max-w-xs rounded-md border border-slate-200 bg-white p-2 text-xs font-normal text-slate-700 shadow-lg"
+            className="pointer-events-none fixed z-100 w-50 rounded-md border border-slate-200 bg-white p-2 text-xs font-normal text-slate-700 shadow-lg"
           >
-            {trimmed}
+            {wrapEveryNWords(trimmed, 4).map((line, index) => (
+              <p key={index}>{line}</p>
+            ))}
           </div>,
           document.body,
         )}
@@ -111,7 +147,7 @@ function RemarksCell({ lead }) {
     event.stopPropagation()
     setValue(lead.remarks ?? '')
     const rect = buttonRef.current.getBoundingClientRect()
-    setPopupPosition({ top: rect.bottom + 4, left: rect.left })
+    setPopupPosition(popupPositionFor(rect, 288))
   }
 
   function close() {
@@ -193,7 +229,7 @@ function SelectBadgeCell({ lead, field, options, placeholder }) {
       return
     }
     const rect = buttonRef.current.getBoundingClientRect()
-    setMenuPosition({ top: rect.bottom + 4, left: rect.left })
+    setMenuPosition(popupPositionFor(rect, 256))
   }
 
   function close() {
@@ -206,7 +242,9 @@ function SelectBadgeCell({ lead, field, options, placeholder }) {
         ref={buttonRef}
         type="button"
         onClick={toggle}
-        className="flex w-full min-w-36 items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 hover:bg-slate-100"
+        className={`flex items-center gap-1.5 rounded-md px-1 py-1 hover:bg-slate-50 ${
+          current ? '' : 'w-full min-w-36 justify-between border border-slate-200 bg-slate-50 px-2.5 py-1.5 hover:bg-slate-100'
+        }`}
       >
         {current ? <Badge tone={current.tone}>{current.label}</Badge> : <span className="text-sm text-slate-400">{placeholder}</span>}
         <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden="true" />
@@ -321,7 +359,7 @@ function FilterDropdown({ label, value, options, onChange }) {
       return
     }
     const rect = buttonRef.current.getBoundingClientRect()
-    setMenuPosition({ top: rect.bottom + 4, left: rect.left })
+    setMenuPosition(popupPositionFor(rect, 260))
   }
 
   function close() {
@@ -349,7 +387,7 @@ function FilterDropdown({ label, value, options, onChange }) {
             <div className="fixed inset-0 z-40" onClick={close} />
             <div
               style={{ top: menuPosition.top, left: menuPosition.left }}
-              className="fixed z-50 max-h-64 w-52 overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+              className="fixed z-50 max-h-64 w-65 overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg"
             >
               <button
                 type="button"
@@ -371,7 +409,7 @@ function FilterDropdown({ label, value, options, onChange }) {
                     onChange(option.value)
                     close()
                   }}
-                  className={`block w-full truncate px-3 py-1.5 text-left text-sm font-normal ${
+                  className={`block w-full px-3 py-1.5 text-left text-sm font-normal ${
                     value === option.value ? 'bg-brand-50 text-brand-700' : 'text-slate-700 hover:bg-slate-50'
                   }`}
                 >
@@ -469,7 +507,11 @@ export function LeadsPage() {
   const sectionByCode = Object.fromEntries(sectionOptions.map((section) => [section.code, section]))
 
   const courseOptionsQuery = useQuery({ queryKey: ['lead-course-options'], queryFn: leadService.getCourseOptions })
-  const courseOptions = courseOptionsQuery.data ?? []
+  // Junk values from test leads created outside the real Foundation Form
+  // programs - not real courses, so they don't belong in the filter list.
+  const courseOptions = (courseOptionsQuery.data ?? []).filter(
+    (course) => !EXCLUDED_COURSE_OPTIONS.includes(course),
+  )
 
   const { items, page, setPage, search, setSearch, isLoading, error, totalPages } = usePaginatedQuery('leads', leadService, {
     section: effectiveSectionFilter || undefined,
@@ -514,6 +556,7 @@ export function LeadsPage() {
     {
       key: 'contact',
       header: 'Contact',
+      align: 'center',
       render: (row) => (
         <div>
           <p className="text-sm text-slate-900">{row.phone}</p>
@@ -521,7 +564,7 @@ export function LeadsPage() {
         </div>
       ),
     },
-    { key: 'course', header: 'Course', render: (row) => row.course_interest ?? '—' },
+    { key: 'course', header: 'Course', align: 'center', render: (row) => row.course_interest ?? '—' },
     // Redundant once a section is already active (every visible row is that
     // section by definition) - only shown in the unscoped "All Sections"
     // view, and never for a Section Admin.
@@ -531,12 +574,14 @@ export function LeadsPage() {
           {
             key: 'section',
             header: 'Section',
+            align: 'center',
             render: (row) => (row.section ? <Badge tone="blue">{sectionByCode[row.section]?.label ?? row.section}</Badge> : '—'),
           },
         ]),
     {
       key: 'payment_option',
       header: 'Payment Option',
+      align: 'center',
       render: (row) => (
         <SelectBadgeCell key={row.id} lead={row} field="payment_option" options={PAYMENT_OPTIONS} placeholder="Select…" />
       ),
@@ -544,6 +589,7 @@ export function LeadsPage() {
     {
       key: 'payment_call_remarks',
       header: 'Payment Remarks',
+      align: 'center',
       render: (row) => (
         <SelectBadgeCell key={row.id} lead={row} field="payment_call_remarks" options={CALL_REMARK_OPTIONS} placeholder="Select…" />
       ),
@@ -551,20 +597,28 @@ export function LeadsPage() {
     {
       key: 'stage',
       header: 'Stage',
+      align: 'center',
       render: (row) => {
         const stage = LEAD_STAGE_BY_VALUE[row.status]
-        return <Badge outline tone={stage?.tone ?? 'slate'}>{stage?.label ?? titleCase(row.status)}</Badge>
+        const style = STAGE_CELL_STYLES[row.status] ?? 'border-slate-300 bg-slate-100 text-slate-700'
+        return (
+          <span className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-medium ${style}`}>
+            {stage?.label ?? titleCase(row.status)}
+          </span>
+        )
       },
     },
-    { key: 'query', header: 'Query', render: (row) => <TruncatedText text={row.notes} /> },
+    { key: 'query', header: 'Query', align: 'center', render: (row) => <TruncatedText text={row.notes} /> },
     {
       key: 'remarks',
       header: 'Remarks',
+      align: 'center',
       render: (row) => <RemarksCell key={row.id} lead={row} />,
     },
     {
       key: 'view',
       header: 'View',
+      align: 'center',
       render: (row) => (
         <button
           type="button"

@@ -6,6 +6,7 @@ from typing import List
 
 from fastapi import UploadFile
 
+from app.database.base import utcnow
 from app.exceptions.base import BadRequestError, ForbiddenError, NotFoundError
 from app.models.enums import InstallmentPaymentMode, LeadSource, LeadStatus, PaymentMethod
 from app.models.lead import FollowUpEntry, Lead
@@ -81,6 +82,7 @@ class LeadService:
                     proof_url=installment.proof_url,
                     scheduled_at=installment.scheduled_at,
                     paid=installment.paid,
+                    paid_at=installment.paid_at,
                 )
                 for installment in lead.installments
             ],
@@ -316,7 +318,10 @@ class LeadService:
             installment.scheduled_at = scheduled_at
         if file is not None:
             installment.proof_url = await self.storage.save_image(file, subdir=f"leads/{lead_id}/installments")
+        was_paid = installment.paid
         installment.paid = bool(installment.mode and (installment.transaction_id or installment.upi_id) and installment.proof_url)
+        if installment.paid and not was_paid:
+            installment.paid_at = utcnow().date()
 
         lead.updated_by = actor_id
         lead.touch(actor_id)

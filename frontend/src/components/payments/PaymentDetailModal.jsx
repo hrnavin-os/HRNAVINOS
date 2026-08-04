@@ -51,25 +51,29 @@ function buildInfoItems(lead, summary) {
 
 // Single-shot plans have exactly one installment, already fully covered by
 // the Paid/Due Amount cards above - the schedule breakdown only earns its
-// keep once there's more than one payment to track (two-shot or EMI).
-function InstallmentScheduleRow({ installment }) {
+// keep once there's more than one payment to track (two-shot or EMI). Cards
+// lay out in a horizontally-scrolling row rather than a stacked list, so a
+// 6-installment EMI plan reads as a timeline instead of a tall column.
+function InstallmentScheduleCard({ installment }) {
   const isPaid = installment.paid
   const tone = isPaid ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
   const Icon = isPaid ? CheckCircle2 : Calendar
-  const statusText = isPaid ? 'Paid' : installment.scheduled_at ? `Due ${formatDate(installment.scheduled_at)}` : 'Not scheduled yet'
+  const dateLabel = isPaid ? 'Payment Date' : 'Due Date'
+  const dateValue = isPaid ? installment.paid_at : installment.scheduled_at
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
-      <div className="flex min-w-0 items-center gap-2.5">
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${tone}`}>
+    <div className="w-44 shrink-0 rounded-lg border border-slate-100 bg-slate-50 p-3">
+      <div className="flex items-center gap-2">
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${tone}`}>
           <Icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
         </span>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-slate-900">{installment.label}</p>
-          <p className={`text-xs font-medium ${isPaid ? 'text-emerald-600' : 'text-slate-500'}`}>{statusText}</p>
-        </div>
+        <p className="truncate text-sm font-semibold text-slate-900">{installment.label}</p>
       </div>
-      <p className="shrink-0 text-sm font-semibold text-slate-900">{formatCurrency(installment.amount)}</p>
+      <p className="mt-2 text-base font-semibold text-slate-900">{formatCurrency(installment.amount)}</p>
+      <p className="mt-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">{dateLabel}</p>
+      <p className={`text-xs font-medium ${isPaid ? 'text-emerald-600' : 'text-slate-600'}`}>
+        {dateValue ? formatDate(dateValue) : 'Not scheduled yet'}
+      </p>
     </div>
   )
 }
@@ -122,9 +126,9 @@ export function PaymentDetailContent({ lead, error }) {
           <p className="mb-1.5 text-sm font-medium text-slate-700">
             {lead.payment_plan === 'emi_6_weeks' ? 'EMI Schedule' : 'Payment Schedule'}
           </p>
-          <div className="space-y-2">
+          <div className="table-scroll flex gap-2.5 overflow-x-auto pb-1.5">
             {lead.installments.map((installment, index) => (
-              <InstallmentScheduleRow key={index} installment={installment} />
+              <InstallmentScheduleCard key={index} installment={installment} />
             ))}
           </div>
         </div>
