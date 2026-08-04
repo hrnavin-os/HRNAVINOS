@@ -22,18 +22,23 @@ const OUTLINE_TONES = {
   emerald: 'border-emerald-300 text-emerald-600',
 }
 
+// whitespace-nowrap because a badge is one atomic label - letting a
+// two-word value like "C Section" or "Batch Confirmation" break across
+// lines in a narrow column reads as two separate tags.
 export function Badge({ tone = 'slate', outline = false, children }) {
   if (outline) {
     return (
       <span
-        className={`inline-flex items-center rounded-md border bg-white px-2.5 py-0.5 text-xs font-medium ${OUTLINE_TONES[tone]}`}
+        className={`inline-flex items-center whitespace-nowrap rounded-md border bg-white px-2.5 py-0.5 text-xs font-medium ${OUTLINE_TONES[tone]}`}
       >
         {children}
       </span>
     )
   }
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${TONES[tone]}`}>
+    <span
+      className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${TONES[tone]}`}
+    >
       {children}
     </span>
   )

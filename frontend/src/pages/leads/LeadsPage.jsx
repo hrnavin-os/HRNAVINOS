@@ -667,7 +667,7 @@ export function LeadsPage() {
         const stage = LEAD_STAGE_BY_VALUE[row.status]
         const style = STAGE_CELL_STYLES[row.status] ?? 'border-slate-300 bg-slate-100 text-slate-700'
         return (
-          <span className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-medium ${style}`}>
+          <span className={`inline-flex items-center whitespace-nowrap rounded-md border px-2.5 py-0.5 text-xs font-medium ${style}`}>
             {stage?.label ?? titleCase(row.status)}
           </span>
         )
@@ -756,15 +756,9 @@ export function LeadsPage() {
           }}
         />
 
-        {!scopedSection && (
-          <FilterDropdown
-            label="Section"
-            value={sectionFilter}
-            options={sectionOptions.map((section) => ({ value: section.code, label: section.label }))}
-            onChange={selectSection}
-          />
-        )}
-
+        {/* No Section filter here: the stat cards above already are the
+            section switcher, and two controls driving one piece of state
+            just invited them to disagree on screen. */}
         <FilterDropdown
           label="Stage"
           value={statusFilter}
