@@ -8,11 +8,14 @@ from fastapi import UploadFile
 
 from app.database.base import utcnow
 from app.exceptions.base import BadRequestError, ForbiddenError, NotFoundError
-from app.models.enums import InstallmentPaymentMode, LeadSource, LeadStatus, PaymentMethod
+from app.models.enums import InstallmentPaymentMode, LeadSource, LeadStatus, NotificationType, PaymentMethod
 from app.models.lead import FollowUpEntry, Lead
+from app.models.notification import Notification
 from app.repositories.audit_log_repository import AuditLogRepository
 from app.repositories.foundation_form_config_repository import FoundationFormConfigRepository
 from app.repositories.lead_repository import LeadRepository
+from app.repositories.notification_repository import NotificationRepository
+from app.repositories.role_repository import RoleRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.lead_schema import (
@@ -39,6 +42,8 @@ class LeadService:
         self.audit_logs = AuditLogRepository()
         self.storage = StorageService()
         self.foundation_form_config = FoundationFormConfigRepository()
+        self.roles = RoleRepository()
+        self.notifications = NotificationRepository()
 
     async def to_response(self, lead: Lead) -> LeadResponse:
         assignee = await self.users.get_by_id(lead.assigned_to) if lead.assigned_to else None
@@ -332,6 +337,40 @@ class LeadService:
             entity_type="Lead",
             entity_id=str(lead.id),
             changes={"installment_index": index, "paid": installment.paid},
+        )
+        return lead
+
+    async def mark_lost_nonpayment(
+        self, lead_id: uuid.UUID, *, actor_id: uuid.UUID | None, scope: str | None = None
+    ) -> Lead:
+        """Finance/Admin declares a lead Lost after 2 consecutive missed EMI/
+        two-shot installments - notifies every HR Coordinator so they can
+        drop the candidate from their active batch-confirmation queue."""
+        lead = await self.get(lead_id, scope=scope)
+        lead.status = LeadStatus.LOST
+        lead.updated_by = actor_id
+        lead.touch(actor_id)
+        await lead.save()
+
+        hr_role = await self.roles.get_by_name("HR Coordinator")
+        if hr_role:
+            hr_users, _ = await self.users.list(page=1, page_size=1000, filters={"role_id": hr_role.id})
+            for hr_user in hr_users:
+                await self.notifications.create(
+                    Notification(
+                        user_id=hr_user.id,
+                        title="Lead marked Lost - non-payment",
+                        message=f"{lead.name} was marked Lost after 2 consecutive missed EMI payments. Warning sign.",
+                        type=NotificationType.WARNING,
+                    )
+                )
+
+        await self.audit.record(
+            user_id=actor_id,
+            action="UPDATE",
+            entity_type="Lead",
+            entity_id=str(lead.id),
+            changes={"status": LeadStatus.LOST, "reason": "non_payment"},
         )
         return lead
 

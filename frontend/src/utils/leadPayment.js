@@ -31,3 +31,33 @@ export function getLeadPaymentSummary(lead) {
     proofUrl: lead.payment_image_url ?? null,
   }
 }
+
+// Reads a multi-installment plan's due dates against today to flag missed
+// EMI/two-shot payments: an installment counts as missed once its whole due
+// date has passed with no payment recorded (same-day grace - due today is
+// still "pending", not missed). Lost eligibility kicks in once 2 unpaid
+// installments in a row are overdue.
+export function getEmiPaymentHealth(lead) {
+  const installments = lead.installments ?? []
+  if (installments.length < 2) return { status: 'ok', missedCount: 0 }
+
+  const todayStr = new Date().toISOString().slice(0, 10)
+  let missedCount = 0
+  for (const installment of installments) {
+    if (installment.paid) continue
+    if (!installment.scheduled_at) break
+    if (installment.scheduled_at < todayStr) {
+      missedCount += 1
+    } else {
+      break
+    }
+  }
+
+  if (missedCount >= 2) return { status: 'lost_eligible', missedCount }
+  if (missedCount === 1) return { status: 'missed_once', missedCount }
+
+  const nextDue = installments.find((installment) => !installment.paid && installment.scheduled_at === todayStr)
+  if (nextDue) return { status: 'pending', missedCount: 0 }
+
+  return { status: 'ok', missedCount: 0 }
+}

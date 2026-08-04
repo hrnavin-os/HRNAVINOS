@@ -47,4 +47,8 @@ export const leadService = {
     })
     return data
   },
+  markLost: async (id) => {
+    const { data } = await apiClient.post(`/leads/${id}/mark-lost`)
+    return data
+  },
 }

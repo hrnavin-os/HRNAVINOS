@@ -212,6 +212,17 @@ async def update_installment(
     return await service.to_response(lead)
 
 
+@router.post("/{lead_id}/mark-lost", response_model=LeadResponse)
+async def mark_lead_lost(
+    lead_id: uuid.UUID,
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
+) -> LeadResponse:
+    service = LeadService()
+    scope = await get_actor_scope(actor)
+    lead = await service.mark_lost_nonpayment(lead_id, actor_id=actor.id, scope=scope)
+    return await service.to_response(lead)
+
+
 @router.post("/{lead_id}/assign", response_model=LeadResponse)
 async def assign_lead(
     lead_id: uuid.UUID,

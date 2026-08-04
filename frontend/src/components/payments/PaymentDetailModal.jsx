@@ -1,10 +1,11 @@
-import { Calendar, CheckCircle2, CircleDollarSign, CreditCard, Hash, Phone, Wallet } from 'lucide-react'
+import { AlertTriangle, Calendar, CheckCircle2, CircleDollarSign, CreditCard, Hash, Phone, Wallet } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { formatCurrency, formatDate, titleCase } from '@/utils/formatters'
-import { getLeadPaymentSummary } from '@/utils/leadPayment'
+import { getEmiPaymentHealth, getLeadPaymentSummary } from '@/utils/leadPayment'
 import { PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
 import { MEDIA_BASE_URL } from '@/constants/config'
 
@@ -78,16 +79,57 @@ function InstallmentScheduleCard({ installment }) {
   )
 }
 
+// Missed-EMI warning banner: a plain visibility notice once one payment is
+// overdue (this is what a Section Admin sees, read-only, via the Lead Detail
+// modal), escalating to a "Mark Lost" action once a caller opts in via
+// `onMarkLost` (only Finance's Cashbook popup does - see mark_lost_nonpayment
+// on the backend, which also notifies every HR Coordinator).
+function PaymentHealthBanner({ health, onMarkLost, isMarkingLost }) {
+  if (health.status === 'missed_once') {
+    return (
+      <div className="flex items-center gap-2.5 rounded-lg border border-amber-300 bg-amber-50 p-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-600">
+          <AlertTriangle className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+        </span>
+        <p className="text-sm font-semibold text-amber-700">1st Due Missed — one EMI payment is overdue.</p>
+      </div>
+    )
+  }
+
+  if (health.status === 'lost_eligible') {
+    return (
+      <div className="flex items-center justify-between gap-2.5 rounded-lg border border-red-300 bg-red-50 p-3">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-red-100 text-red-600">
+            <AlertTriangle className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+          </span>
+          <p className="text-sm font-semibold text-red-700">2 consecutive EMI payments missed.</p>
+        </div>
+        {onMarkLost && (
+          <Button variant="danger" onClick={onMarkLost} disabled={isMarkingLost}>
+            {isMarkingLost ? 'Marking…' : 'Mark Lost'}
+          </Button>
+        )}
+      </div>
+    )
+  }
+
+  return null
+}
+
 // The info-cards/proof/installment-schedule body, with no header of its
 // own - reused both by the standalone modal below (which adds its own
 // avatar/name header) and by the Lead Detail Modal's Payment Details tab
 // (whose parent modal already shows the lead's name).
-export function PaymentDetailContent({ lead, error }) {
+export function PaymentDetailContent({ lead, error, onMarkLost, isMarkingLost }) {
   const summary = getLeadPaymentSummary(lead)
+  const health = getEmiPaymentHealth(lead)
 
   return (
     <div className="space-y-4">
       <ErrorMessage message={error} />
+
+      <PaymentHealthBanner health={health} onMarkLost={onMarkLost} isMarkingLost={isMarkingLost} />
 
       <div className="grid grid-cols-2 gap-2.5">
         {buildInfoItems(lead, summary).map((item) => (
@@ -140,7 +182,7 @@ export function PaymentDetailContent({ lead, error }) {
 // Read-only payment detail view shared by the Approvals "Review" popup and
 // the Cashbook "view details" popup - only the title/status badge/footer
 // actions differ between the two.
-export function PaymentDetailModal({ lead, title, statusBadge, onClose, error, footer }) {
+export function PaymentDetailModal({ lead, title, statusBadge, onClose, error, footer, onMarkLost, isMarkingLost }) {
   return (
     <Modal title={title} isOpen onClose={onClose} maxWidth="max-w-lg">
       <div className="-mt-2 space-y-4">
@@ -157,7 +199,7 @@ export function PaymentDetailModal({ lead, title, statusBadge, onClose, error, f
           </div>
         </div>
 
-        <PaymentDetailContent lead={lead} error={error} />
+        <PaymentDetailContent lead={lead} error={error} onMarkLost={onMarkLost} isMarkingLost={isMarkingLost} />
 
         {footer && <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">{footer}</div>}
       </div>
