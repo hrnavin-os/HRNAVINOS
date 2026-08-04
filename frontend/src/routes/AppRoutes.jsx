@@ -13,6 +13,7 @@ import { StudentsPage } from '@/pages/students/StudentsPage'
 import { CoursesPage } from '@/pages/courses/CoursesPage'
 import { BatchesPage } from '@/pages/batches/BatchesPage'
 import { HRCoordinatorPage } from '@/pages/hr/HRCoordinatorPage'
+import { WhatsAppLinksPage } from '@/pages/hr/WhatsAppLinksPage'
 import { TutorsPage } from '@/pages/tutors/TutorsPage'
 import { AttendancePage } from '@/pages/attendance/AttendancePage'
 import { PaymentsPage } from '@/pages/payments/PaymentsPage'
@@ -67,6 +68,7 @@ export function AppRoutes() {
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.BATCH_CONFIRMATION_VIEW} />}>
             <Route path="/batch-confirmation" element={<HRCoordinatorPage />} />
+            <Route path="/whatsapp-links" element={<WhatsAppLinksPage />} />
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.TUTORS_VIEW} />}>
             <Route path="/tutors" element={<TutorsPage />} />

@@ -4,6 +4,7 @@ import {
   Megaphone,
   UserPlus,
   ClipboardCheck,
+  MessageCircle,
   Wallet,
   Users,
   UserCog,
@@ -64,6 +65,12 @@ export const NAV_ITEMS = [
     permission: PERMISSIONS.BATCH_CONFIRMATION_VIEW,
     icon: ClipboardCheck,
     group: 'HR Coordinator',
+  },
+  {
+    label: 'WhatsApp Links',
+    to: '/whatsapp-links',
+    permission: PERMISSIONS.BATCH_CONFIRMATION_VIEW,
+    icon: MessageCircle,
   },
 
   { label: 'Finance', to: '/payments', permission: PERMISSIONS.PAYMENTS_VIEW, icon: Wallet, group: 'Finance' },

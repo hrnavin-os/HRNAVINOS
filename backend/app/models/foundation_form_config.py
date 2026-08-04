@@ -61,6 +61,11 @@ class FormCollectionSectionCfg(BaseModel):
 
     code: str = Field(max_length=50)
     label: str = Field(max_length=255)
+    # Invite link for this section's WhatsApp group, maintained by the HR
+    # Coordinator. Lives here rather than in its own collection because it's
+    # per-section config, and sections are already open-ended here - a new
+    # section added via "Add Form" gets a link slot for free.
+    whatsapp_group_url: str | None = Field(default=None, max_length=500)
 
 
 class FoundationFormConfig(BaseDocument):

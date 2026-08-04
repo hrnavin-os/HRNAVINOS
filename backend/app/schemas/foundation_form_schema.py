@@ -1,13 +1,18 @@
 """Request/response DTOs for the public Foundation Form and its admin config."""
+import re
 from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.models.enums import PaymentPlanOption, PaymentTimeline, ProgramInterest
 
 FieldType = Literal["text", "email", "tel", "textarea"]
+
+# chat.whatsapp.com invite codes are 20-24 url-safe chars today; the bound is
+# kept loose so a future length change doesn't reject a link that works.
+WHATSAPP_INVITE_PATTERN = re.compile(r"^https://chat\.whatsapp\.com/[A-Za-z0-9]{10,40}$")
 
 
 class FoundationFormFieldConfig(BaseModel):
@@ -118,3 +123,30 @@ class FoundationFormConfigUpdate(BaseModel):
     programs: list[FoundationFormProgramConfig]
     categories: list[FoundationFormCategoryConfig]
     sections: list[FormCollectionSectionConfig]
+
+
+# Deliberately not part of FormCollectionSectionConfig above: the Form
+# Collection editor never sends these, so folding them into that schema would
+# mean every config save round-trips a link it doesn't manage.
+class WhatsAppGroupLinkResponse(BaseModel):
+    code: str
+    label: str
+    whatsapp_group_url: str | None = None
+
+
+class WhatsAppGroupLinkUpdate(BaseModel):
+    # Empty string clears the link; anything else must be a real WhatsApp
+    # group invite, which is the only URL shape chat.whatsapp.com hands out.
+    whatsapp_group_url: str = Field(default="", max_length=500)
+
+    @field_validator("whatsapp_group_url")
+    @classmethod
+    def validate_invite_url(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            return ""
+        if not WHATSAPP_INVITE_PATTERN.match(trimmed):
+            raise ValueError(
+                "Enter a WhatsApp group invite link, e.g. https://chat.whatsapp.com/AbC123..."
+            )
+        return trimmed

@@ -50,4 +50,14 @@ export const batchConfirmationService = {
     const { data } = await apiClient.post(`${BASE}/batches/${batchId}/confirm`)
     return data
   },
+  whatsappLinks: async () => {
+    const { data } = await apiClient.get(`${BASE}/whatsapp-links`)
+    return data
+  },
+  updateWhatsappLink: async (code, whatsappGroupUrl) => {
+    const { data } = await apiClient.put(`${BASE}/whatsapp-links/${code}`, {
+      whatsapp_group_url: whatsappGroupUrl,
+    })
+    return data
+  },
 }

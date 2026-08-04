@@ -21,7 +21,9 @@ from app.schemas.batch_confirmation_schema import (
 )
 from app.schemas.batch_schema import BatchCreate, BatchResponse
 from app.schemas.common import MessageResponse
+from app.schemas.foundation_form_schema import WhatsAppGroupLinkResponse, WhatsAppGroupLinkUpdate
 from app.services.batch_confirmation_service import BatchConfirmationService
+from app.services.foundation_form_config_service import FoundationFormConfigService
 
 router = APIRouter(prefix="/batch-confirmation", tags=["Batch Confirmation"])
 
@@ -117,3 +119,32 @@ async def confirm_batch(
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_CONFIRM)),
 ) -> ConfirmBatchResponse:
     return await BatchConfirmationService().confirm_batch(batch_id, actor_id=actor.id)
+
+
+# WhatsApp group links live on the HR Coordinator's router (and behind its
+# permissions) because they're part of that role's day-to-day work. Note the
+# coordinator has no leads.view, so these can't be folded into the Form
+# Collection config endpoints that otherwise own section settings.
+@router.get("/whatsapp-links", response_model=list[WhatsAppGroupLinkResponse])
+async def list_whatsapp_links(
+    actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
+) -> list[WhatsAppGroupLinkResponse]:
+    sections = await FoundationFormConfigService().list_whatsapp_links()
+    return [
+        WhatsAppGroupLinkResponse(code=s.code, label=s.label, whatsapp_group_url=s.whatsapp_group_url)
+        for s in sections
+    ]
+
+
+@router.put("/whatsapp-links/{code}", response_model=WhatsAppGroupLinkResponse)
+async def update_whatsapp_link(
+    code: str,
+    payload: WhatsAppGroupLinkUpdate,
+    actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
+) -> WhatsAppGroupLinkResponse:
+    section = await FoundationFormConfigService().set_whatsapp_link(
+        code, payload.whatsapp_group_url, actor_id=actor.id
+    )
+    return WhatsAppGroupLinkResponse(
+        code=section.code, label=section.label, whatsapp_group_url=section.whatsapp_group_url
+    )

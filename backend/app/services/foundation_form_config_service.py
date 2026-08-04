@@ -130,7 +130,14 @@ class FoundationFormConfigService:
             )
             for c in data.categories
         ]
-        config.sections = [FormCollectionSectionCfg(code=s.code, label=s.label) for s in data.sections]
+        # The editor's section payload carries only code/label, so rebuilding
+        # straight from it would silently drop each section's WhatsApp link
+        # every time an admin saved the form config. Carry it across by code.
+        existing_links = {s.code: s.whatsapp_group_url for s in config.sections}
+        config.sections = [
+            FormCollectionSectionCfg(code=s.code, label=s.label, whatsapp_group_url=existing_links.get(s.code))
+            for s in data.sections
+        ]
 
         await self.repo.save(config)
         await self.audit.record(
@@ -205,3 +212,28 @@ class FoundationFormConfigService:
             changes={"deleted_section": code},
         )
         return config
+
+    async def list_whatsapp_links(self) -> list[FormCollectionSectionCfg]:
+        """Every section with its WhatsApp group link - one row per section,
+        so a section added later shows up here without any extra wiring."""
+        config = await self.repo.get_or_create()
+        return list(config.sections)
+
+    async def set_whatsapp_link(
+        self, code: str, url: str, *, actor_id: uuid.UUID | None
+    ) -> FormCollectionSectionCfg:
+        config = await self.repo.get_or_create()
+        section = next((s for s in config.sections if s.code == code), None)
+        if section is None:
+            raise NotFoundError(f"Section '{code}' does not exist.")
+
+        section.whatsapp_group_url = url or None
+        await self.repo.save(config)
+        await self.audit.record(
+            user_id=actor_id,
+            action="UPDATE",
+            entity_type="FoundationFormConfig",
+            entity_id=str(config.id),
+            changes={"section": code, "whatsapp_group_url": section.whatsapp_group_url},
+        )
+        return section
