@@ -32,6 +32,7 @@ import { formatLeadSource, LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/
 import { INSTALLMENT_MODE_OPTIONS, PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
 import { leadService } from '@/services/leadService'
 import { foundationFormService } from '@/services/foundationFormService'
+import { PaymentDetailContent } from '@/components/payments/PaymentDetailModal'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { formatDateTime, titleCase } from '@/utils/formatters'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
@@ -86,6 +87,7 @@ const ACTION_TONES = {
 
 const TABS = [
   { key: 'overview', label: 'Overview', icon: Info },
+  { key: 'payment', label: 'Payment Details', icon: Wallet },
   { key: 'followup', label: 'Follow-up', icon: CalendarClock },
   { key: 'timeline', label: 'Timeline', icon: Clock },
 ]
@@ -528,6 +530,19 @@ function OverviewTab({
   )
 }
 
+// Full read-only payment breakdown (paid/due amounts, mode, proof,
+// installment schedule) - the same content the Payments module's review
+// popups show, reused here since a lead's own detail view is the more
+// natural place to check it than a separate eye-icon trigger in the table.
+function PaymentDetailsTab({ lead }) {
+  return (
+    <div className="space-y-4">
+      {lead.payment_plan && <Badge tone="blue">{PAYMENT_PLAN_LABELS[lead.payment_plan] ?? lead.payment_plan}</Badge>}
+      <PaymentDetailContent lead={lead} />
+    </div>
+  )
+}
+
 function FollowUpTab({ followUpAt, setFollowUpAt, history, onSave, isSaving, onClose }) {
   return (
     <div className="space-y-4">
@@ -710,6 +725,7 @@ export function LeadDetailModal({ lead, onClose }) {
             savingInstallmentIndex={savingInstallmentIndex}
           />
         )}
+        {activeTab === 'payment' && <PaymentDetailsTab lead={liveLead} />}
         {activeTab === 'followup' && (
           <FollowUpTab
             followUpAt={followUpAt}

@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Calendar, ChevronDown, Plus, Search } from 'lucide-react'
+import { Calendar, Check, ChevronDown, Eye, Pencil, Plus, Search } from 'lucide-react'
 import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
 import { useAuth } from '@/hooks/useAuth'
 import { leadService } from '@/services/leadService'
@@ -92,11 +92,14 @@ function TruncatedText({ text }) {
   )
 }
 
-// Inline-editable "staff notes" cell - distinct from the read-only Query
-// column (the student's own submitted text). Saves on blur/Enter, not on
-// every keystroke.
+// Staff notes cell - distinct from the read-only Query column (the
+// student's own submitted text). Shows as a pen icon (filled once a
+// remark exists) rather than a persistent text box; clicking it opens a
+// small popover to type into, submitted with the tick button.
 function RemarksCell({ lead }) {
   const queryClient = useQueryClient()
+  const buttonRef = useRef(null)
+  const [popupPosition, setPopupPosition] = useState(null)
   const [value, setValue] = useState(lead.remarks ?? '')
 
   const mutation = useMutation({
@@ -104,24 +107,66 @@ function RemarksCell({ lead }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['leads'] }),
   })
 
-  function commit() {
-    if (value === (lead.remarks ?? '')) return
+  function open(event) {
+    event.stopPropagation()
+    setValue(lead.remarks ?? '')
+    const rect = buttonRef.current.getBoundingClientRect()
+    setPopupPosition({ top: rect.bottom + 4, left: rect.left })
+  }
+
+  function close() {
+    setPopupPosition(null)
+  }
+
+  function submit(event) {
+    event.stopPropagation()
     mutation.mutate(value)
+    close()
   }
 
   return (
-    <input
-      type="text"
-      value={value}
-      placeholder="Add remarks…"
-      onClick={(event) => event.stopPropagation()}
-      onChange={(event) => setValue(event.target.value)}
-      onBlur={commit}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') event.currentTarget.blur()
-      }}
-      className="w-full min-w-35 rounded-md border border-slate-200 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-    />
+    <div className="inline-block">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={open}
+        title={lead.remarks || 'Add remarks'}
+        className={`rounded-md p-1.5 hover:bg-slate-100 ${lead.remarks ? 'text-brand-600' : 'text-slate-400'}`}
+      >
+        <Pencil className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+      </button>
+      {popupPosition &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-40" onClick={close} />
+            <div
+              style={{ top: popupPosition.top, left: popupPosition.left }}
+              className="fixed z-50 w-72 rounded-md border border-slate-200 bg-white p-3 shadow-lg"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <textarea
+                autoFocus
+                rows={3}
+                value={value}
+                onChange={(event) => setValue(event.target.value)}
+                placeholder="Add remarks…"
+                className="w-full resize-none rounded-md border border-slate-200 px-2 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+              <div className="mt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={submit}
+                  aria-label="Save remarks"
+                  className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-600 text-white hover:bg-brand-700"
+                >
+                  <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          </>,
+          document.body,
+        )}
+    </div>
   )
 }
 
@@ -157,12 +202,14 @@ function SelectBadgeCell({ lead, field, options, placeholder }) {
 
   return (
     <div className="inline-block">
-      <button ref={buttonRef} type="button" onClick={toggle} className="rounded-md hover:bg-slate-50">
-        {current ? (
-          <Badge tone={current.tone}>{current.label}</Badge>
-        ) : (
-          <span className="px-1 text-sm text-slate-400">{placeholder}</span>
-        )}
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={toggle}
+        className="flex w-full min-w-36 items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 hover:bg-slate-100"
+      >
+        {current ? <Badge tone={current.tone}>{current.label}</Badge> : <span className="text-sm text-slate-400">{placeholder}</span>}
+        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden="true" />
       </button>
       {menuPosition &&
         createPortal(
@@ -464,8 +511,16 @@ export function LeadsPage() {
         </div>
       ),
     },
-    { key: 'phone', header: 'Ph.no', render: (row) => row.phone },
-    { key: 'email', header: 'Email', render: (row) => row.email ?? '—' },
+    {
+      key: 'contact',
+      header: 'Contact',
+      render: (row) => (
+        <div>
+          <p className="text-sm text-slate-900">{row.phone}</p>
+          {row.email && <p className="text-xs text-slate-500">{row.email}</p>}
+        </div>
+      ),
+    },
     { key: 'course', header: 'Course', render: (row) => row.course_interest ?? '—' },
     // Redundant once a section is already active (every visible row is that
     // section by definition) - only shown in the unscoped "All Sections"
@@ -488,7 +543,7 @@ export function LeadsPage() {
     },
     {
       key: 'payment_call_remarks',
-      header: 'Payment Call Remarks',
+      header: 'Payment Remarks',
       render: (row) => (
         <SelectBadgeCell key={row.id} lead={row} field="payment_call_remarks" options={CALL_REMARK_OPTIONS} placeholder="Select…" />
       ),
@@ -506,6 +561,23 @@ export function LeadsPage() {
       key: 'remarks',
       header: 'Remarks',
       render: (row) => <RemarksCell key={row.id} lead={row} />,
+    },
+    {
+      key: 'view',
+      header: 'View',
+      render: (row) => (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            setViewingLead(row)
+          }}
+          className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+          aria-label={`View details for ${row.name}`}
+        >
+          <Eye className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+        </button>
+      ),
     },
   ]
 

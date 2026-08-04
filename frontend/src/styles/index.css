@@ -20,3 +20,29 @@ body,
 body {
   @apply bg-slate-50 text-slate-900 antialiased;
 }
+
+/* A thick, always-visible horizontal scrollbar for wide tables - the
+   default thin/overlay OS scrollbar is easy to miss entirely, which reads
+   as "the table doesn't scroll" even when it does. */
+.table-scroll {
+  scrollbar-width: auto;
+  scrollbar-color: #94a3b8 #f1f5f9;
+}
+
+.table-scroll::-webkit-scrollbar {
+  height: 12px;
+}
+
+.table-scroll::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.table-scroll::-webkit-scrollbar-thumb {
+  background-color: #94a3b8;
+  border-radius: 9999px;
+  border: 3px solid #f1f5f9;
+}
+
+.table-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: #64748b;
+}
