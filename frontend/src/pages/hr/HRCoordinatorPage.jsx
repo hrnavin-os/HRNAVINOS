@@ -17,14 +17,12 @@ const QUERY_KEY = 'batch-confirmation'
 
 const TABS = [
   { key: 'approved', label: 'Approved by Finance', tone: 'brand' },
-  { key: 'pending_hr', label: 'Pending HR', tone: 'amber' },
   { key: 'group_assigned', label: 'Group Assigned', tone: 'emerald' },
   { key: 'lost', label: 'Lost Students', tone: 'red' },
 ]
 
 const EMPTY_MESSAGE = {
   approved: 'Nobody is waiting on a group. Leads land here once Finance moves them to Batch Confirmation.',
-  pending_hr: 'Nobody is pending HR. Leads land here once they reach Financial Approval.',
   group_assigned: 'No students have been added to a WhatsApp group yet.',
   lost: 'No students have been marked Lost.',
 }
@@ -79,9 +77,9 @@ export function HRCoordinatorPage() {
   const [confirming, setConfirming] = useState(null)
   const [viewingStudent, setViewingStudent] = useState(null)
 
-  // All four tabs are fetched, not just the active one - the cards show a
-  // count, so every tab's total has to be known up front. Switching tabs is
-  // then instant, since the data is already in cache.
+  // Every tab is fetched, not just the active one - the cards show a count, so
+  // each tab's total has to be known up front. Switching tabs is then instant,
+  // since the data is already in cache.
   const tabQueries = useQueries({
     queries: TABS.map((item) => ({
       queryKey: [QUERY_KEY, 'students', item.key],
@@ -162,9 +160,6 @@ export function HRCoordinatorPage() {
         ),
       },
     ],
-    // No Group Assign here: these students haven't reached the batch stage,
-    // so there's nothing to add them to yet.
-    pending_hr: [...BASE_COLUMNS, BATCH_COLUMN],
     group_assigned: [
       ...BASE_COLUMNS,
       { key: 'batch_number', header: 'Batch', align: 'center', render: (row) => dash(row.batch_number) },

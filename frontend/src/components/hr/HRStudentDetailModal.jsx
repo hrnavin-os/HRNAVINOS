@@ -12,26 +12,25 @@ import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { formatDate } from '@/utils/formatters'
 
 const STATES = [
-  { key: 'pending_hr', label: 'Pending HR', tone: 'amber' },
   { key: 'approved', label: 'Approved by Finance', tone: 'blue' },
   { key: 'group_assigned', label: 'Group Assigned', tone: 'green' },
   { key: 'lost', label: 'Lost', tone: 'red' },
 ]
 
 const STATE_BUTTON_TONES = {
-  amber: { active: 'border-amber-500 bg-amber-500 text-white', idle: 'border-amber-300 bg-white text-amber-700 hover:bg-amber-50' },
   blue: { active: 'border-blue-500 bg-blue-500 text-white', idle: 'border-blue-300 bg-white text-blue-700 hover:bg-blue-50' },
   green: { active: 'border-green-600 bg-green-600 text-white', idle: 'border-green-300 bg-white text-green-700 hover:bg-green-50' },
   red: { active: 'border-red-600 bg-red-600 text-white', idle: 'border-red-300 bg-white text-red-700 hover:bg-red-50' },
 }
 
 // Which tab a student is sitting in - group assignment is a timestamp rather
-// than a stage, so it has to be checked before the stage itself.
+// than a stage, so it has to be checked before the stage itself. Returns null
+// for anything the HR tabs don't cover (e.g. a lead still at Financial
+// Approval); callers already treat that as "no stage badge".
 function hrStateOf(student) {
   if (student.status === 'lost') return 'lost'
   if (student.group_assigned_at) return 'group_assigned'
   if (student.status === 'batch_confirmation') return 'approved'
-  if (student.status === 'financial_approval') return 'pending_hr'
   return null
 }
 
@@ -45,11 +44,7 @@ function transitionTo(current, target) {
     return { blocked: 'A lost student can’t be moved back into the pipeline.' }
   }
   if (target === 'lost') return { kind: 'stage', status: 'lost' }
-  if (target === 'pending_hr') {
-    return { blocked: 'A student past Financial Approval can’t be moved back to Pending HR.' }
-  }
   if (target === 'approved') {
-    if (current === 'pending_hr') return { kind: 'stage', status: 'batch_confirmation' }
     if (current === 'group_assigned') return { kind: 'unassign' }
   }
   if (target === 'group_assigned') {
