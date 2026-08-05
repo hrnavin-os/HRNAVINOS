@@ -47,7 +47,7 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
               </td>
             </tr>
           ) : (
-            rows.map((row) => (
+            rows.map((row, index) => (
               <tr
                 key={row.id}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
@@ -58,7 +58,9 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
                     key={column.key}
                     className={`px-4 py-3 text-sm text-slate-700 ${ALIGN[column.align] ?? ALIGN.left}`}
                   >
-                    {column.render ? column.render(row) : row[column.key]}
+                    {/* Second arg is the row's index within this page; columns
+                        that don't need it simply ignore it. */}
+                    {column.render ? column.render(row, index) : row[column.key]}
                   </td>
                 ))}
               </tr>

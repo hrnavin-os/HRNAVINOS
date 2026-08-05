@@ -2,13 +2,18 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getApiErrorMessage } from '@/services/apiClient'
 
+// Exposed on the return value so callers that need a row's position within the
+// full result set (e.g. a serial-number column) can offset by page without
+// re-declaring the size here.
+const PAGE_SIZE = 20
+
 export function usePaginatedQuery(queryKey, service, extraParams = {}) {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
 
   const query = useQuery({
     queryKey: [queryKey, page, search, extraParams],
-    queryFn: () => service.list({ page, page_size: 20, search: search || undefined, ...extraParams }),
+    queryFn: () => service.list({ page, page_size: PAGE_SIZE, search: search || undefined, ...extraParams }),
     placeholderData: (previousData) => previousData,
   })
 
@@ -17,6 +22,7 @@ export function usePaginatedQuery(queryKey, service, extraParams = {}) {
     total: query.data?.total ?? 0,
     totalPages: query.data?.total_pages ?? 1,
     page,
+    pageSize: PAGE_SIZE,
     setPage,
     search,
     setSearch,

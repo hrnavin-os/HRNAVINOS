@@ -67,6 +67,7 @@ export function UsersPage() {
       queryKey="users"
       service={userService}
       columns={columns}
+      serialNumber
       createFields={createFields}
       createPermission={PERMISSIONS.USERS_CREATE}
       rowActions={{

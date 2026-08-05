@@ -38,6 +38,9 @@ export function ResourceListPage({
   //   remove: { permission?, describe(row), lockedReason?(row) }
   //   lockedReason?(row) -> string disables BOTH edit and delete with a tooltip
   rowActions,
+  // Opt-in leading "S.No" column. Numbers run across the whole result set
+  // rather than restarting at 1 on every page.
+  serialNumber = false,
 }) {
   const { hasPermission } = useAuth()
   const queryClient = useQueryClient()
@@ -46,11 +49,8 @@ export function ResourceListPage({
   const [editingRow, setEditingRow] = useState(null)
   const [deletingRow, setDeletingRow] = useState(null)
 
-  const { items, total, page, setPage, search, setSearch, isLoading, error, totalPages } = usePaginatedQuery(
-    queryKey,
-    service,
-    extraParams,
-  )
+  const { items, total, page, pageSize, setPage, search, setSearch, isLoading, error, totalPages } =
+    usePaginatedQuery(queryKey, service, extraParams)
 
   const createMutation = useMutation({
     mutationFn: (values) => service.create(transformCreatePayload(values)),
@@ -98,24 +98,33 @@ export function ResourceListPage({
   // Nothing this user is allowed to do -> don't render a dead column.
   const hasRowActions = Boolean(rowActions) && (Boolean(rowActions.view) || canEdit || canDelete)
 
-  const tableColumns = hasRowActions
-    ? [
-        ...columns,
-        {
-          key: '__actions',
-          header: 'Actions',
-          render: (row) => (
-            <RowActions
-              onView={rowActions.view ? () => setViewingRow(row) : undefined}
-              onEdit={canEdit ? () => openEdit(row) : undefined}
-              onDelete={canDelete ? () => openDelete(row) : undefined}
-              lockedReason={rowActions.lockedReason?.(row) ?? null}
-              deleteLockedReason={rowActions.remove?.lockedReason?.(row) ?? null}
-            />
-          ),
-        },
-      ]
-    : columns
+  const serialColumn = {
+    key: '__sno',
+    header: 'S.No',
+    // `index` is page-local, so offset it to keep numbering continuous:
+    // page 2 of a 20-per-page list starts at 21, not 1.
+    render: (_row, index) => (page - 1) * pageSize + index + 1,
+  }
+
+  const actionsColumn = {
+    key: '__actions',
+    header: 'Actions',
+    render: (row) => (
+      <RowActions
+        onView={rowActions.view ? () => setViewingRow(row) : undefined}
+        onEdit={canEdit ? () => openEdit(row) : undefined}
+        onDelete={canDelete ? () => openDelete(row) : undefined}
+        lockedReason={rowActions.lockedReason?.(row) ?? null}
+        deleteLockedReason={rowActions.remove?.lockedReason?.(row) ?? null}
+      />
+    ),
+  }
+
+  const tableColumns = [
+    ...(serialNumber ? [serialColumn] : []),
+    ...columns,
+    ...(hasRowActions ? [actionsColumn] : []),
+  ]
 
   return (
     <div>

@@ -30,6 +30,7 @@ export function RolesPage() {
       queryKey="roles"
       service={roleService}
       columns={columns}
+      serialNumber
       renderCreateAction={({ onCreated }) => <AddRoleAction onCreated={onCreated} />}
       rowActions={{
         lockedReason,
