@@ -1,5 +1,8 @@
 # ==================== Claude Code harness state ====================
 .claude/scheduled_tasks.lock
+# Machine-local: enables the auto-push Stop hook. Deliberately not shared --
+# nobody should inherit "every edit pushes to main" by cloning the repo.
+.claude/settings.local.json
 
 # ==================== Python / Backend ====================
 __pycache__/
