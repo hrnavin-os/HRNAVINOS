@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Link2, Search, XCircle } from 'lucide-react'
+import { BadgeCheck, Check, Link2, Search, UserX, Users, XCircle } from 'lucide-react'
 import { batchConfirmationService } from '@/services/batchConfirmationService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { Badge } from '@/components/ui/Badge'
@@ -16,9 +16,9 @@ import { formatDate } from '@/utils/formatters'
 const QUERY_KEY = 'batch-confirmation'
 
 const TABS = [
-  { key: 'approved', label: 'Approved by Finance', tone: 'brand' },
-  { key: 'group_assigned', label: 'Group Assigned', tone: 'emerald' },
-  { key: 'lost', label: 'Lost Students', tone: 'red' },
+  { key: 'approved', label: 'Approved by Finance', tone: 'brand', icon: BadgeCheck },
+  { key: 'group_assigned', label: 'Group Assigned', tone: 'emerald', icon: Users },
+  { key: 'lost', label: 'Lost Students', tone: 'red', icon: UserX },
 ]
 
 const EMPTY_MESSAGE = {
@@ -224,6 +224,7 @@ export function HRCoordinatorPage() {
             label={item.label}
             value={tabQueries[index].data?.length ?? 0}
             toneName={item.tone}
+            icon={item.icon}
             isActive={tab === item.key}
             onClick={() => {
               setTab(item.key)

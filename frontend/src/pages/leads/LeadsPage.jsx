@@ -50,7 +50,7 @@ const EXCLUDED_COURSE_OPTIONS = ['HR Recruitment', 'Nothing']
 // stat cards and the Lead Detail modal's stage-picker buttons key their own
 // (different) color maps off of, so changing it here can't affect them.
 const STAGE_CELL_STYLES = {
-  new_lead: 'border-transparent bg-gradient-to-r from-blue-500 to-blue-600 text-white',
+  new_lead: 'border-transparent bg-linear-to-r from-blue-500 to-blue-600 text-white',
   rnr: 'border-red-300 bg-red-100 text-red-700',
   pre_screening: 'border-yellow-300 bg-yellow-100 text-yellow-700',
   financial_approval: 'border-purple-300 bg-purple-100 text-purple-700',
