@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   Target,
+  GraduationCap,
   ClipboardCheck,
   MessageCircle,
   Wallet,
@@ -44,6 +45,14 @@ export const NAV_ITEMS = [
     to: '/leads/form-collection',
     permission: PERMISSIONS.LEADS_VIEW,
     icon: FileCheck2,
+    hiddenForRoles: ['Finance'],
+    hiddenForScopedUsers: true,
+  },
+  {
+    label: 'Programs',
+    to: '/programs',
+    permission: PERMISSIONS.PROGRAMS_VIEW,
+    icon: GraduationCap,
     hiddenForRoles: ['Finance'],
     hiddenForScopedUsers: true,
   },

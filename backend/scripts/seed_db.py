@@ -16,6 +16,7 @@ from app.config.settings import settings  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.database.mongo import close_mongo_connection, connect_to_mongo  # noqa: E402
 from app.models.permission import Permission  # noqa: E402
+from app.models.program import Program  # noqa: E402
 from app.models.role import Role  # noqa: E402
 from app.models.user import User  # noqa: E402
 from app.permissions.permission_codes import all_permission_definitions  # noqa: E402
@@ -24,6 +25,7 @@ from app.permissions.role_definitions import (  # noqa: E402
     ROLE_SCOPED_SECTION,
     SYSTEM_ROLES,
 )
+from app.services.foundation_form_pricing import CATEGORY_BY_PROGRAM, PROGRAM_LABELS  # noqa: E402
 
 
 async def seed_permissions() -> dict[str, Permission]:
@@ -58,6 +60,31 @@ async def seed_roles(permissions_by_code: dict[str, Permission]) -> dict[str, Ro
     return existing
 
 
+async def seed_programs() -> int:
+    """Create the four original programs as rows in the programs collection.
+
+    Keyed on `value`, which is exactly the old ProgramInterest enum member -
+    the same string already stored on every existing lead's program_interest -
+    so leads created before this module keep resolving to the right program
+    and pricing category. Idempotent: existing rows are left untouched, so an
+    admin's later renames or additions survive a re-run.
+    """
+    existing = {p.value for p in await Program.find_all().to_list()}
+    created = 0
+    for index, (program, label) in enumerate(PROGRAM_LABELS.items()):
+        if program.value in existing:
+            continue
+        await Program(
+            name=label,
+            value=program.value,
+            category=CATEGORY_BY_PROGRAM[program],
+            is_active=True,
+            order=index,
+        ).insert()
+        created += 1
+    return created
+
+
 async def seed_superuser(roles_by_name: dict[str, Role]) -> None:
     existing = await User.find_one({"email": settings.FIRST_SUPERUSER_EMAIL.lower()})
     if existing:
@@ -85,6 +112,10 @@ async def run_seed() -> None:
     print("Seeding roles...")
     roles_by_name = await seed_roles(permissions_by_code)
     print(f"  {len(roles_by_name)} roles in database.")
+
+    print("Seeding programs...")
+    created_programs = await seed_programs()
+    print(f"  {created_programs} program(s) created.")
 
     print("Seeding first superuser...")
     await seed_superuser(roles_by_name)

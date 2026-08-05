@@ -10,6 +10,7 @@ import { FoundationFormPage } from '@/pages/public/FoundationFormPage'
 import { MarketingBoardPage } from '@/pages/marketing/MarketingBoardPage'
 import { AdmissionsPage } from '@/pages/admissions/AdmissionsPage'
 import { StudentsPage } from '@/pages/students/StudentsPage'
+import { ProgramsPage } from '@/pages/programs/ProgramsPage'
 import { CoursesPage } from '@/pages/courses/CoursesPage'
 import { BatchesPage } from '@/pages/batches/BatchesPage'
 import { HRCoordinatorPage } from '@/pages/hr/HRCoordinatorPage'
@@ -59,6 +60,9 @@ export function AppRoutes() {
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.STUDENTS_VIEW} />}>
             <Route path="/students" element={<StudentsPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={PERMISSIONS.PROGRAMS_VIEW} />}>
+            <Route path="/programs" element={<ProgramsPage />} />
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.COURSES_VIEW} />}>
             <Route path="/courses" element={<CoursesPage />} />

@@ -31,6 +31,11 @@ export const PERMISSIONS = {
   STUDENTS_UPDATE: 'students.update',
   STUDENTS_DELETE: 'students.delete',
 
+  PROGRAMS_VIEW: 'programs.view',
+  PROGRAMS_CREATE: 'programs.create',
+  PROGRAMS_UPDATE: 'programs.update',
+  PROGRAMS_DELETE: 'programs.delete',
+
   COURSES_VIEW: 'courses.view',
   COURSES_CREATE: 'courses.create',
   COURSES_UPDATE: 'courses.update',

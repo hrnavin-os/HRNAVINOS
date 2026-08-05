@@ -10,9 +10,8 @@ from app.models.foundation_form_config import (
     FoundationFormConfig,
     FoundationFormField,
     FoundationFormPlan,
-    FoundationFormProgramCfg,
 )
-from app.services.foundation_form_pricing import CATEGORY_BY_PROGRAM, PRICING, PROGRAM_LABELS
+from app.services.foundation_form_pricing import PRICING
 
 _DEFAULT_SECTIONS = [
     FormCollectionSectionCfg(code="a", label="A Section"),
@@ -53,10 +52,6 @@ def _seed_config() -> FoundationFormConfig:
         )
         for index, item in enumerate(_SEED_FIELDS)
     ]
-    programs = [
-        FoundationFormProgramCfg(value=program.value, label=label, category=CATEGORY_BY_PROGRAM[program])
-        for program, label in PROGRAM_LABELS.items()
-    ]
     categories = [
         FoundationFormCategory(
             code=code,
@@ -79,7 +74,6 @@ def _seed_config() -> FoundationFormConfig:
     return FoundationFormConfig(
         offer_info=_SEED_OFFER_INFO,
         fields=fields,
-        programs=programs,
         categories=categories,
         sections=list(_DEFAULT_SECTIONS),
     )
@@ -112,7 +106,6 @@ class FoundationFormConfigRepository:
             {
                 FoundationFormConfig.offer_info: config.offer_info,
                 FoundationFormConfig.fields: config.fields,
-                FoundationFormConfig.programs: config.programs,
                 FoundationFormConfig.categories: config.categories,
                 FoundationFormConfig.sections: config.sections,
                 FoundationFormConfig.updated_at: config.updated_at,

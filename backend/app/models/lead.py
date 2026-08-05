@@ -15,7 +15,6 @@ from app.models.enums import (
     PaymentMethod,
     PaymentOption,
     PaymentPlanOption,
-    ProgramInterest,
 )
 
 
@@ -72,7 +71,10 @@ class Lead(BaseDocument):
     raw_form_data: dict[str, str] | None = Field(default=None)
     # Set for Foundation Form submissions; drives the plan-specific payment
     # collection UI (installments) instead of the generic single-amount one.
-    program_interest: ProgramInterest | None = None
+    # An open-ended Program.value, not a closed enum: admins add and retire
+    # programs at runtime from Admin > Programs, exactly as `section` above is
+    # open-ended. Validated against the programs collection in the services.
+    program_interest: str | None = None
     payment_plan: PaymentPlanOption | None = None
     installments: list[PaymentInstallment] = Field(default_factory=list)
     # Which Form Collection section this lead came through, if any - an

@@ -6,6 +6,7 @@ from app.models.enums import LeadSource, PaymentTimeline
 from app.models.lead import Lead
 from app.repositories.foundation_form_config_repository import FoundationFormConfigRepository
 from app.repositories.lead_repository import LeadRepository
+from app.repositories.program_repository import ProgramRepository
 from app.schemas.foundation_form_schema import (
     FoundationFormCategory,
     FoundationFormFieldConfig,
@@ -27,11 +28,16 @@ class FoundationFormService:
     def __init__(self) -> None:
         self.leads = LeadRepository()
         self.config_repo = FoundationFormConfigRepository()
+        self.programs = ProgramRepository()
 
     async def get_pricing(self) -> FoundationFormPricingResponse:
         config = await self.config_repo.get_or_create()
+        # The dropdown's options, straight from the programs collection - this
+        # is what makes an Add/Edit/Delete in Admin > Programs show up in the
+        # public form on the next load, with no code change.
         programs = [
-            FoundationFormProgramOption(value=p.value, label=p.label, category=p.category) for p in config.programs
+            FoundationFormProgramOption(value=p.value, label=p.name, category=p.category)
+            for p in await self.programs.list_active()
         ]
         categories = {
             c.code: FoundationFormCategory(
@@ -87,16 +93,16 @@ class FoundationFormService:
         installments = []
 
         if data.program_interest is not None:
-            program_cfg = next((p for p in config.programs if p.value == data.program_interest), None)
-            if program_cfg is None:
+            program = await self.programs.get_by_value(data.program_interest)
+            if program is None or not program.is_active:
                 raise BadRequestError("Selected program is not valid.")
-            course_interest = program_cfg.label
-            raw_form_data["program_interest"] = program_cfg.label
+            course_interest = program.name
+            raw_form_data["program_interest"] = program.name
 
             if data.payment_plan is not None:
-                plan = get_plan_details(config, data.program_interest, data.payment_plan)
-                installments = build_installments(config, data.program_interest, data.payment_plan)
-                payment_expected = build_payment_expected_summary(config, data.program_interest, data.payment_plan)
+                plan = get_plan_details(config, program.category, data.payment_plan)
+                installments = build_installments(config, program.category, data.payment_plan)
+                payment_expected = build_payment_expected_summary(config, program.category, data.payment_plan)
                 raw_form_data["payment_plan"] = f"{plan.label} - {plan.summary}"
                 raw_form_data["after_placement_fee"] = plan.after_placement
 

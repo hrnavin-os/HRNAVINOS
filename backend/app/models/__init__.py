@@ -17,6 +17,7 @@ from app.models.notification import Notification
 from app.models.payment import Payment
 from app.models.permission import Permission
 from app.models.placement import Placement
+from app.models.program import Program
 from app.models.refresh_token import RefreshToken
 from app.models.report import Report
 from app.models.role import Role
@@ -44,6 +45,7 @@ ALL_DOCUMENTS = [
     Payment,
     Permission,
     Placement,
+    Program,
     RefreshToken,
     Report,
     Role,
@@ -73,6 +75,7 @@ __all__ = [
     "Payment",
     "Permission",
     "Placement",
+    "Program",
     "RefreshToken",
     "Report",
     "Role",

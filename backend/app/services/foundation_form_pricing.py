@@ -17,6 +17,11 @@ from app.models.enums import PaymentPlanOption, ProgramInterest
 from app.models.foundation_form_config import FoundationFormCategory, FoundationFormConfig, FoundationFormPlan
 from app.models.lead import PaymentInstallment
 
+# Seed data only. Programs are now rows in the `programs` collection, created
+# from these two dicts by scripts/seed_db.py so the four original programs keep
+# the exact `value` identifiers that existing leads already reference. Nothing
+# at runtime reads them, and ProgramInterest is no longer a closed set - admins
+# add and remove programs from Admin > Programs.
 PROGRAM_LABELS: dict[ProgramInterest, str] = {
     ProgramInterest.ONLY_RECRUITMENT: "Only Recruitment",
     ProgramInterest.RECRUITMENT_INTERNSHIP: "Recruitment + Internship",
@@ -120,18 +125,20 @@ INSTALLMENT_LABELS: dict[PaymentPlanOption, list[str]] = {
 }
 
 
-def get_category_for_program(config: FoundationFormConfig, program_interest: str) -> FoundationFormCategory:
-    program_cfg = next((p for p in config.programs if p.value == program_interest), None)
-    if program_cfg is None:
-        raise BadRequestError("Selected program is not valid.")
-    category = next((c for c in config.categories if c.code == program_cfg.category), None)
+# These take a pricing category code rather than a program, because programs
+# now live in their own collection (app/models/program.py) while the pricing
+# they map onto still lives in the config singleton. Callers resolve the
+# Program first and hand over its `category` - that keeps this module sync and
+# free of any dependency on the programs collection.
+def get_category(config: FoundationFormConfig, category_code: str) -> FoundationFormCategory:
+    category = next((c for c in config.categories if c.code == category_code), None)
     if category is None:
         raise BadRequestError("Selected program's pricing category is not configured.")
     return category
 
 
-def get_plan_details(config: FoundationFormConfig, program_interest: str, payment_plan: str) -> FoundationFormPlan:
-    category = get_category_for_program(config, program_interest)
+def get_plan_details(config: FoundationFormConfig, category_code: str, payment_plan: str) -> FoundationFormPlan:
+    category = get_category(config, category_code)
     plan = next((p for p in category.plans if p.value == payment_plan), None)
     if plan is None:
         raise BadRequestError("Selected payment plan is not valid for the chosen program.")
@@ -139,13 +146,13 @@ def get_plan_details(config: FoundationFormConfig, program_interest: str, paymen
 
 
 def build_installments(
-    config: FoundationFormConfig, program_interest: str, payment_plan: PaymentPlanOption
+    config: FoundationFormConfig, category_code: str, payment_plan: PaymentPlanOption
 ) -> list[PaymentInstallment]:
-    plan = get_plan_details(config, program_interest, payment_plan)
+    plan = get_plan_details(config, category_code, payment_plan)
     labels = INSTALLMENT_LABELS[payment_plan]
     return [PaymentInstallment(label=label, amount=amount) for label, amount in zip(labels, plan.amounts)]
 
 
-def build_payment_expected_summary(config: FoundationFormConfig, program_interest: str, payment_plan: str) -> str:
-    plan = get_plan_details(config, program_interest, payment_plan)
+def build_payment_expected_summary(config: FoundationFormConfig, category_code: str, payment_plan: str) -> str:
+    plan = get_plan_details(config, category_code, payment_plan)
     return f"{plan.label} - {plan.summary} (After Placement: {plan.after_placement})"

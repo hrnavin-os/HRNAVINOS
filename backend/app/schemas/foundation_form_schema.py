@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
-from app.models.enums import PaymentPlanOption, PaymentTimeline, ProgramInterest
+from app.models.enums import PaymentPlanOption, PaymentTimeline
 
 FieldType = Literal["text", "email", "tel", "textarea"]
 
@@ -30,7 +30,8 @@ class FoundationFormFieldConfig(BaseModel):
 
 
 class FoundationFormProgramOption(BaseModel):
-    value: ProgramInterest
+    # Open-ended Program.value rather than a closed enum - see app/models/program.py.
+    value: str
     label: str
     category: str
 
@@ -60,7 +61,8 @@ class FoundationFormSubmit(BaseModel):
     name: str = Field(min_length=2, max_length=150)
     mobile_number: str = Field(min_length=6, max_length=20)
     email: EmailStr | None = None
-    program_interest: ProgramInterest | None = None
+    # Validated against the live programs collection in FoundationFormService.submit().
+    program_interest: str | None = Field(default=None, max_length=50)
     payment_plan: PaymentPlanOption | None = None
     payment_timeline: PaymentTimeline | None = None
     queries: str | None = Field(default=None, max_length=2000)
@@ -97,12 +99,6 @@ class FoundationFormCategoryConfig(BaseModel):
     plans: list[FoundationFormPlanConfig]
 
 
-class FoundationFormProgramConfig(BaseModel):
-    value: ProgramInterest
-    label: str = Field(min_length=1, max_length=255)
-    category: str
-
-
 class FormCollectionSectionConfig(BaseModel):
     code: str = Field(min_length=1, max_length=50)
     label: str = Field(min_length=1, max_length=255)
@@ -111,7 +107,6 @@ class FormCollectionSectionConfig(BaseModel):
 class FoundationFormConfigResponse(BaseModel):
     offer_info: str
     fields: list[FoundationFormFieldConfig]
-    programs: list[FoundationFormProgramConfig]
     categories: list[FoundationFormCategoryConfig]
     sections: list[FormCollectionSectionConfig]
     updated_at: datetime
@@ -120,7 +115,6 @@ class FoundationFormConfigResponse(BaseModel):
 class FoundationFormConfigUpdate(BaseModel):
     offer_info: str
     fields: list[FoundationFormFieldConfig]
-    programs: list[FoundationFormProgramConfig]
     categories: list[FoundationFormCategoryConfig]
     sections: list[FormCollectionSectionConfig]
 

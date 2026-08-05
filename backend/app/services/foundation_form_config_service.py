@@ -2,14 +2,13 @@
 import uuid
 
 from app.exceptions.base import BadRequestError, NotFoundError
-from app.models.enums import PaymentPlanOption, ProgramInterest
+from app.models.enums import PaymentPlanOption
 from app.models.foundation_form_config import (
     FormCollectionSectionCfg,
     FoundationFormCategory,
     FoundationFormConfig,
     FoundationFormField,
     FoundationFormPlan,
-    FoundationFormProgramCfg,
 )
 from app.permissions.permission_codes import Permissions
 from app.repositories.foundation_form_config_repository import FoundationFormConfigRepository
@@ -26,7 +25,6 @@ _SECTION_ROLE_PERMISSIONS = [Permissions.LEADS_VIEW, Permissions.LEADS_UPDATE]
 
 _REQUIRED_CATEGORY_CODES = {"only_recruitment", "internship_or_generalist", "generalist_internship"}
 _REQUIRED_PLAN_VALUES = set(PaymentPlanOption)
-_REQUIRED_PROGRAM_VALUES = set(ProgramInterest)
 _UNDELETABLE_FIELD_KEYS = {"name", "mobile_number"}
 _STRUCTURAL_FIELD_KEYS = {"program_interest", "payment_timeline"}
 
@@ -56,18 +54,9 @@ class FoundationFormConfigService:
             if match is not None and not match.is_system:
                 raise BadRequestError(f"'{structural_key}' is a reserved field key.")
 
-        program_values = {p.value for p in data.programs}
-        if program_values != _REQUIRED_PROGRAM_VALUES:
-            raise BadRequestError("All 4 programs must be present - programs can't be added or removed.")
-
         category_codes = {c.code for c in data.categories}
         if category_codes != _REQUIRED_CATEGORY_CODES:
             raise BadRequestError("All 3 pricing categories must be present - categories can't be added or removed.")
-
-        valid_program_categories = {c.code for c in data.categories}
-        for program in data.programs:
-            if program.category not in valid_program_categories:
-                raise BadRequestError(f"Program '{program.value}' references an unknown category.")
 
         for category in data.categories:
             plan_values = {p.value for p in category.plans}
@@ -110,9 +99,6 @@ class FoundationFormConfigService:
                 is_system=f.is_system,
             )
             for f in data.fields
-        ]
-        config.programs = [
-            FoundationFormProgramCfg(value=p.value, label=p.label, category=p.category) for p in data.programs
         ]
         config.categories = [
             FoundationFormCategory(

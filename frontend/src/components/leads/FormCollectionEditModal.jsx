@@ -172,7 +172,6 @@ export function FormCollectionEditModal({ onClose }) {
     mutation.mutate({
       offer_info: values.offer_info,
       fields: values.fields,
-      programs: values.programs,
       categories: values.categories,
       // Sections aren't edited from this modal (they're managed via "Add
       // Form" on the Form Collection landing page) - pass the latest fetched
@@ -228,30 +227,15 @@ export function FormCollectionEditModal({ onClose }) {
             </div>
           </section>
 
+          {/* Programs themselves are managed in Admin > Programs, which is the
+              single source of truth for the form's program dropdown. Only the
+              pricing categories they map onto are edited here. */}
           <section>
-            <h2 className="mb-3 text-sm font-semibold text-slate-800">Programs & Pricing</h2>
+            <h2 className="mb-3 text-sm font-semibold text-slate-800">Pricing</h2>
             <div className="space-y-6">
               {(data.categories ?? []).map((category, categoryIndex) => (
                 <CategoryEditor key={category.code} category={category} categoryIndex={categoryIndex} register={register} />
               ))}
-            </div>
-            <div className="mt-6 border-t border-slate-100 pt-4">
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Programs</h3>
-              <div className="space-y-2">
-                {(data.programs ?? []).map((program, programIndex) => (
-                  <div key={program.value} className="flex items-center gap-3">
-                    <input type="hidden" {...register(`programs.${programIndex}.value`)} />
-                    <input type="hidden" {...register(`programs.${programIndex}.category`)} />
-                    <div className="flex-1">
-                      <Input
-                        label={programIndex === 0 ? 'Program Name' : undefined}
-                        {...register(`programs.${programIndex}.label`, { required: true })}
-                      />
-                    </div>
-                    <p className="pb-2 text-xs text-slate-400">Category: {program.category}</p>
-                  </div>
-                ))}
-              </div>
             </div>
           </section>
 

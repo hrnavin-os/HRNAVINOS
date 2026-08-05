@@ -38,6 +38,12 @@ class LeadRepository(BaseRepository[Lead]):
     async def count_by_section(self, code: str) -> int:
         return await Lead.find({"is_deleted": False, "section": code}).count()
 
+    async def count_by_program(self, value: str) -> int:
+        """Leads that picked this program — deleting it would orphan their
+        program_interest, so ProgramService blocks the delete on a non-zero
+        count and points the admin at deactivating instead."""
+        return await Lead.find({"is_deleted": False, "program_interest": value}).count()
+
     async def count_by_section_all(self) -> dict[str, int]:
         counts = await Lead.aggregate(
             [

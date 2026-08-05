@@ -13,7 +13,6 @@ from app.models.enums import (
     PaymentMethod,
     PaymentOption,
     PaymentPlanOption,
-    ProgramInterest,
 )
 
 
@@ -56,7 +55,9 @@ class LeadAssign(BaseModel):
 
 
 class LeadPlanAssign(BaseModel):
-    program_interest: ProgramInterest
+    # A Program.value; validated against the live programs collection in
+    # LeadService.assign_plan() rather than by a closed enum here.
+    program_interest: str = Field(min_length=1, max_length=50)
     payment_plan: PaymentPlanOption
 
 
@@ -97,7 +98,7 @@ class LeadResponse(BaseModel):
     payment_mode: PaymentMethod | None
     reviewed: bool
     raw_form_data: dict[str, str] | None = None
-    program_interest: ProgramInterest | None = None
+    program_interest: str | None = None
     section: str | None = None
     remarks: str | None = None
     payment_option: PaymentOption | None = None

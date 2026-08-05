@@ -48,6 +48,13 @@ class Permissions(StrEnum):
     STUDENTS_UPDATE = "students.update"
     STUDENTS_DELETE = "students.delete"
 
+    # ---------- Programs ----------
+    # The Foundation Form's program dropdown, managed from Admin > Programs.
+    PROGRAMS_VIEW = "programs.view"
+    PROGRAMS_CREATE = "programs.create"
+    PROGRAMS_UPDATE = "programs.update"
+    PROGRAMS_DELETE = "programs.delete"
+
     # ---------- Courses ----------
     COURSES_VIEW = "courses.view"
     COURSES_CREATE = "courses.create"

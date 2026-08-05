@@ -45,12 +45,6 @@ class FoundationFormCategory(BaseModel):
     plans: list[FoundationFormPlan] = Field(default_factory=list)
 
 
-class FoundationFormProgramCfg(BaseModel):
-    value: str = Field(max_length=50)  # ProgramInterest value
-    label: str = Field(max_length=255)
-    category: str = Field(max_length=50)
-
-
 class FormCollectionSectionCfg(BaseModel):
     """One Form Collection section (A/B/C/...). Unlike programs/categories,
     this list is open-ended - admins can add new sections at any time from
@@ -69,9 +63,12 @@ class FormCollectionSectionCfg(BaseModel):
 
 
 class FoundationFormConfig(BaseDocument):
+    # Note: no `programs` here. Programs moved to their own collection
+    # (app/models/program.py) so admins can add and remove them; this document
+    # keeps only the pricing categories those programs point at. Pre-existing
+    # documents still carry a stale `programs` key, which is simply ignored.
     offer_info: str = ""
     fields: list[FoundationFormField] = Field(default_factory=list)
-    programs: list[FoundationFormProgramCfg] = Field(default_factory=list)
     categories: list[FoundationFormCategory] = Field(default_factory=list)
     sections: list[FormCollectionSectionCfg] = Field(default_factory=list)
 

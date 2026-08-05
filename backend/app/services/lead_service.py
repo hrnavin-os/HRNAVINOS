@@ -15,6 +15,7 @@ from app.repositories.audit_log_repository import AuditLogRepository
 from app.repositories.foundation_form_config_repository import FoundationFormConfigRepository
 from app.repositories.lead_repository import LeadRepository
 from app.repositories.notification_repository import NotificationRepository
+from app.repositories.program_repository import ProgramRepository
 from app.repositories.role_repository import RoleRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.common import PaginatedResponse, PaginationParams
@@ -42,6 +43,7 @@ class LeadService:
         self.audit_logs = AuditLogRepository()
         self.storage = StorageService()
         self.foundation_form_config = FoundationFormConfigRepository()
+        self.programs = ProgramRepository()
         self.roles = RoleRepository()
         self.notifications = NotificationRepository()
 
@@ -313,15 +315,15 @@ class LeadService:
         its installments from the same pricing table the public form uses."""
         lead = await self.get(lead_id, scope=scope)
         config = await self.foundation_form_config.get_or_create()
-        program_cfg = next((p for p in config.programs if p.value == data.program_interest), None)
-        if program_cfg is None:
+        program = await self.programs.get_by_value(data.program_interest)
+        if program is None or not program.is_active:
             raise BadRequestError("Selected program is not valid.")
-        installments = build_installments(config, data.program_interest, data.payment_plan)
+        installments = build_installments(config, program.category, data.payment_plan)
         lead.program_interest = data.program_interest
         lead.payment_plan = data.payment_plan
         lead.installments = installments
-        lead.course_interest = program_cfg.label
-        lead.payment_expected = build_payment_expected_summary(config, data.program_interest, data.payment_plan)
+        lead.course_interest = program.name
+        lead.payment_expected = build_payment_expected_summary(config, program.category, data.payment_plan)
         lead.updated_by = actor_id
         lead.touch(actor_id)
         await lead.save()
