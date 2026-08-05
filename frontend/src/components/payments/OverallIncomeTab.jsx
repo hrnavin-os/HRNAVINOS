@@ -72,7 +72,7 @@ export function OverallIncomeTab() {
 
   return (
     <>
-      <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <DataTable
           columns={columns}
           rows={leads}

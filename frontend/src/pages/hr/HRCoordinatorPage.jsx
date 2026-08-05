@@ -253,7 +253,7 @@ export function HRCoordinatorPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <DataTable
           columns={COLUMNS[tab]}
           rows={rows}

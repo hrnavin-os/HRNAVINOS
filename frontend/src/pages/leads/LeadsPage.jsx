@@ -580,7 +580,14 @@ export function LeadsPage() {
     (course) => !EXCLUDED_COURSE_OPTIONS.includes(course),
   )
 
-  const { items, page, setPage, search, setSearch, isLoading, error, totalPages } = usePaginatedQuery('leads', leadService, {
+  // `total` above is the stat cards' unfiltered count across the whole board;
+  // this one is how many rows the current filters actually matched, which is
+  // what the table footer should report.
+  const {
+    items, page, setPage, search, setSearch, isLoading, error, totalPages,
+    total: filteredTotal,
+    pageSize,
+  } = usePaginatedQuery('leads', leadService, {
     section: effectiveSectionFilter || undefined,
     course_interest: courseFilter || undefined,
     status: statusFilter || undefined,
@@ -798,13 +805,19 @@ export function LeadsPage() {
         )}
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         {/* No onRowClick: the row carries inline editors (payment selects,
             remarks) whose dismiss-backdrops sit in portals, and a portal
             click still reaches the row through React's component tree. The
             View column's eye icon is the one deliberate way in. */}
         <DataTable columns={columns} rows={items} isLoading={isLoading} error={error} />
-        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          total={filteredTotal}
+          pageSize={pageSize}
+        />
       </div>
 
       {isCreateOpen && (

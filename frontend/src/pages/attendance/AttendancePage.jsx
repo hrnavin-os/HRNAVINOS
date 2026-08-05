@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
+import { DataTable } from '@/components/ui/DataTable'
 import { useAuth } from '@/hooks/useAuth'
 import { PERMISSIONS } from '@/constants/permissions'
 
@@ -76,36 +77,35 @@ export function AttendancePage() {
       {batchId && loadingStudents && <LoadingSpinner />}
 
       {batchId && students?.items?.length > 0 && (
-        <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Student</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {students.items.map((student) => (
-                <tr key={student.id}>
-                  <td className="px-4 py-3 text-sm text-slate-700">{student.first_name} {student.last_name}</td>
-                  <td className="px-4 py-3">
-                    <select
-                      className="rounded-md border border-slate-300 px-2 py-1 text-sm"
-                      value={statuses[student.id] ?? existingStatus(student.id) ?? 'present'}
-                      onChange={(event) => setStatuses((prev) => ({ ...prev, [student.id]: event.target.value }))}
-                      disabled={!hasPermission(PERMISSIONS.ATTENDANCE_MARK)}
-                    >
-                      {STATUS_OPTIONS.map((status) => (
-                        <option key={status} value={status}>
-                          {status}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          <DataTable
+            columns={[
+              {
+                key: 'student',
+                header: 'Student',
+                render: (student) => `${student.first_name} ${student.last_name}`,
+              },
+              {
+                key: 'status',
+                header: 'Status',
+                render: (student) => (
+                  <select
+                    className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm capitalize text-slate-700 transition-colors hover:border-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                    value={statuses[student.id] ?? existingStatus(student.id) ?? 'present'}
+                    onChange={(event) => setStatuses((prev) => ({ ...prev, [student.id]: event.target.value }))}
+                    disabled={!hasPermission(PERMISSIONS.ATTENDANCE_MARK)}
+                  >
+                    {STATUS_OPTIONS.map((status) => (
+                      <option key={status} value={status} className="capitalize">
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                ),
+              },
+            ]}
+            rows={students.items}
+          />
           {hasPermission(PERMISSIONS.ATTENDANCE_MARK) && (
             <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
               <ErrorMessage message={submitMutation.error ? getApiErrorMessage(submitMutation.error) : null} />

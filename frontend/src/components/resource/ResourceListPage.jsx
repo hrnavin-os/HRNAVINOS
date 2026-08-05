@@ -175,15 +175,33 @@ export function ResourceListPage({
               ))}
             </div>
           )}
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+          {/* Card mode has no card to sit inside, so the footer gets its own.
+              Skipped entirely when there's nothing to count, otherwise an
+              empty bordered strip hangs under the empty state. */}
+          {items.length > 0 && (
+            <div className="mt-3 rounded-lg border border-slate-200 bg-white shadow-sm">
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                total={total}
+                pageSize={pageSize}
+              />
+            </div>
+          )}
         </div>
       ) : (
-        <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           <DataTable columns={tableColumns} rows={items} isLoading={isLoading} error={error} />
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            total={total}
+            pageSize={pageSize}
+          />
         </div>
       )}
-      <p className="mt-2 text-xs text-slate-400">{total} total record{total === 1 ? '' : 's'}</p>
 
       {createFields && (
         <Modal title={`New ${title}`} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
