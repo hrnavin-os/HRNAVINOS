@@ -63,7 +63,6 @@ export function UsersPage() {
   return (
     <ResourceListPage
       title="Users"
-      description="Staff and system accounts."
       queryKey="users"
       service={userService}
       columns={columns}

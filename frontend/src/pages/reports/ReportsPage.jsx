@@ -43,7 +43,6 @@ function ReportSection({ title, queryKey, queryFn, renderRow, headers }) {
 export function ReportsPage() {
   return (
     <div>
-      <h1 className="mb-6 text-xl font-semibold text-slate-900">Reports</h1>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <ReportSection
           title="Revenue by Month"

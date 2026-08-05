@@ -722,15 +722,6 @@ export function LeadsPage() {
 
   return (
     <div>
-      <div className="mb-4 flex items-start justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">
-            {scopedSection ? `Admin ${scopedSection.toUpperCase()}-Section` : 'Admin'}
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">Prospective students tracked through the admin pipeline.</p>
-        </div>
-      </div>
-
       {scopedSection ? (
         <LeadSectionStageStats
           total={total}

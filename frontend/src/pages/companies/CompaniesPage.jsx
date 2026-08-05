@@ -28,7 +28,6 @@ export function CompaniesPage() {
   return (
     <ResourceListPage
       title="Companies"
-      description="Placement partner organizations."
       queryKey="companies"
       service={companyService}
       columns={columns}

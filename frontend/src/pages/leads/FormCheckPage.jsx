@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ClipboardCheck, ImageIcon, RefreshCw } from 'lucide-react'
+import { ImageIcon, RefreshCw } from 'lucide-react'
 import { leadService } from '@/services/leadService'
 import { googleSheetsService } from '@/services/googleSheetsService'
 import { getApiErrorMessage } from '@/services/apiClient'
@@ -150,17 +150,7 @@ export function FormCheckPage() {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-semibold text-slate-900">
-            <ClipboardCheck className="h-5 w-5 text-brand-600" strokeWidth={2} aria-hidden="true" />
-            Form Check
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Review new submissions synced from Google Sheets — check every answer and image, fix anything wrong,
-            then approve to add them to Leads (CRM) as a New Lead.
-          </p>
-        </div>
+      <div className="mb-4 flex flex-wrap items-start justify-end gap-3">
         <Button variant="secondary" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending}>
           <RefreshCw className={`h-4 w-4 ${syncMutation.isPending ? 'animate-spin' : ''}`} strokeWidth={2} aria-hidden="true" />
           {syncMutation.isPending ? 'Syncing…' : 'Sync Sheets'}

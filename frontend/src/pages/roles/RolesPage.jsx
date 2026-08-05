@@ -26,7 +26,6 @@ export function RolesPage() {
   return (
     <ResourceListPage
       title="Roles"
-      description="Permission bundles assignable to users."
       queryKey="roles"
       service={roleService}
       columns={columns}

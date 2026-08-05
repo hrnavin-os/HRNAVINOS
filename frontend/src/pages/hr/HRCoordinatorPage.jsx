@@ -222,13 +222,6 @@ export function HRCoordinatorPage() {
 
   return (
     <div>
-      <div className="mb-4">
-        <h1 className="text-xl font-semibold text-slate-900">HR Coordinator</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Students moving from finance approval into their batch and WhatsApp group.
-        </p>
-      </div>
-
       <div className="mb-4 flex flex-wrap gap-3">
         {TABS.map((item, index) => (
           <StatCard

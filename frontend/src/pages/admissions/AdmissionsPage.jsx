@@ -57,7 +57,6 @@ export function AdmissionsPage() {
   return (
     <ResourceListPage
       title="Admissions"
-      description="Confirmed enrollments into a course/batch."
       queryKey="admissions"
       service={admissionService}
       columns={columns}

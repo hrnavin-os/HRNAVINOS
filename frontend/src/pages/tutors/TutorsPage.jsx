@@ -40,7 +40,6 @@ export function TutorsPage() {
   return (
     <ResourceListPage
       title="Tutors"
-      description="Teaching staff profiles."
       queryKey="tutors"
       service={tutorService}
       columns={columns}

@@ -46,7 +46,6 @@ export function BatchesPage() {
   return (
     <ResourceListPage
       title="Batches"
-      description="Scheduled runs of a course."
       queryKey="batches"
       service={batchService}
       columns={columns}

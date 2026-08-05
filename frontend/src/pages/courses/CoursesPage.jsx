@@ -27,7 +27,6 @@ export function CoursesPage() {
   return (
     <ResourceListPage
       title="Courses"
-      description="Programs offered by the institute."
       queryKey="courses"
       service={courseService}
       columns={columns}

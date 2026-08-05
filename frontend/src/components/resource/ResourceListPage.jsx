@@ -19,8 +19,9 @@ import { ConfirmDeleteModal } from '@/components/resource/ConfirmDeleteModal'
 // Shared "list + search + paginate + create" page shell used by every
 // straightforward CRUD module (Courses, Batches, Tutors, Placements, ...).
 export function ResourceListPage({
+  // Still used for the "New {title}" create-modal heading, even though the
+  // page itself no longer renders a title.
   title,
-  description,
   queryKey,
   service,
   columns,
@@ -141,18 +142,16 @@ export function ResourceListPage({
 
   return (
     <div>
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
-          {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+      {/* No page heading here: the Topbar already renders the current page's
+          name from NAV_LEAF_ITEMS, so an <h1> repeated it directly underneath.
+          Search and the create action share the top row instead. */}
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="max-w-xs flex-1">
+          <Input placeholder="Search..." value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} />
         </div>
         {renderCreateAction
           ? renderCreateAction({ onCreated: () => queryClient.invalidateQueries({ queryKey: [queryKey] }) })
           : canCreate && createFields && <Button onClick={() => setIsModalOpen(true)}>+ New</Button>}
-      </div>
-
-      <div className="mb-4 max-w-xs">
-        <Input placeholder="Search..." value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} />
       </div>
 
       {renderCard ? (

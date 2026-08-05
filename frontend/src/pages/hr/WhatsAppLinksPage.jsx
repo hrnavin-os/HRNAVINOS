@@ -115,13 +115,6 @@ export function WhatsAppLinksPage() {
 
   return (
     <div>
-      <div className="mb-4">
-        <h1 className="text-xl font-semibold text-slate-900">WhatsApp Links</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          The WhatsApp group invite link for each section, shared with students once their batch is confirmed.
-        </p>
-      </div>
-
       {sections.length === 0 ? (
         <p className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-500">
           No sections configured yet.

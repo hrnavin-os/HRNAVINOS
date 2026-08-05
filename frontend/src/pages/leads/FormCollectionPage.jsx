@@ -135,17 +135,7 @@ export function FormCollectionPage() {
 
   return (
     <div>
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-semibold text-slate-900">
-            <ClipboardCheck className="h-5 w-5 text-brand-600" strokeWidth={2} aria-hidden="true" />
-            Form Collection
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Share a section's link with prospective students on a call or meet. When they submit it, their details
-            are added straight to Admin, filed under that section.
-          </p>
-        </div>
+      <div className="mb-4 flex items-start justify-end gap-3">
         {canConfigure && (
           <Button onClick={() => addSectionMutation.mutate()} disabled={addSectionMutation.isPending}>
             <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />

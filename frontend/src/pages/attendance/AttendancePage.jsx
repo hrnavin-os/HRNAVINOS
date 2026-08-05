@@ -61,8 +61,6 @@ export function AttendancePage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-xl font-semibold text-slate-900">Attendance</h1>
-
       <div className="mb-6 grid max-w-lg grid-cols-2 gap-4">
         <Select label="Batch" value={batchId} onChange={(event) => setBatchId(event.target.value)}>
           <option value="">Select batch</option>

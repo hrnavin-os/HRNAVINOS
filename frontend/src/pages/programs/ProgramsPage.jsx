@@ -195,7 +195,6 @@ export function ProgramsPage() {
   return (
     <ResourceListPage
       title="Programs"
-      description='Options for the form’s "Program you are planning to join?" dropdown.'
       queryKey="programs"
       service={programService}
       columns={[]}

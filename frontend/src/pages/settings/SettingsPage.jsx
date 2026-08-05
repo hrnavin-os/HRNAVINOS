@@ -40,9 +40,6 @@ export function SettingsPage() {
 
   return (
     <div>
-      <h1 className="mb-1 text-xl font-semibold text-slate-900">Settings</h1>
-      <p className="mb-6 text-sm text-slate-500">Institute-wide configuration.</p>
-
       <ErrorMessage message={error ? getApiErrorMessage(error) : null} />
 
       <form

@@ -40,7 +40,6 @@ export function TicketsPage() {
   return (
     <ResourceListPage
       title="Tickets"
-      description="Help-desk requests raised by staff and students."
       queryKey="tickets"
       service={ticketService}
       columns={columns}

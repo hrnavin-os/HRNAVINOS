@@ -45,7 +45,6 @@ export function StudentsPage() {
   return (
     <ResourceListPage
       title="Students"
-      description="Enrolled learners across all courses."
       queryKey="students"
       service={studentService}
       columns={columns}

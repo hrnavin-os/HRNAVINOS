@@ -60,7 +60,6 @@ export function PlacementsPage() {
   return (
     <ResourceListPage
       title="Placement"
-      description="Student job placement pipeline."
       queryKey="placements"
       service={placementService}
       columns={columns}
