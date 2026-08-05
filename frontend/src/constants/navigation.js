@@ -1,7 +1,6 @@
 import {
   LayoutDashboard,
   Target,
-  Megaphone,
   UserPlus,
   ClipboardCheck,
   MessageCircle,
@@ -47,14 +46,6 @@ export const NAV_ITEMS = [
     permission: PERMISSIONS.LEADS_VIEW,
     icon: FileCheck2,
     hiddenForRoles: ['Finance'],
-    hiddenForScopedUsers: true,
-  },
-  {
-    label: 'Marketing Board',
-    to: '/marketing-board',
-    permission: PERMISSIONS.LEADS_VIEW,
-    icon: Megaphone,
-    hiddenForRoles: ['Admin', 'Finance'],
     hiddenForScopedUsers: true,
   },
   { label: 'Admissions', to: '/admissions', permission: PERMISSIONS.ADMISSIONS_VIEW, icon: UserPlus },
