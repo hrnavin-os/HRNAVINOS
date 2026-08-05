@@ -4,6 +4,8 @@ import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
 import { useAuth } from '@/hooks/useAuth'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { DataTable } from '@/components/ui/DataTable'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { Pagination } from '@/components/ui/Pagination'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -41,6 +43,12 @@ export function ResourceListPage({
   // Opt-in leading "S.No" column. Numbers run across the whole result set
   // rather than restarting at 1 on every page.
   serialNumber = false,
+  // Swaps the table for a responsive card grid, keeping search, pagination,
+  // the create flow and every row-action modal untouched. Receives
+  // ({ row, index, actions }) where `actions` is the ready-made
+  // View/Edit/Delete control, already permission-filtered - so a card decides
+  // where the buttons sit without re-deriving who may press them.
+  renderCard,
 }) {
   const { hasPermission } = useAuth()
   const queryClient = useQueryClient()
@@ -106,10 +114,10 @@ export function ResourceListPage({
     render: (_row, index) => (page - 1) * pageSize + index + 1,
   }
 
-  const actionsColumn = {
-    key: '__actions',
-    header: 'Actions',
-    render: (row) => (
+  // Shared by the table's Actions column and by renderCard, so a card gets the
+  // same permission-filtered controls without repeating any of this.
+  const rowActionsFor = (row) =>
+    hasRowActions ? (
       <RowActions
         onView={rowActions.view ? () => setViewingRow(row) : undefined}
         onEdit={canEdit ? () => openEdit(row) : undefined}
@@ -117,7 +125,12 @@ export function ResourceListPage({
         lockedReason={rowActions.lockedReason?.(row) ?? null}
         deleteLockedReason={rowActions.remove?.lockedReason?.(row) ?? null}
       />
-    ),
+    ) : null
+
+  const actionsColumn = {
+    key: '__actions',
+    header: 'Actions',
+    render: (row) => rowActionsFor(row),
   }
 
   const tableColumns = [
@@ -142,10 +155,35 @@ export function ResourceListPage({
         <Input placeholder="Search..." value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} />
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-        <DataTable columns={tableColumns} rows={items} isLoading={isLoading} error={error} />
-        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
-      </div>
+      {renderCard ? (
+        <div>
+          {isLoading ? (
+            <div className="rounded-lg border border-slate-200 bg-white py-10 shadow-sm">
+              <LoadingSpinner />
+            </div>
+          ) : error ? (
+            <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+              <ErrorMessage message={error} />
+            </div>
+          ) : !items.length ? (
+            <div className="rounded-lg border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 shadow-sm">
+              No records found.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {items.map((row, index) => (
+                <div key={row.id}>{renderCard({ row, index, actions: rowActionsFor(row) })}</div>
+              ))}
+            </div>
+          )}
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        </div>
+      ) : (
+        <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+          <DataTable columns={tableColumns} rows={items} isLoading={isLoading} error={error} />
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        </div>
+      )}
       <p className="mt-2 text-xs text-slate-400">{total} total record{total === 1 ? '' : 's'}</p>
 
       {createFields && (
@@ -166,6 +204,7 @@ export function ResourceListPage({
           service={service}
           row={viewingRow}
           fields={rowActions.view.fields}
+          maxWidth={rowActions.view.maxWidth}
           onClose={() => setViewingRow(null)}
         />
       )}
