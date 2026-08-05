@@ -1,7 +1,6 @@
 import {
   LayoutDashboard,
   Target,
-  UserPlus,
   ClipboardCheck,
   MessageCircle,
   Wallet,
@@ -48,8 +47,6 @@ export const NAV_ITEMS = [
     hiddenForRoles: ['Finance'],
     hiddenForScopedUsers: true,
   },
-  { label: 'Admissions', to: '/admissions', permission: PERMISSIONS.ADMISSIONS_VIEW, icon: UserPlus },
-
   {
     label: 'Batch Confirmation',
     to: '/batch-confirmation',
