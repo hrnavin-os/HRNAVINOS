@@ -29,54 +29,105 @@ const STATUS_OPTIONS = [
   { value: 'false', label: 'Inactive' },
 ]
 
-// The payment side of a program: every plan its pricing category offers, with
-// the installment schedule spelled out rather than left as a bare total.
-function PricingBreakdown({ category }) {
-  if (!category) {
-    return <p className="text-sm text-amber-600">This program's pricing category no longer exists.</p>
-  }
+const SECTION_HEADING = 'text-xs font-semibold uppercase tracking-wide text-slate-400'
+
+function StatTile({ label, value }) {
+  return (
+    <div className="rounded-lg border border-brand-100 bg-brand-50 px-3 py-2.5">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-brand-700/70">{label}</p>
+      <p className="mt-0.5 text-base font-semibold text-brand-700">{value}</p>
+    </div>
+  )
+}
+
+// One payment plan. The brand left-edge is what separates plans at a glance -
+// three same-coloured boxes in a column read as one block otherwise.
+function PlanCard({ plan }) {
+  const amounts = plan.amounts ?? []
+  const total = amounts.reduce((sum, amount) => sum + Number(amount ?? 0), 0)
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-4 rounded-md bg-slate-50 px-3 py-2 text-sm">
-        <span className="text-slate-500">
-          Training fee: <span className="font-medium text-slate-900">{category.training_fee}</span>
-        </span>
-        <span className="text-slate-500">
-          After placement: <span className="font-medium text-slate-900">{category.after_placement_fee}</span>
-        </span>
+    <div className="overflow-hidden rounded-lg border border-slate-200 border-l-4 border-l-brand-600 bg-white">
+      <div className="flex items-baseline justify-between gap-3 px-3.5 pt-3">
+        <div className="min-w-0">
+          <h4 className="truncate text-sm font-semibold text-slate-900">{plan.label}</h4>
+          <p className="mt-0.5 text-xs text-slate-500">{plan.summary}</p>
+        </div>
+        <span className="shrink-0 text-base font-semibold text-brand-700">{formatCurrency(total)}</span>
       </div>
 
-      {(category.plans ?? []).map((plan) => {
-        const amounts = plan.amounts ?? []
-        const total = amounts.reduce((sum, amount) => sum + Number(amount ?? 0), 0)
-        return (
-          <div key={plan.value} className="rounded-md border border-slate-200 p-3">
-            <div className="flex items-baseline justify-between gap-3">
-              <h4 className="text-sm font-semibold text-slate-900">{plan.label}</h4>
-              <span className="shrink-0 text-sm font-semibold text-slate-900">{formatCurrency(total)}</span>
+      {amounts.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 px-3.5 pt-2.5">
+          {amounts.map((amount, index) => (
+            <div
+              key={`${plan.value}-${index}`}
+              className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-center"
+            >
+              <p className="text-[10px] uppercase tracking-wide text-slate-400">
+                {installmentLabel(plan.value, index)}
+              </p>
+              <p className="text-xs font-semibold text-slate-800">{formatCurrency(amount)}</p>
             </div>
-            <p className="mt-0.5 text-xs text-slate-500">{plan.summary}</p>
+          ))}
+        </div>
+      )}
 
-            {amounts.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {amounts.map((amount, index) => (
-                  <span
-                    key={`${plan.value}-${index}`}
-                    className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-700"
-                  >
-                    {installmentLabel(plan.value, index)}: {formatCurrency(amount)}
-                  </span>
-                ))}
-              </div>
-            )}
+      <div className="mt-3 flex items-center justify-between border-t border-slate-100 bg-slate-50/60 px-3.5 py-2">
+        <span className="text-xs text-slate-500">After placement</span>
+        <span className="text-xs font-semibold text-slate-700">{plan.after_placement}</span>
+      </div>
+    </div>
+  )
+}
 
-            <p className="mt-2 text-xs text-slate-500">
-              After placement: <span className="font-medium text-slate-700">{plan.after_placement}</span>
-            </p>
+// Purpose-built body for the eye icon, in place of the default label/value
+// list: the pricing is the point of this popup, so it gets the room and the
+// visual weight rather than sitting as one more row.
+function ProgramDetail({ program, category }) {
+  return (
+    <div className="space-y-5">
+      <div className="rounded-lg border border-brand-100 bg-brand-50 px-4 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-brand-700/70">Pricing Category</p>
+            <p className="mt-0.5 text-sm font-semibold text-brand-700">{category?.label ?? program.category}</p>
           </div>
-        )
-      })}
+          {statusBadge(program)}
+        </div>
+        <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-brand-100 pt-2.5">
+          <code className="rounded bg-white px-1.5 py-0.5 text-[11px] text-slate-600">{program.value}</code>
+          <span className="text-[11px] text-brand-700/60">Display order {program.order}</span>
+        </div>
+      </div>
+
+      {program.description && <p className="text-sm leading-relaxed text-slate-600">{program.description}</p>}
+
+      {!category ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+          This program&rsquo;s pricing category no longer exists, so the form can&rsquo;t offer it a payment plan.
+        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <StatTile label="Training Fee" value={category.training_fee} />
+            <StatTile label="After Placement" value={category.after_placement_fee} />
+          </div>
+
+          <div>
+            <h3 className={`${SECTION_HEADING} mb-2`}>Payment Plans</h3>
+            <div className="space-y-2.5">
+              {(category.plans ?? []).map((plan) => (
+                <PlanCard key={plan.value} plan={plan} />
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="flex flex-wrap gap-x-6 gap-y-1 border-t border-slate-100 pt-3 text-xs text-slate-400">
+        <span>Created {formatDate(program.created_at)}</span>
+        <span>Updated {formatDate(program.updated_at)}</span>
+      </div>
     </div>
   )
 }
@@ -157,22 +208,8 @@ export function ProgramsPage() {
       rowActions={{
         view: {
           title: (row) => row.name,
-          maxWidth: 'max-w-2xl',
-          fields: [
-            { label: 'Program', value: (row) => row.name },
-            { label: 'Description', value: (row) => row.description },
-            { label: 'Pricing Category', value: (row) => categoryFor(row.category)?.label ?? row.category },
-            { label: 'Form Value', value: (row) => row.value },
-            { label: 'Display Order', value: (row) => String(row.order) },
-            { label: 'Status', value: statusBadge },
-            {
-              label: 'Payment Plans',
-              fullWidth: true,
-              value: (row) => <PricingBreakdown category={categoryFor(row.category)} />,
-            },
-            { label: 'Created', value: (row) => formatDate(row.created_at) },
-            { label: 'Updated', value: (row) => formatDate(row.updated_at) },
-          ],
+          maxWidth: 'max-w-xl',
+          renderBody: (row) => <ProgramDetail program={row} category={categoryFor(row.category)} />,
         },
         edit: {
           title: (row) => `Edit ${row.name}`,

@@ -205,6 +205,7 @@ export function ResourceListPage({
           row={viewingRow}
           fields={rowActions.view.fields}
           maxWidth={rowActions.view.maxWidth}
+          renderBody={rowActions.view.renderBody}
           onClose={() => setViewingRow(null)}
         />
       )}
