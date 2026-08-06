@@ -49,13 +49,24 @@ const EXCLUDED_COURSE_OPTIONS = ['HR Recruitment', 'Nothing']
 // specifically - independent of each stage's shared `tone` name, which the
 // stat cards and the Lead Detail modal's stage-picker buttons key their own
 // (different) color maps off of, so changing it here can't affect them.
+// Every stage is a solid gradient with white text, so the column reads as one
+// consistent set rather than one filled chip among pale ones.
+//
+// The step numbers differ per hue on purpose. White text has to stay legible
+// against the *lightest* end of each gradient - the `from` stop - and the hues
+// are not equally light there. Matching blue's 500 numerically would put white
+// on yellow-500 at 1.92:1 and green-500 at 2.28:1, effectively unreadable.
+// These steps were chosen so every `from` stop clears 4.5:1 (blue 5.17, red
+// 4.83, yellow 4.92, purple 5.38, green 5.02, orange 5.18) - matched by
+// perceived lightness, not by step number. Re-check the contrast if you
+// retune these.
 const STAGE_CELL_STYLES = {
-  new_lead: 'border-transparent bg-linear-to-r from-blue-500 to-blue-600 text-white',
-  rnr: 'border-red-300 bg-red-100 text-red-700',
-  pre_screening: 'border-yellow-300 bg-yellow-100 text-yellow-700',
-  financial_approval: 'border-purple-300 bg-purple-100 text-purple-700',
-  batch_confirmation: 'border-green-300 bg-green-100 text-green-700',
-  lost: 'border-orange-300 bg-orange-100 text-orange-700',
+  new_lead: 'border-transparent bg-linear-to-r from-blue-600 to-blue-700 text-white',
+  rnr: 'border-transparent bg-linear-to-r from-red-600 to-red-700 text-white',
+  pre_screening: 'border-transparent bg-linear-to-r from-yellow-700 to-yellow-800 text-white',
+  financial_approval: 'border-transparent bg-linear-to-r from-purple-600 to-purple-700 text-white',
+  batch_confirmation: 'border-transparent bg-linear-to-r from-green-700 to-green-800 text-white',
+  lost: 'border-transparent bg-linear-to-r from-orange-700 to-orange-800 text-white',
 }
 
 // Matches Lead.remarks' server-side cap, so an over-long paste is stopped at
@@ -692,7 +703,9 @@ export function LeadsPage() {
       align: 'center',
       render: (row) => {
         const stage = LEAD_STAGE_BY_VALUE[row.status]
-        const style = STAGE_CELL_STYLES[row.status] ?? 'border-slate-300 bg-slate-100 text-slate-700'
+        const style =
+          STAGE_CELL_STYLES[row.status] ??
+          'border-transparent bg-linear-to-r from-slate-600 to-slate-700 text-white'
         return (
           <span className={`inline-flex items-center whitespace-nowrap rounded-md border px-2.5 py-0.5 text-xs font-medium ${style}`}>
             {stage?.label ?? titleCase(row.status)}
