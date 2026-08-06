@@ -1,9 +1,8 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowRight,
   BookOpen,
-  Calendar,
   CalendarClock,
   CheckCircle2,
   Clock,
@@ -15,10 +14,8 @@ import {
   Pencil,
   Phone,
   Plus,
-  Tag,
   Trash2,
   UserPlus,
-  UserRound,
   Wallet,
 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
@@ -28,7 +25,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { formatLeadSource, LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
+import { LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
 import { INSTALLMENT_MODE_OPTIONS, PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
 import { PAYMENT_PLAN_TONES } from '@/constants/paymentOptions'
 import { leadService } from '@/services/leadService'
@@ -119,16 +116,13 @@ const INFO_TONE_CLASSES = {
   rose: 'bg-linear-to-br from-rose-500 to-rose-700',
 }
 
+// Source, Assigned To and Created were dropped as noise: the first two are
+// near-constant across this board and the third is already the Date column in
+// the table you opened this from.
 const INFO_ITEMS = (lead) => [
   { key: 'phone', icon: Phone, label: 'Phone', value: lead.phone, tone: 'blue' },
   { key: 'email', icon: Mail, label: 'Email', value: lead.email ?? '—', tone: 'violet' },
-  { key: 'source', icon: Tag, label: 'Source', value: formatLeadSource(lead.source), tone: 'emerald' },
   { key: 'course_interest', icon: BookOpen, label: 'Course Interest', value: lead.course_interest ?? '—', tone: 'purple' },
-]
-
-const TRAILING_INFO_ITEMS = (lead) => [
-  { key: 'assigned_to', icon: UserRound, label: 'Assigned To', value: lead.assigned_to_name ?? 'Unassigned', tone: 'cyan' },
-  { key: 'created', icon: Calendar, label: 'Created', value: formatDateTime(lead.created_at), tone: 'rose' },
 ]
 
 function InfoCard({ item }) {
@@ -254,7 +248,7 @@ function PlanAssignmentForm({ onAssign, isAssigning, error }) {
   )
 }
 
-function InstallmentRow({ lead, installment, index, onSave, isSaving }) {
+function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved = false }) {
   const isTwoShotSecond = lead.payment_plan === 'two_shot' && index === 1
   const [showPaidFields, setShowPaidFields] = useState(!isTwoShotSecond || installment.paid || Boolean(installment.mode))
   const [file, setFile] = useState(null)
@@ -325,8 +319,17 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving }) {
             <Button variant="secondary" onClick={() => setShowPaidFields(true)}>
               Payment received — fill details
             </Button>
-            <Button onClick={handleSaveSchedule} disabled={isSaving}>
-              {isSaving ? 'Saving…' : 'Save schedule'}
+            <Button variant={justSaved ? 'success' : 'primary'} onClick={handleSaveSchedule} disabled={isSaving}>
+              {isSaving ? (
+                'Saving…'
+              ) : justSaved ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                  Saved
+                </>
+              ) : (
+                'Save schedule'
+              )}
             </Button>
           </div>
         </div>
@@ -403,13 +406,22 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving }) {
           </div>
           <ErrorMessage message={validationError} />
           <div className="flex justify-end">
+            {/* `justSaved` wins over `paid` for a few seconds so the click gets
+                an acknowledgement of its own - going straight to "Paid" left
+                it ambiguous whether this save had actually landed or the row
+                was already settled beforehand. */}
             <Button
-              variant={installment.paid ? 'success' : 'primary'}
+              variant={justSaved || installment.paid ? 'success' : 'primary'}
               onClick={handleSavePayment}
               disabled={isSaving}
             >
               {isSaving ? (
                 'Saving…'
+              ) : justSaved ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                  Saved
+                </>
               ) : installment.paid ? (
                 <>
                   <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
@@ -433,6 +445,7 @@ function PaymentCollectionSection({
   assignPlanError,
   onSaveInstallment,
   savingIndex,
+  savedIndex,
 }) {
   if (!lead.payment_plan) {
     return <PlanAssignmentForm onAssign={onAssignPlan} isAssigning={isAssigningPlan} error={assignPlanError} />
@@ -455,10 +468,13 @@ function PaymentCollectionSection({
           {PAYMENT_PLAN_LABELS[lead.payment_plan] ?? lead.payment_plan}
         </Badge>
       </div>
-      {/* No max-height here on purpose: the modal body is already the scroll
+      {/* Two across rather than full width - each card is a short form, and
+          stretched to the full modal the fields looked lost against all that
+          empty space. Drops to one column on narrow screens.
+          No max-height on purpose: the modal body is already the scroll
           container, and a second one nested inside it gave the popup two
           scrollbars side by side. */}
-      <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {lead.installments.map((installment, index) => (
           <InstallmentRow
             key={index}
@@ -467,6 +483,7 @@ function PaymentCollectionSection({
             index={index}
             onSave={onSaveInstallment}
             isSaving={savingIndex === index}
+            justSaved={savedIndex === index}
           />
         ))}
       </div>
@@ -483,11 +500,10 @@ function OverviewTab({
   assignPlanError,
   onSaveInstallment,
   savingInstallmentIndex,
+  savedInstallmentIndex,
 }) {
   return (
     <div className="space-y-4">
-      {/* Three across on the wider modal - at two, the six facts ran to three
-          rows and pushed the stage picker below the fold. */}
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
         {INFO_ITEMS(lead).map((item) => (
           <InfoCard key={item.key} item={item} />
@@ -495,12 +511,6 @@ function OverviewTab({
       </div>
 
       {lead.payment_expected && <PaymentExpectedCard value={lead.payment_expected} />}
-
-      <div className="grid grid-cols-2 gap-2.5">
-        {TRAILING_INFO_ITEMS(lead).map((item) => (
-          <InfoCard key={item.key} item={item} />
-        ))}
-      </div>
 
       {lead.notes && (
         <div className="border-t border-slate-100 pt-4">
@@ -521,6 +531,7 @@ function OverviewTab({
             assignPlanError={assignPlanError}
             onSaveInstallment={onSaveInstallment}
             savingIndex={savingInstallmentIndex}
+            savedIndex={savedInstallmentIndex}
           />
         </div>
       )}
@@ -653,6 +664,7 @@ export function LeadDetailModal({ lead, onClose }) {
   // immediately instead of only after the modal is reopened.
   const [liveLead, setLiveLead] = useState(lead)
   const [savingInstallmentIndex, setSavingInstallmentIndex] = useState(null)
+  const [savedInstallmentIndex, setSavedInstallmentIndex] = useState(null)
   const [pendingLostStage, setPendingLostStage] = useState(false)
   const [lostReason, setLostReason] = useState('')
 
@@ -700,12 +712,25 @@ export function LeadDetailModal({ lead, onClose }) {
 
   const installmentMutation = useMutation({
     mutationFn: ({ index, values }) => leadService.updateInstallment(lead.id, index, values),
-    onSuccess: (updatedLead) => {
+    // Keyed off onSuccess, not onSettled: onSettled also fires on failure, and
+    // a row that says "Saved" after the request errored is worse than one that
+    // says nothing.
+    onSuccess: (updatedLead, { index }) => {
       setLiveLead(updatedLead)
       invalidateLeadQueries()
+      setSavedInstallmentIndex(index)
     },
     onSettled: () => setSavingInstallmentIndex(null),
   })
+
+  // Clears the "Saved" confirmation after a beat so the button settles back to
+  // its real state ("Paid", or the schedule button) rather than claiming to be
+  // a save receipt forever.
+  useEffect(() => {
+    if (savedInstallmentIndex === null) return undefined
+    const timer = setTimeout(() => setSavedInstallmentIndex(null), 2500)
+    return () => clearTimeout(timer)
+  }, [savedInstallmentIndex])
 
   function handleSaveInstallment(index, values) {
     setSavingInstallmentIndex(index)
@@ -763,6 +788,7 @@ export function LeadDetailModal({ lead, onClose }) {
             assignPlanError={planMutation.error ? getApiErrorMessage(planMutation.error) : null}
             onSaveInstallment={handleSaveInstallment}
             savingInstallmentIndex={savingInstallmentIndex}
+            savedInstallmentIndex={savedInstallmentIndex}
           />
         )}
         {activeTab === 'payment' && <PaymentDetailsTab lead={liveLead} />}
