@@ -20,6 +20,7 @@ from app.schemas.lead_schema import (
     LeadTimelineEntryResponse,
     LeadUpdate,
 )
+from app.schemas.notification_schema import PaymentReminderRequest, PaymentReminderResponse
 from app.services.lead_service import LeadService
 
 router = APIRouter(prefix="/leads", tags=["Lead Management"])
@@ -221,6 +222,28 @@ async def mark_lead_lost(
     scope = await get_actor_scope(actor)
     lead = await service.mark_lost_nonpayment(lead_id, actor_id=actor.id, scope=scope)
     return await service.to_response(lead)
+
+
+@router.post("/{lead_id}/payment-reminder", response_model=PaymentReminderResponse)
+async def send_payment_reminder(
+    lead_id: uuid.UUID,
+    payload: PaymentReminderRequest,
+    # Gated on PAYMENTS_VIEW rather than NOTIFICATIONS_CREATE: this is a
+    # Finance action taken from the Cashbook, and Finance holds that.
+    actor: User = Depends(RequirePermissions(Permissions.PAYMENTS_VIEW)),
+) -> PaymentReminderResponse:
+    notified = await LeadService().send_payment_reminder(
+        lead_id, payload.kind, note=payload.note, actor_id=actor.id
+    )
+    if notified == 0:
+        return PaymentReminderResponse(
+            message="No section admin is set up for this lead's section yet, so nobody was notified.",
+            notified=0,
+        )
+    return PaymentReminderResponse(
+        message=f"Reminder sent to {notified} section admin{'' if notified == 1 else 's'}.",
+        notified=notified,
+    )
 
 
 @router.post("/{lead_id}/assign", response_model=LeadResponse)

@@ -42,5 +42,21 @@ class NotificationService:
         await notification.save()
         return notification
 
+    async def acknowledge(self, notification_id: uuid.UUID, *, user_id: uuid.UUID) -> Notification:
+        """Marks read and, for a lead-linked notification (a Finance payment
+        reminder), moves that lead to the follow-up stage - opening the
+        reminder *is* the acknowledgement that someone will chase it.
+
+        Imported inside the method: LeadService already constructs a
+        NotificationRepository, so importing it at module scope would make
+        these two modules import each other.
+        """
+        notification = await self.mark_read(notification_id, user_id=user_id)
+        if notification.lead_id:
+            from app.services.lead_service import LeadService
+
+            await LeadService().move_to_follow_up(notification.lead_id, actor_id=user_id)
+        return notification
+
     async def mark_all_read(self, user_id: uuid.UUID) -> None:
         await self.notifications.mark_all_read(user_id)

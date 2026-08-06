@@ -27,6 +27,9 @@ export function IncomeDetailModal({ lead, onClose }) {
       error={markLostMutation.error ? getApiErrorMessage(markLostMutation.error) : null}
       onMarkLost={() => markLostMutation.mutate()}
       isMarkingLost={markLostMutation.isPending}
+      // Only Finance gets the reminder actions: a Section Admin looking at
+      // their own lead has nobody to forward it to.
+      showReminders
       footer={
         <Button variant="secondary" onClick={onClose}>
           Close

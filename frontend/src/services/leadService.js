@@ -27,6 +27,12 @@ export const leadService = {
     const { data } = await apiClient.post(`/leads/${id}/review`, values)
     return data
   },
+  // Asks the lead's section admins to chase an outstanding payment.
+  // kind: 'due' | 'emi' | 'after_placement'.
+  sendPaymentReminder: async (id, { kind, note }) => {
+    const { data } = await apiClient.post(`/leads/${id}/payment-reminder`, { kind, note: note || null })
+    return data
+  },
   assignPlan: async (id, { programInterest, paymentPlan }) => {
     const { data } = await apiClient.post(`/leads/${id}/plan`, {
       program_interest: programInterest,

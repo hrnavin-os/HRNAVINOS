@@ -1,12 +1,29 @@
-import { AlertTriangle, Calendar, CheckCircle2, CircleDollarSign, CreditCard, Hash, Phone, Wallet } from 'lucide-react'
+import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
+import {
+  AlertTriangle,
+  BellRing,
+  Calendar,
+  CheckCircle2,
+  CircleDollarSign,
+  CreditCard,
+  GraduationCap,
+  Hash,
+  Mail,
+  Phone,
+  Wallet,
+} from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
+import { leadService } from '@/services/leadService'
+import { getApiErrorMessage } from '@/services/apiClient'
 import { formatCurrency, formatDate, titleCase } from '@/utils/formatters'
-import { getEmiPaymentHealth, getLeadPaymentSummary } from '@/utils/leadPayment'
-import { PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
+import { getAfterPlacementFee, getEmiPaymentHealth, getLeadPaymentSummary } from '@/utils/leadPayment'
+import { PAYMENT_PLAN_LABELS, INSTALLMENT_MODE_TONES } from '@/constants/installmentPaymentModes'
+import { PAYMENT_PLAN_TONES } from '@/constants/paymentOptions'
 import { MEDIA_BASE_URL } from '@/constants/config'
 
 // Same accent-per-fact treatment as the Lead Detail Modal's overview cards,
@@ -21,6 +38,7 @@ const INFO_TONE_CLASSES = {
 }
 
 function buildInfoItems(lead, summary) {
+  const afterPlacement = getAfterPlacementFee(lead)
   const items = [
     { icon: Phone, label: 'Contact', value: lead.phone, tone: 'blue' },
     { icon: Calendar, label: 'Date', value: formatDate(lead.created_at), tone: 'rose' },
@@ -47,7 +65,89 @@ function buildInfoItems(lead, summary) {
     value: summary.hasPlan ? formatCurrency(summary.dueAmount) : '—',
     tone: 'amber',
   })
+  // Owed only once the student is placed, so it sits apart from Due Amount
+  // (what's outstanding on the training fee right now).
+  items.push({
+    icon: GraduationCap,
+    label: 'After Placement',
+    value: afterPlacement ?? '—',
+    tone: 'teal',
+  })
+  if (lead.email) {
+    items.push({ icon: Mail, label: 'Email', value: lead.email, tone: 'blue' })
+  }
   return items
+}
+
+// The three amounts Finance can chase, each only offered when there is
+// actually something outstanding - a button that sends a reminder about a
+// settled balance is worse than no button.
+function buildReminderKinds(lead, summary) {
+  const kinds = []
+  const unpaidInstallments = (lead.installments ?? []).filter((installment) => !installment.paid).length
+
+  if (summary.hasPlan && summary.dueAmount > 0) {
+    kinds.push({
+      kind: lead.payment_plan === 'emi_6_weeks' ? 'emi' : 'due',
+      label: lead.payment_plan === 'emi_6_weeks' ? 'Remind: EMI' : 'Remind: Due',
+      detail:
+        lead.payment_plan === 'emi_6_weeks'
+          ? `${unpaidInstallments} instalment${unpaidInstallments === 1 ? '' : 's'} left · ${formatCurrency(summary.dueAmount)}`
+          : formatCurrency(summary.dueAmount),
+    })
+  }
+
+  const afterPlacement = getAfterPlacementFee(lead)
+  if (afterPlacement && !/^nil$/i.test(afterPlacement)) {
+    kinds.push({ kind: 'after_placement', label: 'Remind: After placement', detail: afterPlacement })
+  }
+
+  return kinds
+}
+
+// Sends the lead's section admins a reminder to chase a payment. Rendered
+// only where a caller opts in (Finance's Cashbook popup), since a Section
+// Admin viewing their own lead has nobody to forward it to.
+function PaymentReminders({ lead, summary }) {
+  const [sent, setSent] = useState(null)
+  const kinds = buildReminderKinds(lead, summary)
+
+  const mutation = useMutation({
+    mutationFn: ({ kind }) => leadService.sendPaymentReminder(lead.id, { kind }),
+    onSuccess: (data) => setSent(data.message),
+  })
+
+  if (kinds.length === 0) return null
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <div className="flex items-center gap-2">
+        <BellRing className="h-4 w-4 text-slate-400" strokeWidth={2} aria-hidden="true" />
+        <p className="text-sm font-medium text-slate-700">Ask this section&rsquo;s admin to follow up</p>
+      </div>
+      <p className="mt-1 text-xs text-slate-500">
+        Sends a notification to the admins of {lead.section ? `section ${lead.section.toUpperCase()}` : 'this lead’s section'}. Opening it moves the
+        lead to Follow up call.
+      </p>
+
+      <div className="mt-2.5 flex flex-wrap gap-2">
+        {kinds.map((item) => (
+          <Button
+            key={item.kind}
+            variant="secondary"
+            onClick={() => mutation.mutate({ kind: item.kind })}
+            disabled={mutation.isPending}
+          >
+            {item.label}
+            <span className="text-xs font-normal text-slate-400">{item.detail}</span>
+          </Button>
+        ))}
+      </div>
+
+      <ErrorMessage message={mutation.error ? getApiErrorMessage(mutation.error) : null} />
+      {sent && !mutation.error && <p className="mt-2 text-xs font-medium text-emerald-600">{sent}</p>}
+    </div>
+  )
 }
 
 // Single-shot plans have exactly one installment, already fully covered by
@@ -121,7 +221,7 @@ function PaymentHealthBanner({ health, onMarkLost, isMarkingLost }) {
 // own - reused both by the standalone modal below (which adds its own
 // avatar/name header) and by the Lead Detail Modal's Payment Details tab
 // (whose parent modal already shows the lead's name).
-export function PaymentDetailContent({ lead, error, onMarkLost, isMarkingLost }) {
+export function PaymentDetailContent({ lead, error, onMarkLost, isMarkingLost, showReminders = false }) {
   const summary = getLeadPaymentSummary(lead)
   const health = getEmiPaymentHealth(lead)
 
@@ -130,6 +230,8 @@ export function PaymentDetailContent({ lead, error, onMarkLost, isMarkingLost })
       <ErrorMessage message={error} />
 
       <PaymentHealthBanner health={health} onMarkLost={onMarkLost} isMarkingLost={isMarkingLost} />
+
+      {showReminders && <PaymentReminders lead={lead} summary={summary} />}
 
       <div className="grid grid-cols-2 gap-2.5">
         {buildInfoItems(lead, summary).map((item) => (
@@ -182,24 +284,50 @@ export function PaymentDetailContent({ lead, error, onMarkLost, isMarkingLost })
 // Read-only payment detail view shared by the Approvals "Review" popup and
 // the Cashbook "view details" popup - only the title/status badge/footer
 // actions differ between the two.
-export function PaymentDetailModal({ lead, title, statusBadge, onClose, error, footer, onMarkLost, isMarkingLost }) {
+export function PaymentDetailModal({
+  lead,
+  title,
+  statusBadge,
+  onClose,
+  error,
+  footer,
+  onMarkLost,
+  isMarkingLost,
+  showReminders = false,
+}) {
+  const summary = getLeadPaymentSummary(lead)
+
   return (
-    <Modal title={title} isOpen onClose={onClose} maxWidth="max-w-lg">
+    <Modal title={title} isOpen onClose={onClose} maxWidth="max-w-2xl">
       <div className="-mt-2 space-y-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
           <LeadAvatar name={lead.name} size="h-12 w-12" />
           <div className="min-w-0">
             <h2 className="truncate text-lg font-semibold text-slate-900">{lead.name}</h2>
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               {statusBadge}
+              {/* Same tone maps as the Cashbook table, so a plan and a mode
+                  keep the colour they had in the row you clicked. */}
               {lead.payment_plan && (
-                <Badge tone="blue">{PAYMENT_PLAN_LABELS[lead.payment_plan] ?? lead.payment_plan}</Badge>
+                <Badge tone={PAYMENT_PLAN_TONES[lead.payment_plan] ?? 'slate'}>
+                  {PAYMENT_PLAN_LABELS[lead.payment_plan] ?? lead.payment_plan}
+                </Badge>
               )}
+              {summary.mode && (
+                <Badge tone={INSTALLMENT_MODE_TONES[summary.mode] ?? 'slate'}>{titleCase(summary.mode)}</Badge>
+              )}
+              {lead.section && <Badge tone="slate">Section {lead.section.toUpperCase()}</Badge>}
             </div>
           </div>
         </div>
 
-        <PaymentDetailContent lead={lead} error={error} onMarkLost={onMarkLost} isMarkingLost={isMarkingLost} />
+        <PaymentDetailContent
+          lead={lead}
+          error={error}
+          onMarkLost={onMarkLost}
+          isMarkingLost={isMarkingLost}
+          showReminders={showReminders}
+        />
 
         {footer && <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">{footer}</div>}
       </div>

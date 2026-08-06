@@ -21,6 +21,7 @@ import { PaymentsPage } from '@/pages/payments/PaymentsPage'
 import { PlacementsPage } from '@/pages/placements/PlacementsPage'
 import { CompaniesPage } from '@/pages/companies/CompaniesPage'
 import { TicketsPage } from '@/pages/tickets/TicketsPage'
+import { NotificationsPage } from '@/pages/notifications/NotificationsPage'
 import { ReportsPage } from '@/pages/reports/ReportsPage'
 import { UsersPage } from '@/pages/users/UsersPage'
 import { RolesPage } from '@/pages/roles/RolesPage'
@@ -46,6 +47,9 @@ export function AppRoutes() {
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
           <Route path="/" element={<HomeRoute />} />
+          {/* No permission gate: everyone's notifications are their own, and
+              the endpoint only ever returns the caller's. */}
+          <Route path="/notifications" element={<NotificationsPage />} />
 
           <Route element={<ProtectedRoute permission={PERMISSIONS.LEADS_VIEW} />}>
             <Route path="/leads" element={<LeadsPage />} />

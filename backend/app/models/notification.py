@@ -15,6 +15,11 @@ class Notification(BaseDocument):
     type: NotificationType = NotificationType.INFO
     link: str | None = Field(default=None, max_length=500)
     is_read: bool = False
+    # Set when the notification is about a specific lead (e.g. a Finance
+    # payment reminder). Acknowledging such a notification moves that lead to
+    # the follow-up stage, so the id has to be structured rather than buried
+    # in `link`. None for general notifications, which just get marked read.
+    lead_id: uuid.UUID | None = None
 
     class Settings:
         name = "notifications"

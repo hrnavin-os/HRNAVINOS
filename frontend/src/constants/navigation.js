@@ -2,6 +2,7 @@ import {
   LayoutDashboard,
   Target,
   GraduationCap,
+  Bell,
   ClipboardCheck,
   MessageCircle,
   Wallet,
@@ -81,6 +82,10 @@ export const NAV_ITEMS = [
       { label: 'Roles', to: '/roles', permission: PERMISSIONS.ROLES_VIEW, icon: ShieldCheck },
     ],
   },
+  // permission: null - a user's own notifications are always theirs to read,
+  // and Section Admins (who are the ones Finance's payment reminders land on)
+  // hold almost nothing else.
+  { label: 'Notifications', to: '/notifications', permission: null, icon: Bell },
   { label: 'Settings', to: '/settings', permission: PERMISSIONS.SETTINGS_VIEW, icon: Settings },
 ]
 

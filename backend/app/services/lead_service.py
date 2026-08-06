@@ -422,6 +422,100 @@ class LeadService:
         )
         return lead
 
+    # Wording per reminder kind. The amount is filled in by the caller below,
+    # since only Finance's own view knows what is actually outstanding.
+    _REMINDER_COPY = {
+        "due": ("Payment due", "still has an outstanding balance"),
+        "emi": ("EMI payment due", "has an EMI instalment outstanding"),
+        "after_placement": ("After-placement fee due", "has an after-placement fee outstanding"),
+    }
+
+    async def send_payment_reminder(
+        self, lead_id: uuid.UUID, kind: str, *, note: str | None, actor_id: uuid.UUID | None
+    ) -> int:
+        """Finance asks this lead's section admins to chase a payment.
+
+        Targets every user whose role is scoped to the lead's own section, so
+        it reaches whoever actually owns that pipeline rather than everyone.
+        Returns how many people were notified - zero is a real outcome worth
+        surfacing (a lead with no section, or a section with no admin yet),
+        not an error.
+        """
+        lead = await self.get(lead_id)
+        if not lead.section:
+            raise BadRequestError(
+                "This lead isn't filed under a Form Collection section, so it has no section admin to notify."
+            )
+
+        title, phrase = self._REMINDER_COPY.get(kind, self._REMINDER_COPY["due"])
+        roles = await self.roles.list_by_scoped_section(lead.section)
+        recipients = []
+        for role in roles:
+            users, _ = await self.users.list(page=1, page_size=1000, filters={"role_id": role.id})
+            recipients.extend(users)
+
+        message = f"{lead.name} {phrase}. Open to follow up."
+        if note:
+            message = f"{message} Note from Finance: {note}"
+
+        # De-duplicated: one person holding two scoped roles should still get
+        # a single notification.
+        for user in {user.id: user for user in recipients}.values():
+            await self.notifications.create(
+                Notification(
+                    user_id=user.id,
+                    title=title,
+                    message=message,
+                    type=NotificationType.WARNING,
+                    lead_id=lead.id,
+                )
+            )
+
+        await self.audit.record(
+            user_id=actor_id,
+            action="UPDATE",
+            entity_type="Lead",
+            entity_id=str(lead.id),
+            changes={"payment_reminder": kind, "notified": len(recipients)},
+        )
+        return len({user.id for user in recipients})
+
+    async def move_to_follow_up(self, lead_id: uuid.UUID, *, actor_id: uuid.UUID | None) -> Lead:
+        """Reached when a section admin opens a payment reminder. PRE_SCREENING
+        is the stage the UI labels "Follow up call" (constants/leadStages.js).
+
+        This intentionally moves a lead *backwards* - the leads Finance chases
+        sit at Batch Confirmation, and the whole point of the reminder is that
+        someone has to call them again. Guarding against a backwards move
+        would mean the feature silently did nothing for exactly the leads it
+        exists for.
+
+        Two cases are left alone: a lead already at this stage (nothing to do)
+        and a Lost one, so acknowledging a stale reminder can't quietly pull a
+        written-off lead back into the pipeline.
+        """
+        lead = await self.get(lead_id)
+        if lead.status in (LeadStatus.PRE_SCREENING, LeadStatus.LOST):
+            return lead
+
+        previous = lead.status
+        lead.status = LeadStatus.PRE_SCREENING
+        lead.updated_by = actor_id
+        lead.touch(actor_id)
+        await lead.save()
+        await self.audit.record(
+            user_id=actor_id,
+            action="UPDATE",
+            entity_type="Lead",
+            entity_id=str(lead.id),
+            changes={
+                "status": LeadStatus.PRE_SCREENING,
+                "from": previous,
+                "reason": "payment_reminder_acknowledged",
+            },
+        )
+        return lead
+
     async def timeline(self, lead_id: uuid.UUID, *, scope: str | None = None) -> List[LeadTimelineEntryResponse]:
         await self.get(lead_id, scope=scope)  # 404s / 403s if the lead doesn't exist or isn't in scope
         entries, _ = await self.audit_logs.list(

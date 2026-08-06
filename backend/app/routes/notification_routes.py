@@ -48,6 +48,16 @@ async def mark_read(notification_id: uuid.UUID, user: User = Depends(get_current
     )
 
 
+@router.post("/{notification_id}/acknowledge", response_model=NotificationResponse)
+async def acknowledge(notification_id: uuid.UUID, user: User = Depends(get_current_user)) -> NotificationResponse:
+    """Opening a notification. Same as mark-read, except a payment reminder
+    also moves its lead to the follow-up stage so it resurfaces in the
+    section admin's own queue."""
+    return NotificationResponse.model_validate(
+        await NotificationService().acknowledge(notification_id, user_id=user.id)
+    )
+
+
 @router.post("/mark-all-read", response_model=MessageResponse)
 async def mark_all_read(user: User = Depends(get_current_user)) -> MessageResponse:
     await NotificationService().mark_all_read(user.id)
