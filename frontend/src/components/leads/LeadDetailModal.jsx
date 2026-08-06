@@ -30,6 +30,7 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { formatLeadSource, LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
 import { INSTALLMENT_MODE_OPTIONS, PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
+import { PAYMENT_PLAN_TONES } from '@/constants/paymentOptions'
 import { leadService } from '@/services/leadService'
 import { foundationFormService } from '@/services/foundationFormService'
 import { PaymentDetailContent } from '@/components/payments/PaymentDetailModal'
@@ -104,15 +105,18 @@ function toDateTimeInputValue(value) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-// Each info card gets its own accent color so the overview reads as a set of
-// distinct facts at a glance, rather than a monotone list.
+// Each info card gets its own accent so the overview reads as a set of
+// distinct facts rather than a monotone list. The accent lives on the icon
+// plate only - the label went back to neutral slate because six differently
+// coloured labels competed with the values they were labelling, and the
+// lighter ones (cyan, emerald) were hard to read at this size.
 const INFO_TONE_CLASSES = {
-  blue: { icon: 'bg-blue-100 text-blue-600', label: 'text-blue-500' },
-  violet: { icon: 'bg-violet-100 text-violet-600', label: 'text-violet-500' },
-  emerald: { icon: 'bg-emerald-100 text-emerald-600', label: 'text-emerald-500' },
-  purple: { icon: 'bg-purple-100 text-purple-600', label: 'text-purple-500' },
-  cyan: { icon: 'bg-cyan-100 text-cyan-600', label: 'text-cyan-500' },
-  rose: { icon: 'bg-rose-100 text-rose-600', label: 'text-rose-500' },
+  blue: 'bg-linear-to-br from-blue-500 to-blue-700',
+  violet: 'bg-linear-to-br from-violet-500 to-violet-700',
+  emerald: 'bg-linear-to-br from-emerald-500 to-emerald-700',
+  purple: 'bg-linear-to-br from-purple-500 to-purple-700',
+  cyan: 'bg-linear-to-br from-cyan-500 to-cyan-700',
+  rose: 'bg-linear-to-br from-rose-500 to-rose-700',
 }
 
 const INFO_ITEMS = (lead) => [
@@ -128,14 +132,14 @@ const TRAILING_INFO_ITEMS = (lead) => [
 ]
 
 function InfoCard({ item }) {
-  const tones = INFO_TONE_CLASSES[item.tone] ?? INFO_TONE_CLASSES.blue
+  const plate = INFO_TONE_CLASSES[item.tone] ?? INFO_TONE_CLASSES.blue
   return (
-    <div className="flex items-start gap-2.5 rounded-lg border border-slate-100 bg-white p-3 shadow-sm">
-      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${tones.icon}`}>
+    <div className="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md">
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white shadow-sm ${plate}`}>
         <item.icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
       </span>
       <div className="min-w-0">
-        <p className={`text-xs font-semibold uppercase tracking-wide ${tones.label}`}>{item.label}</p>
+        <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{item.label}</p>
         <p className="break-words text-sm font-semibold text-slate-900">{item.value}</p>
       </div>
     </div>
@@ -292,12 +296,19 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving }) {
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex items-center gap-2">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-center gap-2 border-b border-slate-100 pb-2.5">
+        <span
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+            installment.paid ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
+          }`}
+        >
           {index + 1}
         </span>
-        <p className="text-base font-semibold text-slate-900">{installment.label}</p>
+        <p className="flex-1 text-sm font-semibold text-slate-900">{installment.label}</p>
+        {/* Settled rows are the common case once a plan is running - saying so
+            here means you don't have to read the form below to know. */}
+        {installment.paid && <Badge tone="emerald">Paid</Badge>}
       </div>
 
       {isTwoShotSecond && !showPaidFields ? (
@@ -428,17 +439,26 @@ function PaymentCollectionSection({
   }
 
   return (
-    <div className="rounded-lg border border-brand-200 bg-brand-50/50 p-4">
-      <div className="mb-3 flex items-center gap-2.5">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-brand-100 text-brand-600">
-          <Wallet className="h-4.5 w-4.5" strokeWidth={2} aria-hidden="true" />
+    <section>
+      {/* A plain header rather than a tinted panel wrapping the rows. The rows
+          are already bordered cards, so boxing them again produced three
+          nested frames and made the tab look cluttered. */}
+      <div className="mb-3 flex items-center gap-2.5 border-b border-slate-200 pb-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-brand-500 to-brand-700 text-white shadow-sm">
+          <Wallet className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
         </span>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-slate-800">{lead.course_interest}</p>
-          <Badge tone="blue">{PAYMENT_PLAN_LABELS[lead.payment_plan] ?? lead.payment_plan}</Badge>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-slate-900">{lead.course_interest}</p>
+          <p className="text-xs text-slate-500">Payment collection</p>
         </div>
+        <Badge tone={PAYMENT_PLAN_TONES[lead.payment_plan] ?? 'blue'}>
+          {PAYMENT_PLAN_LABELS[lead.payment_plan] ?? lead.payment_plan}
+        </Badge>
       </div>
-      <div className="max-h-96 space-y-3 overflow-y-auto pr-1">
+      {/* No max-height here on purpose: the modal body is already the scroll
+          container, and a second one nested inside it gave the popup two
+          scrollbars side by side. */}
+      <div className="space-y-3">
         {lead.installments.map((installment, index) => (
           <InstallmentRow
             key={index}
@@ -450,7 +470,7 @@ function PaymentCollectionSection({
           />
         ))}
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -466,7 +486,9 @@ function OverviewTab({
 }) {
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-2.5">
+      {/* Three across on the wider modal - at two, the six facts ran to three
+          rows and pushed the stage picker below the fold. */}
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
         {INFO_ITEMS(lead).map((item) => (
           <InfoCard key={item.key} item={item} />
         ))}
@@ -709,7 +731,7 @@ export function LeadDetailModal({ lead, onClose }) {
   )
 
   return (
-    <Modal header={header} isOpen onClose={onClose} maxWidth="max-w-2xl">
+    <Modal header={header} isOpen onClose={onClose} maxWidth="max-w-3xl">
       <div className="space-y-4">
         <ErrorMessage message={activeError ? getApiErrorMessage(activeError) : null} />
 
