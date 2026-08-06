@@ -13,6 +13,13 @@ which Motor's async client requires.
 
 In CI, a real MongoDB service container is already running and MONGODB_URI
 is already set, so the embedded-server bootstrap is skipped entirely.
+
+CI runs the suite in parallel (`pytest -n auto`). That pays off there
+because every worker shares the one service container. Locally it does the
+opposite: with no MONGODB_URI each worker starts its *own* embedded mongod,
+so `-n auto` on a 12-core machine boots twelve of them and ends up slower
+than running serially. Run plain `pytest` locally, or point MONGODB_URI at a
+running MongoDB first if you want the parallel speedup.
 """
 import os
 import pathlib
@@ -29,20 +36,33 @@ os.environ.setdefault("FIRST_SUPERUSER_PASSWORD", "ChangeMe123!")
 os.environ["APP_ENV"] = "test"
 os.environ["RATE_LIMIT_ENABLED"] = "false"
 
+# Under `pytest -n`, every worker imports this file in its own process. They
+# must not share a database: the `client` fixture drops it between tests, so
+# workers would wipe each other's data mid-run and fail at random.
+_WORKER = os.environ.get("PYTEST_XDIST_WORKER")  # "gw0", "gw1", ... or None
+
 if not os.environ.get("MONGODB_URI"):
-    _mongo_data_dir = _BACKEND_DIR / "_mongo_test_runtime"
-    _mongo_data_dir.mkdir(exist_ok=True)
+    # A port and data folder per worker, since each process starts its own
+    # embedded server. In CI this whole branch is skipped - MONGODB_URI points
+    # at the MongoDB service container and all workers share that one server,
+    # isolated by database name below.
+    _port = 27118 + (int(_WORKER.removeprefix("gw")) if _WORKER else 0)
+    _mongo_data_dir = _BACKEND_DIR / "_mongo_test_runtime" / (_WORKER or "main")
+    # mongod writes its log here on startup and won't create the path itself.
+    _mongo_data_dir.mkdir(parents=True, exist_ok=True)
     os.environ["PYMONGOIM__MONGOD_DATA_FOLDER"] = str(_mongo_data_dir)
-    os.environ["PYMONGOIM__MONGOD_PORT"] = "27118"
+    os.environ["PYMONGOIM__MONGOD_PORT"] = str(_port)
 
     from pymongo_inmemory.context import Context
     from pymongo_inmemory.mongod import Mongod
 
     _mongo_server = Mongod(Context())
     _mongo_server.start()
-    os.environ["MONGODB_URI"] = "mongodb://127.0.0.1:27118"
+    os.environ["MONGODB_URI"] = f"mongodb://127.0.0.1:{_port}"
 
-os.environ.setdefault("MONGODB_DB_NAME", "hrnavinos_erp_test")
+# Respects an explicitly-set name (CI sets one) and still isolates workers.
+_base_db = os.environ.get("MONGODB_DB_NAME", "hrnavinos_erp_test")
+os.environ["MONGODB_DB_NAME"] = f"{_base_db}_{_WORKER}" if _WORKER else _base_db
 
 sys.path.insert(0, str(_BACKEND_DIR / "scripts"))
 

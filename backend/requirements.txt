@@ -39,6 +39,9 @@ python-json-logger==3.2.1
 # ==================== Testing ====================
 pytest==8.3.4
 pytest-asyncio==0.25.1
+# Splits the suite across processes (`pytest -n auto`). Workers are isolated
+# by database name in app/tests/conftest.py so they can't wipe each other.
+pytest-xdist==3.8.0
 faker==33.1.0
 
 # ==================== Lint / Format ====================
