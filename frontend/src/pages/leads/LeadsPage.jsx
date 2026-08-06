@@ -163,9 +163,14 @@ function TruncatedText({ text }) {
 }
 
 // Staff notes cell - distinct from the read-only Query column (the
-// student's own submitted text). Shows as a pen icon (filled once a
-// remark exists) rather than a persistent text box; clicking it opens a
-// small popover to type into, submitted with the tick button.
+// student's own submitted text). Rather than a persistent text box, it's a
+// single icon that opens a small popover to type into, submitted with the
+// tick button.
+//
+// The icon states which of the two things the click will do: a pen on an
+// empty cell (nothing to read yet - write something), an eye once a remark
+// exists (there is something here - come look). Saving invalidates the leads
+// query, so the row refetches and the icon flips on its own.
 function RemarksCell({ lead, onError }) {
   const queryClient = useQueryClient()
   const buttonRef = useRef(null)
@@ -210,9 +215,16 @@ function RemarksCell({ lead, onError }) {
         type="button"
         onClick={open}
         title={lead.remarks || 'Add remarks'}
-        className={`rounded-md p-1.5 hover:bg-slate-100 ${lead.remarks ? 'text-brand-600' : 'text-slate-400'}`}
+        aria-label={lead.remarks ? `View remarks for ${lead.name}` : `Add remarks for ${lead.name}`}
+        className={`rounded-md p-1.5 transition-colors hover:bg-slate-100 ${
+          lead.remarks ? 'text-brand-600 hover:text-brand-700' : 'text-slate-400 hover:text-slate-600'
+        }`}
       >
-        <Pencil className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+        {lead.remarks ? (
+          <Eye className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+        ) : (
+          <Pencil className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+        )}
       </button>
       {popupPosition &&
         createPortal(
