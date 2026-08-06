@@ -25,8 +25,8 @@ import { PAYMENT_PLAN_TONES, CALL_REMARK_OPTIONS, CALL_REMARK_BY_VALUE } from '@
 import { PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
 
 // Anchors a portaled popup under its trigger, clamped so it never runs off
-// the right edge of the viewport (the table's own rightmost columns - View,
-// Remarks - would otherwise push it past screen bounds).
+// the right edge of the viewport (a trigger in the table's rightmost column,
+// Remarks, would otherwise push it past screen bounds).
 function popupPositionFor(rect, popupWidth, gap = 4) {
   const maxLeft = window.innerWidth - popupWidth - 8
   return { top: rect.bottom + gap, left: Math.max(8, Math.min(rect.left, maxLeft)) }
@@ -732,24 +732,6 @@ export function LeadsPage() {
       align: 'center',
       render: (row) => <RemarksCell key={row.id} lead={row} onError={setEditError} />,
     },
-    {
-      key: 'view',
-      header: 'View',
-      align: 'center',
-      render: (row) => (
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation()
-            setViewingLead(row)
-          }}
-          className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-          aria-label={`View details for ${row.name}`}
-        >
-          <Eye className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-        </button>
-      ),
-    },
   ]
 
   return (
@@ -831,11 +813,20 @@ export function LeadsPage() {
       </div>
 
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-        {/* No onRowClick: the row carries inline editors (payment selects,
-            remarks) whose dismiss-backdrops sit in portals, and a portal
-            click still reaches the row through React's component tree. The
-            View column's eye icon is the one deliberate way in. */}
-        <DataTable columns={columns} rows={items} isLoading={isLoading} error={error} />
+        {/* Clicking anywhere on a row opens that lead, so there's no separate
+            View column. Safe because every inline editor in the row (the
+            payment-remarks select, the remarks popover) calls stopPropagation
+            on each click path it owns - including its portal backdrop, which
+            bubbles through React's component tree rather than the DOM and
+            would otherwise open this modal while dismissing itself. Keep that
+            up in anything interactive added to a row later. */}
+        <DataTable
+          columns={columns}
+          rows={items}
+          isLoading={isLoading}
+          error={error}
+          onRowClick={(row) => setViewingLead(row)}
+        />
         <Pagination
           page={page}
           totalPages={totalPages}
