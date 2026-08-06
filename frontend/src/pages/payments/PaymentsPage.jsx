@@ -2,9 +2,12 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowDownLeft, ArrowUpRight } from 'lucide-react'
 import { leadService } from '@/services/leadService'
+import { getApiErrorMessage } from '@/services/apiClient'
 import { IncomeApprovalsTab } from '@/components/payments/IncomeApprovalsTab'
 import { OverallIncomeTab } from '@/components/payments/OverallIncomeTab'
 import { CashbookSummary } from '@/components/payments/CashbookSummary'
+import { CashbookFilters } from '@/components/payments/CashbookFilters'
+import { EMPTY_CASHBOOK_FILTERS, applyCashbookFilters } from '@/utils/cashbookFilters'
 
 const SPLIT_TAB_STYLES = {
   income: { icon: ArrowDownLeft, active: 'bg-[#DCFCE7] text-[#059669]' },
@@ -46,21 +49,45 @@ function ComingSoon({ label }) {
 
 function CashbookTab() {
   const [cashbookTab, setCashbookTab] = useState('income')
-  const statsQuery = useQuery({ queryKey: ['leads-stats'], queryFn: leadService.getStats })
-  const incomeCount = statsQuery.data?.by_status?.batch_confirmation ?? 0
+  const [filters, setFilters] = useState(EMPTY_CASHBOOK_FILTERS)
+
+  // Fetched once here rather than in each child, so the summary cards and the
+  // table are guaranteed to be describing the same rows - the cards say "for
+  // selected period", which was only true while nothing could filter them.
+  const query = useQuery({
+    queryKey: ['overall-income'],
+    queryFn: () => leadService.list({ status: 'batch_confirmation', page_size: 100 }),
+  })
+
+  const allLeads = query.data?.items ?? []
+  const leads = applyCashbookFilters(allLeads, filters)
 
   return (
     <div>
-      <CashbookSummary />
+      <CashbookSummary leads={leads} />
+      <CashbookFilters
+        filters={filters}
+        onChange={setFilters}
+        resultCount={leads.length}
+        totalCount={allLeads.length}
+      />
       <SplitTabs
         tabs={[
-          { key: 'income', label: `Overall Income (${incomeCount})` },
+          { key: 'income', label: `Overall Income (${leads.length})` },
           { key: 'expense', label: 'Overall Expense (0)' },
         ]}
         active={cashbookTab}
         onChange={setCashbookTab}
       />
-      {cashbookTab === 'income' ? <OverallIncomeTab /> : <ComingSoon label="Overall Expense" />}
+      {cashbookTab === 'income' ? (
+        <OverallIncomeTab
+          leads={leads}
+          isLoading={query.isLoading}
+          error={query.error ? getApiErrorMessage(query.error) : null}
+        />
+      ) : (
+        <ComingSoon label="Overall Expense" />
+      )}
     </div>
   )
 }

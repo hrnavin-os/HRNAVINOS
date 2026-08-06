@@ -32,6 +32,25 @@ export function getLeadPaymentSummary(lead) {
   }
 }
 
+// What the student still owes once they're placed, which is priced per
+// payment plan rather than per lead.
+//
+// The backend already resolves it (the plan's `after_placement`) and bakes it
+// into Lead.payment_expected -- see build_payment_expected_summary in
+// app/services/foundation_form_pricing.py, which formats it as
+// "<plan> - <summary> (After Placement: <fee>)", sometimes with a
+// " | Pays on: ..." suffix appended. Reading it back out of that string keeps
+// this to zero extra requests; the alternative is fetching the pricing config
+// and the programs collection just to re-derive a value the lead already
+// carries, and Finance users may not hold permission for either.
+const AFTER_PLACEMENT_PATTERN = /\(After Placement:\s*([^)]*)\)/
+
+export function getAfterPlacementFee(lead) {
+  const match = lead.payment_expected?.match(AFTER_PLACEMENT_PATTERN)
+  const fee = match?.[1]?.trim()
+  return fee || null
+}
+
 // Mirrors LeadService._require_first_payment on the backend: has any money
 // actually landed for this lead? Handles both representations - a structured
 // installment plan, or the older single paid_amount on manual leads.

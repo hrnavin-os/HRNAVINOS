@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Calendar, Check, ChevronDown, Eye, Pencil, Plus, Search } from 'lucide-react'
+import { Check, ChevronDown, Eye, Pencil, Plus, Search } from 'lucide-react'
 import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
 import { useAuth } from '@/hooks/useAuth'
 import { leadService } from '@/services/leadService'
@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { Toast } from '@/components/ui/Toast'
 import { DataTable } from '@/components/ui/DataTable'
+import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { Pagination } from '@/components/ui/Pagination'
 import { ResourceForm } from '@/components/resource/ResourceForm'
 import { LeadSectionStageStats, LeadSectionStats } from '@/components/leads/LeadSectionStats'
@@ -507,43 +508,6 @@ function FilterDropdown({ label, value, options, onChange }) {
           </>,
           document.body,
         )}
-    </div>
-  )
-}
-
-function DateRangeFilter({ dateFrom, dateTo, onChange }) {
-  const [isOpen, setIsOpen] = useState(false)
-  const hasValue = Boolean(dateFrom || dateTo)
-
-  return (
-    <div className="relative">
-      <Button variant="secondary" onClick={() => setIsOpen((open) => !open)}>
-        <Calendar className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-        {hasValue ? `${dateFrom || '…'} → ${dateTo || '…'}` : 'Date'}
-      </Button>
-      {isOpen && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 z-50 mt-2 w-64 rounded-lg border border-slate-200 bg-white p-4 shadow-lg">
-            <Input type="date" label="From" value={dateFrom} onChange={(event) => onChange({ dateFrom: event.target.value, dateTo })} />
-            <div className="mt-3">
-              <Input type="date" label="To" value={dateTo} onChange={(event) => onChange({ dateFrom, dateTo: event.target.value })} />
-            </div>
-            <div className="mt-3 flex justify-end">
-              <Button
-                variant="ghost"
-                className="text-xs"
-                onClick={() => {
-                  onChange({ dateFrom: '', dateTo: '' })
-                  setIsOpen(false)
-                }}
-              >
-                Clear
-              </Button>
-            </div>
-          </div>
-        </>
-      )}
     </div>
   )
 }
