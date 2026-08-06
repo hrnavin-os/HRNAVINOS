@@ -142,7 +142,7 @@ function TruncatedText({ text }) {
         ref={triggerRef}
         onMouseEnter={show}
         onMouseLeave={() => setPopupPosition(null)}
-        className="inline-block cursor-help border-b border-dotted border-slate-300"
+        className="inline-block cursor-default border-b border-dotted border-slate-300"
       >
         {trimmed.slice(0, 6)}…
       </span>
