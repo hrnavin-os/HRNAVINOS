@@ -93,9 +93,14 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
                 {columns.map((column) => (
                   <td
                     key={column.key}
+                    // Cells stay on one line by default: a value wrapping to
+                    // two or three lines makes every row in the table that
+                    // tall, and the container already scrolls horizontally.
+                    // Opt a column out with `wrap: true` when the content is
+                    // genuinely long-form.
                     className={`border-b border-slate-100 px-4 py-3 text-sm text-slate-700 group-last:border-b-0 ${EDGE_PADDING} ${
                       ALIGN[column.align] ?? ALIGN.left
-                    } ${column.numeric ? 'tabular-nums' : ''}`}
+                    } ${column.numeric ? 'tabular-nums' : ''} ${column.wrap ? '' : 'whitespace-nowrap'}`}
                   >
                     {/* Second arg is the row's index within this page; columns
                         that don't need it simply ignore it. */}

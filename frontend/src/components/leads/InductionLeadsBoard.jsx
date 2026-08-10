@@ -24,6 +24,8 @@ const orDash = (value) => value || dash
 const columns = [
   { key: 'name', header: 'Name', render: (row) => <span className="font-medium text-slate-900">{row.name}</span> },
   {
+    // Phone over email is a deliberate two-line stack, not wrapping - each
+    // line is still a single unbroken value.
     key: 'contact',
     header: 'Contact',
     render: (row) => (
@@ -60,8 +62,6 @@ const columns = [
     render: (row) => (row.lead_source ? <Badge tone="amber">{row.lead_source}</Badge> : dash),
   },
   {
-    // Wraps rather than truncates: these run long ("HRLH Razorpay QR Code")
-    // and the mode is the thing Finance scans this column for.
     key: 'payment_mode',
     header: 'Payment Mode',
     render: (row) => (row.payment_mode ? <span className="text-slate-700">{row.payment_mode}</span> : dash),
