@@ -409,10 +409,17 @@ export function InductionLeadsBoard() {
               onChange={(value) => setFilter('assigned_to', value)}
             />
             {hasFilters && (
-              <Button variant="ghost" onClick={() => setFilters(EMPTY_FILTERS)}>
+              // Deliberately not a Button: it must not take a filter-sized
+              // slot in the row, and it counts what it will undo so you can
+              // see at a glance how narrowed the list is.
+              <button
+                type="button"
+                onClick={() => setFilters(EMPTY_FILTERS)}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              >
                 <X className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                Clear
-              </Button>
+                Clear ({Object.keys(activeFilters).length})
+              </button>
             )}
           </>
         )}

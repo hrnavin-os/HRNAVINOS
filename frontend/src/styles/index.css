@@ -4,11 +4,20 @@
   /* Opt-in only (`font-lexend`) - the app default stays the system stack. */
   --font-lexend: 'Lexend', ui-sans-serif, system-ui, sans-serif;
 
+  /* The full blue ramp, not just the four shades first needed. Tailwind v4
+     emits nothing at all for an undefined shade, so a `border-brand-300` that
+     was never declared fell through to currentColor instead of failing
+     loudly - the gaps were already being used in a few places. */
   --color-brand-50: #eff6ff;
   --color-brand-100: #dbeafe;
+  --color-brand-200: #bfdbfe;
+  --color-brand-300: #93c5fd;
+  --color-brand-400: #60a5fa;
   --color-brand-500: #3b82f6;
   --color-brand-600: #2563eb;
   --color-brand-700: #1d4ed8;
+  --color-brand-800: #1e40af;
+  --color-brand-900: #1e3a8a;
 }
 
 html,

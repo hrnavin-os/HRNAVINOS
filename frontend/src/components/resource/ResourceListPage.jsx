@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Search } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
 import { useAuth } from '@/hooks/useAuth'
@@ -147,17 +148,29 @@ export function ResourceListPage({
       {/* No page heading here: the Topbar already renders the current page's
           name from NAV_LEAF_ITEMS, so an <h1> repeated it directly underneath.
           Search and the create action share the top row instead. */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="w-full max-w-56 shrink-0">
-          <Input placeholder="Search..." value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} />
-        </div>
-        {/* Filters sit on the same row as search rather than a band above it -
-            they're the same job, and two stacked rows pushed the table down. */}
-        {renderFilters?.()}
-        <div className="ml-auto">
-          {renderCreateAction
-            ? renderCreateAction({ onCreated: () => queryClient.invalidateQueries({ queryKey: [queryKey] }) })
-            : canCreate && createFields && <Button onClick={() => setIsModalOpen(true)}>+ New</Button>}
+      {/* Search, filters and the create action share one toolbar card, so the
+          controls read as a single band above the table rather than three
+          things floating on the page background. */}
+      <div className="mb-4 rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="w-full max-w-56 shrink-0">
+            <Input
+              placeholder="Search..."
+              value={search}
+              onChange={(event) => { setSearch(event.target.value); setPage(1) }}
+              rightElement={<Search className="h-4 w-4 text-slate-400" strokeWidth={2} aria-hidden="true" />}
+            />
+          </div>
+          {/* Filters sit on the same row as search rather than a band above it -
+              they're the same job, and two stacked rows pushed the table down.
+              The rule separates "find by text" from "narrow by value". */}
+          {renderFilters && <span className="hidden h-7 w-px shrink-0 bg-slate-200 lg:block" />}
+          {renderFilters?.()}
+          <div className="ml-auto">
+            {renderCreateAction
+              ? renderCreateAction({ onCreated: () => queryClient.invalidateQueries({ queryKey: [queryKey] }) })
+              : canCreate && createFields && <Button onClick={() => setIsModalOpen(true)}>+ New</Button>}
+          </div>
         </div>
       </div>
 

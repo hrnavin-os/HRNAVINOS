@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, Eye, Pencil, Search } from 'lucide-react'
+import { ArrowUpDown, Check, ChevronDown, Eye, Pencil, Search } from 'lucide-react'
 import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
 import { useAuth } from '@/hooks/useAuth'
 import { leadService } from '@/services/leadService'
@@ -327,38 +327,39 @@ const SORT_OPTIONS = [
 ]
 
 // Sort filter for the lead table. A custom listbox rather than a native
-// <select> because the browser draws the native option list itself - the
-// milk-white/light-gray palette, the 5px radius and the Lexend face below
-// would all be dropped on the open list (and the OS blue highlight kept).
+// <select> because the browser draws the native option list itself, dropping
+// the styling below and keeping the OS blue highlight.
+//
+// Chrome deliberately matches FilterDropdown: it sits in the same toolbar row,
+// and the milk-white/Lexend treatment it used to carry made one control in the
+// row look like it came from a different app.
 function SortOrderSelect({ value, onChange }) {
   const [isOpen, setIsOpen] = useState(false)
   const selectedLabel = SORT_OPTIONS.find((option) => option.value === value)?.label
 
   return (
-    <div className="relative font-lexend">
+    <div className="relative">
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        className="flex w-[150px] items-center justify-between gap-2 rounded-[5px] border border-[#DCDCD8]
-          bg-[#FAFAF7] px-3 py-2 text-sm font-normal text-[#4A4A46] shadow-sm
-          hover:bg-[#F2F2EE] focus:outline-none focus:ring-1 focus:ring-[#C9C9C4]"
+        className={`flex w-38 items-center justify-between gap-2 rounded-md border px-3.5 py-2 text-sm
+          font-medium text-slate-600 outline-none transition-colors ${
+            isOpen
+              ? 'border-brand-400 bg-white ring-1 ring-brand-400'
+              : 'border-slate-300 bg-white hover:border-slate-400 hover:bg-slate-50'
+          }`}
       >
-        {selectedLabel}
-        <ChevronDown
-          className={`h-4 w-4 shrink-0 text-[#8C8C86] transition-transform ${isOpen ? 'rotate-180' : ''}`}
-          strokeWidth={2}
-          aria-hidden="true"
-        />
+        <span className="truncate">{selectedLabel}</span>
+        <ArrowUpDown className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden="true" />
       </button>
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
           <div
             role="listbox"
-            className="absolute left-0 z-50 mt-1 w-[150px] overflow-hidden rounded-[5px]
-              border border-[#DCDCD8] bg-[#FAFAF7] py-1 shadow-lg"
+            className="absolute left-0 z-50 mt-1 w-38 overflow-hidden rounded-lg border border-slate-200 bg-white p-1 shadow-xl"
           >
             {SORT_OPTIONS.map((option) => (
               <button
@@ -370,11 +371,16 @@ function SortOrderSelect({ value, onChange }) {
                   onChange(option.value)
                   setIsOpen(false)
                 }}
-                className={`block w-full px-3 py-1.5 text-left text-sm font-normal text-[#4A4A46] ${
-                  value === option.value ? 'bg-[#E8E8E3]' : 'hover:bg-[#F0F0EC]'
+                className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-sm ${
+                  value === option.value
+                    ? 'bg-brand-50 font-medium text-brand-700'
+                    : 'font-normal text-slate-700 hover:bg-slate-50'
                 }`}
               >
                 {option.label}
+                {value === option.value && (
+                  <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} aria-hidden="true" />
+                )}
               </button>
             ))}
           </div>
@@ -599,54 +605,62 @@ function FoundationLeadsBoard() {
         />
       )}
 
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-          <Input
-            className="pl-9"
-            placeholder="Search by name, course…"
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value)
+      {/* One toolbar card, matching the Induction board: search and the filters
+          are the same job, so they sit on one surface instead of floating
+          loose above the table. */}
+      <div className="mb-4 rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-55 flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+            <Input
+              className="pl-9"
+              placeholder="Search by name, course…"
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value)
+                setPage(1)
+              }}
+            />
+          </div>
+
+          {/* Separates "find by text" from "narrow by value". */}
+          <span className="hidden h-7 w-px shrink-0 bg-slate-200 lg:block" />
+
+          <FilterDropdown
+            label="Course"
+            value={courseFilter}
+            options={courseOptions.map((course) => ({ value: course, label: course }))}
+            onChange={(value) => {
+              setCourseFilter(value)
               setPage(1)
             }}
           />
+
+          {/* No Section filter here: the stat cards above already are the
+              section switcher, and two controls driving one piece of state
+              just invited them to disagree on screen. */}
+          <FilterDropdown
+            label="Stage"
+            value={statusFilter}
+            options={LEAD_STAGES.map((stage) => ({ value: stage.value, label: stage.label }))}
+            onChange={(value) => {
+              setStatusFilter(value)
+              setPage(1)
+            }}
+          />
+
+          <SortOrderSelect
+            value={sortOrder}
+            onChange={(nextOrder) => {
+              setSortOrder(nextOrder)
+              setPage(1)
+            }}
+          />
+
+          {/* No Create Lead here: leads arrive through the Form Collection
+              forms, not by being typed into the board. */}
+          <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onChange={handleDateChange} />
         </div>
-
-        <FilterDropdown
-          label="Course"
-          value={courseFilter}
-          options={courseOptions.map((course) => ({ value: course, label: course }))}
-          onChange={(value) => {
-            setCourseFilter(value)
-            setPage(1)
-          }}
-        />
-
-        {/* No Section filter here: the stat cards above already are the
-            section switcher, and two controls driving one piece of state
-            just invited them to disagree on screen. */}
-        <FilterDropdown
-          label="Stage"
-          value={statusFilter}
-          options={LEAD_STAGES.map((stage) => ({ value: stage.value, label: stage.label }))}
-          onChange={(value) => {
-            setStatusFilter(value)
-            setPage(1)
-          }}
-        />
-
-        <SortOrderSelect
-          value={sortOrder}
-          onChange={(nextOrder) => {
-            setSortOrder(nextOrder)
-            setPage(1)
-          }}
-        />
-
-        {/* No Create Lead here: leads arrive through the Form Collection
-            forms, not by being typed into the board. */}
-        <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onChange={handleDateChange} />
       </div>
 
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
