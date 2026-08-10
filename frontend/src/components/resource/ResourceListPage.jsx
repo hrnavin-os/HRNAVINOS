@@ -50,6 +50,8 @@ export function ResourceListPage({
   // View/Edit/Delete control, already permission-filtered - so a card decides
   // where the buttons sit without re-deriving who may press them.
   renderCard,
+  // Extra filter controls rendered inline beside the search box.
+  renderFilters,
 }) {
   const { hasPermission } = useAuth()
   const queryClient = useQueryClient()
@@ -145,13 +147,18 @@ export function ResourceListPage({
       {/* No page heading here: the Topbar already renders the current page's
           name from NAV_LEAF_ITEMS, so an <h1> repeated it directly underneath.
           Search and the create action share the top row instead. */}
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="max-w-xs flex-1">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="w-full max-w-56 shrink-0">
           <Input placeholder="Search..." value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} />
         </div>
-        {renderCreateAction
-          ? renderCreateAction({ onCreated: () => queryClient.invalidateQueries({ queryKey: [queryKey] }) })
-          : canCreate && createFields && <Button onClick={() => setIsModalOpen(true)}>+ New</Button>}
+        {/* Filters sit on the same row as search rather than a band above it -
+            they're the same job, and two stacked rows pushed the table down. */}
+        {renderFilters?.()}
+        <div className="ml-auto">
+          {renderCreateAction
+            ? renderCreateAction({ onCreated: () => queryClient.invalidateQueries({ queryKey: [queryKey] }) })
+            : canCreate && createFields && <Button onClick={() => setIsModalOpen(true)}>+ New</Button>}
+        </div>
       </div>
 
       {renderCard ? (

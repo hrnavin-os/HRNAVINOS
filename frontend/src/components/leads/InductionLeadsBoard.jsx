@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ResourceListPage } from '@/components/resource/ResourceListPage'
 import { inductionEntryService } from '@/services/inductionEntryService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
-import { X } from 'lucide-react'
+import { Calendar, CreditCard, Mail, Megaphone, Phone, Tag, UserRound, Wallet, X } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { FilterDropdown } from '@/components/ui/FilterDropdown'
@@ -54,9 +54,23 @@ const columns = [
     render: (row) => (row.paid_date ? formatDate(row.paid_date) : dash),
   },
   { key: 'sales_person', header: 'Sales Person', render: (row) => orDash(row.sales_person) },
-  { key: 'lead_source', header: 'Lead Source', render: (row) => orDash(row.lead_source) },
-  { key: 'payment_mode', header: 'Payment Mode', render: (row) => orDash(row.payment_mode) },
-  { key: 'category', header: 'Category', render: (row) => orDash(row.category) },
+  {
+    key: 'lead_source',
+    header: 'Lead Source',
+    render: (row) => (row.lead_source ? <Badge tone="amber">{row.lead_source}</Badge> : dash),
+  },
+  {
+    // Wraps rather than truncates: these run long ("HRLH Razorpay QR Code")
+    // and the mode is the thing Finance scans this column for.
+    key: 'payment_mode',
+    header: 'Payment Mode',
+    render: (row) => (row.payment_mode ? <span className="text-slate-700">{row.payment_mode}</span> : dash),
+  },
+  {
+    key: 'category',
+    header: 'Category',
+    render: (row) => (row.category ? <Badge tone="emerald">{row.category}</Badge> : dash),
+  },
   {
     // Assigned round-robin across Section Admins when the form is submitted.
     key: 'assigned_to',
@@ -84,6 +98,76 @@ const editFields = [
   { name: 'payment_mode', label: 'Payment Mode' },
   { name: 'category', label: 'Category' },
 ]
+
+// Same treatment as the Programs detail popup: accent on the icon plate, text
+// in slate tokens. A light hue is hard to read as text, and identity already
+// comes from the coloured plate beside it.
+const DETAIL_TONES = {
+  blue: 'bg-linear-to-br from-blue-500 to-blue-700',
+  violet: 'bg-linear-to-br from-violet-500 to-violet-700',
+  emerald: 'bg-linear-to-br from-emerald-500 to-emerald-700',
+  amber: 'bg-linear-to-br from-amber-500 to-amber-700',
+  rose: 'bg-linear-to-br from-rose-500 to-rose-700',
+  cyan: 'bg-linear-to-br from-cyan-500 to-cyan-700',
+}
+
+function DetailTile({ icon: Icon, label, value, tone }) {
+  return (
+    <div className="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white shadow-sm ${DETAIL_TONES[tone]}`}>
+        <Icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
+        <p className="break-words text-sm font-semibold text-slate-900">{value || '—'}</p>
+      </div>
+    </div>
+  )
+}
+
+function InductionEntryDetail({ entry }) {
+  return (
+    <div className="space-y-4">
+      {/* Batch leads: it's the derived value everything else is filed under,
+          and the first thing you check on an entry. */}
+      <div className="rounded-lg border border-brand-100 bg-brand-50 px-4 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-brand-700/70">Batch</p>
+            <p className="mt-0.5 text-lg font-semibold text-brand-700">{entry.batch}</p>
+          </div>
+          {entry.assigned_to_name ? (
+            <div className="text-right">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-brand-700/70">Assigned to</p>
+              <p className="mt-0.5 flex items-center justify-end gap-1.5 text-sm font-semibold text-slate-900">
+                {entry.assigned_to_name}
+                {entry.section && <Badge tone="violet">{entry.section.toUpperCase()}</Badge>}
+              </p>
+            </div>
+          ) : (
+            <Badge tone="amber">Unassigned</Badge>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        <DetailTile icon={Phone} label="Phone Number" value={entry.phone} tone="blue" />
+        <DetailTile icon={Mail} label="Email" value={entry.email} tone="violet" />
+        <DetailTile icon={Calendar} label="Registration Date" value={formatDate(entry.registration_date)} tone="rose" />
+        <DetailTile
+          icon={Wallet}
+          label="Paid Date"
+          value={entry.paid_date ? formatDate(entry.paid_date) : null}
+          tone="emerald"
+        />
+        <DetailTile icon={UserRound} label="Sales Person" value={entry.sales_person} tone="cyan" />
+        <DetailTile icon={Megaphone} label="Lead Source" value={entry.lead_source} tone="amber" />
+        <DetailTile icon={CreditCard} label="Payment Mode" value={entry.payment_mode} tone="violet" />
+        <DetailTile icon={Tag} label="Category" value={entry.category} tone="emerald" />
+      </div>
+    </div>
+  )
+}
 
 const EMPTY_FILTERS = {
   batch: '',
@@ -147,54 +231,55 @@ export function InductionLeadsBoard() {
         activeSection={effectiveSection}
         onSelect={scopedSection ? () => {} : setSectionFilter}
       />
-      {/* Sits above the table rather than in column headers, matching the
-          Foundation board's filter row. */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <FilterDropdown
-          label="Batch"
-          value={filters.batch}
-          options={asOptions(options.batch)}
-          onChange={(value) => setFilter('batch', value)}
-        />
-        <FilterDropdown
-          label="Sales Person"
-          value={filters.sales_person}
-          options={asOptions(options.sales_person)}
-          onChange={(value) => setFilter('sales_person', value)}
-        />
-        <FilterDropdown
-          label="Lead Source"
-          value={filters.lead_source}
-          options={asOptions(options.lead_source)}
-          onChange={(value) => setFilter('lead_source', value)}
-        />
-        <FilterDropdown
-          label="Payment Mode"
-          value={filters.payment_mode}
-          options={asOptions(options.payment_mode)}
-          onChange={(value) => setFilter('payment_mode', value)}
-        />
-        <FilterDropdown
-          label="Category"
-          value={filters.category}
-          options={asOptions(options.category)}
-          onChange={(value) => setFilter('category', value)}
-        />
-        <FilterDropdown
-          label="Assignee"
-          value={filters.assigned_to}
-          options={options.assigned_to ?? []}
-          onChange={(value) => setFilter('assigned_to', value)}
-        />
-        {hasFilters && (
-          <Button variant="ghost" onClick={() => setFilters(EMPTY_FILTERS)}>
-            <X className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-            Clear
-          </Button>
-        )}
-      </div>
-
       <ResourceListPage
+        // Rendered inline beside the search box rather than as a band above
+        // it - same job, and two stacked rows pushed the table off screen.
+        renderFilters={() => (
+          <>
+            <FilterDropdown
+              label="Batch"
+              value={filters.batch}
+              options={asOptions(options.batch)}
+              onChange={(value) => setFilter('batch', value)}
+            />
+            <FilterDropdown
+              label="Sales Person"
+              value={filters.sales_person}
+              options={asOptions(options.sales_person)}
+              onChange={(value) => setFilter('sales_person', value)}
+            />
+            <FilterDropdown
+              label="Lead Source"
+              value={filters.lead_source}
+              options={asOptions(options.lead_source)}
+              onChange={(value) => setFilter('lead_source', value)}
+            />
+            <FilterDropdown
+              label="Payment Mode"
+              value={filters.payment_mode}
+              options={asOptions(options.payment_mode)}
+              onChange={(value) => setFilter('payment_mode', value)}
+            />
+            <FilterDropdown
+              label="Category"
+              value={filters.category}
+              options={asOptions(options.category)}
+              onChange={(value) => setFilter('category', value)}
+            />
+            <FilterDropdown
+              label="Assignee"
+              value={filters.assigned_to}
+              options={options.assigned_to ?? []}
+              onChange={(value) => setFilter('assigned_to', value)}
+            />
+            {hasFilters && (
+              <Button variant="ghost" onClick={() => setFilters(EMPTY_FILTERS)}>
+                <X className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                Clear
+              </Button>
+            )}
+          </>
+        )}
         title="Induction Entry"
         queryKey="induction-entries"
         service={inductionEntryService}
@@ -204,25 +289,8 @@ export function InductionLeadsBoard() {
         rowActions={{
         view: {
           title: (row) => row.name,
-          fields: [
-            { label: 'Name', value: (row) => row.name },
-            { label: 'Email', value: (row) => row.email },
-            { label: 'Phone Number', value: (row) => row.phone },
-            { label: 'Batch', value: (row) => <Badge tone="blue">{row.batch}</Badge> },
-            { label: 'Registration Date', value: (row) => formatDate(row.registration_date) },
-            { label: 'Paid Date', value: (row) => (row.paid_date ? formatDate(row.paid_date) : null) },
-            { label: 'Sales Person', value: (row) => row.sales_person },
-            { label: 'Lead Source', value: (row) => row.lead_source },
-            { label: 'Payment Mode', value: (row) => row.payment_mode },
-            { label: 'Category', value: (row) => row.category },
-            {
-              label: 'Assigned To',
-              value: (row) =>
-                row.assigned_to_name
-                  ? `${row.assigned_to_name}${row.section ? ` (Section ${row.section.toUpperCase()})` : ''}`
-                  : 'Unassigned — no active Section Admin to rotate to',
-            },
-          ],
+          maxWidth: 'max-w-xl',
+          renderBody: (row) => <InductionEntryDetail entry={row} />,
         },
         edit: {
           title: (row) => `Edit ${row.name}`,
