@@ -237,36 +237,42 @@ export function InductionLeadsBoard() {
         renderFilters={() => (
           <>
             <FilterDropdown
+              grow
               label="Batch"
               value={filters.batch}
               options={asOptions(options.batch)}
               onChange={(value) => setFilter('batch', value)}
             />
             <FilterDropdown
+              grow
               label="Sales Person"
               value={filters.sales_person}
               options={asOptions(options.sales_person)}
               onChange={(value) => setFilter('sales_person', value)}
             />
             <FilterDropdown
+              grow
               label="Lead Source"
               value={filters.lead_source}
               options={asOptions(options.lead_source)}
               onChange={(value) => setFilter('lead_source', value)}
             />
             <FilterDropdown
+              grow
               label="Payment Mode"
               value={filters.payment_mode}
               options={asOptions(options.payment_mode)}
               onChange={(value) => setFilter('payment_mode', value)}
             />
             <FilterDropdown
+              grow
               label="Category"
               value={filters.category}
               options={asOptions(options.category)}
               onChange={(value) => setFilter('category', value)}
             />
             <FilterDropdown
+              grow
               label="Assignee"
               value={filters.assigned_to}
               options={options.assigned_to ?? []}

@@ -14,7 +14,10 @@ function menuPositionFor(rect, menuWidth, gap = 4) {
 // column header. The menu is portaled to <body> (positioned from the button's
 // own bounding rect) so it isn't clipped by DataTable's overflow-x-auto row
 // container. Shared by the Foundation and Induction boards.
-export function FilterDropdown({ label, value, options, onChange }) {
+// `grow` lets a row of these share the full width evenly instead of bunching
+// at the left. Off by default so the Foundation board's row, where they sit
+// beside other controls, keeps its natural widths.
+export function FilterDropdown({ label, value, options, onChange, grow = false }) {
   const buttonRef = useRef(null)
   const [menuPosition, setMenuPosition] = useState(null)
   const isActive = Boolean(value)
@@ -31,12 +34,14 @@ export function FilterDropdown({ label, value, options, onChange }) {
   const close = () => setMenuPosition(null)
 
   return (
-    <div className="inline-block">
+    <div className={grow ? 'min-w-32 flex-1' : 'inline-block'}>
       <button
         ref={buttonRef}
         type="button"
         onClick={toggle}
         className={`inline-flex items-center gap-2 rounded-md border px-3.5 py-2 text-sm font-medium transition-colors ${
+          grow ? 'w-full justify-between' : ''
+        } ${
           isActive
             ? 'border-brand-300 bg-brand-50 text-brand-700 hover:bg-brand-100'
             : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
