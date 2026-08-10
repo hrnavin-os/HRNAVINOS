@@ -23,5 +23,9 @@ class InductionEntryRepository(BaseRepository[InductionEntry]):
         ).to_list()
         return {row["_id"]: row["count"] for row in rows}
 
+    async def list_all_for_options(self) -> list[InductionEntry]:
+        """Every live entry, for building the filter dropdowns' option lists."""
+        return await InductionEntry.find({"is_deleted": False}).to_list()
+
     async def count_all(self) -> int:
         return await InductionEntry.find({"is_deleted": False}).count()

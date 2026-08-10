@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/Input'
 import { Toast } from '@/components/ui/Toast'
 import { DataTable } from '@/components/ui/DataTable'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
+import { FilterDropdown } from '@/components/ui/FilterDropdown'
 import { Pagination } from '@/components/ui/Pagination'
 import { LeadSectionStageStats, LeadSectionStats } from '@/components/leads/LeadSectionStats'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
@@ -382,87 +383,6 @@ function SortOrderSelect({ value, onChange }) {
   )
 }
 
-// A filter-row button that opens a dropdown - click it to pick a value,
-// "All <Label>s" clears it. Lives next to the search bar rather than in a
-// column header. The menu is portaled to <body> (positioned from the
-// button's own bounding rect) so it isn't clipped by DataTable's
-// overflow-x-auto row container.
-function FilterDropdown({ label, value, options, onChange }) {
-  const buttonRef = useRef(null)
-  const [menuPosition, setMenuPosition] = useState(null)
-  const isActive = Boolean(value)
-  const selectedLabel = options.find((option) => option.value === value)?.label
-
-  function toggle() {
-    if (menuPosition) {
-      setMenuPosition(null)
-      return
-    }
-    const rect = buttonRef.current.getBoundingClientRect()
-    setMenuPosition(popupPositionFor(rect, 260))
-  }
-
-  function close() {
-    setMenuPosition(null)
-  }
-
-  return (
-    <div className="inline-block">
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={toggle}
-        className={`inline-flex items-center gap-2 rounded-md border px-3.5 py-2 text-sm font-medium transition-colors ${
-          isActive
-            ? 'border-brand-300 bg-brand-50 text-brand-700 hover:bg-brand-100'
-            : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-        }`}
-      >
-        {isActive ? selectedLabel : label}
-        <ChevronDown className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
-      </button>
-      {menuPosition &&
-        createPortal(
-          <>
-            <div className="fixed inset-0 z-40" onClick={close} />
-            <div
-              style={{ top: menuPosition.top, left: menuPosition.left }}
-              className="fixed z-50 max-h-64 w-65 overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg"
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  onChange('')
-                  close()
-                }}
-                className={`block w-full px-3 py-1.5 text-left text-sm font-normal ${
-                  !value ? 'bg-brand-50 text-brand-700' : 'text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                All {label}s
-              </button>
-              {options.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => {
-                    onChange(option.value)
-                    close()
-                  }}
-                  className={`block w-full px-3 py-1.5 text-left text-sm font-normal ${
-                    value === option.value ? 'bg-brand-50 text-brand-700' : 'text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </>,
-          document.body,
-        )}
-    </div>
-  )
-}
 
 // Each tab owns a colour and carries it as a filled background when selected,
 // matching the Form Collection tabs the two forms are shared from.

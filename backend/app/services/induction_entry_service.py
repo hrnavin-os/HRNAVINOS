@@ -1,6 +1,6 @@
 """Business logic for the Induction Call Form."""
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
 from app.exceptions.base import NotFoundError
 from app.models.induction_entry import InductionEntry
@@ -116,7 +116,7 @@ class InductionEntryService:
             raise NotFoundError("Induction entry not found.")
         return entry
 
-    async def list(self, params: PaginationParams, *, section: str | None = None) -> PaginatedResponse:
+    async def list(self, params: PaginationParams, *, filters: dict | None = None) -> PaginatedResponse:
         items, total = await self.entries.list(
             page=params.page,
             page_size=params.page_size,
@@ -124,9 +124,67 @@ class InductionEntryService:
             search_fields=["name", "phone", "email", "sales_person", "lead_source", "category"],
             sort_by=params.sort_by,
             sort_order=params.sort_order,
-            filters={"section": section} if section else None,
+            filters=filters or None,
         )
         return PaginatedResponse.build(items, total, params.page, params.page_size)
+
+    @staticmethod
+    def batch_date_range(batch: str) -> tuple[date, date] | None:
+        """Turns 'Batch-29' back into the month it covers.
+
+        Batch isn't stored - it's derived from registration_date - so filtering
+        by it means filtering on the date range that produces it. Returns None
+        for anything unparseable so a junk query param yields no filter rather
+        than a 500.
+        """
+        try:
+            number = int(batch.split("-", 1)[1])
+        except (IndexError, ValueError):
+            return None
+        anchor_year, anchor_month = BATCH_ANCHOR
+        months = number - BATCH_ANCHOR_NUMBER
+        # Shift to a 0-based month index so the year rolls over correctly in
+        # both directions, then back to 1-based.
+        index = (anchor_year * 12 + (anchor_month - 1)) + months
+        year, month = divmod(index, 12)
+        month += 1
+        start = date(year, month, 1)
+        end = date(year + (month == 12), 1 if month == 12 else month + 1, 1) - timedelta(days=1)
+        return start, end
+
+    async def filter_options(self) -> dict:
+        """Distinct values actually present in the data, for the filter row.
+
+        Deliberately read from the entries rather than the form config: the
+        dropdowns accept typed values that aren't on the configured list, and
+        a filter offering an option that matches nothing (or omitting one that
+        matches rows) would be worse than useless. Batches are derived per
+        entry and returned newest-first.
+        """
+        entries = await self.entries.list_all_for_options()
+        distinct = {field: set() for field in ("sales_person", "lead_source", "payment_mode", "category")}
+        batches: set[str] = set()
+        assignees: dict[str, str] = {}
+
+        for entry in entries:
+            for field in distinct:
+                value = getattr(entry, field)
+                if value:
+                    distinct[field].add(value)
+            batches.add(batch_for(entry.registration_date))
+            if entry.assigned_to:
+                assignees[str(entry.assigned_to)] = ""
+
+        for user_id in assignees:
+            user = await self.users.get_by_id(uuid.UUID(user_id))
+            assignees[user_id] = f"{user.first_name} {user.last_name}".strip() if user else "Unknown"
+
+        return {
+            **{field: sorted(values) for field, values in distinct.items()},
+            # "Batch-9" before "Batch-10" needs a numeric sort, not a string one.
+            "batch": sorted(batches, key=lambda b: int(b.split("-")[1]), reverse=True),
+            "assigned_to": [{"value": key, "label": label} for key, label in sorted(assignees.items(), key=lambda kv: kv[1])],
+        }
 
     async def stats(self) -> dict:
         """Totals behind the board's stat cards - one per section, plus the

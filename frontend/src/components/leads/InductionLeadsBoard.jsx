@@ -3,7 +3,10 @@ import { useQuery } from '@tanstack/react-query'
 import { ResourceListPage } from '@/components/resource/ResourceListPage'
 import { inductionEntryService } from '@/services/inductionEntryService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
+import { X } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
+import { FilterDropdown } from '@/components/ui/FilterDropdown'
 import { LeadSectionStats } from '@/components/leads/LeadSectionStats'
 import { useAuth } from '@/hooks/useAuth'
 import { PERMISSIONS } from '@/constants/permissions'
@@ -82,10 +85,26 @@ const editFields = [
   { name: 'category', label: 'Category' },
 ]
 
+const EMPTY_FILTERS = {
+  batch: '',
+  sales_person: '',
+  lead_source: '',
+  payment_mode: '',
+  category: '',
+  assigned_to: '',
+}
+
 export function InductionLeadsBoard() {
   const { user } = useAuth()
   const scopedSection = user?.scoped_section || null
   const [sectionFilter, setSectionFilter] = useState('')
+  const [filters, setFilters] = useState(EMPTY_FILTERS)
+
+  const setFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }))
+  const hasFilters = Object.values(filters).some(Boolean)
+  // Empty strings would be sent as `?batch=` and match nothing, so only the
+  // set ones reach the query.
+  const activeFilters = Object.fromEntries(Object.entries(filters).filter(([, value]) => value))
 
   // A Section Admin is pinned to their own section, exactly as on the
   // Foundation board - the role carries it, so it can't be changed by clicking.
@@ -105,8 +124,18 @@ export function InductionLeadsBoard() {
     queryFn: foundationFormConfigService.get,
   })
 
+  const optionsQuery = useQuery({
+    queryKey: ['induction-entries', 'filter-options'],
+    queryFn: inductionEntryService.getFilterOptions,
+  })
+
   const sections = configQuery.data?.sections ?? []
   const visibleSections = scopedSection ? sections.filter((s) => s.code === scopedSection) : sections
+
+  // Plain string lists come back for everything except Assigned To, which
+  // needs an id to filter on and a name to show.
+  const asOptions = (values) => (values ?? []).map((value) => ({ value, label: value }))
+  const options = optionsQuery.data ?? {}
 
   return (
     <>
@@ -118,13 +147,60 @@ export function InductionLeadsBoard() {
         activeSection={effectiveSection}
         onSelect={scopedSection ? () => {} : setSectionFilter}
       />
+      {/* Sits above the table rather than in column headers, matching the
+          Foundation board's filter row. */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <FilterDropdown
+          label="Batch"
+          value={filters.batch}
+          options={asOptions(options.batch)}
+          onChange={(value) => setFilter('batch', value)}
+        />
+        <FilterDropdown
+          label="Sales Person"
+          value={filters.sales_person}
+          options={asOptions(options.sales_person)}
+          onChange={(value) => setFilter('sales_person', value)}
+        />
+        <FilterDropdown
+          label="Lead Source"
+          value={filters.lead_source}
+          options={asOptions(options.lead_source)}
+          onChange={(value) => setFilter('lead_source', value)}
+        />
+        <FilterDropdown
+          label="Payment Mode"
+          value={filters.payment_mode}
+          options={asOptions(options.payment_mode)}
+          onChange={(value) => setFilter('payment_mode', value)}
+        />
+        <FilterDropdown
+          label="Category"
+          value={filters.category}
+          options={asOptions(options.category)}
+          onChange={(value) => setFilter('category', value)}
+        />
+        <FilterDropdown
+          label="Assignee"
+          value={filters.assigned_to}
+          options={options.assigned_to ?? []}
+          onChange={(value) => setFilter('assigned_to', value)}
+        />
+        {hasFilters && (
+          <Button variant="ghost" onClick={() => setFilters(EMPTY_FILTERS)}>
+            <X className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+            Clear
+          </Button>
+        )}
+      </div>
+
       <ResourceListPage
         title="Induction Entry"
         queryKey="induction-entries"
         service={inductionEntryService}
         columns={columns}
         serialNumber
-        extraParams={{ section: effectiveSection || undefined }}
+        extraParams={{ section: effectiveSection || undefined, ...activeFilters }}
         rowActions={{
         view: {
           title: (row) => row.name,

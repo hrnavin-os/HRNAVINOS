@@ -39,13 +39,38 @@ async def list_entries(
     page_size: int = Query(20, ge=1, le=100),
     search: str | None = None,
     section: str | None = None,
+    sales_person: str | None = None,
+    lead_source: str | None = None,
+    payment_mode: str | None = None,
+    category: str | None = None,
+    assigned_to: uuid.UUID | None = None,
+    batch: str | None = None,
     sort_by: str = "registration_date",
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> PaginatedResponse[InductionEntryResponse]:
     service = InductionEntryService()
+    filters = {
+        key: value
+        for key, value in {
+            "section": section,
+            "sales_person": sales_person,
+            "lead_source": lead_source,
+            "payment_mode": payment_mode,
+            "category": category,
+            "assigned_to": assigned_to,
+        }.items()
+        if value
+    }
+    # Batch is derived from registration_date rather than stored, so filtering
+    # by it becomes a range query over the month it represents.
+    if batch:
+        window = service.batch_date_range(batch)
+        if window:
+            filters["registration_date"] = {"$gte": window[0], "$lte": window[1]}
+
     params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)
-    result = await service.list(params, section=section)
+    result = await service.list(params, filters=filters)
     return PaginatedResponse[InductionEntryResponse].build(
         [await service.to_response(e) for e in result.items], result.total, result.page, result.page_size
     )
@@ -58,6 +83,15 @@ async def entry_stats(
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> InductionEntryStatsResponse:
     return InductionEntryStatsResponse(**await InductionEntryService().stats())
+
+
+@router.get("/filter-options")
+async def filter_options(
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
+) -> dict:
+    """Distinct values present in the data, so the filter row only ever offers
+    options that actually match something."""
+    return await InductionEntryService().filter_options()
 
 
 @router.get("/{entry_id}", response_model=InductionEntryResponse)

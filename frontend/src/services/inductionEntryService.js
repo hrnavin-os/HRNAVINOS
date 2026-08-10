@@ -9,4 +9,11 @@ export const inductionEntryService = {
     const { data } = await apiClient.get('/induction-entries/stats')
     return data
   },
+  // Distinct values present in the data, so a filter never offers an option
+  // that matches nothing - including values typed into the form's comboboxes
+  // that aren't on the configured dropdown list.
+  getFilterOptions: async () => {
+    const { data } = await apiClient.get('/induction-entries/filter-options')
+    return data
+  },
 }
