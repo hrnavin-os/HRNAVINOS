@@ -26,6 +26,46 @@ class InductionEntryStatsResponse(BaseModel):
     by_section: dict[str, int]
 
 
+class InductionQualificationSchema(BaseModel):
+    ug_degree: str | None = Field(default=None, max_length=150)
+    ug_passed_out_year: str | None = Field(default=None, max_length=10)
+    pg_degree: str | None = Field(default=None, max_length=150)
+    pg_passed_out_year: str | None = Field(default=None, max_length=10)
+
+
+class InductionPlacementSchema(BaseModel):
+    work_experience: str | None = Field(default=None, max_length=500)
+    training_or_extra_course: str | None = Field(default=None, max_length=500)
+    current_location: str | None = Field(default=None, max_length=200)
+    preferred_location: str | None = Field(default=None, max_length=200)
+
+
+class InductionRemarksSchema(BaseModel):
+    session_preference: str | None = Field(default=None, max_length=50)
+    requirements: str | None = Field(default=None, max_length=1000)
+    details: str | None = Field(default=None, max_length=1000)
+    doubts_clarified: str | None = Field(default=None, max_length=1000)
+
+
+class InductionOtherDetailsSchema(BaseModel):
+    induction_call_date: date | None = None
+    scheduled_time: str | None = Field(default=None, max_length=20)
+    terms_form_signed: bool | None = None
+    whatsapp_group_added: bool | None = None
+    call_recording_url: str | None = Field(default=None, max_length=500)
+    confidence: str | None = Field(default=None, max_length=50)
+
+
+class InductionDetailsUpdate(BaseModel):
+    """The four pages of the post-call update form. Each page is optional, so
+    a partially-completed form saves what it has rather than being rejected."""
+
+    qualification: InductionQualificationSchema | None = None
+    placement: InductionPlacementSchema | None = None
+    remarks: InductionRemarksSchema | None = None
+    other_details: InductionOtherDetailsSchema | None = None
+
+
 class InductionEntryUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=150)
     email: str | None = Field(default=None, max_length=255)
@@ -55,6 +95,10 @@ class InductionEntryResponse(BaseModel):
     assigned_to: uuid.UUID | None = None
     assigned_to_name: str | None = None
     section: str | None = None
+    qualification: InductionQualificationSchema = Field(default_factory=InductionQualificationSchema)
+    placement: InductionPlacementSchema = Field(default_factory=InductionPlacementSchema)
+    remarks: InductionRemarksSchema = Field(default_factory=InductionRemarksSchema)
+    other_details: InductionOtherDetailsSchema = Field(default_factory=InductionOtherDetailsSchema)
     created_at: datetime
     updated_at: datetime
 

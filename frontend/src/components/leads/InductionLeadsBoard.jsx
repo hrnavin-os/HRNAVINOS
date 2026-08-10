@@ -3,11 +3,27 @@ import { useQuery } from '@tanstack/react-query'
 import { ResourceListPage } from '@/components/resource/ResourceListPage'
 import { inductionEntryService } from '@/services/inductionEntryService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
-import { Calendar, CreditCard, Mail, Megaphone, Phone, Tag, UserRound, Wallet, X } from 'lucide-react'
+import {
+  Briefcase,
+  Calendar,
+  ClipboardList,
+  CreditCard,
+  GraduationCap,
+  Mail,
+  Megaphone,
+  MessageSquare,
+  Phone,
+  Tag,
+  UserRound,
+  Wallet,
+  X,
+} from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { FilterDropdown } from '@/components/ui/FilterDropdown'
 import { LeadSectionStats } from '@/components/leads/LeadSectionStats'
+import { InductionUpdateModal } from '@/components/leads/InductionUpdateModal'
+import { MEDIA_BASE_URL } from '@/constants/config'
 import { useAuth } from '@/hooks/useAuth'
 import { PERMISSIONS } from '@/constants/permissions'
 import { formatDate } from '@/utils/formatters'
@@ -87,6 +103,15 @@ const columns = [
   },
 ]
 
+// A row's post-call details are "started" once any one of the four pages has
+// an answer - used to label the Update button so you can see at a glance which
+// entries still need working.
+function hasDetails(entry) {
+  return [entry.qualification, entry.placement, entry.remarks, entry.other_details].some((group) =>
+    Object.values(group ?? {}).some((value) => value !== null && value !== undefined && value !== ''),
+  )
+}
+
 const editFields = [
   { name: 'name', label: 'Name', required: true },
   { name: 'email', label: 'Email', type: 'email' },
@@ -165,6 +190,85 @@ function InductionEntryDetail({ entry }) {
         <DetailTile icon={CreditCard} label="Payment Mode" value={entry.payment_mode} tone="violet" />
         <DetailTile icon={Tag} label="Category" value={entry.category} tone="emerald" />
       </div>
+
+      {/* The post-call pages. Each section is skipped entirely when empty, so
+          an entry nobody has worked yet reads as short rather than as a wall
+          of dashes. */}
+      <DetailSection title="Qualification" icon={GraduationCap} tint="bg-blue-50/70 border-blue-100" entries={[
+        ['UG Degree', entry.qualification?.ug_degree],
+        ['UG Passed Out', entry.qualification?.ug_passed_out_year],
+        ['PG Degree', entry.qualification?.pg_degree],
+        ['PG Passed Out', entry.qualification?.pg_passed_out_year],
+      ]} />
+
+      <DetailSection title="Placement" icon={Briefcase} tint="bg-emerald-50/70 border-emerald-100" entries={[
+        ['Work Experience', entry.placement?.work_experience],
+        ['Training / Extra Course', entry.placement?.training_or_extra_course],
+        ['Current Location', entry.placement?.current_location],
+        ['Preferred Location', entry.placement?.preferred_location],
+      ]} />
+
+      <DetailSection title="Remarks" icon={MessageSquare} tint="bg-violet-50/70 border-violet-100" entries={[
+        ['Session', entry.remarks?.session_preference],
+        ['Requirements', entry.remarks?.requirements],
+        ['Details', entry.remarks?.details],
+        ['Doubts Clarified', entry.remarks?.doubts_clarified],
+      ]} />
+
+      <DetailSection title="Other Details" icon={ClipboardList} tint="bg-amber-50/70 border-amber-100" entries={[
+        ['Induction Call Date', entry.other_details?.induction_call_date ? formatDate(entry.other_details.induction_call_date) : null],
+        ['Scheduled Time', entry.other_details?.scheduled_time],
+        ['Terms Form Signed', yesNo(entry.other_details?.terms_form_signed)],
+        ['WhatsApp Group Added', yesNo(entry.other_details?.whatsapp_group_added)],
+        ['Confidence', entry.other_details?.confidence],
+        // Conditional here, not inside RecordingLink: DetailSection drops a
+        // row on a null value, and a component returning null is still a
+        // non-null element, so the row would render empty.
+        [
+          'Call Recording',
+          entry.other_details?.call_recording_url
+            ? <RecordingLink key="recording" url={entry.other_details.call_recording_url} />
+            : null,
+        ],
+      ]} />
+    </div>
+  )
+}
+
+// null stays null so an unanswered yes/no is skipped rather than shown as "No".
+const yesNo = (value) => (value === true ? 'Yes' : value === false ? 'No' : null)
+
+function RecordingLink({ url }) {
+  return (
+    <a
+      href={`${MEDIA_BASE_URL}${url}`}
+      target="_blank"
+      rel="noreferrer"
+      className="font-medium text-brand-600 hover:text-brand-700"
+    >
+      View recording
+    </a>
+  )
+}
+
+function DetailSection({ title, icon: Icon, tint, entries }) {
+  const filled = entries.filter(([, value]) => value !== null && value !== undefined && value !== '')
+  if (filled.length === 0) return null
+
+  return (
+    <div className={`rounded-lg border px-4 py-3 ${tint}`}>
+      <div className="mb-2 flex items-center gap-2">
+        <Icon className="h-4 w-4 text-slate-500" strokeWidth={2} aria-hidden="true" />
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</h3>
+      </div>
+      <dl className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
+        {filled.map(([label, value]) => (
+          <div key={label} className="min-w-0">
+            <dt className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</dt>
+            <dd className="break-words text-sm text-slate-800">{value}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   )
 }
@@ -207,6 +311,8 @@ export function InductionLeadsBoard() {
     queryKey: ['foundation-form-config'],
     queryFn: foundationFormConfigService.get,
   })
+
+  const [updatingEntry, setUpdatingEntry] = useState(null)
 
   const optionsQuery = useQuery({
     queryKey: ['induction-entries', 'filter-options'],
@@ -289,7 +395,28 @@ export function InductionLeadsBoard() {
         title="Induction Entry"
         queryKey="induction-entries"
         service={inductionEntryService}
-        columns={columns}
+        columns={[
+          ...columns,
+          {
+            // Last column, before Actions: opens the four-page post-call form.
+            key: 'update',
+            header: 'Update',
+            align: 'center',
+            render: (row) => (
+              <Button
+                variant="secondary"
+                className="px-3! py-1! text-xs"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setUpdatingEntry(row)
+                }}
+              >
+                <ClipboardList className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                {hasDetails(row) ? 'Edit' : 'Update'}
+              </Button>
+            ),
+          },
+        ]}
         serialNumber
         extraParams={{ section: effectiveSection || undefined, ...activeFilters }}
         rowActions={{
@@ -322,6 +449,10 @@ export function InductionLeadsBoard() {
           },
         }}
       />
+
+      {updatingEntry && (
+        <InductionUpdateModal entry={updatingEntry} onClose={() => setUpdatingEntry(null)} />
+      )}
     </>
   )
 }

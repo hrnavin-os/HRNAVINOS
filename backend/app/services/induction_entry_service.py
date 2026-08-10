@@ -3,18 +3,26 @@ import uuid
 from datetime import date, timedelta
 
 from app.exceptions.base import NotFoundError
-from app.models.induction_entry import InductionEntry
+from app.models.induction_entry import (
+    InductionEntry,
+    InductionOtherDetails,
+    InductionPlacement,
+    InductionQualification,
+    InductionRemarks,
+)
 from app.models.user import User
 from app.repositories.induction_entry_repository import InductionEntryRepository
 from app.repositories.role_repository import RoleRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.induction_entry_schema import (
+    InductionDetailsUpdate,
     InductionEntryCreate,
     InductionEntryResponse,
     InductionEntryUpdate,
 )
 from app.services.audit_service import AuditService
+from app.services.storage_service import StorageService
 
 # The batch sequence is anchored, not enumerated: August 2026 is Batch-28 and
 # every following month is one higher. Anchoring rather than hardcoding a
@@ -40,6 +48,7 @@ class InductionEntryService:
         self.entries = InductionEntryRepository()
         self.roles = RoleRepository()
         self.users = UserRepository()
+        self.storage = StorageService()
         self.audit = AuditService()
 
     async def _section_admin_rota(self) -> list[tuple[User, str]]:
@@ -210,6 +219,52 @@ class InductionEntryService:
             entity_id=str(entry.id),
             changes=update_data,
         )
+        return entry
+
+    async def update_details(
+        self, entry_id: uuid.UUID, data: InductionDetailsUpdate, *, actor_id: uuid.UUID | None
+    ) -> InductionEntry:
+        """Saves the post-call form. Pages arrive one at a time as the user
+        moves through it, so an absent page leaves what's already stored alone
+        rather than blanking it - `exclude_unset` on each group means clearing
+        a single answer still works, but skipping a page doesn't wipe it."""
+        entry = await self.get(entry_id)
+        groups = {
+            "qualification": InductionQualification,
+            "placement": InductionPlacement,
+            "remarks": InductionRemarks,
+            "other_details": InductionOtherDetails,
+        }
+        changed = []
+        for name, model in groups.items():
+            page = getattr(data, name)
+            if page is None:
+                continue
+            merged = getattr(entry, name).model_dump()
+            merged.update(page.model_dump(exclude_unset=True))
+            setattr(entry, name, model(**merged))
+            changed.append(name)
+
+        entry.updated_by = actor_id
+        entry.touch(actor_id)
+        await entry.save()
+        await self.audit.record(
+            user_id=actor_id,
+            action="UPDATE",
+            entity_type="InductionEntry",
+            entity_id=str(entry.id),
+            changes={"details": changed},
+        )
+        return entry
+
+    async def save_call_recording(
+        self, entry_id: uuid.UUID, file, *, actor_id: uuid.UUID | None
+    ) -> InductionEntry:
+        entry = await self.get(entry_id)
+        entry.other_details.call_recording_url = await self.storage.save_video(file, subdir="induction-calls")
+        entry.updated_by = actor_id
+        entry.touch(actor_id)
+        await entry.save()
         return entry
 
     async def delete(self, entry_id: uuid.UUID, *, actor_id: uuid.UUID | None) -> None:

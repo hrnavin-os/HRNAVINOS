@@ -7,13 +7,14 @@ permissions to existing roles before the tab works.
 """
 import uuid
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 
 from app.core.dependencies import RequirePermissions
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.common import MessageResponse, PaginatedResponse, PaginationParams
 from app.schemas.induction_entry_schema import (
+    InductionDetailsUpdate,
     InductionEntryCreate,
     InductionEntryResponse,
     InductionEntryStatsResponse,
@@ -111,6 +112,29 @@ async def update_entry(
 ) -> InductionEntryResponse:
     service = InductionEntryService()
     return await service.to_response(await service.update(entry_id, payload, actor_id=actor.id))
+
+
+@router.put("/{entry_id}/details", response_model=InductionEntryResponse)
+async def update_entry_details(
+    entry_id: uuid.UUID,
+    payload: InductionDetailsUpdate,
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
+) -> InductionEntryResponse:
+    """The post-call update form. Separate from PUT /{entry_id}, which edits
+    the entry's own fields - these are the four extra pages and they save
+    independently of them."""
+    service = InductionEntryService()
+    return await service.to_response(await service.update_details(entry_id, payload, actor_id=actor.id))
+
+
+@router.post("/{entry_id}/call-recording", response_model=InductionEntryResponse)
+async def upload_call_recording(
+    entry_id: uuid.UUID,
+    file: UploadFile = File(...),
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
+) -> InductionEntryResponse:
+    service = InductionEntryService()
+    return await service.to_response(await service.save_call_recording(entry_id, file, actor_id=actor.id))
 
 
 @router.delete("/{entry_id}", response_model=MessageResponse)
