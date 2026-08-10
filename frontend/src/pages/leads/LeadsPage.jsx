@@ -1,24 +1,20 @@
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, Eye, Pencil, Plus, Search } from 'lucide-react'
+import { Check, ChevronDown, Eye, Pencil, Search } from 'lucide-react'
 import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
 import { useAuth } from '@/hooks/useAuth'
 import { leadService } from '@/services/leadService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
-import { PERMISSIONS } from '@/constants/permissions'
 import { formatDate, titleCase } from '@/utils/formatters'
 import { Badge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Modal } from '@/components/ui/Modal'
 import { Toast } from '@/components/ui/Toast'
 import { DataTable } from '@/components/ui/DataTable'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { Pagination } from '@/components/ui/Pagination'
-import { ResourceForm } from '@/components/resource/ResourceForm'
 import { LeadSectionStageStats, LeadSectionStats } from '@/components/leads/LeadSectionStats'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { LeadDetailModal } from '@/components/leads/LeadDetailModal'
@@ -73,51 +69,6 @@ const STAGE_CELL_STYLES = {
 // Matches Lead.remarks' server-side cap, so an over-long paste is stopped at
 // the textarea instead of coming back as an opaque 422.
 const REMARKS_MAX_LENGTH = 2000
-
-// Section is required for anyone who can choose one: a lead created without
-// it lands outside every A/B/C tab and is invisible to Section Admins, so it
-// would silently never get worked. Section Admins don't get the field at all
-// - the server pins new leads to their own section regardless of what's sent.
-function buildCreateFields({ sectionOptions, isSectionScoped }) {
-  return [
-    { name: 'name', label: 'Full Name', placeholder: 'Full Name', required: true },
-    { name: 'phone', label: 'Mobile Number', placeholder: 'Mobile Number', required: true },
-    { name: 'email', label: 'E-Mail ID', placeholder: 'E-Mail ID', type: 'email' },
-    {
-      name: 'course_interest',
-      label: 'Program you are planning to join?',
-      placeholder: 'Program you are planning to join?',
-      required: true,
-    },
-    ...(isSectionScoped
-      ? []
-      : [
-          {
-            name: 'section',
-            label: 'Section',
-            type: 'select',
-            required: true,
-            options: sectionOptions.map((section) => ({ value: section.code, label: section.label })),
-          },
-        ]),
-    {
-      name: 'batch_preference',
-      label: 'Batch',
-      placeholder: 'Batch',
-    },
-    {
-      name: 'payment_expected',
-      label: 'When will you make the payment?',
-      placeholder: 'When will you make the payment?',
-    },
-    {
-      name: 'notes',
-      label: 'Any doubts or queries',
-      placeholder: 'Any doubts or queries',
-      type: 'textarea',
-    },
-  ]
-}
 
 // Shows just the first 6 characters + "…" so a long query doesn't blow out
 // the row height; hovering reveals the full text in a floating popup.
@@ -513,9 +464,7 @@ function FilterDropdown({ label, value, options, onChange }) {
 }
 
 export function LeadsPage() {
-  const { hasPermission, user } = useAuth()
-  const queryClient = useQueryClient()
-  const canCreate = hasPermission(PERMISSIONS.LEADS_CREATE)
+  const { user } = useAuth()
 
   // Section Admins are permanently locked to their own section - the role
   // itself carries this, not a UI selection, so it can never be navigated
@@ -523,7 +472,6 @@ export function LeadsPage() {
   // unrestricted board regardless of which tab they click.
   const scopedSection = user?.scoped_section || null
 
-  const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [viewingLead, setViewingLead] = useState(null)
   // Inline cell edits have no form to hang an error on, so failures surface
   // here instead of the cell silently reverting as if nothing happened.
@@ -581,15 +529,6 @@ export function LeadsPage() {
     sort_order: sortOrder,
     date_from: dateFrom || undefined,
     date_to: dateTo || undefined,
-  })
-
-  const createMutation = useMutation({
-    mutationFn: (values) => leadService.create(values),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['leads'] })
-      queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
-      setIsCreateOpen(false)
-    },
   })
 
   function selectSection(code) {
@@ -766,14 +705,9 @@ export function LeadsPage() {
           }}
         />
 
+        {/* No Create Lead here: leads arrive through the Form Collection
+            forms, not by being typed into the board. */}
         <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onChange={handleDateChange} />
-
-        {canCreate && (
-          <Button onClick={() => setIsCreateOpen(true)}>
-            <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-            Create Lead
-          </Button>
-        )}
       </div>
 
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -799,17 +733,6 @@ export function LeadsPage() {
           pageSize={pageSize}
         />
       </div>
-
-      {isCreateOpen && (
-        <Modal title="New Lead" isOpen onClose={() => setIsCreateOpen(false)}>
-          <ResourceForm
-            fields={buildCreateFields({ sectionOptions, isSectionScoped: Boolean(scopedSection) })}
-            onSubmit={(values) => createMutation.mutateAsync(values)}
-            onCancel={() => setIsCreateOpen(false)}
-            submitError={createMutation.error ? getApiErrorMessage(createMutation.error) : null}
-          />
-        </Modal>
-      )}
 
       {viewingLead && <LeadDetailModal lead={viewingLead} onClose={() => setViewingLead(null)} />}
 
