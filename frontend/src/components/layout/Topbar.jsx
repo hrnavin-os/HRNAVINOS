@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/Button'
 import { NAV_LEAF_ITEMS } from '@/constants/navigation'
 import { LeadBoardTabs } from '@/components/layout/LeadBoardTabs'
+import { NotificationBell } from '@/components/layout/NotificationBell'
 
 // Longest matching path wins: "/leads/form-collection" also starts with
 // "/leads", so a plain find() would title the Form Collection page "Lead
@@ -47,6 +48,7 @@ export function Topbar() {
         </div>
       </div>
       <div className="flex items-center gap-4">
+        <NotificationBell />
         <div className="flex items-center gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700">
             {initials(user?.first_name, user?.last_name)}
