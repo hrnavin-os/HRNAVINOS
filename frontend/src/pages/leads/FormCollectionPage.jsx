@@ -111,7 +111,7 @@ export function FormCollectionPage() {
 
   return (
     <div>
-      <div className="mb-4 flex gap-1 border-b border-slate-200">
+      <div className="mb-4 flex justify-center gap-1 border-b border-slate-200">
         {TABS.map((tab) => (
           <button
             key={tab.key}

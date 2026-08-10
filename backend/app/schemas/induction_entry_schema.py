@@ -17,6 +17,10 @@ class InductionEntryCreate(BaseModel):
     category: str | None = Field(default=None, max_length=150)
 
 
+class InductionFormSubmitResponse(BaseModel):
+    message: str
+
+
 class InductionEntryUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=150)
     email: str | None = Field(default=None, max_length=255)

@@ -7,6 +7,7 @@ import { HomeRoute } from '@/routes/HomeRoute'
 import { LeadsPage } from '@/pages/leads/LeadsPage'
 import { FormCollectionPage } from '@/pages/leads/FormCollectionPage'
 import { FoundationFormPage } from '@/pages/public/FoundationFormPage'
+import { InductionFormPage } from '@/pages/public/InductionFormPage'
 import { MarketingBoardPage } from '@/pages/marketing/MarketingBoardPage'
 import { AdmissionsPage } from '@/pages/admissions/AdmissionsPage'
 import { StudentsPage } from '@/pages/students/StudentsPage'
@@ -39,6 +40,8 @@ export function AppRoutes() {
 
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
       <Route path="/foundation-form" element={<FoundationFormPage />} />
+      {/* Public like the Foundation Form: shared as a link, no login. */}
+      <Route path="/induction-form" element={<InductionFormPage />} />
       {/* Sections are admin-managed and open-ended (Form Collection's "Add Form"
           button can create new ones at any time), so this is a dynamic route
           rather than one static entry per section. */}

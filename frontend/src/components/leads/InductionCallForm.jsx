@@ -1,6 +1,9 @@
+import { useState } from 'react'
+import { ClipboardCheck, Copy, ExternalLink } from 'lucide-react'
 import { ResourceListPage } from '@/components/resource/ResourceListPage'
 import { inductionEntryService } from '@/services/inductionEntryService'
 import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
 import { PERMISSIONS } from '@/constants/permissions'
 import { formatDate } from '@/utils/formatters'
 import {
@@ -66,17 +69,63 @@ const fields = [
   { name: 'category', label: 'Category', type: 'combobox', options: CATEGORY_OPTIONS },
 ]
 
+// The shareable link, mirroring the Foundation Call Form's section cards.
+// Entries come in through this form rather than being keyed in here, so the
+// table below is a record of what's been submitted.
+function ShareFormCard() {
+  const [copied, setCopied] = useState(false)
+  const formUrl = `${window.location.origin}/induction-form`
+
+  async function copyLink() {
+    await navigator.clipboard.writeText(formUrl)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex min-w-0 items-center gap-4">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-brand-500 to-brand-700 text-white shadow-sm">
+          <ClipboardCheck className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+        </span>
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold text-slate-900">Induction Call Form</h3>
+          <p className="mt-0.5 truncate text-sm text-slate-500">
+            Share this link to collect details. Each submission is assigned to a section admin automatically.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-2">
+        <Button type="button" variant="secondary" className="px-3! py-1.5! text-xs" onClick={copyLink}>
+          <Copy className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+          {copied ? 'Copied!' : 'Copy link'}
+        </Button>
+        <a
+          href={formUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
+        >
+          <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+          Open form
+        </a>
+      </div>
+    </div>
+  )
+}
+
 export function InductionCallForm() {
   return (
-    <ResourceListPage
-      title="Induction Entry"
-      queryKey="induction-entries"
-      service={inductionEntryService}
-      columns={columns}
-      serialNumber
-      createFields={fields}
-      createPermission={PERMISSIONS.LEADS_CREATE}
-      rowActions={{
+    <>
+      <ShareFormCard />
+      <ResourceListPage
+        title="Induction Entry"
+        queryKey="induction-entries"
+        service={inductionEntryService}
+        columns={columns}
+        serialNumber
+        rowActions={{
         view: {
           title: (row) => row.name,
           fields: [
@@ -117,11 +166,12 @@ export function InductionCallForm() {
             category: row.category ?? '',
           }),
         },
-        remove: {
-          permission: PERMISSIONS.LEADS_DELETE,
-          describe: (row) => `${row.name} (${row.phone})`,
-        },
-      }}
-    />
+          remove: {
+            permission: PERMISSIONS.LEADS_DELETE,
+            describe: (row) => `${row.name} (${row.phone})`,
+          },
+        }}
+      />
+    </>
   )
 }
