@@ -14,6 +14,7 @@ from app.routes import (
     foundation_form_config_routes,
     foundation_form_routes,
     google_sheets_routes,
+    induction_entry_routes,
     invoice_routes,
     lead_routes,
     notification_routes,
@@ -42,6 +43,7 @@ api_router.include_router(lead_routes.router)
 api_router.include_router(foundation_form_routes.router)
 api_router.include_router(foundation_form_config_routes.router)
 api_router.include_router(google_sheets_routes.router)
+api_router.include_router(induction_entry_routes.router)
 api_router.include_router(admission_routes.router)
 api_router.include_router(student_routes.router)
 api_router.include_router(program_routes.router)

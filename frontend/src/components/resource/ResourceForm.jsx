@@ -6,7 +6,13 @@ import { Button } from '@/components/ui/Button'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 
 // Declarative form renderer shared by every module's "create" modal.
-// fields: [{ name, label, type: 'text'|'number'|'date'|'select'|'textarea', required, options }]
+// fields: [{ name, label, type, required, options }]
+// type: 'text'|'number'|'date'|'select'|'textarea'|'combobox'
+//
+// 'combobox' is a select that still accepts a typed value - a native input
+// backed by a <datalist>, so the browser offers the options while leaving the
+// field free text. A plain <select> can't do that, and it's what the Induction
+// Call Form's Sales Person / Lead Source / Payment Mode / Category need.
 export function ResourceForm({ fields, defaultValues = {}, onSubmit, onCancel, submitLabel = 'Save', submitError }) {
   const {
     register,
@@ -46,6 +52,28 @@ export function ResourceForm({ fields, defaultValues = {}, onSubmit, onCancel, s
                 </option>
               ))}
             </Select>
+          )
+        }
+
+        if (field.type === 'combobox') {
+          const listId = `${field.name}-options`
+          return (
+            <div key={field.name}>
+              <Input
+                list={listId}
+                label={field.label}
+                placeholder={field.placeholder ?? 'Select or type…'}
+                required={Boolean(field.required)}
+                error={errors[field.name]?.message}
+                autoComplete="off"
+                {...register(field.name, validation)}
+              />
+              <datalist id={listId}>
+                {field.options.map((option) => (
+                  <option key={option.value ?? option} value={option.value ?? option} />
+                ))}
+              </datalist>
+            </div>
           )
         }
 

@@ -11,6 +11,7 @@ import { getApiErrorMessage } from '@/services/apiClient'
 import { useAuth } from '@/hooks/useAuth'
 import { PERMISSIONS } from '@/constants/permissions'
 import { FormCollectionEditModal } from '@/components/leads/FormCollectionEditModal'
+import { InductionCallForm } from '@/components/leads/InductionCallForm'
 
 function SectionCard({ section, canConfigure, onEdit, onDelete, isDeleting }) {
   const navigate = useNavigate()
@@ -100,7 +101,41 @@ function SectionCard({ section, canConfigure, onEdit, onDelete, isDeleting }) {
   )
 }
 
+const TABS = [
+  { key: 'induction', label: 'Induction Call Form' },
+  { key: 'foundation', label: 'Foundation Call Form' },
+]
+
 export function FormCollectionPage() {
+  const [activeTab, setActiveTab] = useState('induction')
+
+  return (
+    <div>
+      <div className="mb-4 flex gap-1 border-b border-slate-200">
+        {TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-3 pb-2 text-sm font-semibold transition-colors ${
+              activeTab === tab.key
+                ? 'border-b-2 border-brand-600 text-brand-600'
+                : 'border-b-2 border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'induction' ? <InductionCallForm /> : <FoundationCallForm />}
+    </div>
+  )
+}
+
+// Everything that was previously the whole page, moved behind a tab with no
+// changes to what it renders or how it behaves.
+function FoundationCallForm() {
   const { user, hasPermission } = useAuth()
   const canConfigure = hasPermission(PERMISSIONS.FORM_COLLECTION_CONFIGURE)
   const [isEditOpen, setIsEditOpen] = useState(false)
