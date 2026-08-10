@@ -6,21 +6,22 @@ import { useSearchParams } from 'react-router-dom'
 //
 // Kept out of the component file so that one only exports a component; mixing
 // the two breaks React Fast Refresh for it.
-// Each board keeps its own accent, carried by the text and an underline
-// rather than a filled pill - the header sits on white and a solid chip in it
-// read as a button floating over the page.
+// A segmented control: a recessed track with the selected tab raised out of
+// it on white. Each board keeps its accent as the text colour of the raised
+// pill rather than filling it - on a white header a solid block of colour
+// reads as a button floating over the page rather than a selected tab.
 export const LEAD_BOARDS = [
   {
     key: 'induction',
     label: 'Induction',
-    active: 'border-brand-600 text-brand-600',
-    idle: 'border-transparent text-slate-500 hover:text-slate-700',
+    active: 'bg-white text-brand-700 shadow-sm',
+    idle: 'text-slate-500 hover:text-slate-700',
   },
   {
     key: 'foundation',
     label: 'Foundation',
-    active: 'border-violet-600 text-violet-600',
-    idle: 'border-transparent text-slate-500 hover:text-slate-700',
+    active: 'bg-white text-violet-700 shadow-sm',
+    idle: 'text-slate-500 hover:text-slate-700',
   },
 ]
 
