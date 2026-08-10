@@ -33,6 +33,22 @@ const columns = [
   { key: 'lead_source', header: 'Lead Source', render: (row) => orDash(row.lead_source) },
   { key: 'payment_mode', header: 'Payment Mode', render: (row) => orDash(row.payment_mode) },
   { key: 'category', header: 'Category', render: (row) => orDash(row.category) },
+  {
+    // Assigned automatically, round-robin across Section Admins, when the
+    // entry is created. Shown so whoever keyed it in can see where it landed;
+    // it isn't editable here for the same reason it isn't on the form.
+    key: 'assigned_to',
+    header: 'Assigned To',
+    render: (row) =>
+      row.assigned_to_name ? (
+        <span className="flex items-center gap-1.5">
+          <span className="font-medium text-slate-900">{row.assigned_to_name}</span>
+          {row.section && <Badge tone="violet">{row.section.toUpperCase()}</Badge>}
+        </span>
+      ) : (
+        <span className="text-amber-600">Unassigned</span>
+      ),
+  },
 ]
 
 // Sales Person / Lead Source / Payment Mode / Category are comboboxes, not
@@ -74,6 +90,13 @@ export function InductionCallForm() {
             { label: 'Lead Source', value: (row) => row.lead_source },
             { label: 'Payment Mode', value: (row) => row.payment_mode },
             { label: 'Category', value: (row) => row.category },
+            {
+              label: 'Assigned To',
+              value: (row) =>
+                row.assigned_to_name
+                  ? `${row.assigned_to_name}${row.section ? ` (Section ${row.section.toUpperCase()})` : ''}`
+                  : 'Unassigned — no active Section Admin to rotate to',
+            },
           ],
         },
         edit: {

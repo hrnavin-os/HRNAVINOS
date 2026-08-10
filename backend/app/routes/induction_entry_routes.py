@@ -29,7 +29,7 @@ async def create_entry(
     actor: User = Depends(RequirePermissions(Permissions.LEADS_CREATE)),
 ) -> InductionEntryResponse:
     service = InductionEntryService()
-    return service.to_response(await service.create(payload, actor_id=actor.id))
+    return await service.to_response(await service.create(payload, actor_id=actor.id))
 
 
 @router.get("", response_model=PaginatedResponse[InductionEntryResponse])
@@ -45,7 +45,7 @@ async def list_entries(
     params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)
     result = await service.list(params)
     return PaginatedResponse[InductionEntryResponse].build(
-        [service.to_response(e) for e in result.items], result.total, result.page, result.page_size
+        [await service.to_response(e) for e in result.items], result.total, result.page, result.page_size
     )
 
 
@@ -55,7 +55,7 @@ async def get_entry(
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> InductionEntryResponse:
     service = InductionEntryService()
-    return service.to_response(await service.get(entry_id))
+    return await service.to_response(await service.get(entry_id))
 
 
 @router.put("/{entry_id}", response_model=InductionEntryResponse)
@@ -65,7 +65,7 @@ async def update_entry(
     actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
 ) -> InductionEntryResponse:
     service = InductionEntryService()
-    return service.to_response(await service.update(entry_id, payload, actor_id=actor.id))
+    return await service.to_response(await service.update(entry_id, payload, actor_id=actor.id))
 
 
 @router.delete("/{entry_id}", response_model=MessageResponse)

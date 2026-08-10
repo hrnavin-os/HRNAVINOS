@@ -20,6 +20,15 @@ class RoleRepository(BaseRepository[Role]):
             query["_id"] = {"$ne": exclude_id}
         return await Role.find_one(query) is not None
 
+    async def list_scoped(self) -> list[Role]:
+        """Every Section Admin role, whatever its section. Sorted by creation
+        so the round-robin that walks this list has a stable order between
+        requests rather than whatever Mongo returns first."""
+        roles = await Role.find(
+            {"scoped_section": {"$ne": None}, "is_deleted": False}
+        ).to_list()
+        return sorted(roles, key=lambda role: (role.created_at, str(role.id)))
+
     async def list_by_scoped_section(self, code: str) -> list[Role]:
         """Every role pinned to one Form Collection section - i.e. that
         section's admins. A section can have more than one such role, so this

@@ -42,6 +42,10 @@ class InductionEntryResponse(BaseModel):
     lead_source: str | None
     payment_mode: str | None
     category: str | None
+    # Set by the round-robin at creation, not by the form.
+    assigned_to: uuid.UUID | None = None
+    assigned_to_name: str | None = None
+    section: str | None = None
     created_at: datetime
     updated_at: datetime
 

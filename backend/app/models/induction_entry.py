@@ -6,6 +6,7 @@ read, so it can never drift from the date, can never be edited by hand, and
 historical rows keep the batch they were registered into when the month rolls
 over.
 """
+import uuid
 from datetime import date
 
 from pydantic import Field
@@ -28,11 +29,18 @@ class InductionEntry(BaseDocument):
     payment_mode: str | None = Field(default=None, max_length=100)
     category: str | None = Field(default=None, max_length=150)
 
+    # Set once, on create, by the round-robin in InductionEntryService. Both
+    # are stored rather than derived: who owns a row must not change when
+    # someone is added to or removed from the Section Admin rota afterwards.
+    assigned_to: uuid.UUID | None = None
+    section: str | None = Field(default=None, max_length=50)
+
     class Settings:
         name = "induction_entries"
         indexes = [
             IndexModel([("registration_date", -1)]),
             IndexModel([("phone", 1)]),
+            IndexModel([("assigned_to", 1)]),
         ]
 
     def __repr__(self) -> str:

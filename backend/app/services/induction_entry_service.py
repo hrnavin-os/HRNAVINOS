@@ -4,7 +4,10 @@ from datetime import date
 
 from app.exceptions.base import NotFoundError
 from app.models.induction_entry import InductionEntry
+from app.models.user import User
 from app.repositories.induction_entry_repository import InductionEntryRepository
+from app.repositories.role_repository import RoleRepository
+from app.repositories.user_repository import UserRepository
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.induction_entry_schema import (
     InductionEntryCreate,
@@ -35,19 +38,75 @@ def batch_for(registration_date: date) -> str:
 class InductionEntryService:
     def __init__(self) -> None:
         self.entries = InductionEntryRepository()
+        self.roles = RoleRepository()
+        self.users = UserRepository()
         self.audit = AuditService()
 
-    def to_response(self, entry: InductionEntry) -> InductionEntryResponse:
+    async def _section_admin_rota(self) -> list[tuple[User, str]]:
+        """Every active Section Admin paired with their section, in a stable
+        order.
+
+        The section is carried alongside because it lives on the Role, not the
+        User - there is no user.scoped_section to read back later.
+
+        Ordered by their role's creation then their own, so the rota is the
+        same list on every request; a round-robin over an unordered query
+        isn't a round-robin, it's a shuffle.
+        """
+        rota: list[tuple[User, str]] = []
+        for role in await self.roles.list_scoped():
+            users, _ = await self.users.list(
+                page=1, page_size=1000, filters={"role_id": role.id, "is_active": True}
+            )
+            for user in sorted(users, key=lambda u: (u.created_at, str(u.id))):
+                rota.append((user, role.scoped_section))
+        return rota
+
+    async def _next_assignee(self) -> tuple[User, str] | tuple[None, None]:
+        """Picks the next Section Admin in the rotation.
+
+        The cursor is the total number of induction entries ever created,
+        including soft-deleted ones. Counting only live rows would make the
+        index go backwards when one is deleted and hand the same person two
+        in a row; soft deletes never leave the collection, so this only ever
+        climbs.
+        """
+        rota = await self._section_admin_rota()
+        if not rota:
+            return None, None
+        created_so_far = await InductionEntry.find({}).count()
+        return rota[created_so_far % len(rota)]
+
+    async def to_response(self, entry: InductionEntry) -> InductionEntryResponse:
         # model_dump() also carries the BaseDocument fields (is_deleted,
         # created_by, revision_id...); the response schema ignores what it
         # doesn't declare, so they're harmless here.
-        return InductionEntryResponse(**entry.model_dump(), batch=batch_for(entry.registration_date))
+        assignee = await self.users.get_by_id(entry.assigned_to) if entry.assigned_to else None
+        return InductionEntryResponse(
+            **entry.model_dump(),
+            batch=batch_for(entry.registration_date),
+            assigned_to_name=f"{assignee.first_name} {assignee.last_name}".strip() if assignee else None,
+        )
 
     async def create(self, data: InductionEntryCreate, *, actor_id: uuid.UUID | None) -> InductionEntry:
-        entry = InductionEntry(**data.model_dump(), created_by=actor_id, updated_by=actor_id)
+        # Assignment happens here rather than being a field on the form: the
+        # team keying these in from WhatsApp shouldn't have to remember whose
+        # turn it is, and shouldn't be able to skew the rota by choosing.
+        assignee, section = await self._next_assignee()
+        entry = InductionEntry(
+            **data.model_dump(),
+            assigned_to=assignee.id if assignee else None,
+            section=section,
+            created_by=actor_id,
+            updated_by=actor_id,
+        )
         await self.entries.create(entry)
         await self.audit.record(
-            user_id=actor_id, action="CREATE", entity_type="InductionEntry", entity_id=str(entry.id)
+            user_id=actor_id,
+            action="CREATE",
+            entity_type="InductionEntry",
+            entity_id=str(entry.id),
+            changes={"assigned_to": str(assignee.id) if assignee else None, "section": section},
         )
         return entry
 
