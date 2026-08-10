@@ -136,15 +136,27 @@ const DETAIL_TONES = {
   cyan: 'bg-linear-to-br from-cyan-500 to-cyan-700',
 }
 
+const SECTION_EDGE = {
+  blue: 'border-l-blue-500',
+  violet: 'border-l-violet-500',
+  emerald: 'border-l-emerald-500',
+  amber: 'border-l-amber-500',
+}
+
+// Compact on purpose: eight of these stacked in a modal, at card size with
+// full padding and a border each, pushed the collected details below the fold.
+// A plate, a label and a value is all the information they carry.
 function DetailTile({ icon: Icon, label, value, tone }) {
   return (
-    <div className="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white shadow-sm ${DETAIL_TONES[tone]}`}>
-        <Icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+    <div className="flex items-center gap-2.5 rounded-lg bg-slate-50 px-2.5 py-2">
+      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white ${DETAIL_TONES[tone]}`}>
+        <Icon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
       </span>
       <div className="min-w-0">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
-        <p className="break-words text-sm font-semibold text-slate-900">{value || '—'}</p>
+        <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
+        <p className="truncate text-sm font-medium text-slate-900" title={value || undefined}>
+          {value || '—'}
+        </p>
       </div>
     </div>
   )
@@ -194,43 +206,57 @@ function InductionEntryDetail({ entry }) {
       {/* The post-call pages. Each section is skipped entirely when empty, so
           an entry nobody has worked yet reads as short rather than as a wall
           of dashes. */}
-      <DetailSection title="Qualification" icon={GraduationCap} tint="bg-blue-50/70 border-blue-100" entries={[
+      <DetailSection title="Qualification" icon={GraduationCap} tone="blue" entries={[
         ['UG Degree', entry.qualification?.ug_degree],
         ['UG Passed Out', entry.qualification?.ug_passed_out_year],
         ['PG Degree', entry.qualification?.pg_degree],
         ['PG Passed Out', entry.qualification?.pg_passed_out_year],
       ]} />
 
-      <DetailSection title="Placement" icon={Briefcase} tint="bg-emerald-50/70 border-emerald-100" entries={[
+      <DetailSection title="Placement" icon={Briefcase} tone="emerald" entries={[
         ['Work Experience', entry.placement?.work_experience],
         ['Training / Extra Course', entry.placement?.training_or_extra_course],
         ['Current Location', entry.placement?.current_location],
         ['Preferred Location', entry.placement?.preferred_location],
       ]} />
 
-      <DetailSection title="Remarks" icon={MessageSquare} tint="bg-violet-50/70 border-violet-100" entries={[
+      <DetailSection title="Remarks" icon={MessageSquare} tone="violet" entries={[
         ['Session', entry.remarks?.session_preference],
         ['Requirements', entry.remarks?.requirements],
         ['Details', entry.remarks?.details],
         ['Doubts Clarified', entry.remarks?.doubts_clarified],
       ]} />
 
-      <DetailSection title="Other Details" icon={ClipboardList} tint="bg-amber-50/70 border-amber-100" entries={[
-        ['Induction Call Date', entry.other_details?.induction_call_date ? formatDate(entry.other_details.induction_call_date) : null],
-        ['Scheduled Time', entry.other_details?.scheduled_time],
-        ['Terms Form Signed', yesNo(entry.other_details?.terms_form_signed)],
-        ['WhatsApp Group Added', yesNo(entry.other_details?.whatsapp_group_added)],
-        ['Confidence', entry.other_details?.confidence],
-        // Conditional here, not inside RecordingLink: DetailSection drops a
-        // row on a null value, and a component returning null is still a
-        // non-null element, so the row would render empty.
-        [
-          'Call Recording',
-          entry.other_details?.call_recording_url
-            ? <RecordingLink key="recording" url={entry.other_details.call_recording_url} />
-            : null,
-        ],
-      ]} />
+      <DetailSection
+        title="Other Details"
+        icon={ClipboardList}
+        tone="amber"
+        entries={[
+          ['Induction Call Date', entry.other_details?.induction_call_date ? formatDate(entry.other_details.induction_call_date) : null],
+          ['Scheduled Time', entry.other_details?.scheduled_time],
+          ['Terms Form Signed', yesNo(entry.other_details?.terms_form_signed)],
+          ['WhatsApp Group Added', yesNo(entry.other_details?.whatsapp_group_added)],
+          ['Confidence', entry.other_details?.confidence],
+        ]}
+      >
+        {/* Played inline rather than linked out: the recording is the point of
+            opening this section, and a link meant leaving the popup to watch
+            it. Falls back to a download link if the browser can't play the
+            container. */}
+        {entry.other_details?.call_recording_url && (
+          <div className="mt-3 border-t border-slate-100 pt-3">
+            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">Call Recording</p>
+            <video
+              controls
+              preload="metadata"
+              className="max-h-64 w-full rounded-md border border-slate-200 bg-slate-900"
+              src={`${MEDIA_BASE_URL}${entry.other_details.call_recording_url}`}
+            >
+              <a href={`${MEDIA_BASE_URL}${entry.other_details.call_recording_url}`}>Download the recording</a>
+            </video>
+          </div>
+        )}
+      </DetailSection>
     </div>
   )
 }
@@ -238,37 +264,35 @@ function InductionEntryDetail({ entry }) {
 // null stays null so an unanswered yes/no is skipped rather than shown as "No".
 const yesNo = (value) => (value === true ? 'Yes' : value === false ? 'No' : null)
 
-function RecordingLink({ url }) {
-  return (
-    <a
-      href={`${MEDIA_BASE_URL}${url}`}
-      target="_blank"
-      rel="noreferrer"
-      className="font-medium text-brand-600 hover:text-brand-700"
-    >
-      View recording
-    </a>
-  )
-}
 
-function DetailSection({ title, icon: Icon, tint, entries }) {
+function DetailSection({ title, icon: Icon, tone, entries, children }) {
   const filled = entries.filter(([, value]) => value !== null && value !== undefined && value !== '')
-  if (filled.length === 0) return null
+  if (filled.length === 0 && !children) return null
 
   return (
-    <div className={`rounded-lg border px-4 py-3 ${tint}`}>
-      <div className="mb-2 flex items-center gap-2">
-        <Icon className="h-4 w-4 text-slate-500" strokeWidth={2} aria-hidden="true" />
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</h3>
+    // Left edge rather than a full tint: four stacked panels each washed a
+    // different colour turned the popup into a paint chart. The edge and the
+    // plate carry the section's identity; the surface stays white.
+    <div className={`overflow-hidden rounded-lg border border-slate-200 border-l-4 bg-white ${SECTION_EDGE[tone]}`}>
+      <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-3.5 py-2">
+        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-white ${DETAIL_TONES[tone]}`}>
+          <Icon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+        </span>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">{title}</h3>
       </div>
-      <dl className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
-        {filled.map(([label, value]) => (
-          <div key={label} className="min-w-0">
-            <dt className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</dt>
-            <dd className="break-words text-sm text-slate-800">{value}</dd>
-          </div>
-        ))}
-      </dl>
+      <div className="px-3.5 py-3">
+        {filled.length > 0 && (
+          <dl className="grid grid-cols-1 gap-x-4 gap-y-2.5 sm:grid-cols-2">
+            {filled.map(([label, value]) => (
+              <div key={label} className="min-w-0">
+                <dt className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{label}</dt>
+                <dd className="break-words text-sm text-slate-800">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+        {children}
+      </div>
     </div>
   )
 }
