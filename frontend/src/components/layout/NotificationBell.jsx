@@ -91,7 +91,10 @@ export function NotificationBell() {
       if (notification.lead_id) {
         queryClient.invalidateQueries({ queryKey: ['leads'] })
         queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
-        navigate('/leads')
+        // Explicitly Foundation: a notification's lead_id is always a Lead,
+        // and Induction entries are separate records. Bare /leads would open
+        // the default board, which cannot contain the lead being chased.
+        navigate('/leads?board=foundation')
       }
     },
   })
