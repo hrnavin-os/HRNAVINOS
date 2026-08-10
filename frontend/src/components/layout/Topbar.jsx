@@ -3,6 +3,7 @@ import { LogOut } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/Button'
 import { NAV_LEAF_ITEMS } from '@/constants/navigation'
+import { LeadBoardTabs } from '@/components/layout/LeadBoardTabs'
 
 // Longest matching path wins: "/leads/form-collection" also starts with
 // "/leads", so a plain find() would title the Form Collection page "Lead
@@ -32,6 +33,9 @@ export function Topbar() {
     <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-6">
       <div className="flex items-center gap-4">
         <h1 className="text-base font-semibold text-slate-900">{pageTitle}</h1>
+        {/* Renders itself only on the Lead Dashboard, so the header stays a
+            plain title everywhere else. */}
+        <LeadBoardTabs />
       </div>
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-3">
