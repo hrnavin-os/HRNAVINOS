@@ -162,7 +162,7 @@ function DetailTile({ icon: Icon, label, value, tone }) {
   )
 }
 
-function InductionEntryDetail({ entry }) {
+function InductionEntryDetail({ entry, hideAssignee = false }) {
   return (
     <div className="space-y-4">
       {/* Batch leads: it's the derived value everything else is filed under,
@@ -173,7 +173,7 @@ function InductionEntryDetail({ entry }) {
             <p className="text-[11px] font-medium uppercase tracking-wide text-brand-700/70">Batch</p>
             <p className="mt-0.5 text-lg font-semibold text-brand-700">{entry.batch}</p>
           </div>
-          {entry.assigned_to_name ? (
+          {hideAssignee ? null : entry.assigned_to_name ? (
             <div className="text-right">
               <p className="text-[11px] font-medium uppercase tracking-wide text-brand-700/70">Assigned to</p>
               <p className="mt-0.5 flex items-center justify-end gap-1.5 text-sm font-semibold text-slate-900">
@@ -420,7 +420,9 @@ export function InductionLeadsBoard() {
         queryKey="induction-entries"
         service={inductionEntryService}
         columns={[
-          ...columns,
+          // A Section Admin only ever sees their own section's entries, so
+          // every row would name them - a column of one repeated value.
+          ...(scopedSection ? columns.filter((column) => column.key !== 'assigned_to') : columns),
           {
             // Last column, before Actions: opens the four-page post-call form.
             key: 'update',
@@ -447,7 +449,8 @@ export function InductionLeadsBoard() {
         view: {
           title: (row) => row.name,
           maxWidth: 'max-w-xl',
-          renderBody: (row) => <InductionEntryDetail entry={row} />,
+          // Hidden for the same reason as the column: it's always them.
+          renderBody: (row) => <InductionEntryDetail entry={row} hideAssignee={Boolean(scopedSection)} />,
         },
         edit: {
           title: (row) => `Edit ${row.name}`,

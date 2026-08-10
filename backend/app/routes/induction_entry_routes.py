@@ -9,7 +9,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 
-from app.core.dependencies import RequirePermissions
+from app.core.dependencies import RequirePermissions, get_actor_scope
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.common import MessageResponse, PaginatedResponse, PaginationParams
@@ -51,10 +51,13 @@ async def list_entries(
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> PaginatedResponse[InductionEntryResponse]:
     service = InductionEntryService()
+    # A Section Admin's scope comes from their role and overrides whatever the
+    # client sent, so dropping the query param can't widen what they see.
+    scope = await get_actor_scope(actor)
     filters = {
         key: value
         for key, value in {
-            "section": section,
+            "section": scope or section,
             "sales_person": sales_person,
             "lead_source": lead_source,
             "payment_mode": payment_mode,
@@ -83,7 +86,10 @@ async def list_entries(
 async def entry_stats(
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> InductionEntryStatsResponse:
-    return InductionEntryStatsResponse(**await InductionEntryService().stats())
+    # Scope comes from the actor's role, not a query param, so a Section Admin
+    # can't widen it - same rule the lead stats endpoint follows.
+    scope = await get_actor_scope(actor)
+    return InductionEntryStatsResponse(**await InductionEntryService().stats(section=scope))
 
 
 @router.get("/filter-options")
@@ -91,8 +97,10 @@ async def filter_options(
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> dict:
     """Distinct values present in the data, so the filter row only ever offers
-    options that actually match something."""
-    return await InductionEntryService().filter_options()
+    options that actually match something. Scoped like the list is, or a
+    Section Admin's filters would offer values only other sections have."""
+    scope = await get_actor_scope(actor)
+    return await InductionEntryService().filter_options(section=scope)
 
 
 @router.get("/{entry_id}", response_model=InductionEntryResponse)

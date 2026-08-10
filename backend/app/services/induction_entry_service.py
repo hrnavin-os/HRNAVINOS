@@ -161,7 +161,7 @@ class InductionEntryService:
         end = date(year + (month == 12), 1 if month == 12 else month + 1, 1) - timedelta(days=1)
         return start, end
 
-    async def filter_options(self) -> dict:
+    async def filter_options(self, *, section: str | None = None) -> dict:
         """Distinct values actually present in the data, for the filter row.
 
         Deliberately read from the entries rather than the form config: the
@@ -170,7 +170,7 @@ class InductionEntryService:
         matches rows) would be worse than useless. Batches are derived per
         entry and returned newest-first.
         """
-        entries = await self.entries.list_all_for_options()
+        entries = await self.entries.list_all_for_options(section=section)
         distinct = {field: set() for field in ("sales_person", "lead_source", "payment_mode", "category")}
         batches: set[str] = set()
         assignees: dict[str, str] = {}
@@ -195,15 +195,21 @@ class InductionEntryService:
             "assigned_to": [{"value": key, "label": label} for key, label in sorted(assignees.items(), key=lambda kv: kv[1])],
         }
 
-    async def stats(self) -> dict:
+    async def stats(self, *, section: str | None = None) -> dict:
         """Totals behind the board's stat cards - one per section, plus the
-        overall count. `total` is every entry, not the sum of the sections, so
-        anything that came in while no Section Admin existed (and is therefore
-        unassigned) is still counted somewhere."""
-        return {
-            "total": await self.entries.count_all(),
-            "by_section": await self.entries.count_by_section_all(),
-        }
+        overall count.
+
+        Scoped when the caller is pinned to a section, so a Section Admin's
+        "All Entries" card counts their own section rather than every entry in
+        the system. Unscoped, `total` is every entry rather than the sum of the
+        sections, so anything that arrived while no Section Admin existed (and
+        is therefore unassigned) is still counted somewhere.
+        """
+        by_section = await self.entries.count_by_section_all()
+        if section:
+            scoped = by_section.get(section, 0)
+            return {"total": scoped, "by_section": {section: scoped}}
+        return {"total": await self.entries.count_all(), "by_section": by_section}
 
     async def update(
         self, entry_id: uuid.UUID, data: InductionEntryUpdate, *, actor_id: uuid.UUID | None
