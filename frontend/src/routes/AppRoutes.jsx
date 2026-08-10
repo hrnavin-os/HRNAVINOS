@@ -47,9 +47,12 @@ export function AppRoutes() {
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
           <Route path="/" element={<HomeRoute />} />
-          {/* No permission gate: everyone's notifications are their own, and
-              the endpoint only ever returns the caller's. */}
-          <Route path="/notifications" element={<NotificationsPage />} />
+          {/* Section Admins only - they're who Finance's payment reminders
+              are addressed to. Gated on the route as well as the sidebar so
+              it isn't reachable by typing the URL. */}
+          <Route element={<ProtectedRoute scopedOnly />}>
+            <Route path="/notifications" element={<NotificationsPage />} />
+          </Route>
 
           <Route element={<ProtectedRoute permission={PERMISSIONS.LEADS_VIEW} />}>
             <Route path="/leads" element={<LeadsPage />} />

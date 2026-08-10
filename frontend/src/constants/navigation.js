@@ -18,6 +18,7 @@ import { PERMISSIONS } from '@/constants/permissions'
 // hiddenForRoles: role names that should never see this item, regardless of permission
 // hiddenForScopedUsers: hide this item for any user whose role carries a scoped_section
 // (Section Admins) - section names/roles are open-ended, so this can't be a hiddenForRoles list.
+// scopedUsersOnly: the inverse - show the item ONLY to Section Admins.
 // Grouped for the sidebar; `group` labels a section header (omit to continue the previous group).
 // `children` turns an entry into a collapsible parent instead of a link - it has
 // no `to` of its own, and is hidden entirely when the user can see none of its
@@ -40,6 +41,18 @@ export const NAV_ITEMS = [
     icon: Target,
     group: 'Admin',
     hiddenForRoles: ['Finance'],
+  },
+  // Section Admins only: payment reminders from Finance are addressed to the
+  // admins of a lead's own section, so nobody else has anything to read here.
+  // Sits in their group rather than under Administration - that header comes
+  // from the Employee entry, which a Section Admin can't see, so the item
+  // would have rendered with no heading at all.
+  {
+    label: 'Notifications',
+    to: '/notifications',
+    permission: null,
+    icon: Bell,
+    scopedUsersOnly: true,
   },
   {
     label: 'Form Collection',
@@ -82,10 +95,6 @@ export const NAV_ITEMS = [
       { label: 'Roles', to: '/roles', permission: PERMISSIONS.ROLES_VIEW, icon: ShieldCheck },
     ],
   },
-  // permission: null - a user's own notifications are always theirs to read,
-  // and Section Admins (who are the ones Finance's payment reminders land on)
-  // hold almost nothing else.
-  { label: 'Notifications', to: '/notifications', permission: null, icon: Bell },
   { label: 'Settings', to: '/settings', permission: PERMISSIONS.SETTINGS_VIEW, icon: Settings },
 ]
 
@@ -101,7 +110,10 @@ export function isNavItemVisible(item, { user, hasPermission }) {
   return (
     (!item.permission || hasPermission(item.permission)) &&
     !item.hiddenForRoles?.includes(user?.role) &&
-    !(item.hiddenForScopedUsers && user?.scoped_section)
+    !(item.hiddenForScopedUsers && user?.scoped_section) &&
+    // The inverse of hiddenForScopedUsers: shown ONLY to a user whose role
+    // carries a scoped_section (a Section Admin).
+    !(item.scopedUsersOnly && !user?.scoped_section)
   )
 }
 
