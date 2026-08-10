@@ -15,14 +15,14 @@ export function LeadBoardTabs() {
   if (pathname !== '/leads') return null
 
   return (
-    <div className="inline-flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
+    <div className="inline-flex gap-6">
       {LEAD_BOARDS.map((tab) => (
         <button
           key={tab.key}
           type="button"
           onClick={() => setBoard(tab.key)}
           aria-pressed={board === tab.key}
-          className={`rounded-md px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+          className={`border-b-2 pb-0.5 text-sm font-semibold transition-colors ${
             board === tab.key ? tab.active : tab.idle
           }`}
         >

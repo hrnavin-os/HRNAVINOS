@@ -6,18 +6,21 @@ import { useSearchParams } from 'react-router-dom'
 //
 // Kept out of the component file so that one only exports a component; mixing
 // the two breaks React Fast Refresh for it.
+// Each board keeps its own accent, carried by the text and an underline
+// rather than a filled pill - the header sits on white and a solid chip in it
+// read as a button floating over the page.
 export const LEAD_BOARDS = [
   {
     key: 'induction',
     label: 'Induction',
-    active: 'bg-brand-600 text-white shadow-sm',
-    idle: 'text-brand-700 hover:bg-brand-50',
+    active: 'border-brand-600 text-brand-600',
+    idle: 'border-transparent text-slate-500 hover:text-slate-700',
   },
   {
     key: 'foundation',
     label: 'Foundation',
-    active: 'bg-violet-600 text-white shadow-sm',
-    idle: 'text-violet-700 hover:bg-violet-50',
+    active: 'border-violet-600 text-violet-600',
+    idle: 'border-transparent text-slate-500 hover:text-slate-700',
   },
 ]
 

@@ -30,12 +30,21 @@ export function Topbar() {
   }
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-6">
+    <header className="relative flex h-16 items-center justify-between border-b border-slate-200 bg-white px-6">
       <div className="flex items-center gap-4">
         <h1 className="text-base font-semibold text-slate-900">{pageTitle}</h1>
-        {/* Renders itself only on the Lead Dashboard, so the header stays a
-            plain title everywhere else. */}
-        <LeadBoardTabs />
+      </div>
+
+      {/* Absolutely centred rather than a middle flex column: the title and
+          the user block are different widths, so a flex child would sit
+          off-centre by the difference. Renders itself only on the Lead
+          Dashboard, so the header is a plain title everywhere else.
+          pointer-events-none on the wrapper keeps the transparent strip from
+          swallowing clicks meant for the header behind it. */}
+      <div className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 md:block">
+        <div className="pointer-events-auto">
+          <LeadBoardTabs />
+        </div>
       </div>
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-3">
