@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ClipboardCheck, Copy, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { CARD_PLATE_CLASSES, CARD_TONE_CLASSES } from '@/constants/sectionTones'
 
 // The Induction tab is just the shareable link, mirroring how the Foundation
 // tab is just its section cards. Entries arrive through the public form at
@@ -17,20 +18,23 @@ export function InductionCallForm() {
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    // Same grid the Foundation tab uses, so switching tabs doesn't reflow the
+    // page - a single card here, but it sits in the same column.
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className={`flex h-full flex-col justify-between gap-4 rounded-xl border p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${CARD_TONE_CLASSES.blue}`}>
       <div className="flex min-w-0 items-center gap-4">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-brand-500 to-brand-700 text-white shadow-sm">
+        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white shadow-sm ${CARD_PLATE_CLASSES.blue}`}>
           <ClipboardCheck className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
         </span>
         <div className="min-w-0">
           <h3 className="text-base font-semibold text-slate-900">Induction Call Form</h3>
-          <p className="mt-0.5 text-sm text-slate-500">
+          <p className="mt-0.5 text-sm text-slate-600">
             Share this link to collect details. Each submission is assigned to a section admin automatically.
           </p>
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
         <Button type="button" variant="secondary" className="px-3! py-1.5! text-xs" onClick={copyLink}>
           <Copy className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
           {copied ? 'Copied!' : 'Copy link'}
@@ -44,6 +48,7 @@ export function InductionCallForm() {
           <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
           Open form
         </a>
+      </div>
       </div>
     </div>
   )

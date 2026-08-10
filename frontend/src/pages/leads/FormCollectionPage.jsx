@@ -12,8 +12,9 @@ import { useAuth } from '@/hooks/useAuth'
 import { PERMISSIONS } from '@/constants/permissions'
 import { FormCollectionEditModal } from '@/components/leads/FormCollectionEditModal'
 import { InductionCallForm } from '@/components/leads/InductionCallForm'
+import { CARD_PLATE_CLASSES, CARD_TONE_CLASSES, sectionToneAt } from '@/constants/sectionTones'
 
-function SectionCard({ section, canConfigure, onEdit, onDelete, isDeleting }) {
+function SectionCard({ section, tone, canConfigure, onEdit, onDelete, isDeleting }) {
   const navigate = useNavigate()
   const [copied, setCopied] = useState(false)
   const formUrl = `${window.location.origin}/foundation-form/${section.code}`
@@ -38,22 +39,28 @@ function SectionCard({ section, canConfigure, onEdit, onDelete, isDeleting }) {
       onKeyDown={(event) => {
         if (event.key === 'Enter') navigate(`/leads?section=${section.code}`)
       }}
-      className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+      className={`flex h-full cursor-pointer flex-col justify-between gap-4 rounded-xl border p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${
+        CARD_TONE_CLASSES[tone] ?? CARD_TONE_CLASSES.blue
+      }`}
     >
       <div className="flex min-w-0 items-center gap-4">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-100 text-brand-600">
+        <span
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white shadow-sm ${
+            CARD_PLATE_CLASSES[tone] ?? CARD_PLATE_CLASSES.blue
+          }`}
+        >
           <ClipboardCheck className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
         </span>
         <div className="min-w-0">
           <h3 className="text-base font-semibold text-slate-900">{section.label}</h3>
-          <p className="mt-0.5 flex items-center gap-1.5 text-sm text-slate-500">
+          <p className="mt-0.5 flex items-center gap-1.5 text-sm text-slate-600">
             <Users className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
             {countQuery.isLoading ? 'Loading…' : `${countQuery.data?.total ?? 0} submissions`}
           </p>
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
         <Button type="button" variant="secondary" className="px-3! py-1.5! text-xs" onClick={copyLink}>
           <Copy className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
           {copied ? 'Copied!' : 'Copy link'}
@@ -101,9 +108,22 @@ function SectionCard({ section, canConfigure, onEdit, onDelete, isDeleting }) {
   )
 }
 
+// Each tab owns a colour, carried by a filled background when selected, so
+// which of the two forms you're looking at reads at a glance rather than from
+// a hairline underline.
 const TABS = [
-  { key: 'induction', label: 'Induction Call Form' },
-  { key: 'foundation', label: 'Foundation Call Form' },
+  {
+    key: 'induction',
+    label: 'Induction Call Form',
+    active: 'bg-brand-600 text-white shadow-sm',
+    idle: 'text-brand-700 hover:bg-brand-50',
+  },
+  {
+    key: 'foundation',
+    label: 'Foundation Call Form',
+    active: 'bg-violet-600 text-white shadow-sm',
+    idle: 'text-violet-700 hover:bg-violet-50',
+  },
 ]
 
 export function FormCollectionPage() {
@@ -111,21 +131,22 @@ export function FormCollectionPage() {
 
   return (
     <div>
-      <div className="mb-4 flex justify-center gap-1 border-b border-slate-200">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-3 pb-2 text-sm font-semibold transition-colors ${
-              activeTab === tab.key
-                ? 'border-b-2 border-brand-600 text-brand-600'
-                : 'border-b-2 border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="mb-5 flex justify-center">
+        <div className="inline-flex gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              aria-pressed={activeTab === tab.key}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                activeTab === tab.key ? tab.active : tab.idle
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {activeTab === 'induction' ? <InductionCallForm /> : <FoundationCallForm />}
@@ -189,11 +210,17 @@ function FoundationCallForm() {
         }
       />
 
-      <div className="mt-4 flex flex-col gap-3">
+      {/* Grid rather than a stacked list: these are peers, and one per row
+          left most of the width empty once there were more than two. */}
+      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {visibleSections.map((section) => (
           <SectionCard
             key={section.code}
             section={section}
+            // Keyed on position in the full section list, not the visible
+            // one, so a Section Admin seeing only their own card still gets
+            // the colour that section has everywhere else.
+            tone={sectionToneAt(sections.findIndex((s) => s.code === section.code))}
             canConfigure={canConfigure}
             onEdit={() => setIsEditOpen(true)}
             onDelete={() => handleDelete(section)}

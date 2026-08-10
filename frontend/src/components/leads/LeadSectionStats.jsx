@@ -1,16 +1,7 @@
 import { StatCard } from '@/components/ui/StatCard'
-
-// Cycled across sections so any number of them (A/B/C, or a newly added D...)
-// each get a distinct accent rather than all looking identical.
-//
-// The ORDER is deliberate, not alphabetical or by preference: neighbouring
-// cards sit side by side, so adjacent hues have to stay separable for
-// colour-blind readers. Emerald is kept away from both amber (weak under
-// protanopia) and cyan (too close even with full colour vision). Verified with
-// the palette validator: worst adjacent pair is rose/amber at deltaE 9.4
-// (deutan) and 16.6 normal-vision, both above the floor. Re-run it before
-// reshuffling these.
-const SECTION_TONE_ORDER = ['blue', 'emerald', 'violet', 'amber', 'rose', 'cyan']
+// Shared so the stat cards and the Form Collection cards can't drift onto
+// different colours for the same section - see the ordering note there.
+import { SECTION_TONE_ORDER } from '@/constants/sectionTones'
 
 // Top-of-board stat cards: "All Leads" + one per Form Collection section
 // (open-ended - reads live from config, same as the Section column filter).
