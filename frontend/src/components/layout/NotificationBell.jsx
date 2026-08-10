@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Bell, BellOff, CheckCheck, CircleAlert, CircleCheck, Info } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { useLeadBoard } from '@/hooks/useLeadBoard'
 import { notificationService } from '@/services/notificationService'
 import { formatDateTime } from '@/utils/formatters'
 
@@ -53,10 +54,22 @@ function NotificationRow({ notification, onOpen, isBusy }) {
 export function NotificationBell() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const [board] = useLeadBoard()
   const queryClient = useQueryClient()
   const wrapperRef = useRef(null)
   const [isOpen, setIsOpen] = useState(false)
   const isSectionAdmin = Boolean(user?.scoped_section)
+
+  // Every notification is a Foundation payment reminder, so on the Lead
+  // Dashboard the bell belongs to the Foundation board - opening one from
+  // Induction only offers to send you somewhere that board can't show.
+  // Tested against Foundation rather than Induction so a third board added
+  // later hides it by default instead of inheriting a bell it can't serve.
+  // Everywhere else in the app there is no board in play, so it always shows;
+  // `/leads` is matched exactly because `/leads/form-collection` is a
+  // different page that happens to share the prefix.
+  const isOffBoard = pathname === '/leads' && board !== 'foundation'
 
   const { data: unread = 0 } = useQuery({
     // Same key the panel invalidates after reading, so the badge clears itself.
@@ -65,7 +78,7 @@ export function NotificationBell() {
     // A reminder arrives while you're on another page, so the count has to come
     // to you rather than wait for a navigation.
     refetchInterval: 60_000,
-    enabled: isSectionAdmin,
+    enabled: isSectionAdmin && !isOffBoard,
   })
 
   const listQuery = useQuery({
@@ -73,7 +86,7 @@ export function NotificationBell() {
     queryFn: () => notificationService.list({ page_size: 20 }),
     // Only fetched once the panel is opened - no reason to pull twenty rows on
     // every page load for a bell most people never click.
-    enabled: isSectionAdmin && isOpen,
+    enabled: isSectionAdmin && isOpen && !isOffBoard,
   })
 
   const refresh = () => {
@@ -104,6 +117,12 @@ export function NotificationBell() {
     onSuccess: refresh,
   })
 
+  // The bell renders null off-board but stays mounted, so an open panel would
+  // still be open when you came back to Foundation.
+  useEffect(() => {
+    if (isOffBoard) setIsOpen(false)
+  }, [isOffBoard])
+
   useEffect(() => {
     if (!isOpen) return undefined
     function onPointerDown(event) {
@@ -120,7 +139,7 @@ export function NotificationBell() {
     }
   }, [isOpen])
 
-  if (!isSectionAdmin) return null
+  if (!isSectionAdmin || isOffBoard) return null
 
   const notifications = listQuery.data?.items ?? []
   const label = unread > 0 ? `${unread} unread notification${unread === 1 ? '' : 's'}` : 'Notifications'
