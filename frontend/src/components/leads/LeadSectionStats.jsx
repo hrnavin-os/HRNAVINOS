@@ -6,10 +6,13 @@ import { SECTION_TONE_ORDER } from '@/constants/sectionTones'
 // Top-of-board stat cards: "All Leads" + one per Form Collection section
 // (open-ended - reads live from config, same as the Section column filter).
 // Each card doubles as a quick filter into that section.
-export function LeadSectionStats({ total, sections, bySection, activeSection, onSelect }) {
+// allLabel: what the unfiltered card is called - "All Leads" on the Foundation
+// board, "All Entries" on the Induction one, which counts records rather than
+// leads.
+export function LeadSectionStats({ total, sections, bySection, activeSection, onSelect, allLabel = 'All Leads' }) {
   return (
     <div className="mb-4 flex flex-wrap gap-3">
-      <StatCard label="All Leads" value={total} toneName="brand" isActive={activeSection === ''} onClick={() => onSelect('')} />
+      <StatCard label={allLabel} value={total} toneName="brand" isActive={activeSection === ''} onClick={() => onSelect('')} />
       {sections.map((section, index) => (
         <StatCard
           key={section.code}

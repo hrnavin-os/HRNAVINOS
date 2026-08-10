@@ -1,6 +1,11 @@
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { ResourceListPage } from '@/components/resource/ResourceListPage'
 import { inductionEntryService } from '@/services/inductionEntryService'
+import { foundationFormConfigService } from '@/services/foundationFormConfigService'
 import { Badge } from '@/components/ui/Badge'
+import { LeadSectionStats } from '@/components/leads/LeadSectionStats'
+import { useAuth } from '@/hooks/useAuth'
 import { PERMISSIONS } from '@/constants/permissions'
 import { formatDate } from '@/utils/formatters'
 
@@ -78,14 +83,49 @@ const editFields = [
 ]
 
 export function InductionLeadsBoard() {
+  const { user } = useAuth()
+  const scopedSection = user?.scoped_section || null
+  const [sectionFilter, setSectionFilter] = useState('')
+
+  // A Section Admin is pinned to their own section, exactly as on the
+  // Foundation board - the role carries it, so it can't be changed by clicking.
+  const effectiveSection = scopedSection || sectionFilter
+
+  // Keyed under the list's own key so ResourceListPage's invalidation after an
+  // edit or delete refreshes the cards too - React Query matches by prefix.
+  const statsQuery = useQuery({
+    queryKey: ['induction-entries', 'stats'],
+    queryFn: inductionEntryService.getStats,
+  })
+
+  // Sections are admin-managed and open-ended, so the cards read live from the
+  // form config rather than a fixed list - same source the Foundation cards use.
+  const configQuery = useQuery({
+    queryKey: ['foundation-form-config'],
+    queryFn: foundationFormConfigService.get,
+  })
+
+  const sections = configQuery.data?.sections ?? []
+  const visibleSections = scopedSection ? sections.filter((s) => s.code === scopedSection) : sections
+
   return (
-    <ResourceListPage
-      title="Induction Entry"
-      queryKey="induction-entries"
-      service={inductionEntryService}
-      columns={columns}
-      serialNumber
-      rowActions={{
+    <>
+      <LeadSectionStats
+        allLabel="All Entries"
+        total={statsQuery.data?.total ?? 0}
+        sections={visibleSections}
+        bySection={statsQuery.data?.by_section ?? {}}
+        activeSection={effectiveSection}
+        onSelect={scopedSection ? () => {} : setSectionFilter}
+      />
+      <ResourceListPage
+        title="Induction Entry"
+        queryKey="induction-entries"
+        service={inductionEntryService}
+        columns={columns}
+        serialNumber
+        extraParams={{ section: effectiveSection || undefined }}
+        rowActions={{
         view: {
           title: (row) => row.name,
           fields: [
@@ -126,11 +166,12 @@ export function InductionLeadsBoard() {
             category: row.category ?? '',
           }),
         },
-        remove: {
-          permission: PERMISSIONS.LEADS_DELETE,
-          describe: (row) => `${row.name} (${row.phone})`,
-        },
-      }}
-    />
+          remove: {
+            permission: PERMISSIONS.LEADS_DELETE,
+            describe: (row) => `${row.name} (${row.phone})`,
+          },
+        }}
+      />
+    </>
   )
 }

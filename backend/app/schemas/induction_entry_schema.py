@@ -21,6 +21,11 @@ class InductionFormSubmitResponse(BaseModel):
     message: str
 
 
+class InductionEntryStatsResponse(BaseModel):
+    total: int
+    by_section: dict[str, int]
+
+
 class InductionEntryUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=150)
     email: str | None = Field(default=None, max_length=255)

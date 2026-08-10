@@ -116,7 +116,7 @@ class InductionEntryService:
             raise NotFoundError("Induction entry not found.")
         return entry
 
-    async def list(self, params: PaginationParams) -> PaginatedResponse:
+    async def list(self, params: PaginationParams, *, section: str | None = None) -> PaginatedResponse:
         items, total = await self.entries.list(
             page=params.page,
             page_size=params.page_size,
@@ -124,8 +124,19 @@ class InductionEntryService:
             search_fields=["name", "phone", "email", "sales_person", "lead_source", "category"],
             sort_by=params.sort_by,
             sort_order=params.sort_order,
+            filters={"section": section} if section else None,
         )
         return PaginatedResponse.build(items, total, params.page, params.page_size)
+
+    async def stats(self) -> dict:
+        """Totals behind the board's stat cards - one per section, plus the
+        overall count. `total` is every entry, not the sum of the sections, so
+        anything that came in while no Section Admin existed (and is therefore
+        unassigned) is still counted somewhere."""
+        return {
+            "total": await self.entries.count_all(),
+            "by_section": await self.entries.count_by_section_all(),
+        }
 
     async def update(
         self, entry_id: uuid.UUID, data: InductionEntryUpdate, *, actor_id: uuid.UUID | None
