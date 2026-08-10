@@ -1,34 +1,25 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { CheckCircle2, ClipboardCheck } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { inductionFormService } from '@/services/inductionFormService'
+import { inductionFormConfigService } from '@/services/inductionFormConfigService'
 import { getApiErrorMessage } from '@/services/apiClient'
-import {
-  CATEGORY_OPTIONS,
-  LEAD_SOURCE_OPTIONS,
-  PAYMENT_MODE_OPTIONS,
-  SALES_PERSON_OPTIONS,
-} from '@/constants/inductionOptions'
 
-// Same shape as the in-app create form, minus Batch - that's derived from the
-// registration date by the backend and is never an input anywhere.
-// The four option fields are comboboxes (input + datalist) rather than
-// selects, so a value that isn't listed can still be typed.
-const FIELDS = [
-  { name: 'name', label: 'Name', required: true },
-  { name: 'email', label: 'Email', type: 'email' },
-  { name: 'phone', label: 'Phone Number', required: true },
-  { name: 'registration_date', label: 'Registration Date', type: 'date', required: true },
-  { name: 'paid_date', label: 'Paid Date', type: 'date' },
-  { name: 'sales_person', label: 'Sales Person', options: SALES_PERSON_OPTIONS },
-  { name: 'lead_source', label: 'Lead Source', options: LEAD_SOURCE_OPTIONS },
-  { name: 'payment_mode', label: 'Payment Mode', options: PAYMENT_MODE_OPTIONS },
-  { name: 'category', label: 'Category', options: CATEGORY_OPTIONS },
-]
+// Which input a field gets is structural (a date is a date), so it's derived
+// from the key rather than being another thing to configure. Batch is absent
+// throughout - it's derived from the registration date by the backend and is
+// never an input anywhere.
+const INPUT_TYPE_BY_KEY = {
+  email: 'email',
+  registration_date: 'date',
+  paid_date: 'date',
+  phone: 'tel',
+}
 
 function Shell({ children }) {
   return (
@@ -57,6 +48,14 @@ export function InductionFormPage() {
     reset,
     formState: { errors },
   } = useForm()
+
+  // The form describes itself from config, so renaming a question or editing
+  // a dropdown in Admin > Form Collection shows up here on the next load with
+  // no deploy.
+  const configQuery = useQuery({
+    queryKey: ['induction-form-public-config'],
+    queryFn: inductionFormConfigService.getPublic,
+  })
 
   const mutation = useMutation({
     mutationFn: (values) => inductionFormService.submit(values),
@@ -98,6 +97,28 @@ export function InductionFormPage() {
     )
   }
 
+  if (configQuery.isLoading) {
+    return (
+      <Shell>
+        <div className="rounded-xl border border-slate-200 bg-white p-10 shadow-sm">
+          <LoadingSpinner />
+        </div>
+      </Shell>
+    )
+  }
+
+  if (configQuery.isError) {
+    return (
+      <Shell>
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <ErrorMessage message={getApiErrorMessage(configQuery.error)} />
+        </div>
+      </Shell>
+    )
+  }
+
+  const fields = configQuery.data?.fields ?? []
+
   return (
     <Shell>
       <form
@@ -106,23 +127,24 @@ export function InductionFormPage() {
       >
         <ErrorMessage message={mutation.error ? getApiErrorMessage(mutation.error) : null} />
 
-        {FIELDS.map((field) => {
-          const listId = field.options ? `${field.name}-options` : undefined
+        {fields.map((field) => {
+          const hasOptions = field.options?.length > 0
+          const listId = hasOptions ? `${field.key}-options` : undefined
           return (
-            <div key={field.name}>
+            <div key={field.key}>
               <Input
-                type={field.type ?? 'text'}
+                type={INPUT_TYPE_BY_KEY[field.key] ?? 'text'}
                 list={listId}
                 label={field.label}
-                required={Boolean(field.required)}
-                placeholder={field.options ? 'Select or type…' : undefined}
+                required={field.required}
+                placeholder={hasOptions ? 'Select or type…' : undefined}
                 autoComplete="off"
-                error={errors[field.name]?.message}
-                {...register(field.name, {
+                error={errors[field.key]?.message}
+                {...register(field.key, {
                   required: field.required ? `${field.label} is required` : false,
                 })}
               />
-              {field.options && (
+              {hasOptions && (
                 <datalist id={listId}>
                   {field.options.map((option) => (
                     <option key={option} value={option} />

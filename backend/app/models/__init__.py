@@ -11,6 +11,7 @@ from app.models.finance_verification import FinanceVerification
 from app.models.foundation_form_config import FoundationFormConfig
 from app.models.google_sheet_connection import GoogleSheetConnection
 from app.models.induction_entry import InductionEntry
+from app.models.induction_form_config import InductionFormConfig
 from app.models.invoice import Invoice
 from app.models.lead import Lead
 from app.models.login_history import LoginHistory
@@ -40,6 +41,7 @@ ALL_DOCUMENTS = [
     FoundationFormConfig,
     GoogleSheetConnection,
     InductionEntry,
+    InductionFormConfig,
     Invoice,
     Lead,
     LoginHistory,
@@ -71,6 +73,7 @@ __all__ = [
     "FoundationFormConfig",
     "GoogleSheetConnection",
     "InductionEntry",
+    "InductionFormConfig",
     "Invoice",
     "Lead",
     "LoginHistory",

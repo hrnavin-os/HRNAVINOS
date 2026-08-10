@@ -1,6 +1,9 @@
 import { useState } from 'react'
-import { ClipboardCheck, Copy, ExternalLink } from 'lucide-react'
+import { ClipboardCheck, Copy, ExternalLink, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { useAuth } from '@/hooks/useAuth'
+import { PERMISSIONS } from '@/constants/permissions'
+import { InductionFormEditModal } from '@/components/leads/InductionFormEditModal'
 import { CARD_PLATE_CLASSES, CARD_TONE_CLASSES } from '@/constants/sectionTones'
 
 // The Induction tab is just the shareable link, mirroring how the Foundation
@@ -8,7 +11,10 @@ import { CARD_PLATE_CLASSES, CARD_TONE_CLASSES } from '@/constants/sectionTones'
 // /induction-form and are assigned to a Section Admin on the way in, so there
 // is nothing to key in or manage here.
 export function InductionCallForm() {
+  const { hasPermission } = useAuth()
+  const canConfigure = hasPermission(PERMISSIONS.FORM_COLLECTION_CONFIGURE)
   const [copied, setCopied] = useState(false)
+  const [isEditOpen, setIsEditOpen] = useState(false)
   const formUrl = `${window.location.origin}/induction-form`
 
   async function copyLink() {
@@ -48,8 +54,21 @@ export function InductionCallForm() {
           <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
           Open form
         </a>
+        {canConfigure && (
+          <button
+            type="button"
+            onClick={() => setIsEditOpen(true)}
+            title="Edit form"
+            aria-label="Edit Induction Call Form"
+            className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-white hover:text-brand-600"
+          >
+            <Pencil className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+          </button>
+        )}
       </div>
       </div>
+
+      {isEditOpen && <InductionFormEditModal onClose={() => setIsEditOpen(false)} />}
     </div>
   )
 }
