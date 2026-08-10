@@ -18,6 +18,7 @@ import { Pagination } from '@/components/ui/Pagination'
 import { LeadSectionStageStats, LeadSectionStats } from '@/components/leads/LeadSectionStats'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { LeadDetailModal } from '@/components/leads/LeadDetailModal'
+import { InductionLeadsBoard } from '@/components/leads/InductionLeadsBoard'
 import { PAYMENT_PLAN_TONES, CALL_REMARK_OPTIONS, CALL_REMARK_BY_VALUE } from '@/constants/paymentOptions'
 import { PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
 
@@ -463,7 +464,59 @@ function FilterDropdown({ label, value, options, onChange }) {
   )
 }
 
+// Each tab owns a colour and carries it as a filled background when selected,
+// matching the Form Collection tabs the two forms are shared from.
+const BOARD_TABS = [
+  {
+    key: 'induction',
+    label: 'Induction',
+    active: 'bg-brand-600 text-white shadow-sm',
+    idle: 'text-brand-700 hover:bg-brand-50',
+  },
+  {
+    key: 'foundation',
+    label: 'Foundation',
+    active: 'bg-violet-600 text-white shadow-sm',
+    idle: 'text-violet-700 hover:bg-violet-50',
+  },
+]
+
+// The two boards read different collections - induction submissions are their
+// own records, not Leads - so they're separate components rather than one
+// table with a filter. Splitting here also means the Foundation board's
+// queries don't run while you're looking at the Induction one.
 export function LeadsPage() {
+  const [activeTab, setActiveTab] = useState('induction')
+
+  return (
+    <div>
+      <div className="mb-5 flex justify-center">
+        <div className="inline-flex gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+          {BOARD_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              aria-pressed={activeTab === tab.key}
+              className={`rounded-lg px-5 py-2 text-sm font-semibold transition-colors ${
+                activeTab === tab.key ? tab.active : tab.idle
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeTab === 'induction' ? <InductionLeadsBoard /> : <FoundationLeadsBoard />}
+    </div>
+  )
+}
+
+// Everything that was previously the whole page: the stat cards, filters and
+// lead table, all reading Lead records that arrive through the Foundation
+// form. Moved behind a tab with no changes to what it renders.
+function FoundationLeadsBoard() {
   const { user } = useAuth()
 
   // Section Admins are permanently locked to their own section - the role
