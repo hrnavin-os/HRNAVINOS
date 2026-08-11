@@ -1,5 +1,3 @@
-import { Check } from 'lucide-react'
-
 // Shared stat tile that doubles as a filter/tab control - the Admin board's
 // section and stage rows, and the HR Coordinator's student tabs. (The passive
 // Dashboard summary tile is components/dashboard/StatCard.)
@@ -115,11 +113,6 @@ export function StatCard({ label, value, toneName, isActive, onClick, icon: Icon
             {value}
           </p>
         </div>
-        {/* Confirms the selection without relying on the fill alone, which is
-            the only thing separating active from inactive otherwise. */}
-        {isActive && (
-          <Check className="h-4 w-4 shrink-0 self-start text-white/70" strokeWidth={3} aria-hidden="true" />
-        )}
       </div>
     </button>
   )
