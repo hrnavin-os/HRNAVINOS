@@ -3,12 +3,14 @@ import {
   Calendar,
   ClipboardList,
   CreditCard,
+  ExternalLink,
   GraduationCap,
   Layers,
   Mail,
   Megaphone,
   MessageSquare,
   Phone,
+  PlayCircle,
   Tag,
   UserRound,
   Wallet,
@@ -141,6 +143,41 @@ function DetailSection({ title, icon: Icon, tone, entries, children }) {
   )
 }
 
+// Recordings are Drive links now, which a <video> can't play - Drive serves a
+// viewer page, not a media file, so pointing a player at one gives a black box.
+// Older entries still hold a path to a file uploaded to this server back when
+// the form took an upload, and those do still play inline; the two are told
+// apart by whether the stored value is absolute.
+function CallRecording({ url }) {
+  const isExternal = /^https?:\/\//i.test(url)
+
+  if (isExternal) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-brand-600 transition-colors hover:border-brand-300 hover:bg-brand-50"
+      >
+        <PlayCircle className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+        Open recording
+        <ExternalLink className="h-3.5 w-3.5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden="true" />
+      </a>
+    )
+  }
+
+  return (
+    <video
+      controls
+      preload="metadata"
+      className="max-h-64 w-full rounded-md border border-slate-200 bg-slate-900"
+      src={`${MEDIA_BASE_URL}${url}`}
+    >
+      <a href={`${MEDIA_BASE_URL}${url}`}>Download the recording</a>
+    </video>
+  )
+}
+
 export function InductionEntryDetail({ entry, hideAssignee = false }) {
   return (
     <div className="space-y-4">
@@ -223,21 +260,10 @@ export function InductionEntryDetail({ entry, hideAssignee = false }) {
           ['Confidence', entry.other_details?.confidence],
         ]}
       >
-        {/* Played inline rather than linked out: the recording is the point of
-            opening this section, and a link meant leaving the popup to watch
-            it. Falls back to a download link if the browser can't play the
-            container. */}
         {entry.other_details?.call_recording_url && (
           <div className="mt-3 border-t border-slate-100 pt-3">
             <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">Call Recording</p>
-            <video
-              controls
-              preload="metadata"
-              className="max-h-64 w-full rounded-md border border-slate-200 bg-slate-900"
-              src={`${MEDIA_BASE_URL}${entry.other_details.call_recording_url}`}
-            >
-              <a href={`${MEDIA_BASE_URL}${entry.other_details.call_recording_url}`}>Download the recording</a>
-            </video>
+            <CallRecording url={entry.other_details.call_recording_url} />
           </div>
         )}
       </DetailSection>

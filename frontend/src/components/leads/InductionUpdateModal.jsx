@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Check, GraduationCap, Briefcase, MessageSquare, ClipboardList, Upload } from 'lucide-react'
+import { Check, GraduationCap, Briefcase, MessageSquare, ClipboardList, ExternalLink } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
@@ -17,6 +17,11 @@ const STEPS = [
   { key: 'remarks', label: 'Remarks', icon: MessageSquare },
   { key: 'other_details', label: 'Other Details', icon: ClipboardList },
 ]
+
+// A percentage rather than High/Medium/Low: "medium" means something different
+// to every caller, where 50% is the same number to all of them and can be
+// averaged across a batch.
+const CONFIDENCE_OPTIONS = ['0%', '25%', '50%', '75%', '100%']
 
 function StepRail({ current }) {
   return (
@@ -69,9 +74,7 @@ function YesNoSelect({ label, value, onChange }) {
 
 export function InductionUpdateModal({ entry, onClose }) {
   const queryClient = useQueryClient()
-  const fileInputRef = useRef(null)
   const [step, setStep] = useState(0)
-  const [recordingUrl, setRecordingUrl] = useState(entry.other_details?.call_recording_url ?? null)
 
   // Seeded from what's already saved, so reopening the form shows previous
   // answers rather than a blank slate.
@@ -95,16 +98,21 @@ export function InductionUpdateModal({ entry, onClose }) {
     },
   })
 
-  const uploadMutation = useMutation({
-    mutationFn: (file) => inductionEntryService.uploadCallRecording(entry.id, file),
-    onSuccess: (updated) => {
-      setRecordingUrl(updated.other_details?.call_recording_url ?? null)
-      invalidate()
-    },
-  })
-
   const isLast = step === STEPS.length - 1
-  const error = saveMutation.error || uploadMutation.error
+  const error = saveMutation.error
+
+  const confidence = form.other_details.confidence
+  const legacyConfidence = confidence && !CONFIDENCE_OPTIONS.includes(confidence) ? confidence : null
+
+  // Recordings uploaded before this became a Drive link are stored as a server
+  // path, so they still open through the media host. Anything absolute is a
+  // link someone pasted and is used as given.
+  const storedRecording = form.other_details.call_recording_url
+  const recordingHref = !storedRecording
+    ? null
+    : /^https?:\/\//i.test(storedRecording)
+      ? storedRecording
+      : `${MEDIA_BASE_URL}${storedRecording}`
 
   return (
     <Modal title={`Update — ${entry.name}`} isOpen onClose={onClose} maxWidth="max-w-2xl">
@@ -231,47 +239,39 @@ export function InductionUpdateModal({ entry, onClose }) {
               onChange={(e) => set('other_details', 'confidence', e.target.value || null)}
             >
               <option value="">Not recorded</option>
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
-              <option value="Low">Low</option>
+              {CONFIDENCE_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+              {/* Entries answered before this became a percentage still hold
+                  High/Medium/Low. Without carrying the stored value the select
+                  would render blank and quietly rewrite it to null on save. */}
+              {legacyConfidence && <option value={legacyConfidence}>{legacyConfidence} (previously recorded)</option>}
             </Select>
 
             <div>
-              <p className="mb-1.5 text-sm font-medium text-slate-700">Induction Call Screen Recording</p>
-              {/* Uploaded on selection rather than with the form: a recording
-                  is large enough that holding it until Save would make the
-                  final click feel broken. */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="video/*"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0]
-                  if (file) uploadMutation.mutate(file)
-                }}
+              <Input
+                type="url"
+                label="Induction Call Screen Recording"
+                placeholder="https://drive.google.com/..."
+                value={form.other_details.call_recording_url ?? ''}
+                onChange={(e) => set('other_details', 'call_recording_url', e.target.value || null)}
               />
-              <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadMutation.isPending}
+              <p className="mt-1 text-xs text-slate-500">
+                Paste the Drive link to the recording. Make sure anyone with the link can view it.
+              </p>
+              {recordingHref && (
+                <a
+                  href={recordingHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700"
                 >
-                  <Upload className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                  {uploadMutation.isPending ? 'Uploading…' : recordingUrl ? 'Replace video' : 'Upload video'}
-                </Button>
-                {recordingUrl && (
-                  <a
-                    href={`${MEDIA_BASE_URL}${recordingUrl}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs font-medium text-brand-600 hover:text-brand-700"
-                  >
-                    View uploaded recording
-                  </a>
-                )}
-              </div>
+                  <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                  Open recording
+                </a>
+              )}
             </div>
           </div>
         )}

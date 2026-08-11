@@ -16,16 +16,11 @@ export const inductionEntryService = {
     const { data } = await apiClient.get('/induction-entries/filter-options')
     return data
   },
-  // The post-call form's four pages. Separate from update(), which edits the
-  // entry's own fields.
+  // The post-call form's four pages, including the recording's Drive link -
+  // there's no separate upload call any more, the link saves with the rest of
+  // the form.
   updateDetails: async (id, payload) => {
     const { data } = await apiClient.put(`/induction-entries/${id}/details`, payload)
-    return data
-  },
-  uploadCallRecording: async (id, file) => {
-    const body = new FormData()
-    body.append('file', file)
-    const { data } = await apiClient.post(`/induction-entries/${id}/call-recording`, body)
     return data
   },
 }

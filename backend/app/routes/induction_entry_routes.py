@@ -7,7 +7,7 @@ permissions to existing roles before the tab works.
 """
 import uuid
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from fastapi import APIRouter, Depends, Query, status
 
 from app.core.dependencies import RequirePermissions, get_actor_scope
 from app.models.user import User
@@ -133,16 +133,6 @@ async def update_entry_details(
     independently of them."""
     service = InductionEntryService()
     return await service.to_response(await service.update_details(entry_id, payload, actor_id=actor.id))
-
-
-@router.post("/{entry_id}/call-recording", response_model=InductionEntryResponse)
-async def upload_call_recording(
-    entry_id: uuid.UUID,
-    file: UploadFile = File(...),
-    actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
-) -> InductionEntryResponse:
-    service = InductionEntryService()
-    return await service.to_response(await service.save_call_recording(entry_id, file, actor_id=actor.id))
 
 
 @router.delete("/{entry_id}", response_model=MessageResponse)
