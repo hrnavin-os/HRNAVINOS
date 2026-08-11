@@ -6,6 +6,7 @@ import {
   Check,
   CheckCircle2,
   Clock,
+  Eye,
   ImagePlus,
   Info,
   Link2,
@@ -270,6 +271,15 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
     return null
   }, [file, installment.proof_url])
 
+  // Every createObjectURL above pins its blob in memory until it's revoked,
+  // and picking a different image just made another one. Only the blob URLs
+  // are revoked - the stored proof is a plain URL and revoking it is a no-op,
+  // but checking `file` keeps the intent obvious.
+  useEffect(() => {
+    if (!file || !previewUrl) return undefined
+    return () => URL.revokeObjectURL(previewUrl)
+  }, [file, previewUrl])
+
   function handleSaveSchedule() {
     if (!scheduledAt) {
       setValidationError('Please pick a scheduled date before saving.')
@@ -293,151 +303,185 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
     onSave(index, { file, amount, mode, transactionId, upiId })
   }
 
+  const hasProof = Boolean(file || installment.proof_url)
+
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex items-center gap-2 border-b border-slate-100 pb-2.5">
+    <div
+      className={`overflow-hidden rounded-lg border bg-white ${
+        installment.paid ? 'border-emerald-200' : 'border-slate-200'
+      }`}
+    >
+      <div
+        className={`flex items-center gap-2 border-b px-3.5 py-2 ${
+          installment.paid ? 'border-emerald-100 bg-emerald-50/60' : 'border-slate-100 bg-slate-50/70'
+        }`}
+      >
         <span
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-            installment.paid ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
+          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
+            installment.paid ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'
           }`}
         >
-          {index + 1}
+          {installment.paid ? <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden="true" /> : index + 1}
         </span>
-        <p className="flex-1 text-sm font-semibold text-slate-900">{installment.label}</p>
+        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{installment.label}</p>
         {/* Settled rows are the common case once a plan is running - saying so
             here means you don't have to read the form below to know. */}
         {installment.paid && <Badge tone="emerald">Paid</Badge>}
       </div>
 
-      {isTwoShotSecond && !showPaidFields ? (
-        <div className="space-y-3">
-          <Input
-            type="date"
-            label="Scheduled Date"
-            value={scheduledAt}
-            onChange={(event) => setScheduledAt(event.target.value)}
-            className="rounded-xl!"
-          />
-          <ErrorMessage message={validationError} />
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setShowPaidFields(true)}>
-              Payment received — fill details
-            </Button>
-            <Button variant={justSaved ? 'success' : 'primary'} onClick={handleSaveSchedule} disabled={isSaving}>
-              {isSaving ? (
-                'Saving…'
-              ) : justSaved ? (
-                <>
-                  <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                  Saved
-                </>
-              ) : (
-                'Save schedule'
-              )}
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <Input
-            label="Payment Amount"
-            type="number"
-            step="0.01"
-            value={amount}
-            onChange={(event) => setAmount(event.target.value)}
-            className="rounded-xl!"
-          />
-          <Select
-            label="Payment Mode"
-            value={mode}
-            onChange={(event) => setMode(event.target.value)}
-            className="rounded-xl!"
-          >
-            <option value="">Select Mode</option>
-            {INSTALLMENT_MODE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-          {(mode === 'card' || mode === 'netbanking') && (
+      <div className="p-3.5">
+        {isTwoShotSecond && !showPaidFields ? (
+          <div className="space-y-3">
             <Input
-              label="Transaction ID"
-              value={transactionId}
-              onChange={(event) => setTransactionId(event.target.value)}
-              className="rounded-xl!"
+              type="date"
+              label="Scheduled Date"
+              value={scheduledAt}
+              onChange={(event) => setScheduledAt(event.target.value)}
             />
-          )}
-          {mode === 'upi' && (
-            <Input
-              label="UPI ID"
-              value={upiId}
-              onChange={(event) => setUpiId(event.target.value)}
-              className="rounded-xl!"
-            />
-          )}
-          <div>
-            <label className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-slate-800">
-              <ImagePlus className="h-4 w-4 text-slate-400" strokeWidth={2} aria-hidden="true" />
-              Payment Proof
-            </label>
-            {previewUrl && (
-              <img
-                src={previewUrl}
-                alt="Payment proof"
-                className="mb-2 max-h-40 w-full rounded-md border border-slate-200 object-contain"
-              />
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-              className="hidden"
-            />
-            <div className="flex items-center gap-3">
-              <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
-                <ImagePlus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                {file || installment.proof_url ? 'Change Image' : 'Upload Image'}
+            <ErrorMessage message={validationError} />
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button variant="secondary" onClick={() => setShowPaidFields(true)}>
+                Payment received — fill details
               </Button>
-              {(file || installment.proof_url) && (
-                <span className="flex items-center gap-1 text-xs font-medium text-green-600">
-                  <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-                  {file ? file.name : 'Uploaded'}
-                </span>
-              )}
+              <Button variant={justSaved ? 'success' : 'primary'} onClick={handleSaveSchedule} disabled={isSaving}>
+                {isSaving ? (
+                  'Saving…'
+                ) : justSaved ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                    Saved
+                  </>
+                ) : (
+                  'Save schedule'
+                )}
+              </Button>
             </div>
           </div>
-          <ErrorMessage message={validationError} />
-          <div className="flex justify-end">
-            {/* `justSaved` wins over `paid` for a few seconds so the click gets
-                an acknowledgement of its own - going straight to "Paid" left
-                it ambiguous whether this save had actually landed or the row
-                was already settled beforehand. */}
-            <Button
-              variant={justSaved || installment.paid ? 'success' : 'primary'}
-              onClick={handleSavePayment}
-              disabled={isSaving}
-            >
-              {isSaving ? (
-                'Saving…'
-              ) : justSaved ? (
-                <>
-                  <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                  Saved
-                </>
-              ) : installment.paid ? (
-                <>
-                  <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                  Paid
-                </>
-              ) : (
-                'Save payment'
+        ) : (
+          <div className="space-y-3">
+            {/* Amount and mode side by side: they're one thought ("how much,
+                how"), and stacked in a half-width card they pushed the proof
+                and the save button off the bottom of the popup. */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Input
+                label="Payment Amount"
+                type="number"
+                step="0.01"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+              />
+              <Select label="Payment Mode" value={mode} onChange={(event) => setMode(event.target.value)}>
+                <option value="">Select Mode</option>
+                {INSTALLMENT_MODE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+              {(mode === 'card' || mode === 'netbanking') && (
+                <Input
+                  label="Transaction ID"
+                  value={transactionId}
+                  onChange={(event) => setTransactionId(event.target.value)}
+                />
               )}
-            </Button>
+              {mode === 'upi' && (
+                <Input label="UPI ID" value={upiId} onChange={(event) => setUpiId(event.target.value)} />
+              )}
+            </div>
+
+            {/* A fixed thumbnail rather than the full image. Proofs are phone
+                screenshots - tall and narrow - and rendered full-width with
+                object-contain each one sat in a band of white taller than the
+                rest of the form. Cropped to a square it reads as "there is a
+                proof, here's roughly what it is"; View opens the real thing. */}
+            <div>
+              <p className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                <ImagePlus className="h-4 w-4 text-slate-400" strokeWidth={2} aria-hidden="true" />
+                Payment Proof
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                className="hidden"
+              />
+              <div
+                className={`flex items-center gap-3 rounded-lg border p-2 ${
+                  hasProof ? 'border-slate-200 bg-white' : 'border-dashed border-slate-300 bg-slate-50'
+                }`}
+              >
+                {previewUrl ? (
+                  <img
+                    src={previewUrl}
+                    alt="Payment proof"
+                    className="h-14 w-14 shrink-0 rounded-md border border-slate-200 object-cover"
+                  />
+                ) : (
+                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-400">
+                    <ImagePlus className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+                  </span>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-medium text-slate-700" title={file?.name}>
+                    {file ? file.name : installment.proof_url ? 'Proof on file' : 'No proof uploaded'}
+                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-xs font-semibold text-brand-600 hover:text-brand-700"
+                    >
+                      {hasProof ? 'Replace' : 'Upload image'}
+                    </button>
+                    {previewUrl && (
+                      <a
+                        href={previewUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700"
+                      >
+                        <Eye className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                        View
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <ErrorMessage message={validationError} />
+            <div className="flex justify-end border-t border-slate-100 pt-3">
+              {/* `justSaved` wins over `paid` for a few seconds so the click gets
+                  an acknowledgement of its own - going straight to "Paid" left
+                  it ambiguous whether this save had actually landed or the row
+                  was already settled beforehand. */}
+              <Button
+                variant={justSaved || installment.paid ? 'success' : 'primary'}
+                onClick={handleSavePayment}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  'Saving…'
+                ) : justSaved ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                    Saved
+                  </>
+                ) : installment.paid ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                    Paid
+                  </>
+                ) : (
+                  'Save payment'
+                )}
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
@@ -474,13 +518,15 @@ function PaymentCollectionSection({
       {lead.course_interest && (
         <p className="mb-3 truncate text-sm font-semibold text-slate-900">{lead.course_interest}</p>
       )}
-      {/* Two across rather than full width - each card is a short form, and
-          stretched to the full modal the fields looked lost against all that
-          empty space. Drops to one column on narrow screens.
+      {/* Two across for a plan with several installments - each card is a short
+          form, and stretched full width the fields looked lost. A single-shot
+          plan has exactly one, though, and half a row for it left the card
+          squeezed into a narrow column beside dead space, with every field
+          stacked down it. One installment gets the full width.
           No max-height on purpose: the modal body is already the scroll
           container, and a second one nested inside it gave the popup two
           scrollbars side by side. */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className={`grid grid-cols-1 gap-3 ${lead.installments.length > 1 ? 'sm:grid-cols-2' : ''}`}>
         {lead.installments.map((installment, index) => (
           <InstallmentRow
             key={index}
