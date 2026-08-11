@@ -37,7 +37,7 @@ import { foundationFormService } from '@/services/foundationFormService'
 import { PaymentDetailContent } from '@/components/payments/PaymentDetailModal'
 import { hasFirstPayment } from '@/utils/leadPayment'
 import { getApiErrorMessage } from '@/services/apiClient'
-import { formatDateTime, titleCase } from '@/utils/formatters'
+import { formatDate, formatDateTime, titleCase } from '@/utils/formatters'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { DetailPanel, InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
 import { MEDIA_BASE_URL } from '@/constants/config'
@@ -146,20 +146,101 @@ function InfoCard({ item }) {
   )
 }
 
-// payment_expected arrives as "<plan summary> | Pays on: <weekday> (<date>)" from
-// the backend when a payment timeline was collected - split it so the "Pays on"
-// half reads as a secondary line instead of running on into the same sentence.
-function PaymentExpectedPanel({ value }) {
+// payment_expected is composed by the backend to a fixed shape - see
+// foundation_form_pricing.build_payment_expected_summary and the timeline
+// suffix in foundation_form_service:
+//
+//   "<plan> - <total> (<instalment>) (After Placement: <fee>) | Pays on: <day> (<date>)"
+//
+// Parsed back apart rather than shown whole. As one line it was four separate
+// facts - which plan, how much, what's owed after placement, and when they
+// said they'd pay - run together in a sentence you had to read to the end of
+// to find any of them.
+//
+// Returns nulls if it doesn't match: leads predating this format, or a value
+// typed by hand, fall back to the original single line rather than being
+// mangled into the wrong fields.
+const PAYS_ON = /^Pays on:\s*(.+?)\s*\(([^)]+)\)\s*$/
+
+function parsePaymentExpected(value) {
   const [main, ...rest] = value.split(' | ')
-  const paysOn = rest.join(' | ') || null
+  const paysOnRaw = rest.join(' | ') || null
+
+  // A submission that gave a payment timeline but chose no plan has the
+  // timeline as the entire value, with no plan half in front of it - so the
+  // "Pays on" text is `main` itself and there is nothing else to read.
+  const timeline = paysOnRaw ?? (PAYS_ON.test(main) ? main : null)
+  const planPart = timeline === main ? '' : main
+
+  const afterMatch = planPart.match(/\(After Placement:\s*([^)]+)\)\s*$/)
+  const afterPlacement = afterMatch?.[1].trim() ?? null
+  const head = (afterMatch ? planPart.slice(0, afterMatch.index) : planPart).trim()
+
+  const dashAt = head.indexOf(' - ')
+  const plan = dashAt === -1 ? null : head.slice(0, dashAt).trim()
+  const amount = dashAt === -1 ? head : head.slice(dashAt + 3).trim()
+
+  // "₹15,000 (₹7,500 Per Month)" -> total, then the per-instalment breakdown.
+  const amountMatch = amount.match(/^(.*?)\s*\((.+)\)$/)
+  const total = amountMatch?.[1].trim() ?? amount
+  const perInstalment = amountMatch?.[2].trim() ?? null
+
+  const paysMatch = timeline?.match(PAYS_ON)
+
+  return {
+    plan,
+    total,
+    perInstalment,
+    afterPlacement,
+    paysOnDay: paysMatch?.[1] ?? null,
+    paysOnDate: paysMatch?.[2] ?? null,
+    paysOnRaw: timeline,
+  }
+}
+
+function ExpectedField({ label, value, hint, tone = 'slate' }) {
+  return (
+    <div className="min-w-0 rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
+      <p className={`truncate text-sm font-semibold ${tone === 'amber' ? 'text-amber-700' : 'text-slate-900'}`} title={value}>
+        {value}
+      </p>
+      {hint && <p className="truncate text-[11px] text-slate-500">{hint}</p>}
+    </div>
+  )
+}
+
+function PaymentExpectedPanel({ value }) {
+  const parsed = parsePaymentExpected(value)
+
   return (
     <DetailPanel title="Payment Expected" icon={Wallet} tone="amber">
-      <p className="break-words text-sm font-semibold text-slate-900">{main}</p>
-      {paysOn && (
-        <p className="mt-1 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">
-          <CalendarClock className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
-          {paysOn}
-        </p>
+      {parsed.plan || parsed.paysOnDate ? (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {parsed.plan && <ExpectedField label="Plan" value={parsed.plan} />}
+          {parsed.plan && <ExpectedField label="Training Fee" value={parsed.total} hint={parsed.perInstalment} />}
+          {parsed.afterPlacement && (
+            <ExpectedField label="After Placement" value={parsed.afterPlacement} tone="amber" />
+          )}
+          {parsed.paysOnDate && (
+            <ExpectedField
+              label="Pays On"
+              value={formatDate(parsed.paysOnDate)}
+              hint={parsed.paysOnDay}
+              tone="amber"
+            />
+          )}
+        </div>
+      ) : (
+        <>
+          <p className="break-words text-sm font-semibold text-slate-900">{value.split(' | ')[0]}</p>
+          {parsed.paysOnRaw && (
+            <p className="mt-1 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">
+              <CalendarClock className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
+              {parsed.paysOnRaw}
+            </p>
+          )}
+        </>
       )}
     </DetailPanel>
   )
