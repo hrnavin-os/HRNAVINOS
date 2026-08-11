@@ -41,7 +41,21 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
   }
 
   return (
-    <div className="table-scroll w-full overflow-x-auto">
+    // Capped height so the horizontal scrollbar stays put. Left to grow, the
+    // scroll box ends wherever the last row does, which on a long table is far
+    // below the fold - you had to scroll the page to the bottom to reach the
+    // bar that scrolls the columns. Bounded, the box scrolls its own rows and
+    // the bar sits at its bottom edge, on screen the whole time.
+    //
+    // The 20rem allows for the header, page padding, a stat row, the toolbar
+    // and the pagination beneath. Pages with less chrome than that get a table
+    // slightly shorter than it could be, which is the cheap direction to be
+    // wrong in; --table-max-h overrides it where that matters. Short tables
+    // never reach the cap and are unaffected.
+    <div
+      className="table-scroll w-full overflow-auto"
+      style={{ maxHeight: 'var(--table-max-h, calc(100vh - 20rem))' }}
+    >
       <table className="min-w-full border-separate border-spacing-0">
         <thead>
           <tr>
@@ -49,7 +63,12 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
               <th
                 key={column.key}
                 scope="col"
-                className={`whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 ${EDGE_PADDING} ${
+                // Sticky because the box scrolls its own rows now - column
+                // headings that scroll away leave you reading unlabelled
+                // columns. Works because the table is border-separate:
+                // collapsed borders are painted on the table, not the cell,
+                // and vanish the moment a header sticks.
+                className={`sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 ${EDGE_PADDING} ${
                   ALIGN[column.align] ?? ALIGN.left
                 }`}
               >
