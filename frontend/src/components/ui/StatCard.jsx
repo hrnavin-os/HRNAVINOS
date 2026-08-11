@@ -1,3 +1,5 @@
+import { Check } from 'lucide-react'
+
 // Shared stat tile that doubles as a filter/tab control - the Admin board's
 // section and stage rows, and the HR Coordinator's student tabs. (The passive
 // Dashboard summary tile is components/dashboard/StatCard.)
@@ -76,30 +78,47 @@ export function StatCard({ label, value, toneName, isActive, onClick, icon: Icon
   const tone = TONE_STYLES[toneName] ?? TONE_STYLES.slate
 
   return (
+    // Grows to share the row, but capped. Uncapped, a board with two sections
+    // gave each card half the screen to show a two-digit number, and the row
+    // read as two empty panels rather than a set of counts. basis-44 keeps them
+    // from collapsing when there are six.
     <button
       type="button"
       onClick={onClick}
       aria-pressed={isActive}
-      className={`group min-w-30 flex-1 rounded-xl border px-3.5 py-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${
+      className={`group max-w-60 flex-1 basis-44 rounded-xl border px-3.5 py-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 ${
         isActive ? `${tone.active} shadow-md` : tone.inactive
       }`}
     >
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-3">
         {Icon && (
           <span
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white shadow-sm ${
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white shadow-sm transition-transform group-hover:scale-105 ${
               isActive ? 'bg-white/20' : tone.plate
             }`}
           >
-            <Icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+            <Icon className="h-4.5 w-4.5" strokeWidth={2} aria-hidden="true" />
           </span>
         )}
         <div className="min-w-0 flex-1">
-          <p className={`truncate text-xs font-semibold leading-tight ${isActive ? 'text-white/80' : tone.label}`}>
+          <p
+            className={`truncate text-[11px] font-semibold uppercase tracking-wide leading-tight ${
+              isActive ? 'text-white/75' : tone.label
+            }`}
+          >
             {label}
           </p>
-          <p className={`mt-0.5 text-2xl font-bold leading-none ${isActive ? 'text-white' : tone.value}`}>{value}</p>
+          <p
+            className={`mt-1 text-2xl font-bold leading-none tabular-nums ${isActive ? 'text-white' : tone.value}`}
+          >
+            {value}
+          </p>
         </div>
+        {/* Confirms the selection without relying on the fill alone, which is
+            the only thing separating active from inactive otherwise. */}
+        {isActive && (
+          <Check className="h-4 w-4 shrink-0 self-start text-white/70" strokeWidth={3} aria-hidden="true" />
+        )}
       </div>
     </button>
   )
