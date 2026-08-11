@@ -74,21 +74,23 @@ const TONE_STYLES = {
   },
 }
 
-export function StatCard({ label, value, toneName, isActive, onClick, icon: Icon }) {
+// `fill` drops the width cap so the cards stretch across the whole row.
+// Off by default because the lead boards can show as few as two, and uncapped
+// that gave each one half the screen to display a two-digit number. A row with
+// a fixed, known set of cards - the HR coordinator's three queues - has no such
+// problem and looks unfinished with the row left half empty.
+export function StatCard({ label, value, toneName, isActive, onClick, icon: Icon, fill = false }) {
   const tone = TONE_STYLES[toneName] ?? TONE_STYLES.slate
 
   return (
-    // Grows to share the row, but capped. Uncapped, a board with two sections
-    // gave each card half the screen to show a two-digit number, and the row
-    // read as two empty panels rather than a set of counts. basis-44 keeps them
-    // from collapsing when there are six.
+    // basis-44 keeps them from collapsing the other way when there are six.
     <button
       type="button"
       onClick={onClick}
       aria-pressed={isActive}
-      className={`group max-w-60 flex-1 basis-44 rounded-xl border px-3.5 py-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 ${
-        isActive ? `${tone.active} shadow-md` : tone.inactive
-      }`}
+      className={`group flex-1 basis-44 rounded-xl border px-3.5 py-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 ${
+        fill ? '' : 'max-w-60'
+      } ${isActive ? `${tone.active} shadow-md` : tone.inactive}`}
     >
       <div className="flex items-center gap-3">
         {Icon && (

@@ -217,10 +217,14 @@ export function HRCoordinatorPage() {
 
   return (
     <div>
+      {/* fill: these three queues are the whole page, and unlike the lead
+          boards the set is fixed - there's no case where two of them have to
+          share the row and end up half a screen wide each. */}
       <div className="mb-4 flex flex-wrap gap-3">
         {TABS.map((item, index) => (
           <StatCard
             key={item.key}
+            fill
             label={item.label}
             value={tabQueries[index].data?.length ?? 0}
             toneName={item.tone}
