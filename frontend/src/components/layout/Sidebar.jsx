@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { ChevronDown, GraduationCap, X } from 'lucide-react'
+import { ChevronDown, GraduationCap } from 'lucide-react'
 import { getVisibleNavItems } from '@/constants/navigation'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -98,12 +98,12 @@ function Brand() {
 
 // The link list itself, shared by the docked desktop sidebar and the mobile
 // drawer so the two can't drift into offering different navigation.
-function SidebarNav({ onNavigate }) {
+function SidebarNav() {
   const { user, hasPermission } = useAuth()
   const items = getVisibleNavItems({ user, hasPermission })
 
   return (
-    <nav onClick={onNavigate} className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
+    <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
       {items.map((item) => (
         <div key={item.to ?? item.label}>
           {item.group && (
@@ -124,51 +124,5 @@ export function Sidebar() {
       <Brand />
       <SidebarNav />
     </aside>
-  )
-}
-
-// The same navigation as a slide-over, for widths where the docked sidebar is
-// hidden. Without it the app had no menu at all on a phone: the sidebar was
-// `hidden md:flex` and nothing took its place, so every page below md was
-// reachable only by typing the URL.
-export function MobileSidebar({ isOpen, onClose }) {
-  // Escape closes it, and the body is locked so the page underneath doesn't
-  // scroll behind the drawer.
-  useEffect(() => {
-    if (!isOpen) return undefined
-    function onKeyDown(event) {
-      if (event.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKeyDown)
-    const { overflow } = document.body.style
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.removeEventListener('keydown', onKeyDown)
-      document.body.style.overflow = overflow
-    }
-  }, [isOpen, onClose])
-
-  if (!isOpen) return null
-
-  return (
-    <div className="fixed inset-0 z-50 md:hidden">
-      <div className="absolute inset-0 bg-slate-900/50" onClick={onClose} />
-      <aside className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-200 pr-2">
-          <Brand />
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close menu"
-            className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-          >
-            <X className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
-          </button>
-        </div>
-        {/* Any link click closes the drawer - on a phone it covers the page
-            you just navigated to, so leaving it open hides the result. */}
-        <SidebarNav onNavigate={onClose} />
-      </aside>
-    </div>
   )
 }

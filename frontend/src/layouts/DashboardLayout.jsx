@@ -1,13 +1,11 @@
-import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { BottomNav } from '@/components/layout/BottomNav'
-import { MobileSidebar, Sidebar } from '@/components/layout/Sidebar'
+import { Sidebar } from '@/components/layout/Sidebar'
 import { Topbar } from '@/components/layout/Topbar'
 import { useAuth } from '@/hooks/useAuth'
 
 export function DashboardLayout() {
   const { user } = useAuth()
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
   // A Section Admin has exactly two destinations - their board, which is where
   // they land, and Notifications, which the header bell opens - so a sidebar
   // listing them spends 256px to say nothing. Everyone else keeps it.
@@ -16,7 +14,6 @@ export function DashboardLayout() {
   return (
     <div className="flex h-screen bg-slate-50">
       {!hideSidebar && <Sidebar />}
-      {!hideSidebar && <MobileSidebar isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} />}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar showBrand={hideSidebar} />
         {/* Tighter padding on a phone: 24px on each side of a 360px screen is
@@ -32,9 +29,9 @@ export function DashboardLayout() {
       </div>
 
       {/* Navigation moves to the bottom of the screen on a phone, where a
-          thumb reaches, rather than a hamburger in the top corner. The drawer
-          stays for whatever doesn't fit in the bar. */}
-      {!hideSidebar && <BottomNav onMore={() => setIsMenuOpen(true)} />}
+          thumb reaches. It owns its own overflow sheet, so there is no drawer
+          state for this layout to hold. */}
+      {!hideSidebar && <BottomNav />}
     </div>
   )
 }
