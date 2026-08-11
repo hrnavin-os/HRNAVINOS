@@ -222,6 +222,58 @@ async def test_opening_a_date_reminder_leaves_the_stage_alone(client, category):
     assert (await Lead.get(lead.id)).status == LeadStatus.BATCH_CONFIRMATION
 
 
+# --------------------------------------------------------------------------
+# Finance payment reminders - repeat presses
+# --------------------------------------------------------------------------
+
+
+async def test_pressing_send_reminder_twice_does_not_stack_a_duplicate(client):
+    from app.services.lead_service import LeadService
+
+    admin = await make_section_admin()
+    lead = await make_lead(status=LeadStatus.BATCH_CONFIRMATION)
+    service = LeadService()
+
+    assert await service.send_payment_reminder(lead.id, "due", note=None, actor_id=None) == (1, 0)
+    # The second press finds the first still unopened, so it says so rather
+    # than adding another copy to the same panel.
+    assert await service.send_payment_reminder(lead.id, "due", note=None, actor_id=None) == (0, 1)
+    assert len(await notifications_for(admin)) == 1
+
+
+async def test_a_different_reminder_kind_is_not_suppressed(client):
+    from app.services.lead_service import LeadService
+
+    admin = await make_section_admin()
+    lead = await make_lead(status=LeadStatus.BATCH_CONFIRMATION)
+    service = LeadService()
+
+    await service.send_payment_reminder(lead.id, "due", note=None, actor_id=None)
+    # An after-placement fee is a different thing to chase, so an unread
+    # payment-due reminder must not mask it.
+    assert await service.send_payment_reminder(lead.id, "after_placement", note=None, actor_id=None) == (1, 0)
+    assert len(await notifications_for(admin)) == 2
+
+
+async def test_chasing_again_is_allowed_once_the_first_was_read(client):
+    """Suppression is about unopened copies piling up, not a cooling-off
+    period. If they read it and the money still hasn't come in, Finance has to
+    be able to chase again."""
+    from app.services.notification_service import NotificationService
+    from app.services.lead_service import LeadService
+
+    admin = await make_section_admin()
+    lead = await make_lead(status=LeadStatus.BATCH_CONFIRMATION)
+    service = LeadService()
+
+    await service.send_payment_reminder(lead.id, "due", note=None, actor_id=None)
+    first = (await notifications_for(admin))[0]
+    await NotificationService().mark_read(first.id, user_id=admin.id)
+
+    assert await service.send_payment_reminder(lead.id, "due", note=None, actor_id=None) == (1, 0)
+    assert len(await notifications_for(admin)) == 2
+
+
 async def test_opening_a_payment_reminder_still_moves_the_lead(client):
     """The pre-existing behaviour, which the category check must not break -
     including for reminders raised before categories existed (category=None)."""

@@ -110,11 +110,19 @@ function buildReminderKinds(lead, summary) {
 // Admin viewing their own lead has nobody to forward it to.
 function PaymentReminders({ lead, summary }) {
   const [sent, setSent] = useState(null)
+  // Which kinds have been sent from this popup. `mutation.isPending` only
+  // covers the in-flight request, so it does nothing about the far more likely
+  // second press a moment after the first one lands - which is what was
+  // stacking duplicate reminders in the admin's panel.
+  const [sentKinds, setSentKinds] = useState([])
   const kinds = buildReminderKinds(lead, summary)
 
   const mutation = useMutation({
     mutationFn: ({ kind }) => leadService.sendPaymentReminder(lead.id, { kind }),
-    onSuccess: (data) => setSent(data.message),
+    onSuccess: (data, { kind }) => {
+      setSent(data.message)
+      setSentKinds((current) => [...current, kind])
+    },
   })
 
   if (kinds.length === 0) return null
@@ -131,17 +139,22 @@ function PaymentReminders({ lead, summary }) {
       </p>
 
       <div className="mt-2.5 flex flex-wrap gap-2">
-        {kinds.map((item) => (
-          <Button
-            key={item.kind}
-            variant="secondary"
-            onClick={() => mutation.mutate({ kind: item.kind })}
-            disabled={mutation.isPending}
-          >
-            {item.label}
-            <span className="text-xs font-normal text-slate-400">{item.detail}</span>
-          </Button>
-        ))}
+        {kinds.map((item) => {
+          const isSent = sentKinds.includes(item.kind)
+          return (
+            <Button
+              key={item.kind}
+              variant={isSent ? 'success' : 'secondary'}
+              onClick={() => mutation.mutate({ kind: item.kind })}
+              disabled={mutation.isPending || isSent}
+              title={isSent ? 'Already sent from this popup' : undefined}
+            >
+              {isSent && <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />}
+              {isSent ? 'Sent' : item.label}
+              {!isSent && <span className="text-xs font-normal text-slate-400">{item.detail}</span>}
+            </Button>
+          )
+        })}
       </div>
 
       <ErrorMessage message={mutation.error ? getApiErrorMessage(mutation.error) : null} />

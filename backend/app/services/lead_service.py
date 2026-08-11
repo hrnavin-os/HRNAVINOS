@@ -466,14 +466,23 @@ class LeadService:
 
     async def send_payment_reminder(
         self, lead_id: uuid.UUID, kind: str, *, note: str | None, actor_id: uuid.UUID | None
-    ) -> int:
+    ) -> tuple[int, int]:
         """Finance asks this lead's section admins to chase a payment.
 
         Targets every user whose role is scoped to the lead's own section, so
         it reaches whoever actually owns that pipeline rather than everyone.
-        Returns how many people were notified - zero is a real outcome worth
-        surfacing (a lead with no section, or a section with no admin yet),
-        not an error.
+
+        Returns (notified, already_pending). Both zeros are real outcomes worth
+        surfacing rather than errors: a section with no admin yet, or a button
+        pressed twice.
+
+        Anyone still holding an unopened reminder of this kind about this lead
+        is skipped. Pressing the button again used to stack a second identical
+        copy in their panel, which is noise, not urgency - and the disabled
+        state on the button only ever covered the in-flight request, so a
+        second press a moment after the first landed went straight through.
+        Suppression lifts once they've read it: if the money still hasn't
+        arrived, chasing again is exactly what Finance should be able to do.
         """
         lead = await self.get(lead_id)
         if not lead.section:
@@ -492,9 +501,14 @@ class LeadService:
         if note:
             message = f"{message} Note from Finance: {note}"
 
+        notified = 0
+        already_pending = 0
         # De-duplicated: one person holding two scoped roles should still get
         # a single notification.
         for user in {user.id: user for user in recipients}.values():
+            if await self.notifications.has_unread_reminder(user_id=user.id, lead_id=lead.id, title=title):
+                already_pending += 1
+                continue
             await self.notifications.create(
                 Notification(
                     user_id=user.id,
@@ -508,15 +522,19 @@ class LeadService:
                     category=NotificationCategory.PAYMENT_REMINDER,
                 )
             )
+            notified += 1
 
-        await self.audit.record(
-            user_id=actor_id,
-            action="UPDATE",
-            entity_type="Lead",
-            entity_id=str(lead.id),
-            changes={"payment_reminder": kind, "notified": len(recipients)},
-        )
-        return len({user.id for user in recipients})
+        # Only recorded when something was actually sent - an audit line per
+        # suppressed double-click would bury the real ones.
+        if notified:
+            await self.audit.record(
+                user_id=actor_id,
+                action="UPDATE",
+                entity_type="Lead",
+                entity_id=str(lead.id),
+                changes={"payment_reminder": kind, "notified": notified},
+            )
+        return notified, already_pending
 
     async def move_to_follow_up(self, lead_id: uuid.UUID, *, actor_id: uuid.UUID | None) -> Lead:
         """Reached when a section admin opens a payment reminder. PRE_SCREENING

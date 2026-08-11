@@ -43,3 +43,7 @@ class PaymentReminderRequest(BaseModel):
 class PaymentReminderResponse(BaseModel):
     message: str
     notified: int
+    # Recipients skipped because they hadn't opened the last identical reminder
+    # yet. Reported rather than hidden, so a suppressed double-press reads as
+    # deliberate instead of as a send that silently did nothing.
+    already_pending: int = 0

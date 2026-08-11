@@ -260,17 +260,31 @@ async def send_payment_reminder(
     # Finance action taken from the Cashbook, and Finance holds that.
     actor: User = Depends(RequirePermissions(Permissions.PAYMENTS_VIEW)),
 ) -> PaymentReminderResponse:
-    notified = await LeadService().send_payment_reminder(
+    notified, already_pending = await LeadService().send_payment_reminder(
         lead_id, payload.kind, note=payload.note, actor_id=actor.id
     )
+    if notified == 0 and already_pending:
+        # Said plainly rather than reported as a successful send. Claiming to
+        # have sent something that was deliberately suppressed is how you end
+        # up pressing the button a third time.
+        return PaymentReminderResponse(
+            message=(
+                f"{already_pending} section admin{'' if already_pending == 1 else 's'} already "
+                "have this reminder unopened, so no duplicate was sent."
+            ),
+            notified=0,
+            already_pending=already_pending,
+        )
     if notified == 0:
         return PaymentReminderResponse(
             message="No section admin is set up for this lead's section yet, so nobody was notified.",
             notified=0,
         )
+    suffix = f" {already_pending} already had it unopened." if already_pending else ""
     return PaymentReminderResponse(
-        message=f"Reminder sent to {notified} section admin{'' if notified == 1 else 's'}.",
+        message=f"Reminder sent to {notified} section admin{'' if notified == 1 else 's'}.{suffix}",
         notified=notified,
+        already_pending=already_pending,
     )
 
 
