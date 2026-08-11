@@ -12,7 +12,7 @@ const SLOTS = 5
 const TAB_BASE =
   'flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-2 text-[10px] font-medium transition-colors'
 
-// The overflow, as a sheet rising from the bottom bar that opened it - not a
+// The full menu, as a sheet rising from the bottom bar that opened it - not a
 // drawer flying in from the left edge, which is where the navigation
 // deliberately stopped living.
 function MoreSheet({ items, isOpen, onClose }) {
@@ -47,7 +47,9 @@ function MoreSheet({ items, isOpen, onClose }) {
         </div>
 
         <div className="flex items-center justify-between px-4 pb-1 pt-2">
-          <p className="text-sm font-semibold text-slate-900">More</p>
+          {/* "Menu", not "More": the sheet lists every page, including the ones
+              already in the bar, so calling it More would undersell it. */}
+          <p className="text-sm font-semibold text-slate-900">Menu</p>
           <button
             type="button"
             onClick={onClose}
@@ -58,9 +60,11 @@ function MoreSheet({ items, isOpen, onClose }) {
           </button>
         </div>
 
-        {/* A grid rather than a list: these are destinations, not settings, and
-            three across puts twice as many within reach without scrolling. */}
-        <div className="grid grid-cols-3 gap-2 p-4 pt-2">
+        {/* A grid rather than a list: these are destinations, not settings, so
+            four across puts the whole menu on one screen without scrolling.
+            No card around each one - at this density a border per tile is
+            sixteen boxes competing with the icons inside them. */}
+        <div className="grid grid-cols-4 gap-x-1 gap-y-3 p-4 pt-2">
           {items.map((item) => (
             <NavLink
               key={item.to}
@@ -68,23 +72,21 @@ function MoreSheet({ items, isOpen, onClose }) {
               end
               onClick={onClose}
               className={({ isActive }) =>
-                `flex flex-col items-center gap-2 rounded-xl border px-2 py-3 text-center transition-colors ${
-                  isActive
-                    ? 'border-brand-200 bg-brand-50 text-brand-700'
-                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                `flex flex-col items-center gap-1.5 rounded-lg py-1 text-center transition-colors ${
+                  isActive ? 'text-brand-700' : 'text-slate-600'
                 }`
               }
             >
               {({ isActive }) => (
                 <>
                   <span
-                    className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-                      isActive ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-500'
+                    className={`flex h-11 w-11 items-center justify-center rounded-xl transition-colors ${
+                      isActive ? 'bg-brand-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500'
                     }`}
                   >
-                    <item.icon className="h-4.5 w-4.5" strokeWidth={2} aria-hidden="true" />
+                    <item.icon className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
                   </span>
-                  <span className="w-full text-[11px] font-medium leading-tight">
+                  <span className="w-full truncate text-[11px] font-medium leading-tight">
                     {item.shortLabel ?? item.label}
                   </span>
                 </>
@@ -168,7 +170,11 @@ export function BottomNav() {
         </div>
       </nav>
 
-      <MoreSheet items={overflow} isOpen={isMoreOpen} onClose={() => setIsMoreOpen(false)} />
+      {/* Every page, not just the overflow. Opening a menu and finding the
+          four pages you can already see missing from it reads as a bug - and
+          it means the sheet is a complete answer to "where can I go", rather
+          than a remainder you have to mentally add the bar to. */}
+      <MoreSheet items={leaves} isOpen={isMoreOpen} onClose={() => setIsMoreOpen(false)} />
     </>
   )
 }
