@@ -1,11 +1,20 @@
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { AlertCircle, X } from 'lucide-react'
+import { AlertCircle, CheckCircle2, X } from 'lucide-react'
 
-// Transient failure notice for actions with no form to attach an error to -
-// inline table edits in particular, which otherwise fail silently and leave
-// the user believing their change saved.
-export function Toast({ message, onDismiss, duration = 6000 }) {
+const TONES = {
+  error: { border: 'border-red-200', plate: 'bg-red-100 text-red-600', icon: AlertCircle },
+  success: { border: 'border-emerald-200', plate: 'bg-emerald-100 text-emerald-600', icon: CheckCircle2 },
+}
+
+// Transient notice for actions with no form to attach a message to - inline
+// table edits in particular, which otherwise fail silently and leave the user
+// believing their change saved.
+//
+// `action` is what makes a one-click, no-confirmation action safe to offer:
+// the undo lives here rather than in a dialog beforehand, so the common case
+// costs one click and the mistake costs two.
+export function Toast({ message, onDismiss, duration = 6000, tone = 'error', action }) {
   useEffect(() => {
     if (!message) return undefined
     const timer = setTimeout(onDismiss, duration)
@@ -14,15 +23,32 @@ export function Toast({ message, onDismiss, duration = 6000 }) {
 
   if (!message) return null
 
+  const style = TONES[tone] ?? TONES.error
+  const Icon = style.icon
+
   return createPortal(
     <div
       role="alert"
-      className="fixed bottom-5 right-5 z-100 flex max-w-sm items-start gap-2.5 rounded-lg border border-red-200 bg-white p-3.5 shadow-lg"
+      className={`fixed bottom-5 right-5 z-100 flex max-w-sm items-start gap-2.5 rounded-lg border bg-white p-3.5 shadow-lg ${style.border}`}
     >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-red-100 text-red-600">
-        <AlertCircle className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${style.plate}`}>
+        <Icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
       </span>
-      <p className="min-w-0 flex-1 text-sm font-medium text-slate-700">{message}</p>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-slate-700">{message}</p>
+        {action && (
+          <button
+            type="button"
+            onClick={() => {
+              action.onClick()
+              onDismiss()
+            }}
+            className="mt-1 text-xs font-semibold text-brand-600 hover:text-brand-700"
+          >
+            {action.label}
+          </button>
+        )}
+      </div>
       <button
         type="button"
         onClick={onDismiss}

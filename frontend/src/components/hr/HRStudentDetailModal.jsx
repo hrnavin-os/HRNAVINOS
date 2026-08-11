@@ -131,7 +131,10 @@ export function HRStudentDetailModal({ student, sectionLabel, onClose }) {
           <DetailRow icon={Mail} label="Email" value={student.email ?? dash} />
           <DetailRow icon={BookOpen} label="Course" value={student.course_interest ?? dash} />
           <DetailRow icon={Layers} label="Section" value={sectionLabel ?? student.section?.toUpperCase() ?? dash} />
-          <DetailRow icon={Hash} label="Batch" value={student.batch_number ?? dash} />
+          {/* `batch` is derived from the student's induction registration
+              month, falling back to a hand-typed batch_number for leads that
+              never came through Induction. */}
+          <DetailRow icon={Hash} label="Batch" value={student.batch ?? dash} />
           <DetailRow
             icon={CalendarCheck}
             label={student.group_assigned_at ? 'Group Assigned' : 'Added'}

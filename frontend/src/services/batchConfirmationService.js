@@ -64,6 +64,10 @@ export const batchConfirmationService = {
     const { data } = await apiClient.post(`${BASE}/students/${leadId}/group-assigned`, { assigned })
     return data
   },
+  markGroupAssignedBulk: async (leadIds) => {
+    const { data } = await apiClient.post(`${BASE}/students/group-assigned/bulk`, { lead_ids: leadIds })
+    return data
+  },
   setHrStage: async (leadId, status, lostReason) => {
     const { data } = await apiClient.post(`${BASE}/students/${leadId}/stage`, {
       status,

@@ -147,6 +147,16 @@ class CoordinatorSummaryResponse(BaseModel):
     students_placed: int
 
 
+class BulkGroupAssignRequest(BaseModel):
+    lead_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
+
+
+class BulkGroupAssignResponse(BaseModel):
+    message: str
+    assigned: int
+    skipped: list[str] = []
+
+
 class HRStudentResponse(BaseModel):
     """One row in any of the four HR Coordinator tabs. A single shape across
     all of them - each tab just renders the subset of columns it cares about,
@@ -161,7 +171,15 @@ class HRStudentResponse(BaseModel):
     # The pipeline stage behind the tab, so the detail popup can work out
     # which moves are allowed rather than re-deriving it from the tab.
     status: LeadStatus
+    # What the coordinator typed in by hand, kept for leads that never came
+    # through Induction and for rows entered before batch became automatic.
     batch_number: str | None
+    # The batch this student actually belongs to. Derived from their induction
+    # entry's registration month, which is where the number comes from in the
+    # first place - the coordinator was re-typing a value the system already
+    # knew, and any typo silently disagreed with the Induction board. Falls
+    # back to batch_number when there's no induction record to read.
+    batch: str | None = None
     group_assigned_at: datetime | None
     lost_reason: str | None
     lost_at: datetime | None

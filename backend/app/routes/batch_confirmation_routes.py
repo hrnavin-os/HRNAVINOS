@@ -14,6 +14,8 @@ from app.schemas.batch_confirmation_schema import (
     BatchNumberRequest,
     BatchReadinessDetailResponse,
     BatchReadinessResponse,
+    BulkGroupAssignRequest,
+    BulkGroupAssignResponse,
     ConfirmBatchResponse,
     CoordinatorSummaryResponse,
     GroupAssignRequest,
@@ -154,7 +156,7 @@ async def update_whatsapp_link(
     )
 
 
-def _to_hr_student(lead) -> HRStudentResponse:
+def _to_hr_student(lead, batch: str | None = None) -> HRStudentResponse:
     return HRStudentResponse(
         id=lead.id,
         name=lead.name,
@@ -164,6 +166,10 @@ def _to_hr_student(lead) -> HRStudentResponse:
         section=lead.section,
         status=lead.status,
         batch_number=lead.batch_number,
+        # Derived from Induction where there is one; otherwise whatever was
+        # typed by hand, so leads that never came through Induction still show
+        # a batch.
+        batch=batch or lead.batch_number,
         group_assigned_at=lead.group_assigned_at,
         lost_reason=lead.lost_reason,
         lost_at=lead.lost_at,
@@ -176,8 +182,31 @@ async def list_hr_students(
     tab: str = Query(default="approved", pattern="^(approved|pending_hr|group_assigned|lost)$"),
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
 ) -> list[HRStudentResponse]:
-    leads = await BatchConfirmationService().list_hr_students(tab)
-    return [_to_hr_student(lead) for lead in leads]
+    service = BatchConfirmationService()
+    leads = await service.list_hr_students(tab)
+    # Resolved for the whole page in one query rather than per row.
+    batches = await service.batches_for(leads)
+    return [_to_hr_student(lead, batches.get(lead.id)) for lead in leads]
+
+
+@router.post("/students/group-assigned/bulk", response_model=BulkGroupAssignResponse)
+async def bulk_mark_group_assigned(
+    payload: BulkGroupAssignRequest,
+    actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_ALLOCATE)),
+) -> BulkGroupAssignResponse:
+    """Marks a selection as added to their WhatsApp group.
+
+    Declared before /students/{lead_id}/... so the dynamic segment doesn't
+    swallow "group-assigned" and try to parse it as a UUID.
+    """
+    assigned, skipped = await BatchConfirmationService().set_group_assigned_bulk(
+        payload.lead_ids, actor_id=actor.id
+    )
+    message = f"{assigned} student{'' if assigned == 1 else 's'} marked as added to the group."
+    if skipped:
+        message = f"{message} Skipped {len(skipped)}: {', '.join(skipped[:3])}"
+        message = f"{message}…" if len(skipped) > 3 else message
+    return BulkGroupAssignResponse(message=message, assigned=assigned, skipped=skipped)
 
 
 @router.put("/students/{lead_id}/batch-number", response_model=HRStudentResponse)

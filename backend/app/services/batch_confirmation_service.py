@@ -25,6 +25,7 @@ from app.models.enums import (
     StudentStatus,
     TutorStatus,
 )
+from app.models.induction_entry import InductionEntry
 from app.models.lead import Lead
 from app.models.student import Student
 from app.repositories.admission_repository import AdmissionRepository
@@ -50,6 +51,7 @@ from app.schemas.batch_confirmation_schema import (
 from app.schemas.batch_schema import BatchCreate
 from app.services.audit_service import AuditService
 from app.services.batch_service import BatchService
+from app.services.induction_entry_service import batch_for
 
 # Smallest roster the institute will run a batch with. Deliberately a single
 # constant rather than per-course config: the rule is operational, not
@@ -193,17 +195,46 @@ class BatchConfirmationService:
         on a WhatsApp group; assigning that group is what moves a lead into
         `group_assigned`, which is why it filters on the timestamp rather than
         on stage.
+
+        `group_assigned` excludes Lost. Losing a student doesn't clear the
+        timestamp - they were in the group, that happened - but a lost student
+        listed as an active group member appeared in two tabs at once and was
+        counted twice on the cards above them.
         """
         base: dict = {"is_deleted": False, "reviewed": {"$ne": False}}
         queries = {
             "pending_hr": {**base, "status": LeadStatus.FINANCIAL_APPROVAL},
             "approved": {**base, "status": LeadStatus.BATCH_CONFIRMATION, "group_assigned_at": None},
-            "group_assigned": {**base, "group_assigned_at": {"$ne": None}},
+            "group_assigned": {
+                **base,
+                "group_assigned_at": {"$ne": None},
+                "status": {"$ne": LeadStatus.LOST},
+            },
             "lost": {**base, "status": LeadStatus.LOST},
         }
         if tab not in queries:
             raise BadRequestError(f"Unknown tab '{tab}'.")
         return await Lead.find(queries[tab]).sort("+created_at").to_list()
+
+    async def batches_for(self, leads: list[Lead]) -> dict[uuid.UUID, str]:
+        """{lead id: batch} for leads linked to an induction entry.
+
+        One query for the whole page rather than one per row: the induction ids
+        are collected first and fetched together. Leads with no induction
+        record simply aren't in the result, and the caller falls back to
+        whatever batch was typed by hand.
+        """
+        entry_ids = [lead.induction_entry_id for lead in leads if lead.induction_entry_id]
+        if not entry_ids:
+            return {}
+
+        entries = await InductionEntry.find({"_id": {"$in": entry_ids}}).to_list()
+        batch_by_entry = {entry.id: batch_for(entry.registration_date) for entry in entries}
+        return {
+            lead.id: batch_by_entry[lead.induction_entry_id]
+            for lead in leads
+            if lead.induction_entry_id in batch_by_entry
+        }
 
     async def set_batch_number(
         self, lead_id: uuid.UUID, *, batch_number: str, actor_id: uuid.UUID | None
@@ -249,6 +280,28 @@ class BatchConfirmationService:
             changes={"group_assigned_at": assigned_at.isoformat() if assigned_at else None},
         )
         return lead
+
+    async def set_group_assigned_bulk(
+        self, lead_ids: list[uuid.UUID], *, actor_id: uuid.UUID | None
+    ) -> tuple[int, list[str]]:
+        """Marks a whole selection as added to their group.
+
+        Returns (assigned, skipped_names). Skipping is reported rather than
+        raised: one lead that has moved on shouldn't discard the rest of a
+        selection the coordinator has just worked through.
+        """
+        assigned = 0
+        skipped: list[str] = []
+        for lead_id in lead_ids:
+            lead = await self.leads.get_by_id(lead_id)
+            if not lead:
+                continue
+            if lead.status != LeadStatus.BATCH_CONFIRMATION or lead.group_assigned_at is not None:
+                skipped.append(lead.name)
+                continue
+            await self.set_group_assigned(lead_id, assigned=True, actor_id=actor_id)
+            assigned += 1
+        return assigned, skipped
 
     async def set_hr_stage(
         self,

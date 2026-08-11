@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BadgeCheck, Check, Link2, Search, UserX, Users, XCircle } from 'lucide-react'
+import { BadgeCheck, Check, Search, Send, UserX, Users, XCircle } from 'lucide-react'
 import { batchConfirmationService } from '@/services/batchConfirmationService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Modal } from '@/components/ui/Modal'
 import { Toast } from '@/components/ui/Toast'
 import { StatCard } from '@/components/ui/StatCard'
 import { DataTable } from '@/components/ui/DataTable'
@@ -29,42 +28,19 @@ const EMPTY_MESSAGE = {
 
 const dash = (value) => value ?? <span className="text-slate-400">—</span>
 
-// Free-text batch the coordinator types in (27, 28...). Saves on blur or
-// Enter rather than per keystroke, and reports failures rather than
-// quietly reverting.
-function BatchNumberCell({ row, onError }) {
-  const queryClient = useQueryClient()
-  const saved = row.batch_number ?? ''
-  const [value, setValue] = useState(saved)
+// wa.me wants digits only, with a country code. A stored Indian number is the
+// bare 10 digits, so it gets the 91 that WhatsApp needs to route it.
+function whatsappNumber(phone) {
+  const digits = String(phone ?? '').replace(/\D/g, '')
+  if (!digits) return null
+  return digits.length === 10 ? `91${digits}` : digits
+}
 
-  const mutation = useMutation({
-    mutationFn: (batchNumber) => batchConfirmationService.setBatchNumber(row.id, batchNumber),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: [QUERY_KEY] }),
-    onError: (error) => {
-      setValue(saved)
-      onError(`Couldn't save the batch for ${row.name}: ${getApiErrorMessage(error)}`)
-    },
-  })
-
-  function commit() {
-    if (value.trim() === saved) return
-    mutation.mutate(value.trim())
-  }
-
-  return (
-    <input
-      type="text"
-      value={value}
-      placeholder="e.g. 27"
-      onClick={(event) => event.stopPropagation()}
-      onChange={(event) => setValue(event.target.value)}
-      onBlur={commit}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') event.currentTarget.blur()
-      }}
-      className="w-20 rounded-md border border-slate-200 px-2 py-1 text-center text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-    />
-  )
+// The invite the coordinator sends. WhatsApp has no way for one account to add
+// another to a group - only the person themselves can accept an invite - so
+// "add them to the group" is, on this platform, sending them the join link.
+function inviteMessage(name, groupUrl) {
+  return `Hi ${name}, welcome to HRNAVINOS! Join your batch group here: ${groupUrl}`
 }
 
 export function HRCoordinatorPage() {
@@ -72,9 +48,8 @@ export function HRCoordinatorPage() {
   const [tab, setTab] = useState('approved')
   const [search, setSearch] = useState('')
   const [error, setError] = useState(null)
-  // Held between opening the invite link and the coordinator confirming the
-  // student actually joined - the open itself proves nothing.
-  const [confirming, setConfirming] = useState(null)
+  const [notice, setNotice] = useState(null)
+  const [selected, setSelected] = useState([])
   const [viewingStudent, setViewingStudent] = useState(null)
 
   // Every tab is fetched, not just the active one - the cards show a count, so
@@ -90,35 +65,99 @@ export function HRCoordinatorPage() {
   const studentsQuery = tabQueries[activeIndex]
   const linksQuery = useQuery({ queryKey: ['whatsapp-links'], queryFn: batchConfirmationService.whatsappLinks })
 
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: [QUERY_KEY] })
+
   const assignMutation = useMutation({
     mutationFn: (leadId) => batchConfirmationService.markGroupAssigned(leadId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [QUERY_KEY] })
-      setConfirming(null)
+    onSuccess: (_data, leadId) => {
+      invalidate()
+      // No confirmation dialog before the fact - the undo here is what makes a
+      // single click safe, and it costs nothing in the common case where the
+      // coordinator meant it.
+      setNotice({
+        message: 'Marked as added to the group.',
+        action: { label: 'Undo', onClick: () => undoMutation.mutate(leadId) },
+      })
     },
-    onError: (err) => {
-      setError(getApiErrorMessage(err))
-      setConfirming(null)
+    onError: (err) => setError(getApiErrorMessage(err)),
+  })
+
+  const undoMutation = useMutation({
+    mutationFn: (leadId) => batchConfirmationService.markGroupAssigned(leadId, false),
+    onSuccess: invalidate,
+    onError: (err) => setError(getApiErrorMessage(err)),
+  })
+
+  const bulkMutation = useMutation({
+    mutationFn: (leadIds) => batchConfirmationService.markGroupAssignedBulk(leadIds),
+    onSuccess: (data) => {
+      invalidate()
+      setSelected([])
+      setNotice({ message: data.message })
     },
+    onError: (err) => setError(getApiErrorMessage(err)),
   })
 
   const linkBySection = Object.fromEntries(
     (linksQuery.data ?? []).map((section) => [section.code, section]),
   )
 
-  function handleGroupAssign(row) {
-    const section = row.section ? linkBySection[row.section] : null
-    if (!section?.whatsapp_group_url) {
+  const groupUrlFor = (row) => (row.section ? linkBySection[row.section]?.whatsapp_group_url : null)
+
+  // Opens WhatsApp with the invite ready to send, and records the assignment
+  // in the same click. Two steps before: open the group, then confirm in a
+  // dialog that you'd added them.
+  function sendInvite(row) {
+    const groupUrl = groupUrlFor(row)
+    if (!groupUrl) {
       setError('No WhatsApp Group Link has been configured for this section.')
       return
     }
-    window.open(section.whatsapp_group_url, '_blank', 'noopener,noreferrer')
-    setConfirming({ row, section })
+    const number = whatsappNumber(row.phone)
+    const target = number
+      ? `https://wa.me/${number}?text=${encodeURIComponent(inviteMessage(row.name, groupUrl))}`
+      : groupUrl
+    window.open(target, '_blank', 'noopener,noreferrer')
+    assignMutation.mutate(row.id)
   }
 
+  function sendBulkInvites() {
+    const rows = allRows.filter((row) => selected.includes(row.id))
+    const missing = rows.filter((row) => !groupUrlFor(row))
+    if (missing.length) {
+      setError(`No WhatsApp Group Link configured for: ${missing.map((row) => row.name).join(', ')}.`)
+      return
+    }
+    // One tab per student: the invite is a message to each of them, and
+    // WhatsApp has no bulk equivalent. Popup blockers stop everything after
+    // the first unless the user has allowed them, so the marking below is what
+    // actually records the work either way.
+    rows.forEach((row) => {
+      const number = whatsappNumber(row.phone)
+      if (!number) return
+      window.open(
+        `https://wa.me/${number}?text=${encodeURIComponent(inviteMessage(row.name, groupUrlFor(row)))}`,
+        '_blank',
+        'noopener,noreferrer',
+      )
+    })
+    bulkMutation.mutate(rows.map((row) => row.id))
+  }
+
+  const toggleSelected = (id) =>
+    setSelected((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]))
+
   const BASE_COLUMNS = [
-    { key: 'name', header: 'Name', render: (row) => <span className="font-medium text-slate-900">{row.name}</span> },
-    { key: 'phone', header: 'Phone' },
+    {
+      key: 'name',
+      header: 'Student',
+      render: (row) => (
+        <div className="min-w-0">
+          <p className="truncate font-medium text-slate-900">{row.name}</p>
+          <p className="truncate text-xs text-slate-500">{row.phone}</p>
+        </div>
+      ),
+    },
     { key: 'email', header: 'Email', render: (row) => dash(row.email) },
     { key: 'course_interest', header: 'Course', render: (row) => dash(row.course_interest) },
     {
@@ -127,51 +166,67 @@ export function HRCoordinatorPage() {
       align: 'center',
       render: (row) => (row.section ? <Badge tone="violet">{row.section.toUpperCase()}</Badge> : dash(null)),
     },
+    {
+      // Read-only: the batch comes from the student's induction registration
+      // month, which is where the coordinator was copying it from anyway.
+      key: 'batch',
+      header: 'Batch',
+      align: 'center',
+      render: (row) => (row.batch ? <Badge tone="blue">{row.batch}</Badge> : dash(null)),
+    },
   ]
 
-  const BATCH_COLUMN = {
-    key: 'batch_number',
-    header: 'Batch',
+  const SELECT_COLUMN = {
+    key: '__select',
+    header: '',
     align: 'center',
-    render: (row) => <BatchNumberCell key={row.id} row={row} onError={setError} />,
+    render: (row) => (
+      <input
+        type="checkbox"
+        checked={selected.includes(row.id)}
+        onClick={(event) => event.stopPropagation()}
+        onChange={() => toggleSelected(row.id)}
+        aria-label={`Select ${row.name}`}
+        className="h-4 w-4 cursor-pointer rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+      />
+    ),
   }
 
   const COLUMNS = {
     approved: [
+      SELECT_COLUMN,
       ...BASE_COLUMNS,
-      BATCH_COLUMN,
       {
         key: 'group_assign',
-        header: 'Group Assign',
+        header: 'Group',
         align: 'center',
         render: (row) => (
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            className="px-3! py-1! text-xs"
+            disabled={assignMutation.isPending}
             onClick={(event) => {
               event.stopPropagation()
-              handleGroupAssign(row)
+              sendInvite(row)
             }}
-            title="Open this section's WhatsApp group"
-            aria-label={`Open the WhatsApp group for ${row.name}`}
-            className="rounded-md p-1.5 text-green-600 transition-colors hover:bg-green-50"
           >
-            <Link2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-          </button>
+            <Send className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+            Send invite
+          </Button>
         ),
       },
     ],
     group_assigned: [
       ...BASE_COLUMNS,
-      { key: 'batch_number', header: 'Batch', align: 'center', render: (row) => dash(row.batch_number) },
       {
         key: 'assigned_group',
-        header: 'Assigned Group',
+        header: 'Group',
         align: 'center',
         render: (row) => dash(row.section ? (linkBySection[row.section]?.label ?? row.section.toUpperCase()) : null),
       },
       {
         key: 'group_assigned_at',
-        header: 'Assigned Date',
+        header: 'Added On',
         align: 'center',
         render: (row) => formatDate(row.group_assigned_at),
       },
@@ -181,8 +236,8 @@ export function HRCoordinatorPage() {
         align: 'center',
         render: () => (
           <Badge tone="green">
-            <Check className="mr-1 h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
-            Group Assigned
+            <Check className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
+            In group
           </Badge>
         ),
       },
@@ -197,7 +252,7 @@ export function HRCoordinatorPage() {
         align: 'center',
         render: () => (
           <Badge tone="red">
-            <XCircle className="mr-1 h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
+            <XCircle className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
             Lost
           </Badge>
         ),
@@ -209,11 +264,13 @@ export function HRCoordinatorPage() {
   const allRows = studentsQuery.data ?? []
   const rows = term
     ? allRows.filter((row) =>
-        [row.name, row.phone, row.email, row.course_interest, row.batch_number]
+        [row.name, row.phone, row.email, row.course_interest, row.batch]
           .filter(Boolean)
           .some((field) => String(field).toLowerCase().includes(term)),
       )
     : allRows
+
+  const allSelected = rows.length > 0 && rows.every((row) => selected.includes(row.id))
 
   return (
     <div>
@@ -229,27 +286,47 @@ export function HRCoordinatorPage() {
             onClick={() => {
               setTab(item.key)
               setSearch('')
+              setSelected([])
             }}
           />
         ))}
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-slate-900">
-          {TABS.find((item) => item.key === tab).label}{' '}
-          <span className="font-normal text-slate-400">({rows.length})</span>
-        </h2>
-        <div className="relative w-full max-w-xs">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-            aria-hidden="true"
-          />
-          <Input
-            className="pl-9"
-            placeholder="Search…"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
+      {/* One toolbar band, matching the lead boards. In selection mode it
+          swaps to the bulk action rather than growing a second row. */}
+      <div className="mb-4 rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          {tab === 'approved' && rows.length > 0 && (
+            <label className="flex cursor-pointer items-center gap-2 px-2 text-sm font-medium text-slate-600">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={() => setSelected(allSelected ? [] : rows.map((row) => row.id))}
+                className="h-4 w-4 cursor-pointer rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+              />
+              {selected.length > 0 ? `${selected.length} selected` : 'Select all'}
+            </label>
+          )}
+
+          <div className="relative min-w-55 flex-1">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+              aria-hidden="true"
+            />
+            <Input
+              className="pl-9"
+              placeholder="Search name, phone, email, batch…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+
+          {selected.length > 0 && (
+            <Button onClick={sendBulkInvites} disabled={bulkMutation.isPending}>
+              <Send className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+              {bulkMutation.isPending ? 'Sending…' : `Send invites (${selected.length})`}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -262,27 +339,11 @@ export function HRCoordinatorPage() {
           emptyMessage={EMPTY_MESSAGE[tab]}
           onRowClick={(row) => setViewingStudent(row)}
         />
+        <p className="border-t border-slate-100 px-4 py-2.5 text-xs text-slate-400">
+          Showing <span className="font-semibold text-slate-600">{rows.length}</span> of {allRows.length} record
+          {allRows.length === 1 ? '' : 's'}
+        </p>
       </div>
-      <p className="mt-2 text-xs text-slate-400">
-        {rows.length} record{rows.length === 1 ? '' : 's'}
-      </p>
-
-      {confirming && (
-        <Modal title="Confirm group assignment" isOpen onClose={() => setConfirming(null)} maxWidth="max-w-md">
-          <p className="text-sm text-slate-700">
-            The <span className="font-semibold">{confirming.section.label}</span> WhatsApp group has been opened in a
-            new tab. Was <span className="font-semibold">{confirming.row.name}</span> added to it?
-          </p>
-          <div className="mt-5 flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setConfirming(null)}>
-              Not yet
-            </Button>
-            <Button onClick={() => assignMutation.mutate(confirming.row.id)} disabled={assignMutation.isPending}>
-              {assignMutation.isPending ? 'Saving…' : 'Yes, added'}
-            </Button>
-          </div>
-        </Modal>
-      )}
 
       {viewingStudent && (
         <HRStudentDetailModal
@@ -293,6 +354,12 @@ export function HRCoordinatorPage() {
       )}
 
       <Toast message={error} onDismiss={() => setError(null)} />
+      <Toast
+        message={notice?.message}
+        tone="success"
+        action={notice?.action}
+        onDismiss={() => setNotice(null)}
+      />
     </div>
   )
 }
