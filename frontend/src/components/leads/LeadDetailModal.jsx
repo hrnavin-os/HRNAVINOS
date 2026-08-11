@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowRight,
   BookOpen,
   CalendarClock,
+  Check,
   CheckCircle2,
   Clock,
   ImagePlus,
   Info,
   Link2,
+  Lock,
   Mail,
   MessageSquare,
   Milestone,
@@ -37,7 +38,7 @@ import { hasFirstPayment } from '@/utils/leadPayment'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { formatDateTime, titleCase } from '@/utils/formatters'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
-import { InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
+import { DetailPanel, InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
 import { MEDIA_BASE_URL } from '@/constants/config'
 
 // Financial Approval and Batch Confirmation are pipeline gates: each is only
@@ -62,26 +63,23 @@ function stageBlockReason(lead, targetStatus) {
   return null
 }
 
-const STAGE_BUTTON_TONES = {
-  blue: { active: 'border-blue-600 bg-blue-600 text-white', inactive: 'border-blue-300 bg-white text-blue-700 hover:bg-blue-50' },
-  red: { active: 'border-red-600 bg-red-600 text-white', inactive: 'border-red-300 bg-white text-red-700 hover:bg-red-50' },
-  amber: {
-    active: 'border-amber-500 bg-amber-500 text-white',
-    inactive: 'border-amber-300 bg-white text-amber-700 hover:bg-amber-50',
-  },
-  violet: {
-    active: 'border-violet-600 bg-violet-600 text-white',
-    inactive: 'border-violet-300 bg-white text-violet-700 hover:bg-violet-50',
-  },
-  emerald: {
-    active: 'border-emerald-600 bg-emerald-600 text-white',
-    inactive: 'border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50',
-  },
-  slate: {
-    active: 'border-slate-600 bg-slate-600 text-white',
-    inactive: 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50',
-  },
+// Only the stage you're on is coloured. Six differently-tinted outline buttons
+// gave every destination equal claim on your attention and turned the picker
+// into a paint chart - and the colour was decoration anyway, since choosing
+// where to move a lead depends on which stage is current and which are
+// blocked, not on what hue each one owns. Lost keeps a red hover as the one
+// genuinely irreversible move.
+const STAGE_ACTIVE_TONES = {
+  blue: 'border-blue-600 bg-blue-600 text-white',
+  red: 'border-red-600 bg-red-600 text-white',
+  amber: 'border-amber-500 bg-amber-500 text-white',
+  violet: 'border-violet-600 bg-violet-600 text-white',
+  emerald: 'border-emerald-600 bg-emerald-600 text-white',
+  slate: 'border-slate-600 bg-slate-600 text-white',
 }
+
+const STAGE_IDLE = 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+const STAGE_IDLE_LOST = 'border-slate-200 bg-white text-slate-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700'
 
 const ACTION_ICONS = { CREATE: Plus, UPDATE: Pencil, ASSIGN: UserPlus, DELETE: Trash2 }
 const ACTION_TONES = {
@@ -150,20 +148,19 @@ function InfoCard({ item }) {
 // payment_expected arrives as "<plan summary> | Pays on: <weekday> (<date>)" from
 // the backend when a payment timeline was collected - split it so the "Pays on"
 // half reads as a secondary line instead of running on into the same sentence.
-function PaymentExpectedCard({ value }) {
+function PaymentExpectedPanel({ value }) {
   const [main, ...rest] = value.split(' | ')
   const paysOn = rest.join(' | ') || null
   return (
-    <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 border-l-4 border-l-amber-400 bg-amber-50 p-3">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-600">
-        <Wallet className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-      </span>
-      <div className="min-w-0">
-        <p className="text-xs font-semibold uppercase tracking-wide text-amber-600">Payment Expected</p>
-        <p className="break-words text-sm font-semibold text-slate-900">{main}</p>
-        {paysOn && <p className="mt-0.5 break-words text-xs font-medium text-amber-700">{paysOn}</p>}
-      </div>
-    </div>
+    <DetailPanel title="Payment Expected" icon={Wallet} tone="amber">
+      <p className="break-words text-sm font-semibold text-slate-900">{main}</p>
+      {paysOn && (
+        <p className="mt-1 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">
+          <CalendarClock className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
+          {paysOn}
+        </p>
+      )}
+    </DetailPanel>
   )
 }
 
@@ -459,22 +456,24 @@ function PaymentCollectionSection({
   }
 
   return (
-    <section>
-      {/* A plain header rather than a tinted panel wrapping the rows. The rows
-          are already bordered cards, so boxing them again produced three
-          nested frames and made the tab look cluttered. */}
-      <div className="mb-3 flex items-center gap-2.5 border-b border-slate-200 pb-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-brand-500 to-brand-700 text-white shadow-sm">
-          <Wallet className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-slate-900">{lead.course_interest}</p>
-          <p className="text-xs text-slate-500">Payment collection</p>
-        </div>
+    // The same panel every other block on this tab uses. It previously had a
+    // bespoke header to avoid nesting frames, but once the rest of the tab
+    // became panels that made payment collection the one section that looked
+    // like it came from somewhere else - and panel-around-cards is one level
+    // of nesting, not the three the old note was avoiding.
+    <DetailPanel
+      title="Payment Collection"
+      icon={Wallet}
+      tone="emerald"
+      action={
         <Badge tone={PAYMENT_PLAN_TONES[lead.payment_plan] ?? 'blue'}>
           {PAYMENT_PLAN_LABELS[lead.payment_plan] ?? lead.payment_plan}
         </Badge>
-      </div>
+      }
+    >
+      {lead.course_interest && (
+        <p className="mb-3 truncate text-sm font-semibold text-slate-900">{lead.course_interest}</p>
+      )}
       {/* Two across rather than full width - each card is a short form, and
           stretched to the full modal the fields looked lost against all that
           empty space. Drops to one column on narrow screens.
@@ -494,7 +493,7 @@ function PaymentCollectionSection({
           />
         ))}
       </div>
-    </section>
+    </DetailPanel>
   )
 }
 
@@ -517,42 +516,41 @@ function OverviewTab({
         ))}
       </div>
 
-      {lead.payment_expected && <PaymentExpectedCard value={lead.payment_expected} />}
+      {lead.payment_expected && <PaymentExpectedPanel value={lead.payment_expected} />}
 
       {lead.notes && (
-        <div className="border-t border-slate-100 pt-4">
-          <p className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-            <MessageSquare className="h-4 w-4 text-slate-400" strokeWidth={2} aria-hidden="true" />
-            Notes
-          </p>
-          <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700">{lead.notes}</p>
-        </div>
+        <DetailPanel title="Notes" icon={MessageSquare} tone="violet">
+          <p className="break-words text-sm leading-relaxed text-slate-700">{lead.notes}</p>
+        </DetailPanel>
       )}
 
       {lead.status === 'pre_screening' && (
-        <div className="border-t border-slate-100 pt-4">
-          <PaymentCollectionSection
-            lead={lead}
-            onAssignPlan={onAssignPlan}
-            isAssigningPlan={isAssigningPlan}
-            assignPlanError={assignPlanError}
-            onSaveInstallment={onSaveInstallment}
-            savingIndex={savingInstallmentIndex}
-            savedIndex={savedInstallmentIndex}
-          />
-        </div>
+        <PaymentCollectionSection
+          lead={lead}
+          onAssignPlan={onAssignPlan}
+          isAssigningPlan={isAssigningPlan}
+          assignPlanError={assignPlanError}
+          onSaveInstallment={onSaveInstallment}
+          savingIndex={savingInstallmentIndex}
+          savedIndex={savedInstallmentIndex}
+        />
       )}
 
-      <div className="border-t border-slate-100 pt-4">
-        <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-          <Milestone className="h-4 w-4 text-slate-400" strokeWidth={2} aria-hidden="true" />
-          Move to Stage
-        </p>
-        <div className="grid grid-cols-3 gap-2">
+      <DetailPanel
+        title="Move to Stage"
+        icon={Milestone}
+        tone="slate"
+        action={
+          <span className="text-[11px] font-medium text-slate-400">
+            Currently {LEAD_STAGE_BY_VALUE[lead.status]?.label ?? titleCase(lead.status)}
+          </span>
+        }
+      >
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {LEAD_STAGES.map((stage) => {
             const isActive = lead.status === stage.value
-            const tones = STAGE_BUTTON_TONES[stage.tone] ?? STAGE_BUTTON_TONES.slate
             const blockReason = stageBlockReason(lead, stage.value)
+            const idle = stage.value === 'lost' ? STAGE_IDLE_LOST : STAGE_IDLE
             return (
               <button
                 key={stage.value}
@@ -560,17 +558,22 @@ function OverviewTab({
                 onClick={() => onSelectStage(stage.value)}
                 disabled={isSaving || Boolean(blockReason)}
                 title={blockReason ?? undefined}
-                className={`inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md border px-2 py-1.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                  isActive ? tones.active : tones.inactive
+                className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 ${
+                  isActive ? `${STAGE_ACTIVE_TONES[stage.tone] ?? STAGE_ACTIVE_TONES.slate} font-semibold` : idle
                 }`}
               >
+                {/* Marks the gated stages, so "you can't go there yet" is
+                    visible without hovering for the tooltip that says why. */}
+                {blockReason && !isActive && (
+                  <Lock className="h-3 w-3 shrink-0" strokeWidth={2.5} aria-hidden="true" />
+                )}
                 {stage.label}
-                {isActive && <ArrowRight className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} aria-hidden="true" />}
+                {isActive && <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={3} aria-hidden="true" />}
               </button>
             )
           })}
         </div>
-      </div>
+      </DetailPanel>
     </div>
   )
 }

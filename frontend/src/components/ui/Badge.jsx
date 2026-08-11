@@ -25,11 +25,15 @@ const OUTLINE_TONES = {
 // whitespace-nowrap because a badge is one atomic label - letting a
 // two-word value like "C Section" or "Batch Confirmation" break across
 // lines in a narrow column reads as two separate tags.
+//
+// gap-1 so a badge given a leading icon doesn't run it into the text. Costs
+// nothing on the text-only badges that are most of them, since there's no
+// second child to put a gap between.
 export function Badge({ tone = 'slate', outline = false, children }) {
   if (outline) {
     return (
       <span
-        className={`inline-flex items-center whitespace-nowrap rounded-md border bg-white px-2.5 py-0.5 text-xs font-medium ${OUTLINE_TONES[tone]}`}
+        className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md border bg-white px-2.5 py-0.5 text-xs font-medium ${OUTLINE_TONES[tone]}`}
       >
         {children}
       </span>
@@ -37,7 +41,7 @@ export function Badge({ tone = 'slate', outline = false, children }) {
   }
   return (
     <span
-      className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${TONES[tone]}`}
+      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${TONES[tone]}`}
     >
       {children}
     </span>

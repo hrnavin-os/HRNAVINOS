@@ -30,6 +30,7 @@ const DETAIL_TONES = {
   amber: 'bg-linear-to-br from-amber-500 to-amber-700',
   rose: 'bg-linear-to-br from-rose-500 to-rose-700',
   cyan: 'bg-linear-to-br from-cyan-500 to-cyan-700',
+  slate: 'bg-linear-to-br from-slate-500 to-slate-700',
 }
 
 const SECTION_EDGE = {
@@ -37,6 +38,9 @@ const SECTION_EDGE = {
   violet: 'border-l-violet-500',
   emerald: 'border-l-emerald-500',
   amber: 'border-l-amber-500',
+  rose: 'border-l-rose-500',
+  cyan: 'border-l-cyan-500',
+  slate: 'border-l-slate-400',
 }
 
 // null stays null so an unanswered yes/no is skipped rather than shown as "No".
@@ -61,35 +65,48 @@ function DetailTile({ icon: Icon, label, value, tone }) {
   )
 }
 
-function DetailSection({ title, icon: Icon, tone, entries, children }) {
-  const filled = entries.filter(([, value]) => value !== null && value !== undefined && value !== '')
-  if (filled.length === 0 && !children) return null
-
+// The one panel shape used by every titled block in a lead or induction
+// popup. Exported so the lead's own tabs use it too - before this the Overview
+// tab had a different treatment per section (a full amber wash here, a bare
+// grey box there, a naked heading somewhere else) and read as four unrelated
+// things stacked up.
+//
+// Left edge rather than a full tint: four stacked panels each washed a
+// different colour turned the popup into a paint chart. The edge and the
+// plate carry the section's identity; the surface stays white.
+export function DetailPanel({ title, icon: Icon, tone = 'blue', action, children }) {
   return (
-    // Left edge rather than a full tint: four stacked panels each washed a
-    // different colour turned the popup into a paint chart. The edge and the
-    // plate carry the section's identity; the surface stays white.
     <div className={`overflow-hidden rounded-lg border border-slate-200 border-l-4 bg-white ${SECTION_EDGE[tone]}`}>
       <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-3.5 py-2">
         <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-white ${DETAIL_TONES[tone]}`}>
           <Icon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
         </span>
         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">{title}</h3>
+        {action && <div className="ml-auto">{action}</div>}
       </div>
-      <div className="px-3.5 py-3">
-        {filled.length > 0 && (
-          <dl className="grid grid-cols-1 gap-x-4 gap-y-2.5 sm:grid-cols-2">
-            {filled.map(([label, value]) => (
-              <div key={label} className="min-w-0">
-                <dt className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{label}</dt>
-                <dd className="break-words text-sm text-slate-800">{value}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
-        {children}
-      </div>
+      <div className="px-3.5 py-3">{children}</div>
     </div>
+  )
+}
+
+function DetailSection({ title, icon: Icon, tone, entries, children }) {
+  const filled = entries.filter(([, value]) => value !== null && value !== undefined && value !== '')
+  if (filled.length === 0 && !children) return null
+
+  return (
+    <DetailPanel title={title} icon={Icon} tone={tone}>
+      {filled.length > 0 && (
+        <dl className="grid grid-cols-1 gap-x-4 gap-y-2.5 sm:grid-cols-2">
+          {filled.map(([label, value]) => (
+            <div key={label} className="min-w-0">
+              <dt className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{label}</dt>
+              <dd className="break-words text-sm text-slate-800">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {children}
+    </DetailPanel>
   )
 }
 
