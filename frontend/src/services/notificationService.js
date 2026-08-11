@@ -20,4 +20,14 @@ export const notificationService = {
     const { data } = await apiClient.post('/notifications/mark-all-read')
     return data
   },
+  remove: async (id) => {
+    const { data } = await apiClient.delete(`/notifications/${id}`)
+    return data
+  },
+  // POST rather than DELETE: a body on a DELETE is legal but poorly supported
+  // by proxies and some clients drop it silently.
+  removeMany: async (ids) => {
+    const { data } = await apiClient.post('/notifications/bulk-delete', { ids })
+    return data
+  },
 }

@@ -44,9 +44,12 @@ async def make_lead(**overrides) -> Lead:
 
 
 async def notifications_for(user: User) -> list:
+    """This user's live notifications - what the panel would actually show.
+    Deletes are soft, so the row survives; excluding them here is what makes
+    "deleted" and "gone from the list" the same assertion."""
     from app.models.notification import Notification
 
-    return await Notification.find({"user_id": user.id}).to_list()
+    return await Notification.find({"user_id": user.id, "is_deleted": False}).to_list()
 
 
 # --------------------------------------------------------------------------
@@ -272,6 +275,81 @@ async def test_chasing_again_is_allowed_once_the_first_was_read(client):
 
     assert await service.send_payment_reminder(lead.id, "due", note=None, actor_id=None) == (1, 0)
     assert len(await notifications_for(admin)) == 2
+
+
+# --------------------------------------------------------------------------
+# Dismissing notifications
+# --------------------------------------------------------------------------
+
+
+async def make_notification(user: User, title: str = "Due"):
+    from app.models.notification import Notification
+
+    notification = Notification(user_id=user.id, title=title, message="Due")
+    await notification.insert()
+    return notification
+
+
+async def test_deleting_a_notification_removes_it_from_the_list(client):
+    from app.schemas.common import PaginationParams
+    from app.services.notification_service import NotificationService
+
+    admin = await make_section_admin()
+    notification = await make_notification(admin)
+    service = NotificationService()
+
+    await service.delete(notification.id, user_id=admin.id)
+
+    listing = await service.list_for_user(admin.id, PaginationParams(page=1, page_size=20))
+    assert listing.total == 0
+
+
+async def test_deleting_someone_elses_notification_is_refused(client):
+    from app.exceptions.base import NotFoundError
+    from app.services.notification_service import NotificationService
+
+    owner = await make_section_admin("owner@hrnavinos.com")
+    other = await make_section_admin("other@hrnavinos.com")
+    notification = await make_notification(owner)
+
+    # Not Found rather than Forbidden, so the endpoint can't be used to probe
+    # which notification ids exist.
+    with pytest.raises(NotFoundError):
+        await NotificationService().delete(notification.id, user_id=other.id)
+
+    assert len(await notifications_for(owner)) == 1
+
+
+async def test_bulk_delete_removes_only_the_callers_own(client):
+    from app.services.notification_service import NotificationService
+
+    owner = await make_section_admin("owner@hrnavinos.com")
+    other = await make_section_admin("other@hrnavinos.com")
+    mine = [await make_notification(owner), await make_notification(owner)]
+    theirs = await make_notification(other)
+
+    # The other person's id is passed deliberately: user_id is part of the
+    # query filter, so it simply doesn't match rather than being trusted.
+    deleted = await NotificationService().delete_many(
+        [item.id for item in mine] + [theirs.id], user_id=owner.id
+    )
+
+    assert deleted == 2
+    assert await notifications_for(owner) == []
+    assert len(await notifications_for(other)) == 1
+
+
+async def test_a_deleted_notification_stops_counting_as_unread(client):
+    from app.services.notification_service import NotificationService
+
+    admin = await make_section_admin()
+    notification = await make_notification(admin)
+    service = NotificationService()
+    assert await service.unread_count(admin.id) == 1
+
+    await service.delete(notification.id, user_id=admin.id)
+
+    assert await service.unread_count(admin.id) == 0
 
 
 async def test_opening_a_payment_reminder_still_moves_the_lead(client):

@@ -74,3 +74,19 @@ class NotificationService:
 
     async def mark_all_read(self, user_id: uuid.UUID) -> None:
         await self.notifications.mark_all_read(user_id)
+
+    async def delete(self, notification_id: uuid.UUID, *, user_id: uuid.UUID) -> None:
+        """Dismisses one notification. Reads as Not Found rather than
+        Forbidden for somebody else's, so the endpoint can't be used to probe
+        which notification ids exist."""
+        notification = await self.notifications.get_by_id(notification_id)
+        if not notification or notification.user_id != user_id:
+            raise NotFoundError("Notification not found.")
+        await self.notifications.delete(notification)
+
+    async def delete_many(self, ids: list[uuid.UUID], *, user_id: uuid.UUID) -> int:
+        """Dismisses a selection. Returns how many were actually removed,
+        which can be fewer than asked for if some were already gone."""
+        if not ids:
+            return 0
+        return await self.notifications.soft_delete_many(ids, user_id=user_id)

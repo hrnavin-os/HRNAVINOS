@@ -33,6 +33,17 @@ class NotificationResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class NotificationBulkDeleteRequest(BaseModel):
+    # Bounded so a single request can't ask the database to match an unbounded
+    # $in list; the panel only ever shows 20 at a time and the full page 100.
+    ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
+
+
+class NotificationDeleteResponse(BaseModel):
+    message: str
+    deleted: int
+
+
 class PaymentReminderRequest(BaseModel):
     # Which outstanding amount the reminder is about. Drives the wording only -
     # every kind lands on the same section admins and moves the same lead.

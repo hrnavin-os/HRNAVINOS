@@ -1,6 +1,7 @@
 """Data access for Notification documents."""
 import uuid
 
+from app.database.base import utcnow
 from app.models.notification import Notification
 from app.repositories.base_repository import BaseRepository
 
@@ -18,6 +19,22 @@ class NotificationRepository(BaseRepository[Notification]):
 
     async def mark_all_read(self, user_id: uuid.UUID) -> None:
         await Notification.find({"user_id": user_id, "is_read": False}).update({"$set": {"is_read": True}})
+
+    async def soft_delete_many(self, ids: list[uuid.UUID], *, user_id: uuid.UUID) -> int:
+        """Removes several of this user's notifications in one write.
+
+        `user_id` is part of the filter rather than checked beforehand, so ids
+        belonging to somebody else simply don't match - a request listing
+        another person's notifications deletes none of them instead of being
+        trusted and then rejected.
+
+        Soft, like every other delete in the app: the row stays for audit and
+        the list queries already exclude is_deleted.
+        """
+        result = await Notification.find(
+            {"_id": {"$in": ids}, "user_id": user_id, "is_deleted": False}
+        ).update({"$set": {"is_deleted": True, "deleted_at": utcnow()}})
+        return result.modified_count
 
     async def has_unread_reminder(self, *, user_id: uuid.UUID, lead_id: uuid.UUID, title: str) -> bool:
         """Whether this person is already sitting on an unopened reminder of

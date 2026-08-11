@@ -1,7 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Bell, BellOff, CheckCheck, CircleAlert, CircleCheck, Info } from 'lucide-react'
+import {
+  AlertTriangle,
+  Bell,
+  BellOff,
+  CheckCheck,
+  CircleAlert,
+  CircleCheck,
+  Info,
+  ListChecks,
+  Trash2,
+} from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useLeadBoard } from '@/hooks/useLeadBoard'
 import { notificationService } from '@/services/notificationService'
@@ -16,32 +26,70 @@ const TYPE_STYLES = {
   error: { icon: CircleAlert, plate: 'bg-red-100 text-red-600' },
 }
 
-function NotificationRow({ notification, onOpen, isBusy }) {
+// A row rather than one big button, because it now carries a delete control
+// and a selection checkbox - a button inside a button is invalid HTML and the
+// browser drops the inner one. The opening action keeps its own button around
+// the text; the others are siblings.
+function NotificationRow({ notification, onOpen, onDelete, isBusy, isDeleting, selectMode, isSelected, onToggle }) {
   const style = TYPE_STYLES[notification.type] ?? TYPE_STYLES.info
   const Icon = style.icon
   const isUnread = !notification.is_read
 
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(notification)}
-      disabled={isBusy}
-      className={`flex w-full items-start gap-3 px-3.5 py-3 text-left transition-colors disabled:cursor-wait disabled:opacity-60 ${
-        isUnread ? 'bg-brand-50/50 hover:bg-brand-50' : 'hover:bg-slate-50'
-      }`}
+    <div
+      className={`flex items-start gap-2 pr-2 transition-colors ${
+        isSelected ? 'bg-brand-100/60' : isUnread ? 'bg-brand-50/50 hover:bg-brand-50' : 'hover:bg-slate-50'
+      } ${isDeleting ? 'opacity-50' : ''}`}
     >
-      <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${style.plate}`}>
-        <Icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-start justify-between gap-2">
-          <span className="text-sm font-semibold leading-snug text-slate-900">{notification.title}</span>
-          {isUnread && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-600" aria-label="Unread" />}
+      {selectMode && (
+        <label className="flex cursor-pointer items-start py-3 pl-3.5">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onToggle(notification.id)}
+            className="mt-0.5 h-4 w-4 cursor-pointer rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+            aria-label={`Select ${notification.title}`}
+          />
+        </label>
+      )}
+      <button
+        type="button"
+        // In selection mode the row picks rather than opens, so a stray click
+        // can't navigate away mid-selection and lose what you'd ticked.
+        onClick={() => (selectMode ? onToggle(notification.id) : onOpen(notification))}
+        disabled={isBusy || isDeleting}
+        className={`flex min-w-0 flex-1 items-start gap-3 py-3 text-left disabled:cursor-wait ${
+          selectMode ? 'pl-0' : 'pl-3.5'
+        }`}
+      >
+        <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${style.plate}`}>
+          <Icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
         </span>
-        <span className="mt-0.5 block text-xs leading-relaxed text-slate-600">{notification.message}</span>
-        <span className="mt-1 block text-[11px] text-slate-400">{formatDateTime(notification.created_at)}</span>
-      </span>
-    </button>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-start justify-between gap-2">
+            <span className="text-sm font-semibold leading-snug text-slate-900">{notification.title}</span>
+            {isUnread && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-600" aria-label="Unread" />}
+          </span>
+          <span className="mt-0.5 block text-xs leading-relaxed text-slate-600">{notification.message}</span>
+          <span className="mt-1 block text-[11px] text-slate-400">{formatDateTime(notification.created_at)}</span>
+        </span>
+      </button>
+      {!selectMode && (
+        // Always visible rather than revealed on hover: hover doesn't exist on
+        // a touch screen, and a control you can only find with a mouse isn't
+        // one everybody has.
+        <button
+          type="button"
+          onClick={() => onDelete(notification.id)}
+          disabled={isDeleting}
+          title="Delete this notification"
+          aria-label={`Delete ${notification.title}`}
+          className="mt-3 shrink-0 rounded-md p-1.5 text-slate-300 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-wait"
+        >
+          <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -59,6 +107,11 @@ export function NotificationBell() {
   const queryClient = useQueryClient()
   const wrapperRef = useRef(null)
   const [isOpen, setIsOpen] = useState(false)
+  // Selection is off until asked for: the panel's job is reading notifications,
+  // and a checkbox on every row by default makes the common case busier to
+  // serve the rare one.
+  const [selectMode, setSelectMode] = useState(false)
+  const [selected, setSelected] = useState([])
   const isSectionAdmin = Boolean(user?.scoped_section)
 
   // Every notification is a Foundation payment reminder, so on the Lead
@@ -121,6 +174,28 @@ export function NotificationBell() {
     onSuccess: refresh,
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: (id) => notificationService.remove(id),
+    onSuccess: refresh,
+  })
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids) => notificationService.removeMany(ids),
+    onSuccess: () => {
+      refresh()
+      setSelectMode(false)
+      setSelected([])
+    },
+  })
+
+  const toggleSelected = (id) =>
+    setSelected((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]))
+
+  function exitSelectMode() {
+    setSelectMode(false)
+    setSelected([])
+  }
+
   // The bell renders null off-board but stays mounted, so an open panel would
   // still be open when you came back to Foundation.
   useEffect(() => {
@@ -147,6 +222,7 @@ export function NotificationBell() {
 
   const notifications = listQuery.data?.items ?? []
   const label = unread > 0 ? `${unread} unread notification${unread === 1 ? '' : 's'}` : 'Notifications'
+  const allSelected = notifications.length > 0 && selected.length === notifications.length
 
   return (
     <div className="relative" ref={wrapperRef}>
@@ -172,23 +248,70 @@ export function NotificationBell() {
 
       {isOpen && (
         <div className="absolute right-0 z-50 mt-2 w-96 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-          <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-3.5 py-2.5">
-            <p className="text-sm font-semibold text-slate-900">
-              Notifications
-              {unread > 0 && <span className="ml-1.5 font-normal text-slate-500">({unread} unread)</span>}
-            </p>
-            {unread > 0 && (
-              <button
-                type="button"
-                onClick={() => markAllMutation.mutate()}
-                disabled={markAllMutation.isPending}
-                className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700 disabled:opacity-50"
-              >
-                <CheckCheck className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-                Mark all read
-              </button>
-            )}
-          </div>
+          {/* The header swaps wholesale in selection mode rather than growing
+              a third row of controls - while you're picking things to delete,
+              "Mark all read" is not what you came for. */}
+          {selectMode ? (
+            <div className="flex items-center justify-between gap-3 border-b border-brand-200 bg-brand-50 px-3.5 py-2.5">
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-900">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={() => setSelected(allSelected ? [] : notifications.map((item) => item.id))}
+                  className="h-4 w-4 cursor-pointer rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                />
+                {selected.length > 0 ? `${selected.length} selected` : 'Select all'}
+              </label>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => bulkDeleteMutation.mutate(selected)}
+                  disabled={selected.length === 0 || bulkDeleteMutation.isPending}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 disabled:cursor-not-allowed disabled:text-slate-300"
+                >
+                  <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                  {bulkDeleteMutation.isPending ? 'Deleting…' : 'Delete'}
+                </button>
+                <button
+                  type="button"
+                  onClick={exitSelectMode}
+                  className="text-xs font-medium text-slate-500 hover:text-slate-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-3.5 py-2.5">
+              <p className="text-sm font-semibold text-slate-900">
+                Notifications
+                {unread > 0 && <span className="ml-1.5 font-normal text-slate-500">({unread} unread)</span>}
+              </p>
+              <div className="flex items-center gap-3">
+                {unread > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => markAllMutation.mutate()}
+                    disabled={markAllMutation.isPending}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700 disabled:opacity-50"
+                  >
+                    <CheckCheck className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                    Mark all read
+                  </button>
+                )}
+                {notifications.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectMode(true)}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700"
+                  >
+                    <ListChecks className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                    Select
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="max-h-96 divide-y divide-slate-100 overflow-y-auto">
             {listQuery.isLoading ? (
@@ -206,7 +329,12 @@ export function NotificationBell() {
                   key={notification.id}
                   notification={notification}
                   onOpen={(item) => openMutation.mutate(item)}
+                  onDelete={(id) => deleteMutation.mutate(id)}
                   isBusy={openMutation.isPending && openMutation.variables?.id === notification.id}
+                  isDeleting={deleteMutation.isPending && deleteMutation.variables === notification.id}
+                  selectMode={selectMode}
+                  isSelected={selected.includes(notification.id)}
+                  onToggle={toggleSelected}
                 />
               ))
             )}

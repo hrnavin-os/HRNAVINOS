@@ -7,7 +7,12 @@ from app.core.dependencies import RequirePermissions, get_current_user
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.common import MessageResponse, PaginatedResponse, PaginationParams
-from app.schemas.notification_schema import NotificationCreate, NotificationResponse
+from app.schemas.notification_schema import (
+    NotificationBulkDeleteRequest,
+    NotificationCreate,
+    NotificationDeleteResponse,
+    NotificationResponse,
+)
 from app.services.notification_service import NotificationService
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
@@ -62,3 +67,28 @@ async def acknowledge(notification_id: uuid.UUID, user: User = Depends(get_curre
 async def mark_all_read(user: User = Depends(get_current_user)) -> MessageResponse:
     await NotificationService().mark_all_read(user.id)
     return MessageResponse(message="All notifications marked as read.")
+
+
+# Both delete routes are scoped to the caller rather than gated on a
+# permission: a notification is addressed to one person, and dismissing your
+# own is not an administrative act. Nobody can reach anybody else's.
+#
+# Declared before /{notification_id} so the dynamic route doesn't swallow
+# "bulk-delete" and try to parse it as a UUID.
+@router.post("/bulk-delete", response_model=NotificationDeleteResponse)
+async def bulk_delete(
+    payload: NotificationBulkDeleteRequest,
+    user: User = Depends(get_current_user),
+) -> NotificationDeleteResponse:
+    deleted = await NotificationService().delete_many(payload.ids, user_id=user.id)
+    return NotificationDeleteResponse(
+        message=f"{deleted} notification{'' if deleted == 1 else 's'} deleted.", deleted=deleted
+    )
+
+
+@router.delete("/{notification_id}", response_model=MessageResponse)
+async def delete_notification(
+    notification_id: uuid.UUID, user: User = Depends(get_current_user)
+) -> MessageResponse:
+    await NotificationService().delete(notification_id, user_id=user.id)
+    return MessageResponse(message="Notification deleted.")
