@@ -4,6 +4,7 @@ import {
   ClipboardList,
   CreditCard,
   GraduationCap,
+  Layers,
   Mail,
   Megaphone,
   MessageSquare,
@@ -43,6 +44,21 @@ const SECTION_EDGE = {
   slate: 'border-l-slate-400',
 }
 
+// Soft tints for the tile plates, not the saturated gradients the section
+// headers use. Eight gradients side by side in one grid competed with each
+// other and with the values they were labelling - at that density the colour
+// stops being identity and becomes noise. Muted, the icons still separate the
+// fields at a glance and the data is what's dark on the tile.
+const TILE_TONES = {
+  blue: 'bg-blue-100 text-blue-600',
+  violet: 'bg-violet-100 text-violet-600',
+  emerald: 'bg-emerald-100 text-emerald-600',
+  amber: 'bg-amber-100 text-amber-600',
+  rose: 'bg-rose-100 text-rose-600',
+  cyan: 'bg-cyan-100 text-cyan-600',
+  slate: 'bg-slate-100 text-slate-500',
+}
+
 // null stays null so an unanswered yes/no is skipped rather than shown as "No".
 const yesNo = (value) => (value === true ? 'Yes' : value === false ? 'No' : null)
 
@@ -50,15 +66,30 @@ const yesNo = (value) => (value === true ? 'Yes' : value === false ? 'No' : null
 // full padding and a border each, pushed the collected details below the fold.
 // A plate, a label and a value is all the information they carry.
 function DetailTile({ icon: Icon, label, value, tone }) {
+  // Half these fields are routinely blank, and at full strength a row of "—"
+  // read as loudly as the answers. An empty tile recedes so the eye lands on
+  // what was actually collected.
+  const isEmpty = !value
   return (
-    <div className="flex items-center gap-2.5 rounded-lg bg-slate-50 px-2.5 py-2">
-      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white ${DETAIL_TONES[tone]}`}>
+    <div
+      className={`flex items-center gap-2.5 rounded-lg border px-2.5 py-2 ${
+        isEmpty ? 'border-slate-100 bg-slate-50/60' : 'border-slate-200 bg-white'
+      }`}
+    >
+      <span
+        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${
+          isEmpty ? TILE_TONES.slate : TILE_TONES[tone]
+        }`}
+      >
         <Icon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
       </span>
       <div className="min-w-0">
         <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
-        <p className="truncate text-sm font-medium text-slate-900" title={value || undefined}>
-          {value || '—'}
+        <p
+          className={`truncate text-sm ${isEmpty ? 'text-slate-300' : 'font-semibold text-slate-900'}`}
+          title={value || undefined}
+        >
+          {value || 'Not recorded'}
         </p>
       </div>
     </div>
@@ -114,28 +145,33 @@ export function InductionEntryDetail({ entry, hideAssignee = false }) {
   return (
     <div className="space-y-4">
       {/* Batch leads: it's the derived value everything else is filed under,
-          and the first thing you check on an entry. */}
-      <div className="rounded-lg border border-brand-100 bg-brand-50 px-4 py-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-brand-700/70">Batch</p>
-            <p className="mt-0.5 text-lg font-semibold text-brand-700">{entry.batch}</p>
-          </div>
-          {hideAssignee ? null : entry.assigned_to_name ? (
-            <div className="text-right">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-brand-700/70">Assigned to</p>
-              <p className="mt-0.5 flex items-center justify-end gap-1.5 text-sm font-semibold text-slate-900">
+          and the first thing you check on an entry. Given the accent plate the
+          tiles below gave up, so one thing on this tab carries real colour and
+          it's the thing you look for first. */}
+      <div className="flex items-center gap-3 rounded-lg border border-brand-100 bg-brand-50 px-3.5 py-2.5">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-brand-500 to-brand-700 text-white shadow-sm">
+          <Layers className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-brand-700/70">Batch</p>
+          <p className="text-base font-semibold leading-tight text-brand-700">{entry.batch}</p>
+        </div>
+        {hideAssignee ? null : (
+          <div className="ml-auto min-w-0 text-right">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-brand-700/70">Assigned to</p>
+            {entry.assigned_to_name ? (
+              <p className="flex items-center justify-end gap-1.5 truncate text-sm font-semibold leading-tight text-slate-900">
                 {entry.assigned_to_name}
                 {entry.section && <Badge tone="violet">{entry.section.toUpperCase()}</Badge>}
               </p>
-            </div>
-          ) : (
-            <Badge tone="amber">Unassigned</Badge>
-          )}
-        </div>
+            ) : (
+              <Badge tone="amber">Unassigned</Badge>
+            )}
+          </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <DetailTile icon={Phone} label="Phone Number" value={entry.phone} tone="blue" />
         <DetailTile icon={Mail} label="Email" value={entry.email} tone="violet" />
         <DetailTile icon={Calendar} label="Registration Date" value={formatDate(entry.registration_date)} tone="rose" />

@@ -653,18 +653,18 @@ function InductionTab({ leadId }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-start gap-2.5 rounded-lg border border-emerald-200 border-l-4 border-l-emerald-400 bg-emerald-50 p-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-600">
-          <Link2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Matched on mobile number</p>
-          <p className="text-sm text-slate-700">
-            This lead came across from an induction call
-            {entry.converted_at ? ` on ${formatDateTime(entry.converted_at)}` : ''}. Everything collected then is
-            below.
-          </p>
-        </div>
+      {/* One line, not a paragraph. The tab is called Induction and everything
+          under it is plainly the induction record, so the banner only has to
+          say what joined the two and when - it was explaining the obvious at
+          the cost of the first screenful. */}
+      <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+        <Link2 className="h-4 w-4 shrink-0 text-emerald-600" strokeWidth={2.5} aria-hidden="true" />
+        <p className="min-w-0 text-sm text-emerald-900">
+          <span className="font-semibold">Matched on mobile number</span>
+          {entry.converted_at && (
+            <span className="text-emerald-700"> · moved {formatDateTime(entry.converted_at)}</span>
+          )}
+        </p>
       </div>
       <InductionEntryDetail entry={entry} />
     </div>
