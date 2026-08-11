@@ -1,4 +1,6 @@
 """Data access for Lead documents."""
+from datetime import date, datetime
+
 from app.models.enums import LeadSource, LeadStatus
 from app.models.lead import Lead
 from app.repositories.base_repository import BaseRepository
@@ -52,6 +54,51 @@ class LeadRepository(BaseRepository[Lead]):
             ]
         ).to_list()
         return {row["_id"]: row["count"] for row in counts}
+
+    async def list_due_follow_ups(self, *, now: datetime, limit: int = 200) -> list[Lead]:
+        """Leads whose scheduled follow-up has come round.
+
+        `$lte now` rather than "is today": if nobody opened the app on the day
+        itself, the reminder still has to appear - a follow-up that silently
+        expired because no one was logged in is the failure this is for. Lost
+        leads are excluded; there's nothing left to follow up.
+        """
+        return await (
+            Lead.find(
+                {
+                    "is_deleted": False,
+                    "reviewed": {"$ne": False},
+                    "status": {"$ne": LeadStatus.LOST.value},
+                    "follow_up_at": {"$ne": None, "$lte": now},
+                }
+            )
+            .sort("follow_up_at")
+            .limit(limit)
+            .to_list()
+        )
+
+    async def list_due_installments(self, *, today: date, limit: int = 200) -> list[Lead]:
+        """Leads carrying an unpaid installment whose scheduled date has come
+        round - the second half of a two-shot plan, in practice.
+
+        Matches on the array as a whole and lets the caller pick out which
+        installments are actually due: $elemMatch would return the lead but not
+        tell us which entry matched, and a plan can have more than one.
+        """
+        return await (
+            Lead.find(
+                {
+                    "is_deleted": False,
+                    "reviewed": {"$ne": False},
+                    "status": {"$ne": LeadStatus.LOST.value},
+                    "installments": {
+                        "$elemMatch": {"paid": False, "scheduled_at": {"$ne": None, "$lte": today}}
+                    },
+                }
+            )
+            .limit(limit)
+            .to_list()
+        )
 
     async def find_by_phone_normalized(self, phone_normalized: str) -> Lead | None:
         """The existing lead for this mobile number, if any.

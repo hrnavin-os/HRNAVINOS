@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowUpDown, Check, ChevronDown, Eye, Link2, Pencil, Search } from 'lucide-react'
@@ -418,6 +419,33 @@ function FoundationLeadsBoard() {
   const scopedSection = user?.scoped_section || null
 
   const [viewingLead, setViewingLead] = useState(null)
+  // ?lead=<id> opens that candidate straight away - how a due-date reminder in
+  // the notification panel gets you to the person it's about. Fetched by id
+  // rather than looked up in `items`, because the lead being chased is very
+  // often not on the page of results you happen to be showing.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const deepLinkedLeadId = searchParams.get('lead')
+
+  const deepLinkedQuery = useQuery({
+    queryKey: ['lead', deepLinkedLeadId],
+    queryFn: () => leadService.get(deepLinkedLeadId),
+    enabled: Boolean(deepLinkedLeadId),
+  })
+
+  // Dropping the param on close stops the modal reopening itself on every
+  // later render, and keeps the URL honest about what's on screen.
+  function closeLead() {
+    setViewingLead(null)
+    if (deepLinkedLeadId) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('lead')
+      setSearchParams(next, { replace: true })
+    }
+  }
+
+  // The row click still wins: if you opened someone else while a deep link was
+  // in the URL, you get who you clicked.
+  const openLead = viewingLead ?? (deepLinkedLeadId ? deepLinkedQuery.data : null)
   // Inline cell edits have no form to hang an error on, so failures surface
   // here instead of the cell silently reverting as if nothing happened.
   const [editError, setEditError] = useState(null)
@@ -719,7 +747,7 @@ function FoundationLeadsBoard() {
         />
       </div>
 
-      {viewingLead && <LeadDetailModal lead={viewingLead} onClose={() => setViewingLead(null)} />}
+      {openLead && <LeadDetailModal lead={openLead} onClose={closeLead} />}
 
       <Toast message={editError} onDismiss={() => setEditError(null)} />
     </div>

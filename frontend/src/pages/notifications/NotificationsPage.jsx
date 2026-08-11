@@ -94,9 +94,9 @@ export function NotificationsPage() {
       if (notification.lead_id) {
         queryClient.invalidateQueries({ queryKey: ['leads'] })
         queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
-        // Explicitly Foundation - see NotificationBell: a lead_id is always a
-        // Lead, which the Induction board cannot show.
-        navigate('/leads?board=foundation')
+        // Explicitly Foundation, and straight into that candidate's popup -
+        // see NotificationBell.
+        navigate(`/leads?board=foundation&lead=${notification.lead_id}`)
       }
     },
   })

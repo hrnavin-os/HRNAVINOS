@@ -8,7 +8,14 @@ from fastapi import UploadFile
 
 from app.database.base import utcnow
 from app.exceptions.base import BadRequestError, ForbiddenError, NotFoundError
-from app.models.enums import InstallmentPaymentMode, LeadSource, LeadStatus, NotificationType, PaymentMethod
+from app.models.enums import (
+    InstallmentPaymentMode,
+    LeadSource,
+    LeadStatus,
+    NotificationCategory,
+    NotificationType,
+    PaymentMethod,
+)
 from app.models.lead import FollowUpEntry, Lead
 from app.models.notification import Notification
 from app.repositories.audit_log_repository import AuditLogRepository
@@ -495,6 +502,10 @@ class LeadService:
                     message=message,
                     type=NotificationType.WARNING,
                     lead_id=lead.id,
+                    # Stated rather than left to the None fallback, which only
+                    # exists to keep reminders raised before categories did
+                    # behaving as they always have.
+                    category=NotificationCategory.PAYMENT_REMINDER,
                 )
             )
 

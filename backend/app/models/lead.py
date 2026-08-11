@@ -133,6 +133,10 @@ class Lead(BaseDocument):
             IndexModel([("status", 1)]),
             IndexModel([("assigned_to", 1)]),
             IndexModel([("section", 1)]),
+            # The reminder sweep runs on every notification poll, so the "whose
+            # follow-up is due" query has to be an index hit rather than a scan
+            # of every lead in the system.
+            IndexModel([("follow_up_at", 1)]),
             # Not unique: MongoDB stores this as `null` (not "missing") on every
             # regular lead, since Beanie always writes declared fields, so a
             # unique+sparse index would collide across all non-synced leads.

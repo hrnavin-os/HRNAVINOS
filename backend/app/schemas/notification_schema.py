@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import NotificationType
+from app.models.enums import NotificationCategory, NotificationType
 
 
 class NotificationCreate(BaseModel):
@@ -25,6 +25,9 @@ class NotificationResponse(BaseModel):
     link: str | None
     is_read: bool
     lead_id: uuid.UUID | None = None
+    # Lets the UI show a matching icon and, for the date reminders, skip the
+    # "moves the lead to follow up" wording that only applies to Finance's.
+    category: NotificationCategory | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

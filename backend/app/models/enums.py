@@ -158,6 +158,22 @@ class NotificationType(StrEnum):
     ERROR = "error"
 
 
+class NotificationCategory(StrEnum):
+    """Why a notification was raised, which decides what opening it does.
+
+    Opening a Finance payment reminder deliberately drags its lead back to the
+    follow-up stage, because the point of that reminder is that someone has to
+    chase the money again. The date-driven reminders must not: a lead whose
+    follow-up call or installment simply came due is already where it belongs,
+    and silently moving it backwards would rewrite the pipeline behind the
+    admin's back every time they read their notifications.
+    """
+
+    PAYMENT_REMINDER = "payment_reminder"
+    FOLLOW_UP_DUE = "follow_up_due"
+    INSTALLMENT_DUE = "installment_due"
+
+
 class TicketStatus(StrEnum):
     OPEN = "open"
     IN_PROGRESS = "in_progress"

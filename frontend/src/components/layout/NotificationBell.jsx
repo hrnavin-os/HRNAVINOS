@@ -107,7 +107,11 @@ export function NotificationBell() {
         // Explicitly Foundation: a notification's lead_id is always a Lead,
         // and Induction entries are separate records. Bare /leads would open
         // the default board, which cannot contain the lead being chased.
-        navigate('/leads?board=foundation')
+        //
+        // ?lead= opens that candidate's popup on arrival. Landing on the board
+        // and leaving you to find the name yourself defeats the reminder -
+        // the lead is frequently not even on the first page.
+        navigate(`/leads?board=foundation&lead=${notification.lead_id}`)
       }
     },
   })
