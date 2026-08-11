@@ -14,6 +14,9 @@ import {
 } from 'lucide-react'
 import { PERMISSIONS } from '@/constants/permissions'
 
+// shortLabel: what the mobile bottom bar shows. A tab is about 70px wide, so
+// anything longer than one word truncates to nothing useful there ("Batch
+// Confirmation" -> "Batch C…"). Omit it and the full label is used.
 // permission: null means "visible to any authenticated user"
 // hiddenForRoles: role names that should never see this item, regardless of permission
 // hiddenForScopedUsers: hide this item for any user whose role carries a scoped_section
@@ -36,6 +39,7 @@ export const NAV_ITEMS = [
 
   {
     label: 'Lead Dashboard',
+    shortLabel: 'Leads',
     to: '/leads',
     permission: PERMISSIONS.LEADS_VIEW,
     icon: Target,
@@ -56,6 +60,7 @@ export const NAV_ITEMS = [
   },
   {
     label: 'Form Collection',
+    shortLabel: 'Forms',
     to: '/leads/form-collection',
     permission: PERMISSIONS.LEADS_VIEW,
     icon: FileCheck2,
@@ -72,6 +77,7 @@ export const NAV_ITEMS = [
   },
   {
     label: 'Batch Confirmation',
+    shortLabel: 'Batches',
     to: '/batch-confirmation',
     permission: PERMISSIONS.BATCH_CONFIRMATION_VIEW,
     icon: ClipboardCheck,
@@ -79,6 +85,7 @@ export const NAV_ITEMS = [
   },
   {
     label: 'WhatsApp Links',
+    shortLabel: 'WhatsApp',
     to: '/whatsapp-links',
     permission: PERMISSIONS.BATCH_CONFIRMATION_VIEW,
     icon: MessageCircle,

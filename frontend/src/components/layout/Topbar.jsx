@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { GraduationCap, LogOut, Menu } from 'lucide-react'
+import { GraduationCap, LogOut } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/Button'
 import { NAV_LEAF_ITEMS } from '@/constants/navigation'
@@ -20,7 +20,10 @@ function initials(firstName, lastName) {
   return `${firstName?.[0] ?? ''}${lastName?.[0] ?? ''}`.toUpperCase() || '?'
 }
 
-export function Topbar({ showBrand = false, onMenuClick }) {
+// No hamburger: on a phone the navigation lives in the bottom tab bar
+// (components/layout/BottomNav), within thumb reach, and the drawer behind
+// "More" is opened from there instead.
+export function Topbar({ showBrand = false }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const pageTitle = useCurrentPageTitle()
@@ -34,19 +37,6 @@ export function Topbar({ showBrand = false, onMenuClick }) {
     <>
       <header className="relative flex h-16 items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-2 sm:gap-4">
-          {/* Opens the navigation drawer that stands in for the sidebar below
-              md. Absent for a Section Admin, who has no sidebar to open. */}
-          {onMenuClick && (
-            <button
-              type="button"
-              onClick={onMenuClick}
-              aria-label="Open menu"
-              className="-ml-1 rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 md:hidden"
-            >
-              <Menu className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
-            </button>
-          )}
-
           {/* The logo normally lives at the top of the sidebar, so it moves here
               when there isn't one - otherwise the app loses its name entirely
               for a Section Admin. */}

@@ -29,7 +29,10 @@ export function Toast({ message, onDismiss, duration = 6000, tone = 'error', act
   return createPortal(
     <div
       role="alert"
-      className={`fixed bottom-5 right-5 z-100 flex max-w-sm items-start gap-2.5 rounded-lg border bg-white p-3.5 shadow-lg ${style.border}`}
+      // Sits above the mobile tab bar, which is fixed to the bottom of the
+      // screen and would otherwise cover the toast - including its Undo. The
+      // breakpoint is md because that is where the bar disappears.
+      className={`fixed inset-x-4 bottom-24 z-100 flex items-start gap-2.5 rounded-lg border bg-white p-3.5 shadow-lg md:inset-x-auto md:bottom-5 md:right-5 md:max-w-sm ${style.border}`}
     >
       <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${style.plate}`}>
         <Icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
