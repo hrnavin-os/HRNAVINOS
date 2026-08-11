@@ -945,13 +945,16 @@ export function LeadDetailModal({ lead, onClose }) {
       <div className="space-y-4">
         <ErrorMessage message={activeError ? getApiErrorMessage(activeError) : null} />
 
-        <div className="flex gap-1 border-b border-slate-200">
+        {/* Scrolls sideways rather than wrapping: five tabs don't fit a phone,
+            and wrapped onto two lines they stop reading as one tab strip.
+            table-scroll gives them the app's own slim scrollbar. */}
+        <div className="table-scroll flex gap-1 overflow-x-auto border-b border-slate-200">
           {visibleTabs.map((tab) => (
             <button
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-1.5 px-3 pb-2 text-sm font-semibold transition-colors ${
+              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 pb-2 text-sm font-semibold transition-colors ${
                 activeTab === tab.key
                   ? 'border-b-2 border-brand-600 text-brand-600'
                   : 'border-b-2 border-transparent text-slate-500 hover:text-slate-700'

@@ -33,9 +33,12 @@ export function ResourceViewModal({ title, queryKey, service, row, fields, onClo
               const rendered = value === null || value === undefined || value === '' ? '—' : value
 
               return (
-                <div key={field.label} className="grid grid-cols-3 gap-3 py-2.5">
+                // Label above value on a phone. Side by side, a third of a
+                // 330px modal leaves the value about 200px wide, so anything
+                // longer than a date wrapped to three or four lines.
+                <div key={field.label} className="grid grid-cols-1 gap-x-3 py-2.5 sm:grid-cols-3">
                   <dt className="text-sm font-medium text-slate-500">{field.label}</dt>
-                  <dd className="col-span-2 text-sm break-words text-slate-900">{rendered}</dd>
+                  <dd className="text-sm break-words text-slate-900 sm:col-span-2">{rendered}</dd>
                 </div>
               )
             })}

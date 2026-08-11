@@ -32,7 +32,7 @@ function StepRail({ current }) {
         return (
           <div key={step.key} className="flex flex-1 items-center gap-1">
             <div
-              className={`flex flex-1 items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold transition-colors ${
+              className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-2 py-2 text-xs font-semibold transition-colors sm:justify-start sm:px-2.5 ${
                 active
                   ? 'bg-brand-600 text-white shadow-sm'
                   : done
@@ -47,7 +47,11 @@ function StepRail({ current }) {
               >
                 {done ? <Check className="h-3 w-3" strokeWidth={3} aria-hidden="true" /> : index + 1}
               </span>
-              <span className="truncate">{step.label}</span>
+              {/* Four labels across a phone truncate to "Qua…", "Pla…" and
+                  say nothing. Only the step you're on keeps its name there;
+                  the rest are numbered pills, which is enough to show how far
+                  through you are. */}
+              <span className={`truncate ${active ? '' : 'hidden sm:inline'}`}>{step.label}</span>
             </div>
           </div>
         )

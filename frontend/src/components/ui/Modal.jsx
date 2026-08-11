@@ -22,10 +22,12 @@ export function Modal({ title, header, isOpen, onClose, children, maxWidth = 'ma
   return (
     <div
       onClick={onBackdropClick}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-3 sm:p-4"
     >
-      <div className={`flex max-h-[85vh] w-full ${maxWidth} flex-col rounded-lg bg-white shadow-xl`}>
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-4">
+      {/* Taller on a phone: 85vh leaves a band of backdrop top and bottom that
+          is wasted when the panel is the only thing on screen anyway. */}
+      <div className={`flex max-h-[92vh] w-full sm:max-h-[85vh] ${maxWidth} flex-col rounded-lg bg-white shadow-xl`}>
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-4">
           {header ?? <h2 className="text-base font-semibold text-slate-900">{title}</h2>}
           <button
             type="button"
@@ -36,7 +38,7 @@ export function Modal({ title, header, isOpen, onClose, children, maxWidth = 'ma
             ✕
           </button>
         </div>
-        <div className="overflow-y-auto px-5 py-4">{children}</div>
+        <div className="overflow-y-auto px-4 py-4 sm:px-5">{children}</div>
       </div>
     </div>
   )

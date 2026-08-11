@@ -52,8 +52,13 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
     // slightly shorter than it could be, which is the cheap direction to be
     // wrong in; --table-max-h overrides it where that matters. Short tables
     // never reach the cap and are unaffected.
+    // The cap is lifted below sm. On a phone the chrome above the table is
+    // taller relative to the viewport, so subtracting a desktop-sized 20rem
+    // left a box a couple of rows deep inside a page that scrolls anyway - and
+    // a pinned horizontal scrollbar buys nothing on a touch screen, where you
+    // drag the table itself.
     <div
-      className="table-scroll w-full overflow-auto"
+      className="table-scroll w-full overflow-auto max-sm:max-h-none!"
       style={{ maxHeight: 'var(--table-max-h, calc(100vh - 20rem))' }}
     >
       <table className="min-w-full border-separate border-spacing-0">

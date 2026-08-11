@@ -7,9 +7,11 @@ import { formatDate } from '@/utils/formatters'
 // every field shown here.
 function Row({ label, children }) {
   return (
-    <div className="grid grid-cols-3 gap-3 py-2.5">
+    // Stacks on a phone - side by side the value gets about 200px, which
+    // wraps anything longer than a date onto several lines.
+    <div className="grid grid-cols-1 gap-x-3 py-2.5 sm:grid-cols-3">
       <dt className="text-sm font-medium text-slate-500">{label}</dt>
-      <dd className="col-span-2 text-sm break-words text-slate-900">{children ?? '—'}</dd>
+      <dd className="text-sm break-words text-slate-900 sm:col-span-2">{children ?? '—'}</dd>
     </div>
   )
 }
