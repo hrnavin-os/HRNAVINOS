@@ -131,7 +131,10 @@ export function NotificationBell() {
     // A reminder arrives while you're on another page, so the count has to come
     // to you rather than wait for a navigation.
     refetchInterval: 60_000,
-    enabled: isSectionAdmin && !isOffBoard,
+    // Polled for everyone, not just Section Admins: a follow-up reminder goes
+    // to whoever scheduled the call, which is usually an Admin from the lead
+    // popup, and they can't be told about it if nobody ever asks.
+    enabled: !isOffBoard,
   })
 
   const listQuery = useQuery({
@@ -139,7 +142,7 @@ export function NotificationBell() {
     queryFn: () => notificationService.list({ page_size: 20 }),
     // Only fetched once the panel is opened - no reason to pull twenty rows on
     // every page load for a bell most people never click.
-    enabled: isSectionAdmin && isOpen && !isOffBoard,
+    enabled: isOpen && !isOffBoard,
   })
 
   const refresh = () => {
@@ -218,7 +221,11 @@ export function NotificationBell() {
     }
   }, [isOpen])
 
-  if (!isSectionAdmin || isOffBoard) return null
+  // Section Admins always have the bell - reminders are addressed to them by
+  // design. Anyone else gets it only once something is actually waiting, so a
+  // follow-up they scheduled can reach them without putting a permanently
+  // empty bell in every other role's header.
+  if (isOffBoard || (!isSectionAdmin && unread === 0)) return null
 
   const notifications = listQuery.data?.items ?? []
   const label = unread > 0 ? `${unread} unread notification${unread === 1 ? '' : 's'}` : 'Notifications'

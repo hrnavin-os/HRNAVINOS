@@ -90,6 +90,33 @@ class ReminderService:
         # One person holding two scoped roles should still get one reminder.
         return list({user.id: user for user in recipients}.values())
 
+    async def _follow_up_recipients(self, lead: Lead) -> list[User]:
+        """Who hears about a follow-up coming due.
+
+        The section's admins, as with every other reminder - plus the person
+        who scheduled it and whoever owns the lead. Scheduling a call is a
+        promise the person making it should be reminded of; targeting only
+        section admins meant an Admin could set a follow-up from the lead popup
+        and never hear about it again, which is the whole point of setting one.
+
+        follow_up_history is inserted newest-first (LeadService.update), so
+        entry zero is whoever set the date currently on the lead.
+        """
+        recipients = await self._section_admins(lead.section)
+        extra_ids = {lead.assigned_to}
+        if lead.follow_up_history:
+            extra_ids.add(lead.follow_up_history[0].created_by)
+
+        known = {user.id for user in recipients}
+        for user_id in extra_ids:
+            if user_id is None or user_id in known:
+                continue
+            user = await self.users.get_by_id(user_id)
+            if user and user.is_active:
+                recipients.append(user)
+                known.add(user.id)
+        return recipients
+
     async def _raise(
         self,
         *,
@@ -132,7 +159,7 @@ class ReminderService:
         created = 0
 
         for lead in await self.leads.list_due_follow_ups(now=now):
-            recipients = await self._section_admins(lead.section)
+            recipients = await self._follow_up_recipients(lead)
             # Keyed by the due date, not by "today": rescheduling a follow-up
             # to another day is a new promise and earns a new reminder, while
             # the sweep running twenty times before anyone reads it does not.

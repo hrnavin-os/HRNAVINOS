@@ -113,6 +113,67 @@ async def test_rescheduling_the_follow_up_earns_a_new_reminder(client):
     assert len(await notifications_for(admin)) == 2
 
 
+async def test_whoever_scheduled_the_follow_up_is_told(client):
+    """Setting a follow-up is a promise by the person setting it. An Admin can
+    schedule one from the lead popup without being a section admin, and used to
+    hear nothing back when the day came."""
+    from app.models.lead import FollowUpEntry
+
+    admin = await make_section_admin()
+    scheduler = User(
+        email="scheduler@hrnavinos.com",
+        password_hash="not-a-real-hash",
+        first_name="Sales",
+        last_name="Admin",
+        is_active=True,
+    )
+    await scheduler.insert()
+
+    due = utcnow() - timedelta(minutes=5)
+    await make_lead(
+        follow_up_at=due,
+        follow_up_history=[FollowUpEntry(scheduled_at=due, created_by=scheduler.id)],
+    )
+
+    assert await ReminderService().sweep() == 2
+    assert len(await notifications_for(scheduler)) == 1
+    assert len(await notifications_for(admin)) == 1
+
+
+async def test_the_leads_assignee_is_told(client):
+    # Section admin exists so the count below distinguishes "assignee as well"
+    # from "assignee instead of".
+    await make_section_admin()
+    owner = User(
+        email="owner@hrnavinos.com",
+        password_hash="not-a-real-hash",
+        first_name="Lead",
+        last_name="Owner",
+        is_active=True,
+    )
+    await owner.insert()
+    await make_lead(follow_up_at=utcnow() - timedelta(minutes=5), assigned_to=owner.id)
+
+    assert await ReminderService().sweep() == 2
+    assert len(await notifications_for(owner)) == 1
+
+
+async def test_the_scheduler_is_not_told_twice_for_being_a_section_admin(client):
+    from app.models.lead import FollowUpEntry
+
+    admin = await make_section_admin()
+    due = utcnow() - timedelta(minutes=5)
+    await make_lead(
+        follow_up_at=due,
+        assigned_to=admin.id,
+        follow_up_history=[FollowUpEntry(scheduled_at=due, created_by=admin.id)],
+    )
+
+    # Section admin, assignee and scheduler are the same person here.
+    assert await ReminderService().sweep() == 1
+    assert len(await notifications_for(admin)) == 1
+
+
 async def test_lost_leads_are_not_chased(client):
     admin = await make_section_admin()
     await make_lead(follow_up_at=utcnow() - timedelta(days=1), status=LeadStatus.LOST)

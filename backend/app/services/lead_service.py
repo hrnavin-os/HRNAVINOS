@@ -39,6 +39,7 @@ from app.schemas.lead_schema import (
 )
 from app.services.audit_service import AuditService
 from app.services.foundation_form_pricing import build_installments, build_payment_expected_summary
+from app.services.reminder_service import ReminderService
 from app.services.storage_service import StorageService
 from app.utils.phone import normalize_phone
 
@@ -182,6 +183,14 @@ class LeadService:
             if date_to:
                 created_range["$lte"] = datetime.combine(date_to, time.max)
             filters["created_at"] = created_range
+        # Second place the reminder sweep is driven from, besides the
+        # notification poll. That poll only happens while the bell is on
+        # screen, which is a Section Admin on the Foundation board - so a
+        # follow-up set by an Admin could sit due indefinitely with nobody in
+        # that particular seat to trigger it. Anyone opening the board runs it
+        # now. Throttled per worker, so the extra call sites cost nothing.
+        await ReminderService().sweep_if_due()
+
         items, total = await self.leads.list(
             page=params.page,
             page_size=params.page_size,
