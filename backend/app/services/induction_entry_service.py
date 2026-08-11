@@ -11,7 +11,7 @@ from app.models.induction_entry import (
     InductionRemarks,
 )
 from app.models.user import User
-from app.repositories.induction_entry_repository import InductionEntryRepository
+from app.repositories.induction_entry_repository import NOT_CONVERTED, InductionEntryRepository
 from app.repositories.role_repository import RoleRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.common import PaginatedResponse, PaginationParams
@@ -23,6 +23,7 @@ from app.schemas.induction_entry_schema import (
 )
 from app.services.audit_service import AuditService
 from app.services.storage_service import StorageService
+from app.utils.phone import normalize_phone
 
 # The batch sequence is anchored, not enumerated: August 2026 is Batch-28 and
 # every following month is one higher. Anchoring rather than hardcoding a
@@ -104,6 +105,9 @@ class InductionEntryService:
         assignee, section = await self._next_assignee()
         entry = InductionEntry(
             **data.model_dump(),
+            # The key the Foundation Form will match this person on later,
+            # computed on write so the match is an indexed lookup.
+            phone_normalized=normalize_phone(data.phone),
             assigned_to=assignee.id if assignee else None,
             section=section,
             created_by=actor_id,
@@ -126,6 +130,14 @@ class InductionEntryService:
         return entry
 
     async def list(self, params: PaginationParams, *, filters: dict | None = None) -> PaginatedResponse:
+        """The active Induction board.
+
+        Entries already linked to a Foundation lead are excluded here rather
+        than by the caller, so every route onto this board inherits the rule:
+        an entry that has moved to Foundation must not appear in both active
+        lists. The record still exists and is still reachable through the lead
+        it became - it has left the queue, it hasn't been deleted.
+        """
         items, total = await self.entries.list(
             page=params.page,
             page_size=params.page_size,
@@ -133,7 +145,7 @@ class InductionEntryService:
             search_fields=["name", "phone", "email", "sales_person", "lead_source", "category"],
             sort_by=params.sort_by,
             sort_order=params.sort_order,
-            filters=filters or None,
+            filters={**(filters or {}), **NOT_CONVERTED},
         )
         return PaginatedResponse.build(items, total, params.page, params.page_size)
 
@@ -216,6 +228,10 @@ class InductionEntryService:
     ) -> InductionEntry:
         entry = await self.get(entry_id)
         update_data = data.model_dump(exclude_unset=True)
+        # Correcting a mistyped number has to move the match key with it, or
+        # the entry would keep matching on the number it no longer has.
+        if update_data.get("phone"):
+            update_data["phone_normalized"] = normalize_phone(update_data["phone"])
         update_data["updated_by"] = actor_id
         await self.entries.update(entry, update_data)
         await self.audit.record(

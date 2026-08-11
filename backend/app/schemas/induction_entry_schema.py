@@ -99,6 +99,12 @@ class InductionEntryResponse(BaseModel):
     placement: InductionPlacementSchema = Field(default_factory=InductionPlacementSchema)
     remarks: InductionRemarksSchema = Field(default_factory=InductionRemarksSchema)
     other_details: InductionOtherDetailsSchema = Field(default_factory=InductionOtherDetailsSchema)
+    # Set once this person submitted the Foundation Form with a matching mobile
+    # number. Present on the response even though a converted entry never
+    # appears in the board's list, because the lead's detail view fetches the
+    # entry directly to show where it came from.
+    foundation_lead_id: uuid.UUID | None = None
+    converted_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

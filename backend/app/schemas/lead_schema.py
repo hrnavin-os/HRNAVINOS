@@ -83,6 +83,12 @@ class LeadResponse(BaseModel):
     name: str
     email: EmailStr | None
     phone: str
+    # The Induction Call Form entry this lead was matched to on mobile number,
+    # and the flag the UI reads. `induction_matched` is derived from the id
+    # rather than stored beside it so the two can never disagree - "unmatched"
+    # is precisely "no induction entry has this number", nothing else.
+    induction_entry_id: uuid.UUID | None = None
+    induction_matched: bool = False
     source: LeadSource
     status: LeadStatus
     course_interest: str | None
@@ -119,6 +125,9 @@ class LeadStatsResponse(BaseModel):
     total: int
     by_status: dict[str, int]
     by_section: dict[str, int] = {}
+    # {"matched": n, "unmatched": n} over Foundation Form leads only - how many
+    # came across from an induction call versus arrived cold through the form.
+    by_induction_match: dict[str, int] = {}
 
 
 class LeadTimelineEntryResponse(BaseModel):

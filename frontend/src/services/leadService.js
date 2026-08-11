@@ -19,6 +19,13 @@ export const leadService = {
     const { data } = await apiClient.get(`/leads/${id}/timeline`)
     return data
   },
+  // The Induction Call Form entry this lead was matched to on mobile number,
+  // or null. Fetched on demand rather than embedded in the lead, since only
+  // the detail view shows it.
+  getInduction: async (id) => {
+    const { data } = await apiClient.get(`/leads/${id}/induction`)
+    return data
+  },
   getPendingReview: async () => {
     const { data } = await apiClient.get('/leads/pending-review')
     return data

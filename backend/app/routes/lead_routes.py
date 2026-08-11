@@ -11,6 +11,7 @@ from app.models.enums import InstallmentPaymentMode, LeadSource, PaymentMethod
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.common import MessageResponse, PaginatedResponse, PaginationParams
+from app.schemas.induction_entry_schema import InductionEntryResponse
 from app.schemas.lead_schema import (
     LeadAssign,
     LeadCreate,
@@ -21,6 +22,7 @@ from app.schemas.lead_schema import (
     LeadUpdate,
 )
 from app.schemas.notification_schema import PaymentReminderRequest, PaymentReminderResponse
+from app.services.induction_entry_service import InductionEntryService
 from app.services.lead_service import LeadService
 
 router = APIRouter(prefix="/leads", tags=["Lead Management"])
@@ -50,6 +52,7 @@ async def list_leads(
     course_interest: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
+    induction_matched: bool | None = None,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> PaginatedResponse[LeadResponse]:
     params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)
@@ -65,6 +68,7 @@ async def list_leads(
         course_interest=course_interest,
         date_from=date_from,
         date_to=date_to,
+        induction_matched=induction_matched,
     )
     items = [await service.to_response(lead) for lead in result.items]
     return PaginatedResponse[LeadResponse].build(items, result.total, result.page, result.page_size)
@@ -119,6 +123,30 @@ async def get_lead_timeline(
 ) -> list[LeadTimelineEntryResponse]:
     scope = await get_actor_scope(actor)
     return await LeadService().timeline(lead_id, scope=scope)
+
+
+@router.get("/{lead_id}/induction", response_model=InductionEntryResponse | None)
+async def get_lead_induction(
+    lead_id: uuid.UUID,
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
+) -> InductionEntryResponse | None:
+    """The Induction Call Form entry this lead was matched to, or null.
+
+    A separate call rather than part of the lead response: only the detail view
+    needs it, and folding it in would cost a second query per row on every page
+    of the board to serve something the list never shows.
+
+    Fetched through LeadService.get first so a Section Admin can't read another
+    section's induction record by guessing a lead id.
+    """
+    lead = await LeadService().get(lead_id, scope=await get_actor_scope(actor))
+    if lead.induction_entry_id is None:
+        return None
+    service = InductionEntryService()
+    # get_by_id, not the board's list: the entry is converted by definition
+    # here, and the board deliberately excludes those.
+    entry = await service.entries.get_by_id(lead.induction_entry_id)
+    return await service.to_response(entry) if entry else None
 
 
 @router.get("/{lead_id}", response_model=LeadResponse)

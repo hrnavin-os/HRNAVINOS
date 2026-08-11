@@ -33,6 +33,7 @@ from app.schemas.lead_schema import (
 from app.services.audit_service import AuditService
 from app.services.foundation_form_pricing import build_installments, build_payment_expected_summary
 from app.services.storage_service import StorageService
+from app.utils.phone import normalize_phone
 
 
 class LeadService:
@@ -55,6 +56,8 @@ class LeadService:
             name=lead.name,
             email=lead.email,
             phone=lead.phone,
+            induction_entry_id=lead.induction_entry_id,
+            induction_matched=lead.induction_entry_id is not None,
             source=lead.source,
             status=lead.status,
             course_interest=lead.course_interest,
@@ -104,7 +107,15 @@ class LeadService:
     async def create(self, data: LeadCreate, *, actor_id: uuid.UUID | None, scope: str | None = None) -> Lead:
         if data.assigned_to and not await self.users.get_by_id(data.assigned_to):
             raise NotFoundError("Specified assignee does not exist.")
-        lead = Lead(**data.model_dump(), created_by=actor_id, updated_by=actor_id)
+        lead = Lead(
+            **data.model_dump(),
+            # Set here too, not just on the public form, so a hand-keyed lead
+            # still participates in mobile-number matching - otherwise a later
+            # Foundation Form submission would create a duplicate beside it.
+            phone_normalized=normalize_phone(data.phone),
+            created_by=actor_id,
+            updated_by=actor_id,
+        )
         # A section-scoped actor can only ever create leads in their own
         # section, regardless of what (if anything) the client sent.
         if scope is not None:
@@ -133,9 +144,16 @@ class LeadService:
         course_interest: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
+        induction_matched: bool | None = None,
     ) -> PaginatedResponse:
         # See LeadRepository.count_total for why this isn't a plain "reviewed": True.
         filters = {"reviewed": {"$ne": False}}
+        # Separates leads that came across from an induction call from those
+        # whose number never appeared in Induction. `$eq: None` rather than a
+        # bare None so it also matches leads created before the field existed,
+        # where the key is absent rather than null.
+        if induction_matched is not None:
+            filters["induction_entry_id"] = {"$ne": None} if induction_matched else {"$eq": None}
         if status:
             filters["status"] = status
         if assigned_to:
@@ -199,7 +217,12 @@ class LeadService:
         # Sections" view - once a caller is already looking at one section's
         # stage counts, there's nothing else to break down by section.
         by_section = await self.leads.count_by_section_all() if section is None else {}
-        return LeadStatsResponse(total=total, by_status=by_status, by_section=by_section)
+        return LeadStatsResponse(
+            total=total,
+            by_status=by_status,
+            by_section=by_section,
+            by_induction_match=await self.leads.count_by_induction_match(),
+        )
 
     async def course_options(self) -> List[str]:
         return await self.leads.distinct_course_interests()
@@ -255,6 +278,10 @@ class LeadService:
         if data.status is not None:
             self._validate_stage_transition(lead, data.status)
         update_data = data.model_dump(exclude_unset=True)
+        # Correcting the number moves the match key with it, so the lead keeps
+        # matching on the number it actually has.
+        if update_data.get("phone"):
+            update_data["phone_normalized"] = normalize_phone(update_data["phone"])
         update_data["updated_by"] = actor_id
         # Losing a lead has to say why - otherwise the Lost list records that
         # it happened with no way to tell churn reasons apart afterwards.

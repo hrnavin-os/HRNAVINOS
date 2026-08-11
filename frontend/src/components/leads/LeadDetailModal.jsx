@@ -8,11 +8,13 @@ import {
   Clock,
   ImagePlus,
   Info,
+  Link2,
   Mail,
   MessageSquare,
   Milestone,
   Pencil,
   Phone,
+  PhoneCall,
   Plus,
   Trash2,
   UserPlus,
@@ -35,6 +37,7 @@ import { hasFirstPayment } from '@/utils/leadPayment'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { formatDateTime, titleCase } from '@/utils/formatters'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
+import { InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
 import { MEDIA_BASE_URL } from '@/constants/config'
 
 // Financial Approval and Batch Confirmation are pipeline gates: each is only
@@ -88,8 +91,12 @@ const ACTION_TONES = {
   DELETE: 'bg-red-100 text-red-600',
 }
 
+// Induction is conditional - only leads matched to an induction entry have one,
+// and an empty tab on the rest would read as missing data rather than as a lead
+// that arrived through the form directly.
 const TABS = [
   { key: 'overview', label: 'Overview', icon: Info },
+  { key: 'induction', label: 'Induction', icon: PhoneCall, matchedOnly: true },
   { key: 'payment', label: 'Payment Details', icon: Wallet },
   { key: 'followup', label: 'Follow-up', icon: CalendarClock },
   { key: 'timeline', label: 'Timeline', icon: Clock },
@@ -622,6 +629,45 @@ function FollowUpTab({ followUpAt, setFollowUpAt, history, onSave, isSaving, onC
   )
 }
 
+// The induction call this lead came from. Fetched here rather than carried on
+// the lead, since the board's list would otherwise pay for a record only this
+// tab ever shows.
+function InductionTab({ leadId }) {
+  const inductionQuery = useQuery({
+    queryKey: ['lead-induction', leadId],
+    queryFn: () => leadService.getInduction(leadId),
+  })
+
+  if (inductionQuery.isLoading) return <LoadingSpinner />
+  if (inductionQuery.error) return <ErrorMessage message={getApiErrorMessage(inductionQuery.error)} />
+
+  const entry = inductionQuery.data
+  if (!entry) {
+    // Reachable if the entry was deleted after the match was made - the link
+    // survives on the lead, the record behind it doesn't.
+    return <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">The linked induction entry is no longer available.</p>
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start gap-2.5 rounded-lg border border-emerald-200 border-l-4 border-l-emerald-400 bg-emerald-50 p-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-600">
+          <Link2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Matched on mobile number</p>
+          <p className="text-sm text-slate-700">
+            This lead came across from an induction call
+            {entry.converted_at ? ` on ${formatDateTime(entry.converted_at)}` : ''}. Everything collected then is
+            below.
+          </p>
+        </div>
+      </div>
+      <InductionEntryDetail entry={entry} />
+    </div>
+  )
+}
+
 function TimelineTab({ leadId }) {
   const timelineQuery = useQuery({ queryKey: ['lead-timeline', leadId], queryFn: () => leadService.getTimeline(leadId) })
 
@@ -739,6 +785,7 @@ export function LeadDetailModal({ lead, onClose }) {
 
   const activeError = stageMutation.error || followUpMutation.error || installmentMutation.error
   const stageInfo = LEAD_STAGE_BY_VALUE[liveLead.status]
+  const visibleTabs = TABS.filter((tab) => !tab.matchedOnly || liveLead.induction_matched)
 
   const header = (
     <div className="flex min-w-0 items-center gap-3">
@@ -749,6 +796,14 @@ export function LeadDetailModal({ lead, onClose }) {
           <Badge outline tone={stageInfo?.tone ?? 'slate'}>
             {stageInfo?.label ?? titleCase(liveLead.status)}
           </Badge>
+          {/* Says where the lead came from at a glance, so you know whether
+              there's an induction history to read before hunting for the tab. */}
+          {liveLead.induction_matched && (
+            <Badge tone="emerald">
+              <Link2 className="h-3 w-3" strokeWidth={2.5} aria-hidden="true" />
+              From Induction
+            </Badge>
+          )}
         </div>
         <p className="text-sm text-slate-500">{lead.phone}</p>
       </div>
@@ -761,7 +816,7 @@ export function LeadDetailModal({ lead, onClose }) {
         <ErrorMessage message={activeError ? getApiErrorMessage(activeError) : null} />
 
         <div className="flex gap-1 border-b border-slate-200">
-          {TABS.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab.key}
               type="button"
@@ -791,6 +846,7 @@ export function LeadDetailModal({ lead, onClose }) {
             savedInstallmentIndex={savedInstallmentIndex}
           />
         )}
+        {activeTab === 'induction' && <InductionTab leadId={lead.id} />}
         {activeTab === 'payment' && <PaymentDetailsTab lead={liveLead} />}
         {activeTab === 'followup' && (
           <FollowUpTab

@@ -47,6 +47,17 @@ class Lead(BaseDocument):
     name: str = Field(max_length=150)
     email: str | None = Field(default=None, max_length=255)
     phone: str = Field(max_length=20)
+    # The comparable form of `phone` - see app/utils/phone.py. Both the
+    # Induction match and the duplicate-submission check key off this, so it is
+    # stored and indexed rather than derived per query.
+    phone_normalized: str | None = Field(default=None, max_length=20)
+    # The Induction Call Form entry this lead came from, matched on mobile
+    # number when the Foundation Form was submitted. None means the number
+    # never appeared in Induction - an "unmatched" Foundation lead, which is a
+    # legitimate state, not an error. The induction record is referenced rather
+    # than copied so the full history stays traceable in one direction and the
+    # induction data has exactly one home.
+    induction_entry_id: uuid.UUID | None = None
     source: LeadSource = LeadSource.OTHER
     status: LeadStatus = LeadStatus.NEW_LEAD
     course_interest: str | None = Field(default=None, max_length=150)
@@ -113,6 +124,12 @@ class Lead(BaseDocument):
         indexes = [
             IndexModel([("email", 1)]),
             IndexModel([("phone", 1)]),
+            # Not unique, for the same reason external_ref below isn't: leads
+            # predating this field all carry `null`, and staff-created leads
+            # can legitimately share a number with a form submission. Duplicate
+            # prevention is enforced in FoundationFormService.submit instead.
+            IndexModel([("phone_normalized", 1)]),
+            IndexModel([("induction_entry_id", 1)]),
             IndexModel([("status", 1)]),
             IndexModel([("assigned_to", 1)]),
             IndexModel([("section", 1)]),

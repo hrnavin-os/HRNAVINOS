@@ -7,7 +7,7 @@ historical rows keep the batch they were registered into when the month rolls
 over.
 """
 import uuid
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 from pymongo import IndexModel
@@ -53,6 +53,11 @@ class InductionEntry(BaseDocument):
     name: str = Field(max_length=150)
     email: str | None = Field(default=None, max_length=255)
     phone: str = Field(max_length=20)
+    # `phone` as the student gave it, kept verbatim for display and dialling;
+    # this is the comparable form the Foundation Form matches against. Stored
+    # rather than computed per query so the match is a single indexed lookup
+    # instead of a collection scan - see app/utils/phone.py.
+    phone_normalized: str | None = Field(default=None, max_length=20)
     registration_date: date
     paid_date: date | None = None
     # Open-ended on purpose: each of these is a dropdown in the UI that also
@@ -77,12 +82,24 @@ class InductionEntry(BaseDocument):
     remarks: InductionRemarks = Field(default_factory=InductionRemarks)
     other_details: InductionOtherDetails = Field(default_factory=InductionOtherDetails)
 
+    # Set when this person later submits the Foundation Form with a matching
+    # mobile number. The entry itself is never deleted or emptied - the whole
+    # point of linking is that the induction data survives the move - but a
+    # linked entry drops off the active Induction board, because it has moved
+    # on to Foundation and showing it in both lists would double-count it.
+    foundation_lead_id: uuid.UUID | None = None
+    converted_at: datetime | None = None
+
     class Settings:
         name = "induction_entries"
         indexes = [
             IndexModel([("registration_date", -1)]),
             IndexModel([("phone", 1)]),
             IndexModel([("assigned_to", 1)]),
+            # The matching lookup: by number, restricted to entries that have
+            # not already been converted. Compound because every caller asks
+            # both questions at once.
+            IndexModel([("phone_normalized", 1), ("foundation_lead_id", 1)]),
         ]
 
     def __repr__(self) -> str:

@@ -1,5 +1,5 @@
 """Data access for Lead documents."""
-from app.models.enums import LeadStatus
+from app.models.enums import LeadSource, LeadStatus
 from app.models.lead import Lead
 from app.repositories.base_repository import BaseRepository
 
@@ -52,6 +52,55 @@ class LeadRepository(BaseRepository[Lead]):
             ]
         ).to_list()
         return {row["_id"]: row["count"] for row in counts}
+
+    async def find_by_phone_normalized(self, phone_normalized: str) -> Lead | None:
+        """The existing lead for this mobile number, if any.
+
+        Backs duplicate prevention on the public Foundation Form: a resubmit, a
+        refresh mid-submission, or the same person filling the form twice must
+        update this lead rather than create a second one.
+
+        Deliberately not restricted to `source == foundation_form`. A lead
+        someone keyed in by hand is still that person - creating a second
+        record beside it would be exactly the duplicate this is meant to stop.
+
+        Most recent wins if history already contains duplicates for a number,
+        since that's the record staff are currently working.
+        """
+        matches = await (
+            Lead.find({"is_deleted": False, "phone_normalized": phone_normalized})
+            .sort("-created_at")
+            .limit(1)
+            .to_list()
+        )
+        return matches[0] if matches else None
+
+    async def count_by_induction_match(self) -> dict[str, int]:
+        """{"matched": n, "unmatched": n} across live Foundation Form leads.
+
+        Only form submissions are counted: a lead typed straight into the CRM
+        never went through an induction call, so calling it "unmatched" would
+        read as a failed match rather than a different intake route.
+        """
+        rows = await Lead.aggregate(
+            [
+                {
+                    "$match": {
+                        "is_deleted": False,
+                        "reviewed": {"$ne": False},
+                        "source": LeadSource.FOUNDATION_FORM.value,
+                    }
+                },
+                {
+                    "$group": {
+                        "_id": {"$cond": [{"$ifNull": ["$induction_entry_id", False]}, "matched", "unmatched"]},
+                        "count": {"$sum": 1},
+                    }
+                },
+            ]
+        ).to_list()
+        counts = {row["_id"]: row["count"] for row in rows}
+        return {"matched": counts.get("matched", 0), "unmatched": counts.get("unmatched", 0)}
 
     async def distinct_course_interests(self) -> list[str]:
         # Beanie's FindMany query builder has no .distinct() - go through the
