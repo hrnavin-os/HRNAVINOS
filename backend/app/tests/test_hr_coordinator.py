@@ -2,12 +2,24 @@
 from datetime import date, timedelta
 
 import pytest
+import pytest_asyncio
 
 from app.database.base import utcnow
 from app.models.enums import LeadStatus, WhatsAppGroupStatus
 from app.models.induction_entry import InductionEntry
 from app.models.lead import INVITE_WAIT, Lead
 from app.services.batch_confirmation_service import BatchConfirmationService
+from app.services.foundation_form_config_service import FoundationFormConfigService
+
+# A real-shaped invite link; the config rejects anything that isn't one.
+GROUP_LINK = "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrSt"
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _section_group_link(client):
+    """Section A needs an invite link before anybody can be invited to it, and
+    every test in this file works section A."""
+    await FoundationFormConfigService().set_whatsapp_link("a", GROUP_LINK, actor_id=None)
 
 
 async def make_lead(**overrides) -> Lead:
@@ -99,7 +111,7 @@ async def test_sending_an_invite_does_not_mark_anyone_joined(client):
     lead = await make_lead(status=LeadStatus.BATCH_CONFIRMATION)
     service = BatchConfirmationService()
 
-    updated = await service.send_whatsapp_invite(lead.id, actor_id=None)
+    updated, delivered = await service.send_whatsapp_invite(lead.id, actor_id=None)
 
     assert updated.whatsapp_status == WhatsAppGroupStatus.INVITE_SENT
     assert updated.whatsapp_invite_sent_at is not None
@@ -139,7 +151,7 @@ async def test_resending_restarts_the_wait_and_counts_the_attempt(client):
         whatsapp_invite_count=1,
     )
 
-    updated = await BatchConfirmationService().send_whatsapp_invite(lead.id, actor_id=None)
+    updated, delivered = await BatchConfirmationService().send_whatsapp_invite(lead.id, actor_id=None)
 
     assert updated.whatsapp_invite_count == 2
     assert updated.whatsapp_status == WhatsAppGroupStatus.INVITE_SENT
@@ -243,3 +255,39 @@ async def test_every_step_lands_in_the_history(client):
             "WHATSAPP_JOINED_MANUAL",
         ]
     )
+
+
+async def test_an_invite_needs_a_group_link_for_the_section(client):
+    """You cannot invite somebody to a group that has no link configured. The
+    check is on the server rather than only in the board, so the bulk path and
+    any future caller get it too."""
+    from app.exceptions.base import BadRequestError
+
+    # Section B has no link set by the fixture above.
+    lead = await make_lead(section="b", status=LeadStatus.BATCH_CONFIRMATION)
+    with pytest.raises(BadRequestError):
+        await BatchConfirmationService().send_whatsapp_invite(lead.id, actor_id=None)
+
+
+async def test_an_invite_is_recorded_even_when_it_could_not_be_sent(client):
+    """No API credentials in the test environment, so the send is refused and
+    the board falls back to a manual message - but the candidate must still
+    move to Waiting for Join, or the row looks untouched and gets invited
+    again."""
+    lead = await make_lead(status=LeadStatus.BATCH_CONFIRMATION)
+
+    updated, delivered = await BatchConfirmationService().send_whatsapp_invite(lead.id, actor_id=None)
+
+    assert delivered is False
+    assert updated.whatsapp_status == WhatsAppGroupStatus.INVITE_SENT
+
+
+async def test_the_history_says_whether_the_system_or_a_person_sent_it(client):
+    lead = await make_lead(status=LeadStatus.BATCH_CONFIRMATION)
+    service = BatchConfirmationService()
+    await service.send_whatsapp_invite(lead.id, actor_id=None)
+
+    from app.models.audit_log import AuditLog
+
+    entry = await AuditLog.find_one({"entity_id": str(lead.id), "action": "WHATSAPP_INVITE_SENT"})
+    assert entry.changes["delivery"] == "manual"

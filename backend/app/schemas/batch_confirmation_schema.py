@@ -157,6 +157,21 @@ class BulkGroupAssignResponse(BaseModel):
     skipped: list[str] = []
 
 
+class WhatsAppInviteResponse(BaseModel):
+    student: "HRStudentResponse"
+    # True when the Cloud API sent the message. False means the board should
+    # fall back to opening a pre-written wa.me link - either the credentials
+    # aren't configured or Meta refused the send.
+    delivered: bool
+
+
+class WhatsAppConfigResponse(BaseModel):
+    """Whether automatic sending is available, so the board can say which mode
+    it's in before anybody presses anything."""
+
+    configured: bool
+
+
 class WhatsAppHistoryEntry(BaseModel):
     action: str
     user_name: str | None
@@ -226,3 +241,8 @@ class HRStageRequest(BaseModel):
     status: LeadStatus
     # Required by LeadService.update when the move is to Lost.
     lost_reason: str | None = Field(default=None, max_length=500)
+
+
+# HRStudentResponse is declared below the response that references it, so the
+# forward reference has to be resolved once the real class exists.
+WhatsAppInviteResponse.model_rebuild()

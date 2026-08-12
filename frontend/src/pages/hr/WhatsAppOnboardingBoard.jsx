@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { History, Search, Send, Users } from 'lucide-react'
+import { History, Info, Search, Send, Users } from 'lucide-react'
 import { batchConfirmationService } from '@/services/batchConfirmationService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { Badge } from '@/components/ui/Badge'
@@ -102,15 +102,30 @@ export function WhatsAppOnboardingBoard() {
     queryFn: batchConfirmationService.whatsappCounts,
   })
   const linksQuery = useQuery({ queryKey: ['whatsapp-links'], queryFn: batchConfirmationService.whatsappLinks })
+  const configQuery = useQuery({
+    queryKey: [QUERY_KEY, 'config'],
+    queryFn: batchConfirmationService.whatsappConfig,
+  })
+  const autoSend = configQuery.data?.configured ?? false
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [QUERY_KEY] })
   const onError = (err) => setError(getApiErrorMessage(err))
 
+  // The server sends the message itself when the Cloud API is configured, and
+  // says so. Only when it couldn't does the board open WhatsApp for the
+  // coordinator to send by hand - which is why the fallback lives here, after
+  // the response, rather than firing a tab open on every click.
   const inviteMutation = useMutation({
     mutationFn: (leadId) => batchConfirmationService.sendWhatsappInvite(leadId),
-    onSuccess: () => {
+    onSuccess: (data, leadId) => {
       invalidate()
-      setNotice('Invite recorded. They stay in Waiting for Join until you mark them joined.')
+      if (data.delivered) {
+        setNotice('Invite sent. They stay in Waiting for Join until they accept it.')
+        return
+      }
+      const row = allRows.find((item) => item.id === leadId)
+      if (row) openManualInvite(row)
+      setNotice('Invite recorded. Send the message that just opened to finish it.')
     },
     onError,
   })
@@ -145,22 +160,17 @@ export function WhatsAppOnboardingBoard() {
   )
   const groupUrlFor = (row) => (row.section ? linkBySection[row.section]?.whatsapp_group_url : null)
 
-  // Opens WhatsApp with the invite written to that candidate, then records
-  // that it was sent. Recording is separate from joining - the candidate has
-  // to accept the invite themselves, and no WhatsApp API reports when they do.
-  function openAndRecordInvite(row) {
+  // The fallback for when the server couldn't send: WhatsApp opens with the
+  // invite already written, and the coordinator presses send.
+  function openManualInvite(row) {
     const groupUrl = groupUrlFor(row)
-    if (!groupUrl) {
-      setError('No WhatsApp Group Link has been configured for this section.')
-      return
-    }
+    if (!groupUrl) return
     const number = whatsappNumber(row.phone)
     window.open(
       number ? `https://wa.me/${number}?text=${encodeURIComponent(inviteMessage(row.name, groupUrl))}` : groupUrl,
       '_blank',
       'noopener,noreferrer',
     )
-    inviteMutation.mutate(row.id)
   }
 
   function sendBulk() {
@@ -170,16 +180,11 @@ export function WhatsAppOnboardingBoard() {
       setError(`No WhatsApp Group Link configured for: ${missing.map((row) => row.name).join(', ')}.`)
       return
     }
-    rows.forEach((row) => {
-      const number = whatsappNumber(row.phone)
-      if (number) {
-        window.open(
-          `https://wa.me/${number}?text=${encodeURIComponent(inviteMessage(row.name, groupUrlFor(row)))}`,
-          '_blank',
-          'noopener,noreferrer',
-        )
-      }
-    })
+    // Only opens a tab per candidate when the server can't send for us -
+    // twenty tabs is a lot to inflict on someone whose invites went out on
+    // their own. Popup blockers stop all but the first anyway, which is the
+    // other reason automatic sending matters most here.
+    if (!autoSend) rows.forEach(openManualInvite)
     bulkMutation.mutate(rows.map((row) => row.id))
   }
 
@@ -276,7 +281,7 @@ export function WhatsAppOnboardingBoard() {
                 variant="secondary"
                 className="px-2.5! py-1! text-xs"
                 disabled={busy}
-                onClick={() => openAndRecordInvite(row)}
+                onClick={() => inviteMutation.mutate(row.id)}
               >
                 <Send className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
                 {invited ? 'Resend' : 'Send invite'}
@@ -360,6 +365,20 @@ export function WhatsAppOnboardingBoard() {
           />
         ))}
       </div>
+
+      {/* Said before anybody presses Send, not after: whether the button
+          delivers the message or hands you one to send makes a real difference
+          to how the queue is worked. */}
+      {!configQuery.isLoading && !autoSend && (
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" strokeWidth={2} aria-hidden="true" />
+          <p>
+            <span className="font-semibold">Manual sending.</span> WhatsApp API credentials aren&rsquo;t
+            configured, so Send invite opens WhatsApp with the message ready and you press send. The invite is
+            recorded either way.
+          </p>
+        </div>
+      )}
 
       <div className="mb-4 rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">

@@ -74,6 +74,12 @@ export const batchConfirmationService = {
     const { data } = await apiClient.get(`${BASE}/whatsapp/counts`)
     return data
   },
+  // Whether the Cloud API can send on its own, so the board can say which mode
+  // it is in before anyone presses Send.
+  whatsappConfig: async () => {
+    const { data } = await apiClient.get(`${BASE}/whatsapp/config`)
+    return data
+  },
   sendWhatsappInvite: async (leadId) => {
     const { data } = await apiClient.post(`${BASE}/whatsapp/${leadId}/invite`)
     return data

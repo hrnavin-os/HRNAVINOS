@@ -53,7 +53,9 @@ from app.schemas.batch_confirmation_schema import (
 from app.schemas.batch_schema import BatchCreate
 from app.services.audit_service import AuditService
 from app.services.batch_service import BatchService
+from app.services.foundation_form_config_service import FoundationFormConfigService
 from app.services.induction_entry_service import batch_for
+from app.services.whatsapp_service import WhatsAppService
 
 # Smallest roster the institute will run a batch with. Deliberately a single
 # constant rather than per-course config: the rule is operational, not
@@ -101,6 +103,7 @@ class BatchConfirmationService:
         self.admissions = AdmissionRepository()
         self.audit = AuditService()
         self.audit_logs = AuditLogRepository()
+        self.whatsapp = WhatsAppService()
 
     # ---------- Reads ----------
 
@@ -342,7 +345,13 @@ class BatchConfirmationService:
     # ---------- WhatsApp group onboarding ----------
 
     async def _whatsapp_action(
-        self, lead_id: uuid.UUID, *, action: str, changes: dict, actor_id: uuid.UUID | None
+        self,
+        lead_id: uuid.UUID,
+        *,
+        action: str,
+        changes: dict,
+        actor_id: uuid.UUID | None,
+        detail: dict | None = None,
     ) -> Lead:
         """Applies one step of the group onboarding and records who did it.
 
@@ -361,12 +370,21 @@ class BatchConfirmationService:
             action=action,
             entity_type="Lead",
             entity_id=str(lead.id),
-            changes={"whatsapp": action},
+            changes={"whatsapp": action, **(detail or {})},
         )
         return lead
 
-    async def send_whatsapp_invite(self, lead_id: uuid.UUID, *, actor_id: uuid.UUID | None) -> Lead:
-        """Records that the group invite was sent - not that it was accepted.
+    async def send_whatsapp_invite(
+        self, lead_id: uuid.UUID, *, actor_id: uuid.UUID | None
+    ) -> tuple[Lead, bool]:
+        """Sends the group invite, and records that it went out - not that it
+        was accepted.
+
+        Returns (lead, delivered_automatically). Delivery is attempted through
+        the Cloud API when credentials are configured; when they aren't, or the
+        API refuses, the invite is still recorded and the caller opens a
+        pre-written wa.me message for the coordinator to send by hand. Either
+        way the candidate is now waiting to join, so the board reads the same.
 
         Deliberately does not touch group_assigned_at. Sending and joining used
         to be the same click, which meant the board reported candidates as
@@ -381,16 +399,38 @@ class BatchConfirmationService:
         if lead.group_assigned_at is not None:
             raise BadRequestError(f"{lead.name} has already joined the group.")
 
+        group_url = await self._group_url_for(lead)
+        if not group_url:
+            raise BadRequestError("No WhatsApp Group Link has been configured for this section.")
+
+        result = await self.whatsapp.send_group_invite(phone=lead.phone, name=lead.name, group_url=group_url)
+
         resend = lead.whatsapp_invite_count > 0
-        return await self._whatsapp_action(
+        action = "WHATSAPP_INVITE_RESENT" if resend else "WHATSAPP_INVITE_SENT"
+        updated = await self._whatsapp_action(
             lead_id,
-            action="WHATSAPP_INVITE_RESENT" if resend else "WHATSAPP_INVITE_SENT",
+            action=action,
             changes={
                 "whatsapp_invite_sent_at": utcnow(),
                 "whatsapp_invite_count": lead.whatsapp_invite_count + 1,
             },
             actor_id=actor_id,
+            # Recorded on the audit entry so the history distinguishes an
+            # invite the system delivered from one a coordinator sent by hand,
+            # and names the reason when an automatic attempt was refused.
+            detail={"delivery": "api" if result.delivered else "manual", "error": result.error},
         )
+        return updated, result.delivered
+
+    async def _group_url_for(self, lead: Lead) -> str | None:
+        """The invite link for this lead's section, or None if the section has
+        no link configured yet."""
+        if not lead.section:
+            return None
+        for section in await FoundationFormConfigService().list_whatsapp_links():
+            if section.code == lead.section:
+                return section.whatsapp_group_url
+        return None
 
     async def mark_whatsapp_joined(self, lead_id: uuid.UUID, *, actor_id: uuid.UUID | None) -> Lead:
         """Records that the candidate is actually in the group.
@@ -468,7 +508,14 @@ class BatchConfirmationService:
             if lead.status != LeadStatus.BATCH_CONFIRMATION or lead.group_assigned_at is not None:
                 skipped.append(lead.name)
                 continue
-            await self.send_whatsapp_invite(lead_id, actor_id=actor_id)
+            try:
+                await self.send_whatsapp_invite(lead_id, actor_id=actor_id)
+            except BadRequestError:
+                # A section with no group link configured. Named in the skipped
+                # list rather than aborting - the rest of the selection is
+                # perfectly sendable.
+                skipped.append(lead.name)
+                continue
             sent += 1
         return sent, skipped
 

@@ -23,8 +23,10 @@ from app.schemas.batch_confirmation_schema import (
     HRStudentResponse,
     MarkRequest,
     PendingLeadResponse,
+    WhatsAppConfigResponse,
     WhatsAppCountsResponse,
     WhatsAppHistoryEntry,
+    WhatsAppInviteResponse,
     WithdrawRequest,
 )
 from app.schemas.batch_schema import BatchCreate, BatchResponse
@@ -32,6 +34,7 @@ from app.schemas.common import MessageResponse
 from app.schemas.foundation_form_schema import WhatsAppGroupLinkResponse, WhatsAppGroupLinkUpdate
 from app.services.batch_confirmation_service import BatchConfirmationService
 from app.services.foundation_form_config_service import FoundationFormConfigService
+from app.services.whatsapp_service import WhatsAppService
 
 router = APIRouter(prefix="/batch-confirmation", tags=["Batch Confirmation"])
 
@@ -244,6 +247,16 @@ async def list_whatsapp_queue(
     ]
 
 
+@router.get("/whatsapp/config", response_model=WhatsAppConfigResponse)
+async def whatsapp_config(
+    actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
+) -> WhatsAppConfigResponse:
+    """Whether invites send by themselves. The board reads this to know whether
+    pressing Send will deliver the message or hand the coordinator a
+    pre-written one to send - worth saying up front rather than after."""
+    return WhatsAppConfigResponse(configured=WhatsAppService().configured)
+
+
 @router.get("/whatsapp/counts", response_model=WhatsAppCountsResponse)
 async def whatsapp_counts(
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
@@ -268,14 +281,21 @@ async def bulk_send_whatsapp_invite(
     return BulkGroupAssignResponse(message=message, assigned=sent, skipped=skipped)
 
 
-@router.post("/whatsapp/{lead_id}/invite", response_model=HRStudentResponse)
+@router.post("/whatsapp/{lead_id}/invite", response_model=WhatsAppInviteResponse)
 async def send_whatsapp_invite(
     lead_id: uuid.UUID,
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_ALLOCATE)),
-) -> HRStudentResponse:
-    """Records that the invite went out. Does NOT mark anybody as joined."""
-    lead = await BatchConfirmationService().send_whatsapp_invite(lead_id, actor_id=actor.id)
-    return _to_hr_student(lead)
+) -> WhatsAppInviteResponse:
+    """Sends the invite and records that it went out. Does NOT mark anybody as
+    joined - the candidate still has to accept it themselves.
+
+    `delivered` tells the board whether the Cloud API actually sent the
+    message. False means credentials aren't configured (or Meta refused), and
+    the board opens a pre-written wa.me message instead - so the button works
+    either way and the coordinator can see which happened.
+    """
+    lead, delivered = await BatchConfirmationService().send_whatsapp_invite(lead_id, actor_id=actor.id)
+    return WhatsAppInviteResponse(student=_to_hr_student(lead), delivered=delivered)
 
 
 @router.post("/whatsapp/{lead_id}/joined", response_model=HRStudentResponse)

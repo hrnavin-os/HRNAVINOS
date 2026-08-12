@@ -46,6 +46,29 @@ class Settings(BaseSettings):
     GOOGLE_OAUTH_CLIENT_SECRET: str | None = None
     GOOGLE_OAUTH_REDIRECT_URI: str = "http://localhost:8000/api/v1/integrations/google-sheets/callback"
 
+    # ---------- WhatsApp Cloud API (group invites) ----------
+    # Unset by default, and the app runs perfectly well that way: the HR board
+    # falls back to opening a pre-written wa.me message for the coordinator to
+    # send by hand. Fill these in and the same button sends by itself.
+    #
+    # From Meta: WhatsApp > API Setup gives the phone number id and a token;
+    # the template must be created under Message Templates and approved before
+    # it can be used. A template is required, not optional - WhatsApp only
+    # allows a business to open a conversation with an approved template, and
+    # an invite is always the business speaking first.
+    WHATSAPP_PHONE_NUMBER_ID: str | None = None
+    WHATSAPP_ACCESS_TOKEN: str | None = None
+    WHATSAPP_TEMPLATE_NAME: str | None = None
+    WHATSAPP_TEMPLATE_LANG: str = "en"
+    WHATSAPP_API_VERSION: str = "v21.0"
+    # Default country code for numbers stored without one, as Indian mobiles
+    # are throughout this system.
+    WHATSAPP_DEFAULT_COUNTRY_CODE: str = "91"
+
+    @property
+    def whatsapp_configured(self) -> bool:
+        return bool(self.WHATSAPP_PHONE_NUMBER_ID and self.WHATSAPP_ACCESS_TOKEN and self.WHATSAPP_TEMPLATE_NAME)
+
     # ---------- Rate Limiting ----------
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_DEFAULT: str = "100/minute"
