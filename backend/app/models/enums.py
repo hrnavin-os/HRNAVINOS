@@ -187,6 +187,10 @@ class NotificationCategory(StrEnum):
     PAYMENT_REMINDER = "payment_reminder"
     FOLLOW_UP_DUE = "follow_up_due"
     INSTALLMENT_DUE = "installment_due"
+    # Finance declaring a lead a non-payer. Addressed to the HR Coordinators
+    # rather than a section admin, because the action it asks for is theirs:
+    # take the student out of the batch group.
+    NON_PAYMENT = "non_payment"
 
 
 class TicketStatus(StrEnum):

@@ -1,6 +1,7 @@
 """Request/response DTOs for the Batch Confirmation module (HR Coordinator)."""
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
@@ -222,6 +223,11 @@ class HRStudentResponse(BaseModel):
     whatsapp_invite_count: int = 0
     whatsapp_last_follow_up_at: datetime | None = None
     whatsapp_handled_by_name: str | None = None
+    # Set when Finance flagged this student as not having paid. Carried on the
+    # row as well as in the notification, since a notification is read once by
+    # one person and the board has to keep showing the flag afterwards.
+    non_payment_reported_at: datetime | None = None
+    non_payment_amount: Decimal | None = None
     lost_reason: str | None
     lost_at: datetime | None
     created_at: datetime

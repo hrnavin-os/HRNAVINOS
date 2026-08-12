@@ -40,6 +40,15 @@ export const leadService = {
     const { data } = await apiClient.post(`/leads/${id}/payment-reminder`, { kind, note: note || null })
     return data
   },
+  // Finance declaring the money isn't coming. Goes to the HR Coordinators,
+  // whose removal of the student from the batch group is what marks them Lost.
+  reportNonPayment: async (id, { amount, note } = {}) => {
+    const { data } = await apiClient.post(`/leads/${id}/non-payment`, {
+      amount: amount ?? null,
+      note: note || null,
+    })
+    return data
+  },
   assignPlan: async (id, { programInterest, paymentPlan }) => {
     const { data } = await apiClient.post(`/leads/${id}/plan`, {
       program_interest: programInterest,

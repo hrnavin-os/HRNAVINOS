@@ -12,6 +12,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { notificationService } from '@/services/notificationService'
+import { destinationFor } from '@/utils/notificationRouting'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { Button } from '@/components/ui/Button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -138,9 +139,9 @@ export function NotificationsPage() {
       if (notification.lead_id) {
         queryClient.invalidateQueries({ queryKey: ['leads'] })
         queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
-        // Explicitly Foundation, and straight into that candidate's popup -
-        // see NotificationBell.
-        navigate(`/leads?board=foundation&lead=${notification.lead_id}`)
+        // Shared with the bell so the two can't send the same notification to
+        // different places - see destinationFor.
+        navigate(destinationFor(notification))
       }
     },
   })

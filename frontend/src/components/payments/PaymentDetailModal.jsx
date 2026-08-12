@@ -5,6 +5,7 @@ import {
   BellRing,
   Calendar,
   CheckCircle2,
+  CircleAlert,
   CircleDollarSign,
   CreditCard,
   GraduationCap,
@@ -159,6 +160,69 @@ function PaymentReminders({ lead, summary }) {
 
       <ErrorMessage message={mutation.error ? getApiErrorMessage(mutation.error) : null} />
       {sent && !mutation.error && <p className="mt-2 text-xs font-medium text-emerald-600">{sent}</p>}
+
+      <NonPaymentAction lead={lead} summary={summary} />
+    </div>
+  )
+}
+
+// The end of the road for a reminder that went unanswered. Separated from the
+// reminders above by a rule and coloured red, because it is a different kind of
+// act: a reminder asks somebody to chase the money, this declares it isn't
+// coming and starts the student's removal from the batch group.
+//
+// Goes to the HR Coordinators, not the section admins - taking somebody out of
+// a group is their job, and the removal is what marks the student Lost.
+function NonPaymentAction({ lead, summary }) {
+  const [confirming, setConfirming] = useState(false)
+  const [done, setDone] = useState(null)
+
+  const outstanding = summary.dueAmount > 0 ? summary.dueAmount : null
+
+  const mutation = useMutation({
+    mutationFn: () => leadService.reportNonPayment(lead.id, { amount: outstanding }),
+    onSuccess: (data) => {
+      setDone(data.message)
+      setConfirming(false)
+    },
+  })
+
+  return (
+    <div className="mt-3 border-t border-slate-200 pt-3">
+      {done ? (
+        <p className="flex items-center gap-1.5 text-xs font-medium text-red-600">
+          <CircleAlert className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+          {done}
+        </p>
+      ) : confirming ? (
+        // Confirmed rather than fired on the first press: this one ends with a
+        // student being marked Lost, which is not something to do by mis-click.
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+          <p className="text-sm font-semibold text-red-800">Report {lead.name} as not paid?</p>
+          <p className="mt-0.5 text-xs text-red-700">
+            HR will be asked to remove them from the batch WhatsApp group, which marks them Lost.
+          </p>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            <Button variant="danger" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+              {mutation.isPending ? 'Reporting…' : 'Yes, report to HR'}
+            </Button>
+            <Button variant="secondary" onClick={() => setConfirming(false)}>
+              Cancel
+            </Button>
+          </div>
+          <ErrorMessage message={mutation.error ? getApiErrorMessage(mutation.error) : null} />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          className="inline-flex items-center gap-2 rounded-md border border-red-200 bg-white px-3.5 py-2 text-sm font-medium text-red-600 transition-colors hover:border-red-300 hover:bg-red-50"
+        >
+          <CircleAlert className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+          Didn&rsquo;t pay
+          {outstanding ? <span className="text-xs font-semibold">{formatCurrency(outstanding)}</span> : null}
+        </button>
+      )}
     </div>
   )
 }

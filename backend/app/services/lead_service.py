@@ -18,10 +18,12 @@ from app.models.enums import (
 )
 from app.models.lead import FollowUpEntry, Lead
 from app.models.notification import Notification
+from app.permissions.permission_codes import Permissions
 from app.repositories.audit_log_repository import AuditLogRepository
 from app.repositories.foundation_form_config_repository import FoundationFormConfigRepository
 from app.repositories.lead_repository import LeadRepository
 from app.repositories.notification_repository import NotificationRepository
+from app.repositories.permission_repository import PermissionRepository
 from app.repositories.program_repository import ProgramRepository
 from app.repositories.role_repository import RoleRepository
 from app.repositories.user_repository import UserRepository
@@ -55,6 +57,7 @@ class LeadService:
         self.programs = ProgramRepository()
         self.roles = RoleRepository()
         self.notifications = NotificationRepository()
+        self.permissions = PermissionRepository()
 
     async def to_response(self, lead: Lead) -> LeadResponse:
         assignee = await self.users.get_by_id(lead.assigned_to) if lead.assigned_to else None
@@ -443,18 +446,15 @@ class LeadService:
         lead.touch(actor_id)
         await lead.save()
 
-        hr_role = await self.roles.get_by_name("HR Coordinator")
-        if hr_role:
-            hr_users, _ = await self.users.list(page=1, page_size=1000, filters={"role_id": hr_role.id})
-            for hr_user in hr_users:
-                await self.notifications.create(
-                    Notification(
-                        user_id=hr_user.id,
-                        title="Lead marked Lost - non-payment",
-                        message=f"{lead.name} was marked Lost after 2 consecutive missed EMI payments. Warning sign.",
-                        type=NotificationType.WARNING,
-                    )
+        for hr_user in await self._hr_coordinators():
+            await self.notifications.create(
+                Notification(
+                    user_id=hr_user.id,
+                    title="Lead marked Lost - non-payment",
+                    message=f"{lead.name} was marked Lost after 2 consecutive missed EMI payments. Warning sign.",
+                    type=NotificationType.WARNING,
                 )
+            )
 
         await self.audit.record(
             user_id=actor_id,
@@ -464,6 +464,26 @@ class LeadService:
             changes={"status": LeadStatus.LOST, "reason": "non_payment"},
         )
         return lead
+
+    async def _hr_coordinators(self) -> list:
+        """Everyone who can act on a batch group.
+
+        Found by permission rather than by a role called "HR Coordinator":
+        role names are editable and a site may run several roles that do the
+        job, so matching the name would quietly stop notifying somebody the day
+        it was renamed. What these notifications need is whoever is allowed to
+        act on them, which is what holding the permission means.
+
+        De-duplicated, since one person can hold two roles that both qualify.
+        """
+        permission = await self.permissions.get_by_code(Permissions.BATCH_CONFIRMATION_ALLOCATE)
+        if not permission:
+            return []
+        recipients = []
+        for role in await self.roles.list_with_permission(permission.id):
+            users, _ = await self.users.list(page=1, page_size=1000, filters={"role_id": role.id})
+            recipients.extend(users)
+        return list({user.id: user for user in recipients}.values())
 
     # Wording per reminder kind. The amount is filled in by the caller below,
     # since only Finance's own view knows what is actually outstanding.
@@ -544,6 +564,64 @@ class LeadService:
                 changes={"payment_reminder": kind, "notified": notified},
             )
         return notified, already_pending
+
+    async def report_non_payment(
+        self, lead_id: uuid.UUID, *, amount: Decimal | None, note: str | None, actor_id: uuid.UUID | None
+    ) -> int:
+        """Finance declares this student a non-payer, for the HR Coordinators
+        to act on.
+
+        Addressed to whoever holds batch_confirmation.allocate rather than to a
+        role called "HR Coordinator": role names are editable and a site may
+        run several roles that do the job, so matching on the name would
+        quietly stop notifying somebody the day it was renamed. Permission is
+        what the notification actually needs - the recipient has to be able to
+        remove the student from the group.
+
+        The flag is written onto the lead as well as sent. A notification is
+        read once by one person; the board has to keep showing which students
+        Finance has flagged after that.
+        """
+        lead = await self.get(lead_id)
+        recipients = await self._hr_coordinators()
+
+        await self.leads.update(
+            lead,
+            {
+                "non_payment_reported_at": utcnow(),
+                "non_payment_amount": amount,
+                "updated_by": actor_id,
+            },
+        )
+
+        owed = f" ₹{amount:,.0f}" if amount is not None else ""
+        message = (
+            f"{lead.name} has not paid{owed}. Remove them from the batch WhatsApp group "
+            "and mark them lost."
+        )
+        if note:
+            message = f"{message} Note from Finance: {note}"
+
+        for user in {user.id: user for user in recipients}.values():
+            await self.notifications.create(
+                Notification(
+                    user_id=user.id,
+                    title="Payment not received",
+                    message=message,
+                    type=NotificationType.ERROR,
+                    lead_id=lead.id,
+                    category=NotificationCategory.NON_PAYMENT,
+                )
+            )
+
+        await self.audit.record(
+            user_id=actor_id,
+            action="NON_PAYMENT_REPORTED",
+            entity_type="Lead",
+            entity_id=str(lead.id),
+            changes={"amount": str(amount) if amount is not None else None, "notified": len(recipients)},
+        )
+        return len({user.id for user in recipients})
 
     async def move_to_follow_up(self, lead_id: uuid.UUID, *, actor_id: uuid.UUID | None) -> Lead:
         """Reached when a section admin opens a payment reminder. PRE_SCREENING

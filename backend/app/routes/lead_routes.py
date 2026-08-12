@@ -21,7 +21,11 @@ from app.schemas.lead_schema import (
     LeadTimelineEntryResponse,
     LeadUpdate,
 )
-from app.schemas.notification_schema import PaymentReminderRequest, PaymentReminderResponse
+from app.schemas.notification_schema import (
+    NonPaymentReportRequest,
+    PaymentReminderRequest,
+    PaymentReminderResponse,
+)
 from app.services.induction_entry_service import InductionEntryService
 from app.services.lead_service import LeadService
 
@@ -285,6 +289,34 @@ async def send_payment_reminder(
         message=f"Reminder sent to {notified} section admin{'' if notified == 1 else 's'}.{suffix}",
         notified=notified,
         already_pending=already_pending,
+    )
+
+
+@router.post("/{lead_id}/non-payment", response_model=PaymentReminderResponse)
+async def report_non_payment(
+    lead_id: uuid.UUID,
+    payload: NonPaymentReportRequest,
+    # Same gate as the payment reminder: this is a Finance judgement made from
+    # the Cashbook, and Finance holds PAYMENTS_VIEW.
+    actor: User = Depends(RequirePermissions(Permissions.PAYMENTS_VIEW)),
+) -> PaymentReminderResponse:
+    """Finance declares a student a non-payer, for HR to act on.
+
+    Goes to the HR Coordinators rather than the section admins - the action it
+    asks for is theirs: take the student out of the batch group, which marks
+    them lost.
+    """
+    notified = await LeadService().report_non_payment(
+        lead_id, amount=payload.amount, note=payload.note, actor_id=actor.id
+    )
+    if notified == 0:
+        return PaymentReminderResponse(
+            message="Flagged, but no HR Coordinator is set up yet, so nobody was notified.",
+            notified=0,
+        )
+    return PaymentReminderResponse(
+        message=f"HR notified ({notified} coordinator{'' if notified == 1 else 's'}).",
+        notified=notified,
     )
 
 

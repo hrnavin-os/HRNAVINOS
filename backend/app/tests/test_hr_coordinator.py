@@ -291,3 +291,114 @@ async def test_the_history_says_whether_the_system_or_a_person_sent_it(client):
 
     entry = await AuditLog.find_one({"entity_id": str(lead.id), "action": "WHATSAPP_INVITE_SENT"})
     assert entry.changes["delivery"] == "manual"
+
+
+# ---------------------------------------------------------------------------
+# Finance reports non-payment -> HR removes -> student is Lost
+# ---------------------------------------------------------------------------
+
+
+async def make_hr_coordinator(seeded, email: str = "hr@hrnavinos.com"):
+    """A user whose role holds batch_confirmation.allocate. Built through the
+    real permission rather than a role named "HR Coordinator", which is what
+    the notification targeting looks for."""
+    from app.models.role import Role
+    from app.models.user import User
+    from app.permissions.permission_codes import Permissions
+    from app.repositories.permission_repository import PermissionRepository
+
+    permission = await PermissionRepository().get_by_code(Permissions.BATCH_CONFIRMATION_ALLOCATE)
+    role = Role(name=f"Coordinator {email}", permission_ids=[permission.id])
+    await role.insert()
+    user = User(
+        email=email, password_hash="x", first_name="HR", last_name="Coord", role_id=role.id, is_active=True
+    )
+    await user.insert()
+    return user
+
+
+async def test_finance_reporting_non_payment_notifies_hr(seeded):
+    from decimal import Decimal
+
+    from app.models.notification import Notification
+    from app.services.lead_service import LeadService
+
+    coordinator = await make_hr_coordinator(seeded)
+    lead = await make_lead(status=LeadStatus.BATCH_CONFIRMATION, group_assigned_at=utcnow())
+
+    notified = await LeadService().report_non_payment(
+        lead.id, amount=Decimal("3500"), note=None, actor_id=None
+    )
+
+    # Not an exact count: targeting is by permission, and a Super Admin holds
+    # every permission - so they are legitimately a recipient too. What matters
+    # is that the coordinator got exactly one, naming the figure.
+    assert notified >= 1
+    raised = await Notification.find({"user_id": coordinator.id}).to_list()
+    assert len(raised) == 1
+    assert raised[0].category.value == "non_payment"
+    assert "3,500" in raised[0].message
+
+
+async def test_the_flag_stays_on_the_lead_not_only_in_the_notification(seeded):
+    """A notification is read once by one person. The board has to keep showing
+    which students Finance flagged after that."""
+    from decimal import Decimal
+
+    from app.services.lead_service import LeadService
+
+    await make_hr_coordinator(seeded)
+    lead = await make_lead(status=LeadStatus.BATCH_CONFIRMATION, group_assigned_at=utcnow())
+
+    await LeadService().report_non_payment(lead.id, amount=Decimal("3500"), note=None, actor_id=None)
+
+    refreshed = await Lead.get(lead.id)
+    assert refreshed.non_payment_reported_at is not None
+    assert refreshed.non_payment_amount == Decimal("3500")
+
+
+async def test_removing_from_the_group_marks_the_student_lost(client):
+    """Removal and marking lost are one decision - split into two buttons, the
+    pair ends up half-done whenever somebody is interrupted between them."""
+    lead = await make_lead(status=LeadStatus.BATCH_CONFIRMATION, group_assigned_at=utcnow())
+
+    removed = await BatchConfirmationService().remove_from_group(lead.id, reason=None, actor_id=None)
+
+    assert removed.status == LeadStatus.LOST
+    assert removed.group_assigned_at is None
+    assert "payment" in removed.lost_reason.lower()
+
+
+async def test_a_removed_student_leaves_both_lists(client):
+    """Clearing the timestamp takes them off the onboarding queue, LOST takes
+    them out of the pipeline. Missing either leaves the row lingering in one
+    of the two places."""
+    lead = await make_lead(status=LeadStatus.BATCH_CONFIRMATION, group_assigned_at=utcnow())
+
+    await BatchConfirmationService().remove_from_group(lead.id, reason=None, actor_id=None)
+
+    assert await names_in("group_assigned") == []
+    assert await BatchConfirmationService().list_whatsapp_queue() == []
+    assert await names_in("lost") == ["Harish"]
+
+
+async def test_opening_a_non_payment_notification_does_not_move_the_stage(seeded):
+    """The removal it asks for sets the stage itself. Moving the lead on read
+    would rewrite the board behind the coordinator's back."""
+    from app.models.notification import Notification
+    from app.services.notification_service import NotificationService
+
+    coordinator = await make_hr_coordinator(seeded)
+    lead = await make_lead(status=LeadStatus.BATCH_CONFIRMATION)
+    notification = Notification(
+        user_id=coordinator.id,
+        title="Payment not received",
+        message="…",
+        lead_id=lead.id,
+        category="non_payment",
+    )
+    await notification.insert()
+
+    await NotificationService().acknowledge(notification.id, user_id=coordinator.id)
+
+    assert (await Lead.get(lead.id)).status == LeadStatus.BATCH_CONFIRMATION

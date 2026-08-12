@@ -96,6 +96,12 @@ export const batchConfirmationService = {
     const { data } = await apiClient.post(`${BASE}/whatsapp/${leadId}/follow-up`)
     return data
   },
+  // Takes a non-paying student off the board and marks them Lost. One call,
+  // because they are one decision - see the backend service.
+  removeFromGroup: async (leadId, reason) => {
+    const { data } = await apiClient.post(`${BASE}/whatsapp/${leadId}/remove`, { reason: reason ?? null })
+    return data
+  },
   whatsappHistory: async (leadId) => {
     const { data } = await apiClient.get(`${BASE}/whatsapp/${leadId}/history`)
     return data

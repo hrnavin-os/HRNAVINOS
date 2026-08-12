@@ -182,6 +182,8 @@ def _to_hr_student(lead, batch: str | None = None, handled_by: str | None = None
         whatsapp_invite_count=lead.whatsapp_invite_count,
         whatsapp_last_follow_up_at=lead.whatsapp_last_follow_up_at,
         whatsapp_handled_by_name=handled_by,
+        non_payment_reported_at=lead.non_payment_reported_at,
+        non_payment_amount=lead.non_payment_amount,
         lost_reason=lead.lost_reason,
         lost_at=lead.lost_at,
         created_at=lead.created_at,
@@ -313,6 +315,24 @@ async def log_whatsapp_follow_up(
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_ALLOCATE)),
 ) -> HRStudentResponse:
     lead = await BatchConfirmationService().log_whatsapp_follow_up(lead_id, actor_id=actor.id)
+    return _to_hr_student(lead)
+
+
+@router.post("/whatsapp/{lead_id}/remove", response_model=HRStudentResponse)
+async def remove_from_group(
+    lead_id: uuid.UUID,
+    payload: WithdrawRequest | None = None,
+    actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_ALLOCATE)),
+) -> HRStudentResponse:
+    """Removes a non-paying student from the batch group and marks them Lost.
+
+    One call, because they're one decision - see the service. The coordinator
+    still has to remove them inside WhatsApp itself; nothing here can do that,
+    and this records that it was done.
+    """
+    lead = await BatchConfirmationService().remove_from_group(
+        lead_id, reason=payload.reason if payload else None, actor_id=actor.id
+    )
     return _to_hr_student(lead)
 
 

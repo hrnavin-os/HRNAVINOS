@@ -15,6 +15,7 @@ import {
 import { useAuth } from '@/hooks/useAuth'
 import { useLeadBoard } from '@/hooks/useLeadBoard'
 import { notificationService } from '@/services/notificationService'
+import { destinationFor } from '@/utils/notificationRouting'
 import { formatDateTime } from '@/utils/formatters'
 
 // Accent per notification type, carried by the icon as well as the colour so a
@@ -160,14 +161,7 @@ export function NotificationBell() {
       if (notification.lead_id) {
         queryClient.invalidateQueries({ queryKey: ['leads'] })
         queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
-        // Explicitly Foundation: a notification's lead_id is always a Lead,
-        // and Induction entries are separate records. Bare /leads would open
-        // the default board, which cannot contain the lead being chased.
-        //
-        // ?lead= opens that candidate's popup on arrival. Landing on the board
-        // and leaving you to find the name yourself defeats the reminder -
-        // the lead is frequently not even on the first page.
-        navigate(`/leads?board=foundation&lead=${notification.lead_id}`)
+        navigate(destinationFor(notification))
       }
     },
   })

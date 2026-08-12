@@ -140,6 +140,12 @@ class Lead(BaseDocument):
     # Ownership follows whoever picked it up rather than being assigned in
     # advance, since the queue is worked from the top by whoever is free.
     whatsapp_handled_by: uuid.UUID | None = None
+    # Set when Finance declares the student a non-payer. Kept on the lead as
+    # well as sent as a notification, so the HR board can flag the row for
+    # anyone who wasn't the one to read the message - a notification is seen
+    # once by one person, and this has to survive that.
+    non_payment_reported_at: datetime | None = None
+    non_payment_amount: MongoDecimal | None = None
     # Captured at the moment a lead is moved to Lost, so the Lost list can say
     # why rather than just that it happened.
     lost_reason: str | None = Field(default=None, max_length=500)

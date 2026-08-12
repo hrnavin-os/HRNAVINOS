@@ -34,3 +34,14 @@ class RoleRepository(BaseRepository[Role]):
         section's admins. A section can have more than one such role, so this
         returns a list rather than assuming the seeded "Admin X-Section"."""
         return await Role.find({"scoped_section": code, "is_deleted": False}).to_list()
+
+    async def list_with_permission(self, permission_id: uuid.UUID) -> list[Role]:
+        """Every role holding one permission.
+
+        How to find "the HR Coordinators" without naming them: role names are
+        editable and a site may well have several roles that do the job, so
+        matching on the name would quietly stop notifying somebody the day it
+        was renamed. What the notification actually needs is whoever is allowed
+        to act on it, which is exactly what holding the permission means.
+        """
+        return await Role.find({"permission_ids": permission_id, "is_deleted": False}).to_list()

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { History, Info, Search, Send, Users } from 'lucide-react'
+import { CircleAlert, History, Info, Search, Send, UserMinus, Users } from 'lucide-react'
 import { batchConfirmationService } from '@/services/batchConfirmationService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { Badge } from '@/components/ui/Badge'
@@ -92,6 +92,7 @@ export function WhatsAppOnboardingBoard() {
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState(null)
   const [historyLead, setHistoryLead] = useState(null)
+  const [removing, setRemoving] = useState(null)
 
   const queueQuery = useQuery({
     queryKey: [QUERY_KEY, 'queue', status],
@@ -145,6 +146,16 @@ export function WhatsAppOnboardingBoard() {
     },
     onError,
   })
+  const removeMutation = useMutation({
+    mutationFn: (leadId) => batchConfirmationService.removeFromGroup(leadId),
+    onSuccess: () => {
+      invalidate()
+      setRemoving(null)
+      setNotice('Removed from the list and marked Lost. Remember to remove them in WhatsApp too.')
+    },
+    onError,
+  })
+
   const bulkMutation = useMutation({
     mutationFn: (leadIds) => batchConfirmationService.sendWhatsappInviteBulk(leadIds),
     onSuccess: (data) => {
@@ -216,6 +227,16 @@ export function WhatsAppOnboardingBoard() {
         <div className="min-w-0">
           <p className="truncate font-medium text-slate-900">{row.name}</p>
           <p className="truncate text-xs text-slate-500">{row.phone}</p>
+          {/* Carried on the row, not just in the notification a colleague may
+              have read yesterday - whoever opens the board next has to be able
+              to see who Finance flagged. */}
+          {row.non_payment_reported_at && (
+            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+              <CircleAlert className="h-3 w-3 shrink-0" strokeWidth={2.5} aria-hidden="true" />
+              Didn&rsquo;t pay
+              {row.non_payment_amount ? ` · ₹${Number(row.non_payment_amount).toLocaleString('en-IN')}` : ''}
+            </span>
+          )}
         </div>
       ),
     },
@@ -307,6 +328,17 @@ export function WhatsAppOnboardingBoard() {
                 Log follow-up
               </Button>
             )}
+            {/* Offered on any row, but the flag above is what makes it the
+                obvious next step on the ones Finance reported. */}
+            <Button
+              variant="secondary"
+              className="px-2.5! py-1! text-xs text-red-600!"
+              disabled={busy}
+              onClick={() => setRemoving(row)}
+            >
+              <UserMinus className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+              Remove
+            </Button>
             <button
               type="button"
               onClick={() => setHistoryLead(row)}
@@ -417,6 +449,33 @@ export function WhatsAppOnboardingBoard() {
       </div>
 
       {historyLead && <HistoryModal lead={historyLead} onClose={() => setHistoryLead(null)} />}
+
+      {removing && (
+        <Modal title="Remove from group" isOpen onClose={() => setRemoving(null)} maxWidth="max-w-md">
+          <p className="text-sm text-slate-700">
+            Remove <span className="font-semibold">{removing.name}</span> from the batch list and mark them{' '}
+            <span className="font-semibold">Lost</span>?
+          </p>
+          {/* Said plainly, because the ERP cannot do it: WhatsApp has no API
+              for removing a group member either. */}
+          <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            You still need to remove them from the WhatsApp group yourself — WhatsApp doesn&rsquo;t let the ERP
+            do that. This records it here.
+          </p>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setRemoving(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => removeMutation.mutate(removing.id)}
+              disabled={removeMutation.isPending}
+            >
+              {removeMutation.isPending ? 'Removing…' : 'Remove and mark Lost'}
+            </Button>
+          </div>
+        </Modal>
+      )}
 
       <Toast message={error} onDismiss={() => setError(null)} />
       <Toast message={notice} tone="success" onDismiss={() => setNotice(null)} />

@@ -54,11 +54,12 @@ class NotificationService:
         that someone will chase the money again.
 
         Only that kind. A follow-up or installment date coming round says
-        nothing about where the lead belongs in the pipeline, so moving it
-        would rewrite the board behind the admin's back every time they read
-        their notifications. Category is None on every reminder raised before
-        categories existed, all of which were payment reminders, so None keeps
-        the old behaviour.
+        nothing about where the lead belongs in the pipeline, and a non-payment
+        report asks for a removal that sets the stage itself - so moving the
+        lead here would rewrite the board behind the reader's back every time
+        they opened their notifications. Category is None on every reminder
+        raised before categories existed, all of which were payment reminders,
+        so None keeps the old behaviour.
 
         Imported inside the method: LeadService already constructs a
         NotificationRepository, so importing it at module scope would make

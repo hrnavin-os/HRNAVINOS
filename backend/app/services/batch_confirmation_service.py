@@ -466,6 +466,49 @@ class BatchConfirmationService:
             actor_id=actor_id,
         )
 
+    async def remove_from_group(
+        self, lead_id: uuid.UUID, *, reason: str | None, actor_id: uuid.UUID | None
+    ) -> Lead:
+        """Takes a non-paying student out of the batch group and off the board.
+
+        One action, not two. Removing somebody from the group and marking them
+        lost are the same decision - a student pulled out of the group for not
+        paying is not coming back to it - and splitting them into two buttons
+        leaves the pair half-done whenever somebody is interrupted between
+        them.
+
+        Clearing group_assigned_at is what takes them off the onboarding queue;
+        LOST is what takes them out of the pipeline. Both, or the row lingers
+        in one of the two places.
+
+        The reason defaults to non-payment because that's the only route here,
+        but is overridable - a coordinator removing somebody for another reason
+        shouldn't have to record a wrong one.
+        """
+        lead = await self.leads.get_by_id(lead_id)
+        if not lead:
+            raise NotFoundError("Lead not found.")
+
+        await self.leads.update(
+            lead,
+            {
+                "group_assigned_at": None,
+                "status": LeadStatus.LOST,
+                "lost_reason": reason or "Removed from batch group - payment not received",
+                "lost_at": utcnow(),
+                "whatsapp_handled_by": actor_id,
+                "updated_by": actor_id,
+            },
+        )
+        await self.audit.record(
+            user_id=actor_id,
+            action="WHATSAPP_REMOVED",
+            entity_type="Lead",
+            entity_id=str(lead.id),
+            changes={"whatsapp": "WHATSAPP_REMOVED", "reason": lead.lost_reason},
+        )
+        return lead
+
     async def whatsapp_history(self, lead_id: uuid.UUID) -> list[tuple]:
         """(action, actor name, when) for every onboarding step on this
         candidate, newest first."""
