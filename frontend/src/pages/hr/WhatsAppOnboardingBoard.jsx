@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CircleAlert, History, Info, Search, Send, UserMinus, Users } from 'lucide-react'
+import { CircleAlert, Info, Search, Send, Users } from 'lucide-react'
 import { batchConfirmationService } from '@/services/batchConfirmationService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { Badge } from '@/components/ui/Badge'
@@ -9,13 +9,10 @@ import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
 import { Toast } from '@/components/ui/Toast'
 import { DataTable } from '@/components/ui/DataTable'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { StatCard } from '@/components/ui/StatCard'
-import {
-  WHATSAPP_ACTION_LABELS,
-  WHATSAPP_STATUS,
-  WHATSAPP_STATUS_ORDER,
-} from '@/constants/whatsappStatus'
+import { WhatsAppStatusPill } from '@/components/hr/WhatsAppStatusPill'
+import { WhatsAppStudentModal } from '@/components/hr/WhatsAppStudentModal'
+import { WHATSAPP_STATUS, WHATSAPP_STATUS_ORDER } from '@/constants/whatsappStatus'
 import { formatDateTime } from '@/utils/formatters'
 
 const QUERY_KEY = 'whatsapp-onboarding'
@@ -35,55 +32,6 @@ function inviteMessage(name, groupUrl) {
   return `Hi ${name}, welcome to HRNAVINOS! Join your batch group here: ${groupUrl}`
 }
 
-function StatusPill({ status }) {
-  const style = WHATSAPP_STATUS[status] ?? WHATSAPP_STATUS.not_invited
-  const Icon = style.icon
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium ${style.pill}`}
-    >
-      <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} aria-hidden="true" />
-      {style.label}
-    </span>
-  )
-}
-
-function HistoryModal({ lead, onClose }) {
-  const query = useQuery({
-    queryKey: [QUERY_KEY, 'history', lead.id],
-    queryFn: () => batchConfirmationService.whatsappHistory(lead.id),
-  })
-
-  return (
-    <Modal title={`Group history — ${lead.name}`} isOpen onClose={onClose} maxWidth="max-w-lg">
-      {query.isLoading ? (
-        <LoadingSpinner />
-      ) : query.data?.length ? (
-        <ol className="space-y-3">
-          {query.data.map((entry, index) => (
-            <li key={index} className="flex gap-3">
-              <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-brand-500" />
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-slate-900">
-                  {WHATSAPP_ACTION_LABELS[entry.action] ?? entry.action}
-                </p>
-                <p className="text-xs text-slate-500">
-                  {formatDateTime(entry.created_at)}
-                  {entry.user_name ? ` · ${entry.user_name}` : ''}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      ) : (
-        <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">
-          Nothing recorded yet. Sending the first invite starts the history.
-        </p>
-      )}
-    </Modal>
-  )
-}
-
 export function WhatsAppOnboardingBoard() {
   const queryClient = useQueryClient()
   const [status, setStatus] = useState('')
@@ -91,7 +39,7 @@ export function WhatsAppOnboardingBoard() {
   const [selected, setSelected] = useState([])
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState(null)
-  const [historyLead, setHistoryLead] = useState(null)
+  const [viewing, setViewing] = useState(null)
   const [removing, setRemoving] = useState(null)
 
   const queueQuery = useQuery({
@@ -214,6 +162,8 @@ export function WhatsAppOnboardingBoard() {
           <input
             type="checkbox"
             checked={selected.includes(row.id)}
+            // The row opens the popup now, so ticking a box must not do both.
+            onClick={(event) => event.stopPropagation()}
             onChange={() => toggleSelected(row.id)}
             aria-label={`Select ${row.name}`}
             className="h-4 w-4 cursor-pointer rounded border-slate-300 text-brand-600 focus:ring-brand-500"
@@ -260,7 +210,7 @@ export function WhatsAppOnboardingBoard() {
       key: 'whatsapp_status',
       header: 'WhatsApp Group',
       align: 'center',
-      render: (row) => <StatusPill status={row.whatsapp_status} />,
+      render: (row) => <WhatsAppStatusPill status={row.whatsapp_status} />,
     },
     {
       key: 'invite_sent_at',
@@ -289,66 +239,43 @@ export function WhatsAppOnboardingBoard() {
       render: (row) => row.whatsapp_handled_by_name ?? dash,
     },
     {
+      // One action, not five. The column carried Send, Mark joined, Log
+      // follow-up, Remove and a history icon, which is what pushed the table
+      // into a horizontal scroll. The rest live in the row's popup now, and
+      // this keeps only the step that row is actually waiting on.
       key: 'actions',
-      header: 'Actions',
+      header: 'Action',
       align: 'center',
       render: (row) => {
-        const joined = row.whatsapp_status === 'joined'
+        if (row.whatsapp_status === 'joined') return <span className="text-xs text-slate-400">—</span>
         const invited = row.whatsapp_status !== 'not_invited'
-        return (
-          <div className="flex items-center justify-center gap-1.5">
-            {!joined && (
-              <Button
-                variant="secondary"
-                className="px-2.5! py-1! text-xs"
-                disabled={busy}
-                onClick={() => inviteMutation.mutate(row.id)}
-              >
-                <Send className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-                {invited ? 'Resend' : 'Send invite'}
-              </Button>
-            )}
-            {!joined && invited && (
-              <Button
-                variant="success"
-                className="px-2.5! py-1! text-xs"
-                disabled={busy}
-                onClick={() => joinedMutation.mutate(row.id)}
-              >
-                Mark joined
-              </Button>
-            )}
-            {row.whatsapp_status === 'follow_up_required' && (
-              <Button
-                variant="secondary"
-                className="px-2.5! py-1! text-xs"
-                disabled={busy}
-                onClick={() => followUpMutation.mutate(row.id)}
-              >
-                Log follow-up
-              </Button>
-            )}
-            {/* Offered on any row, but the flag above is what makes it the
-                obvious next step on the ones Finance reported. */}
-            <Button
-              variant="secondary"
-              className="px-2.5! py-1! text-xs text-red-600!"
-              disabled={busy}
-              onClick={() => setRemoving(row)}
-            >
-              <UserMinus className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-              Remove
-            </Button>
-            <button
-              type="button"
-              onClick={() => setHistoryLead(row)}
-              title="Group history"
-              aria-label={`Group history for ${row.name}`}
-              className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
-            >
-              <History className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-            </button>
-          </div>
+        // stopPropagation throughout: the row itself opens the popup now, and
+        // a button inside it must not do both.
+        return invited ? (
+          <Button
+            variant="success"
+            className="px-2.5! py-1! text-xs"
+            disabled={busy}
+            onClick={(event) => {
+              event.stopPropagation()
+              joinedMutation.mutate(row.id)
+            }}
+          >
+            Mark joined
+          </Button>
+        ) : (
+          <Button
+            variant="secondary"
+            className="px-2.5! py-1! text-xs"
+            disabled={busy}
+            onClick={(event) => {
+              event.stopPropagation()
+              inviteMutation.mutate(row.id)
+            }}
+          >
+            <Send className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+            Send invite
+          </Button>
         )
       },
     },
@@ -442,13 +369,38 @@ export function WhatsAppOnboardingBoard() {
           isLoading={queueQuery.isLoading}
           error={queueQuery.error ? getApiErrorMessage(queueQuery.error) : null}
           emptyMessage="No candidates in this state. Leads arrive here once Finance moves them to Batch Confirmation."
+          onRowClick={(row) => setViewing(row)}
         />
         <p className="border-t border-slate-100 px-4 py-2.5 text-xs text-slate-400">
           Showing <span className="font-semibold text-slate-600">{rows.length}</span> of {allRows.length}
         </p>
       </div>
 
-      {historyLead && <HistoryModal lead={historyLead} onClose={() => setHistoryLead(null)} />}
+      {viewing && (
+        <WhatsAppStudentModal
+          student={viewing}
+          isBusy={busy}
+          onClose={() => setViewing(null)}
+          onInvite={(id) => {
+            inviteMutation.mutate(id)
+            setViewing(null)
+          }}
+          onJoined={(id) => {
+            joinedMutation.mutate(id)
+            setViewing(null)
+          }}
+          onFollowUp={(id) => {
+            followUpMutation.mutate(id)
+            setViewing(null)
+          }}
+          // Hands off to the confirm dialog rather than removing straight from
+          // the popup - this one marks the student Lost.
+          onRemove={(row) => {
+            setViewing(null)
+            setRemoving(row)
+          }}
+        />
+      )}
 
       {removing && (
         <Modal title="Remove from group" isOpen onClose={() => setRemoving(null)} maxWidth="max-w-md">
