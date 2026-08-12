@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { History, Search, Send } from 'lucide-react'
+import { History, Search, Send, Users } from 'lucide-react'
 import { batchConfirmationService } from '@/services/batchConfirmationService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { Badge } from '@/components/ui/Badge'
@@ -10,6 +10,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Toast } from '@/components/ui/Toast'
 import { DataTable } from '@/components/ui/DataTable'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { StatCard } from '@/components/ui/StatCard'
 import {
   WHATSAPP_ACTION_LABELS,
   WHATSAPP_STATUS,
@@ -327,39 +328,36 @@ export function WhatsAppOnboardingBoard() {
     : allRows
 
   const counts = countsQuery.data ?? {}
-  const chips = [
-    { value: '', label: 'All', count: counts.all, chip: 'border-brand-300 bg-brand-100 text-brand-800' },
+  const cards = [
+    { value: '', label: 'All Candidates', count: counts.all, tone: 'brand', icon: Users },
     ...WHATSAPP_STATUS_ORDER.map((key) => ({
       value: key,
-      label: WHATSAPP_STATUS[key].chipLabel ?? WHATSAPP_STATUS[key].label,
+      label: WHATSAPP_STATUS[key].cardLabel ?? WHATSAPP_STATUS[key].label,
       count: counts[key],
-      chip: WHATSAPP_STATUS[key].chip,
-      dot: WHATSAPP_STATUS[key].dot,
+      tone: WHATSAPP_STATUS[key].tone,
+      icon: WHATSAPP_STATUS[key].icon,
     })),
   ]
 
   return (
     <div>
-      {/* Chips rather than the stat cards used elsewhere: these are one row of
-          a single lifecycle, and reading them left to right is meant to show
-          the process - not invited, waiting, overdue, in. */}
-      <div className="mb-4 flex flex-wrap gap-2">
-        {chips.map((chip) => (
-          <button
-            key={chip.value || 'all'}
-            type="button"
+      {/* The same StatCard the lead boards and the coordinator queues use.
+          Ordered as the lifecycle reads, left to right, so the row doubles as
+          a diagram of the process - not invited, waiting, overdue, in. */}
+      <div className="mb-4 flex flex-wrap gap-3">
+        {cards.map((card) => (
+          <StatCard
+            key={card.value || 'all'}
+            label={card.label}
+            value={card.count ?? 0}
+            toneName={card.tone}
+            icon={card.icon}
+            isActive={status === card.value}
             onClick={() => {
-              setStatus(chip.value)
+              setStatus(card.value)
               setSelected([])
             }}
-            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
-              status === chip.value ? chip.chip : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            {chip.dot && <span className={`h-2 w-2 shrink-0 rounded-full ${chip.dot}`} />}
-            {chip.label}
-            <span className="tabular-nums opacity-70">{chip.count ?? 0}</span>
-          </button>
+          />
         ))}
       </div>
 
