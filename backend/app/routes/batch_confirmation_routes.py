@@ -4,7 +4,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query, status
 
 from app.core.dependencies import RequirePermissions
-from app.models.enums import AllocationStatus
+from app.models.enums import AllocationStatus, WhatsAppGroupStatus
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.batch_confirmation_schema import (
@@ -23,6 +23,8 @@ from app.schemas.batch_confirmation_schema import (
     HRStudentResponse,
     MarkRequest,
     PendingLeadResponse,
+    WhatsAppCountsResponse,
+    WhatsAppHistoryEntry,
     WithdrawRequest,
 )
 from app.schemas.batch_schema import BatchCreate, BatchResponse
@@ -156,7 +158,7 @@ async def update_whatsapp_link(
     )
 
 
-def _to_hr_student(lead, batch: str | None = None) -> HRStudentResponse:
+def _to_hr_student(lead, batch: str | None = None, handled_by: str | None = None) -> HRStudentResponse:
     return HRStudentResponse(
         id=lead.id,
         name=lead.name,
@@ -171,10 +173,28 @@ def _to_hr_student(lead, batch: str | None = None) -> HRStudentResponse:
         # a batch.
         batch=batch or lead.batch_number,
         group_assigned_at=lead.group_assigned_at,
+        joined_at=lead.group_assigned_at,
+        whatsapp_status=lead.whatsapp_status,
+        whatsapp_invite_sent_at=lead.whatsapp_invite_sent_at,
+        whatsapp_invite_count=lead.whatsapp_invite_count,
+        whatsapp_last_follow_up_at=lead.whatsapp_last_follow_up_at,
+        whatsapp_handled_by_name=handled_by,
         lost_reason=lead.lost_reason,
         lost_at=lead.lost_at,
         created_at=lead.created_at,
     )
+
+
+async def _handler_names(service: BatchConfirmationService, leads: list) -> dict:
+    """{user id: display name} for whoever last worked each candidate.
+    Resolved once for the page rather than per row."""
+    ids = {lead.whatsapp_handled_by for lead in leads if lead.whatsapp_handled_by}
+    names = {}
+    for user_id in ids:
+        user = await service.users.get_by_id(user_id)
+        if user:
+            names[user_id] = f"{user.first_name} {user.last_name}".strip()
+    return names
 
 
 @router.get("/students", response_model=list[HRStudentResponse])
@@ -186,27 +206,106 @@ async def list_hr_students(
     leads = await service.list_hr_students(tab)
     # Resolved for the whole page in one query rather than per row.
     batches = await service.batches_for(leads)
-    return [_to_hr_student(lead, batches.get(lead.id)) for lead in leads]
+    handlers = await _handler_names(service, leads)
+    return [
+        _to_hr_student(lead, batches.get(lead.id), handlers.get(lead.whatsapp_handled_by)) for lead in leads
+    ]
 
 
-@router.post("/students/group-assigned/bulk", response_model=BulkGroupAssignResponse)
-async def bulk_mark_group_assigned(
+# ---------------------------------------------------------------------------
+# WhatsApp group onboarding
+#
+# The ERP cannot add anybody to a WhatsApp group. Only the person holding the
+# account can accept an invite, and no WhatsApp API - Business API included -
+# exposes group member management or a join event to subscribe to. So the flow
+# these routes model is the one the platform actually permits:
+#
+#     coordinator sends the invite -> candidate joins -> coordinator records it
+#
+# Sending is a wa.me deep link with the invite pre-written, which needs no
+# credentials and works today. If an integration that can send programmatically
+# is added later it slots in at send_whatsapp_invite and nothing else changes;
+# a real join event would replace only the manual mark, which is recorded under
+# its own audit action so the two stay distinguishable in the history.
+# ---------------------------------------------------------------------------
+
+
+@router.get("/whatsapp/queue", response_model=list[HRStudentResponse])
+async def list_whatsapp_queue(
+    status_filter: WhatsAppGroupStatus | None = Query(default=None, alias="status"),
+    actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
+) -> list[HRStudentResponse]:
+    service = BatchConfirmationService()
+    leads = await service.list_whatsapp_queue(status_filter)
+    batches = await service.batches_for(leads)
+    handlers = await _handler_names(service, leads)
+    return [
+        _to_hr_student(lead, batches.get(lead.id), handlers.get(lead.whatsapp_handled_by)) for lead in leads
+    ]
+
+
+@router.get("/whatsapp/counts", response_model=WhatsAppCountsResponse)
+async def whatsapp_counts(
+    actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
+) -> WhatsAppCountsResponse:
+    return WhatsAppCountsResponse(**await BatchConfirmationService().whatsapp_counts())
+
+
+@router.post("/whatsapp/invite/bulk", response_model=BulkGroupAssignResponse)
+async def bulk_send_whatsapp_invite(
     payload: BulkGroupAssignRequest,
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_ALLOCATE)),
 ) -> BulkGroupAssignResponse:
-    """Marks a selection as added to their WhatsApp group.
-
-    Declared before /students/{lead_id}/... so the dynamic segment doesn't
-    swallow "group-assigned" and try to parse it as a UUID.
-    """
-    assigned, skipped = await BatchConfirmationService().set_group_assigned_bulk(
+    """Sends the invite to a selection. Declared before the /{lead_id} routes
+    so the dynamic segment doesn't swallow "invite"."""
+    sent, skipped = await BatchConfirmationService().send_whatsapp_invite_bulk(
         payload.lead_ids, actor_id=actor.id
     )
-    message = f"{assigned} student{'' if assigned == 1 else 's'} marked as added to the group."
+    message = f"Invite sent to {sent} candidate{'' if sent == 1 else 's'}."
     if skipped:
-        message = f"{message} Skipped {len(skipped)}: {', '.join(skipped[:3])}"
-        message = f"{message}…" if len(skipped) > 3 else message
-    return BulkGroupAssignResponse(message=message, assigned=assigned, skipped=skipped)
+        shown = ", ".join(skipped[:3]) + ("…" if len(skipped) > 3 else "")
+        message = f"{message} Skipped {len(skipped)}: {shown}"
+    return BulkGroupAssignResponse(message=message, assigned=sent, skipped=skipped)
+
+
+@router.post("/whatsapp/{lead_id}/invite", response_model=HRStudentResponse)
+async def send_whatsapp_invite(
+    lead_id: uuid.UUID,
+    actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_ALLOCATE)),
+) -> HRStudentResponse:
+    """Records that the invite went out. Does NOT mark anybody as joined."""
+    lead = await BatchConfirmationService().send_whatsapp_invite(lead_id, actor_id=actor.id)
+    return _to_hr_student(lead)
+
+
+@router.post("/whatsapp/{lead_id}/joined", response_model=HRStudentResponse)
+async def mark_whatsapp_joined(
+    lead_id: uuid.UUID,
+    actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_ALLOCATE)),
+) -> HRStudentResponse:
+    lead = await BatchConfirmationService().mark_whatsapp_joined(lead_id, actor_id=actor.id)
+    return _to_hr_student(lead)
+
+
+@router.post("/whatsapp/{lead_id}/follow-up", response_model=HRStudentResponse)
+async def log_whatsapp_follow_up(
+    lead_id: uuid.UUID,
+    actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_ALLOCATE)),
+) -> HRStudentResponse:
+    lead = await BatchConfirmationService().log_whatsapp_follow_up(lead_id, actor_id=actor.id)
+    return _to_hr_student(lead)
+
+
+@router.get("/whatsapp/{lead_id}/history", response_model=list[WhatsAppHistoryEntry])
+async def whatsapp_history(
+    lead_id: uuid.UUID,
+    actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
+) -> list[WhatsAppHistoryEntry]:
+    history = await BatchConfirmationService().whatsapp_history(lead_id)
+    return [
+        WhatsAppHistoryEntry(action=action, user_name=user_name, created_at=created_at)
+        for action, user_name, created_at in history
+    ]
 
 
 @router.put("/students/{lead_id}/batch-number", response_model=HRStudentResponse)

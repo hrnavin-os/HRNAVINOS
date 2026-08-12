@@ -77,6 +77,21 @@ class LeadStatus(StrEnum):
     LOST = "lost"
 
 
+class WhatsAppGroupStatus(StrEnum):
+    """Where a candidate is in the WhatsApp group onboarding.
+
+    Never stored on the lead. It's a pure function of three timestamps
+    (see Lead.whatsapp_status), so it can't drift from them and needs no job
+    to move anyone into FOLLOW_UP_REQUIRED when their wait runs out - the
+    moment the cutoff passes, the same data reads as the new status.
+    """
+
+    NOT_INVITED = "not_invited"
+    INVITE_SENT = "invite_sent"
+    JOINED = "joined"
+    FOLLOW_UP_REQUIRED = "follow_up_required"
+
+
 class AdmissionStatus(StrEnum):
     PENDING = "pending"
     CONFIRMED = "confirmed"

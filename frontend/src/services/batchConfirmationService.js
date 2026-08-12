@@ -64,8 +64,34 @@ export const batchConfirmationService = {
     const { data } = await apiClient.post(`${BASE}/students/${leadId}/group-assigned`, { assigned })
     return data
   },
-  markGroupAssignedBulk: async (leadIds) => {
-    const { data } = await apiClient.post(`${BASE}/students/group-assigned/bulk`, { lead_ids: leadIds })
+  // WhatsApp group onboarding. Sending an invite and recording a join are
+  // separate calls on purpose - see the note on the backend routes.
+  whatsappQueue: async (status) => {
+    const { data } = await apiClient.get(`${BASE}/whatsapp/queue`, { params: status ? { status } : {} })
+    return data
+  },
+  whatsappCounts: async () => {
+    const { data } = await apiClient.get(`${BASE}/whatsapp/counts`)
+    return data
+  },
+  sendWhatsappInvite: async (leadId) => {
+    const { data } = await apiClient.post(`${BASE}/whatsapp/${leadId}/invite`)
+    return data
+  },
+  sendWhatsappInviteBulk: async (leadIds) => {
+    const { data } = await apiClient.post(`${BASE}/whatsapp/invite/bulk`, { lead_ids: leadIds })
+    return data
+  },
+  markWhatsappJoined: async (leadId) => {
+    const { data } = await apiClient.post(`${BASE}/whatsapp/${leadId}/joined`)
+    return data
+  },
+  logWhatsappFollowUp: async (leadId) => {
+    const { data } = await apiClient.post(`${BASE}/whatsapp/${leadId}/follow-up`)
+    return data
+  },
+  whatsappHistory: async (leadId) => {
+    const { data } = await apiClient.get(`${BASE}/whatsapp/${leadId}/history`)
     return data
   },
   setHrStage: async (leadId, status, lostReason) => {

@@ -1,6 +1,6 @@
 """Lead document — a prospective student tracked through the CRM / Pre-Sales pipeline."""
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from pymongo import IndexModel
 from pydantic import BaseModel, Field
@@ -15,7 +15,18 @@ from app.models.enums import (
     PaymentMethod,
     PaymentOption,
     PaymentPlanOption,
+    WhatsAppGroupStatus,
 )
+
+# How long a candidate has to accept a group invite before the board starts
+# asking somebody to chase them. One working day: long enough that a candidate
+# who was simply asleep isn't flagged, short enough that a batch filling up
+# doesn't wait a week to find out who never joined.
+#
+# The single place this is configured. It is read at query time as well as on
+# the model, so changing it here re-classifies everyone immediately - there is
+# no stored status to migrate.
+INVITE_WAIT = timedelta(hours=24)
 
 
 class FollowUpEntry(BaseModel):
@@ -110,10 +121,25 @@ class Lead(BaseDocument):
     # separate from `batch_preference` (what the student asked for on the form)
     # and from the Batch documents the allocation flow uses.
     batch_number: str | None = Field(default=None, max_length=50)
-    # Set once the coordinator confirms the student actually joined their
-    # section's WhatsApp group; doubles as the flag that moves them out of the
-    # "Approved by Finance" queue and into "Group Assigned".
+    # When the candidate actually joined their section's WhatsApp group. Named
+    # for the queue it used to drive rather than for what it means; kept under
+    # that name because every existing row already carries it, and exposed as
+    # `joined_at` on the API.
     group_assigned_at: datetime | None = None
+    # When the invite was last sent, and how many times. An invite is NOT a
+    # join: the two were the same click until this existed, so a candidate who
+    # was merely messaged counted as a group member and nobody chased them.
+    whatsapp_invite_sent_at: datetime | None = None
+    whatsapp_invite_count: int = 0
+    # Set when a coordinator records that they chased an unjoined candidate.
+    # Doesn't change the status - the candidate still hasn't joined - it only
+    # says somebody has already tried, so two coordinators don't both ring the
+    # same person on the same day.
+    whatsapp_last_follow_up_at: datetime | None = None
+    # The coordinator who last acted on this candidate's group onboarding.
+    # Ownership follows whoever picked it up rather than being assigned in
+    # advance, since the queue is worked from the top by whoever is free.
+    whatsapp_handled_by: uuid.UUID | None = None
     # Captured at the moment a lead is moved to Lost, so the Lost list can say
     # why rather than just that it happened.
     lost_reason: str | None = Field(default=None, max_length=500)
@@ -144,6 +170,24 @@ class Lead(BaseDocument):
             # code (GoogleSheetsService.sync_all checks for an existing match).
             IndexModel([("external_ref", 1)]),
         ]
+
+    @property
+    def whatsapp_status(self) -> WhatsAppGroupStatus:
+        """Where this candidate is in the group onboarding.
+
+        Derived, never stored. Follow-up Required is "invited a while ago and
+        still not in" - a fact about the clock, not an event anybody records -
+        so computing it means it arrives exactly when the wait elapses instead
+        of whenever a job last ran, and it can never disagree with the
+        timestamps it's read from.
+        """
+        if self.group_assigned_at is not None:
+            return WhatsAppGroupStatus.JOINED
+        if self.whatsapp_invite_sent_at is None:
+            return WhatsAppGroupStatus.NOT_INVITED
+        if utcnow() - self.whatsapp_invite_sent_at >= INVITE_WAIT:
+            return WhatsAppGroupStatus.FOLLOW_UP_REQUIRED
+        return WhatsAppGroupStatus.INVITE_SENT
 
     def __repr__(self) -> str:
         return f"<Lead {self.name} status={self.status}>"

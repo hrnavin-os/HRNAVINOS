@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import AllocationStatus, BatchStatus, LeadStatus
+from app.models.enums import AllocationStatus, BatchStatus, LeadStatus, WhatsAppGroupStatus
 
 
 class AllocateRequest(BaseModel):
@@ -157,6 +157,22 @@ class BulkGroupAssignResponse(BaseModel):
     skipped: list[str] = []
 
 
+class WhatsAppHistoryEntry(BaseModel):
+    action: str
+    user_name: str | None
+    created_at: datetime
+
+
+class WhatsAppCountsResponse(BaseModel):
+    """One count per status plus the total, for the board's filter chips."""
+
+    all: int
+    not_invited: int
+    invite_sent: int
+    joined: int
+    follow_up_required: int
+
+
 class HRStudentResponse(BaseModel):
     """One row in any of the four HR Coordinator tabs. A single shape across
     all of them - each tab just renders the subset of columns it cares about,
@@ -180,7 +196,17 @@ class HRStudentResponse(BaseModel):
     # knew, and any typo silently disagreed with the Induction board. Falls
     # back to batch_number when there's no induction record to read.
     batch: str | None = None
+    # Stored as group_assigned_at; renamed here because "when they joined" is
+    # what it means and what the board shows.
     group_assigned_at: datetime | None
+    joined_at: datetime | None = None
+    # Derived from the timestamps below - see Lead.whatsapp_status. An invite
+    # having been sent is never reported as a join.
+    whatsapp_status: WhatsAppGroupStatus = WhatsAppGroupStatus.NOT_INVITED
+    whatsapp_invite_sent_at: datetime | None = None
+    whatsapp_invite_count: int = 0
+    whatsapp_last_follow_up_at: datetime | None = None
+    whatsapp_handled_by_name: str | None = None
     lost_reason: str | None
     lost_at: datetime | None
     created_at: datetime

@@ -24,11 +24,13 @@ from app.models.enums import (
     LeadStatus,
     StudentStatus,
     TutorStatus,
+    WhatsAppGroupStatus,
 )
 from app.models.induction_entry import InductionEntry
-from app.models.lead import Lead
+from app.models.lead import INVITE_WAIT, Lead
 from app.models.student import Student
 from app.repositories.admission_repository import AdmissionRepository
+from app.repositories.audit_log_repository import AuditLogRepository
 from app.repositories.batch_allocation_repository import BatchAllocationRepository
 from app.repositories.batch_repository import BatchRepository
 from app.repositories.course_repository import CourseRepository
@@ -98,6 +100,7 @@ class BatchConfirmationService:
         self.students = StudentRepository()
         self.admissions = AdmissionRepository()
         self.audit = AuditService()
+        self.audit_logs = AuditLogRepository()
 
     # ---------- Reads ----------
 
@@ -216,6 +219,61 @@ class BatchConfirmationService:
             raise BadRequestError(f"Unknown tab '{tab}'.")
         return await Lead.find(queries[tab]).sort("+created_at").to_list()
 
+    @staticmethod
+    def whatsapp_status_query(status: WhatsAppGroupStatus) -> dict:
+        """The stored-field query matching a derived WhatsApp status.
+
+        Mirrors Lead.whatsapp_status. The derivation lives on the model so a
+        single lead can report itself; this exists so the database can filter
+        thousands without loading them, and the two have to agree - the cutoff
+        is computed from the same INVITE_WAIT either way.
+
+        `$eq: None` rather than a bare None throughout, so leads written before
+        these fields existed - where the key is absent rather than null - match
+        as Not Invited instead of silently vanishing from every filter.
+        """
+        cutoff = utcnow() - INVITE_WAIT
+        if status == WhatsAppGroupStatus.JOINED:
+            return {"group_assigned_at": {"$ne": None}}
+        if status == WhatsAppGroupStatus.NOT_INVITED:
+            return {"group_assigned_at": {"$eq": None}, "whatsapp_invite_sent_at": {"$eq": None}}
+        if status == WhatsAppGroupStatus.FOLLOW_UP_REQUIRED:
+            return {"group_assigned_at": {"$eq": None}, "whatsapp_invite_sent_at": {"$ne": None, "$lte": cutoff}}
+        # INVITE_SENT: invited, still inside the waiting period.
+        return {"group_assigned_at": {"$eq": None}, "whatsapp_invite_sent_at": {"$ne": None, "$gt": cutoff}}
+
+    async def list_whatsapp_queue(self, status: WhatsAppGroupStatus | None = None) -> list[Lead]:
+        """The group-onboarding board: every candidate at the batch stage, or
+        one status of them.
+
+        Joined candidates are included - the coordinator needs to see who is
+        already in as well as who isn't, and hiding them would make the counts
+        on the filter chips disagree with the list they filter.
+        """
+        query: dict = {
+            "is_deleted": False,
+            "reviewed": {"$ne": False},
+            "status": LeadStatus.BATCH_CONFIRMATION,
+        }
+        if status is not None:
+            query.update(self.whatsapp_status_query(status))
+        return await Lead.find(query).sort("+created_at").to_list()
+
+    async def whatsapp_counts(self) -> dict[str, int]:
+        """One count per status, for the filter chips."""
+        counts = {}
+        for status in WhatsAppGroupStatus:
+            counts[status.value] = await Lead.find(
+                {
+                    "is_deleted": False,
+                    "reviewed": {"$ne": False},
+                    "status": LeadStatus.BATCH_CONFIRMATION,
+                    **self.whatsapp_status_query(status),
+                }
+            ).count()
+        counts["all"] = sum(counts.values())
+        return counts
+
     async def batches_for(self, leads: list[Lead]) -> dict[uuid.UUID, str]:
         """{lead id: batch} for leads linked to an induction entry.
 
@@ -281,16 +339,127 @@ class BatchConfirmationService:
         )
         return lead
 
-    async def set_group_assigned_bulk(
+    # ---------- WhatsApp group onboarding ----------
+
+    async def _whatsapp_action(
+        self, lead_id: uuid.UUID, *, action: str, changes: dict, actor_id: uuid.UUID | None
+    ) -> Lead:
+        """Applies one step of the group onboarding and records who did it.
+
+        Every step goes through here so none of them can be taken without
+        leaving an audit entry - the trail is the point of the feature, not a
+        nicety, since "did anyone actually chase this candidate" is exactly
+        what the board exists to answer.
+        """
+        lead = await self.leads.get_by_id(lead_id)
+        if not lead:
+            raise NotFoundError("Lead not found.")
+
+        await self.leads.update(lead, {**changes, "whatsapp_handled_by": actor_id, "updated_by": actor_id})
+        await self.audit.record(
+            user_id=actor_id,
+            action=action,
+            entity_type="Lead",
+            entity_id=str(lead.id),
+            changes={"whatsapp": action},
+        )
+        return lead
+
+    async def send_whatsapp_invite(self, lead_id: uuid.UUID, *, actor_id: uuid.UUID | None) -> Lead:
+        """Records that the group invite was sent - not that it was accepted.
+
+        Deliberately does not touch group_assigned_at. Sending and joining used
+        to be the same click, which meant the board reported candidates as
+        group members on the strength of a message going out, and nobody was
+        ever chased. Resending reuses this: the timestamp moves, restarting the
+        wait, and the count goes up so the trail shows how many attempts it
+        took.
+        """
+        lead = await self.leads.get_by_id(lead_id)
+        if not lead:
+            raise NotFoundError("Lead not found.")
+        if lead.group_assigned_at is not None:
+            raise BadRequestError(f"{lead.name} has already joined the group.")
+
+        resend = lead.whatsapp_invite_count > 0
+        return await self._whatsapp_action(
+            lead_id,
+            action="WHATSAPP_INVITE_RESENT" if resend else "WHATSAPP_INVITE_SENT",
+            changes={
+                "whatsapp_invite_sent_at": utcnow(),
+                "whatsapp_invite_count": lead.whatsapp_invite_count + 1,
+            },
+            actor_id=actor_id,
+        )
+
+    async def mark_whatsapp_joined(self, lead_id: uuid.UUID, *, actor_id: uuid.UUID | None) -> Lead:
+        """Records that the candidate is actually in the group.
+
+        Manual, because WhatsApp gives us no join event to listen for - see
+        the note on the routes. Recorded as a manual mark in the audit trail
+        precisely so that, if an integration ever does deliver join events,
+        the two are distinguishable in the history.
+        """
+        lead = await self.leads.get_by_id(lead_id)
+        if not lead:
+            raise NotFoundError("Lead not found.")
+        if lead.status != LeadStatus.BATCH_CONFIRMATION:
+            raise BadRequestError("Only leads at the Batch Confirmation stage can be marked as joined.")
+
+        return await self._whatsapp_action(
+            lead_id,
+            action="WHATSAPP_JOINED_MANUAL",
+            changes={"group_assigned_at": utcnow()},
+            actor_id=actor_id,
+        )
+
+    async def log_whatsapp_follow_up(self, lead_id: uuid.UUID, *, actor_id: uuid.UUID | None) -> Lead:
+        """Records that somebody chased this candidate.
+
+        Doesn't change the status - they still haven't joined - it stops two
+        coordinators working the same overdue row on the same day.
+        """
+        return await self._whatsapp_action(
+            lead_id,
+            action="WHATSAPP_FOLLOW_UP",
+            changes={"whatsapp_last_follow_up_at": utcnow()},
+            actor_id=actor_id,
+        )
+
+    async def whatsapp_history(self, lead_id: uuid.UUID) -> list[tuple]:
+        """(action, actor name, when) for every onboarding step on this
+        candidate, newest first."""
+        entries, _ = await self.audit_logs.list(
+            page=1,
+            page_size=100,
+            sort_by="created_at",
+            sort_order="desc",
+            filters={"entity_type": "Lead", "entity_id": str(lead_id)},
+        )
+        history = []
+        for entry in entries:
+            if not entry.action.startswith("WHATSAPP_"):
+                continue
+            user = await self.users.get_by_id(entry.user_id) if entry.user_id else None
+            history.append(
+                (entry.action, f"{user.first_name} {user.last_name}".strip() if user else None, entry.created_at)
+            )
+        return history
+
+    async def send_whatsapp_invite_bulk(
         self, lead_ids: list[uuid.UUID], *, actor_id: uuid.UUID | None
     ) -> tuple[int, list[str]]:
-        """Marks a whole selection as added to their group.
+        """Sends the group invite to a whole selection.
 
-        Returns (assigned, skipped_names). Skipping is reported rather than
-        raised: one lead that has moved on shouldn't discard the rest of a
+        Sends, not joins: the bulk action used to mark everybody as a group
+        member in one press, which is the same mistake the single-row button
+        made and worse for being applied to twenty people at once.
+
+        Returns (sent, skipped_names). Skipping is reported rather than raised:
+        one candidate who has already joined shouldn't discard the rest of a
         selection the coordinator has just worked through.
         """
-        assigned = 0
+        sent = 0
         skipped: list[str] = []
         for lead_id in lead_ids:
             lead = await self.leads.get_by_id(lead_id)
@@ -299,9 +468,9 @@ class BatchConfirmationService:
             if lead.status != LeadStatus.BATCH_CONFIRMATION or lead.group_assigned_at is not None:
                 skipped.append(lead.name)
                 continue
-            await self.set_group_assigned(lead_id, assigned=True, actor_id=actor_id)
-            assigned += 1
-        return assigned, skipped
+            await self.send_whatsapp_invite(lead_id, actor_id=actor_id)
+            sent += 1
+        return sent, skipped
 
     async def set_hr_stage(
         self,
