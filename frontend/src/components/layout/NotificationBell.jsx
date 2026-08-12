@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
@@ -12,8 +12,6 @@ import {
   ListChecks,
   Trash2,
 } from 'lucide-react'
-import { useAuth } from '@/hooks/useAuth'
-import { useLeadBoard } from '@/hooks/useLeadBoard'
 import { notificationService } from '@/services/notificationService'
 import { destinationFor } from '@/utils/notificationRouting'
 import { formatDateTime } from '@/utils/formatters'
@@ -98,13 +96,14 @@ function NotificationRow({ notification, onOpen, onDelete, isBusy, isDeleting, s
 // reminder is a glance, not a destination, and leaving the board to read one
 // meant losing your place on it.
 //
-// Section Admins only: the same rule the sidebar entry and the route follow,
-// since payment reminders are addressed to them.
+// Always present, for every role, on every page. It used to hide itself unless
+// you were a Section Admin sitting on the Foundation board, which was fine
+// while payment reminders were the only kind - but reminders are now raised
+// for follow-ups, scheduled installments and non-payment, and they reach
+// whoever scheduled the call, whoever owns the lead, and the HR Coordinators.
+// A bell that comes and goes is also a bell nobody learns the position of.
 export function NotificationBell() {
-  const { user } = useAuth()
   const navigate = useNavigate()
-  const { pathname } = useLocation()
-  const [board] = useLeadBoard()
   const queryClient = useQueryClient()
   const wrapperRef = useRef(null)
   const [isOpen, setIsOpen] = useState(false)
@@ -113,17 +112,6 @@ export function NotificationBell() {
   // serve the rare one.
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState([])
-  const isSectionAdmin = Boolean(user?.scoped_section)
-
-  // Every notification is a Foundation payment reminder, so on the Lead
-  // Dashboard the bell belongs to the Foundation board - opening one from
-  // Induction only offers to send you somewhere that board can't show.
-  // Tested against Foundation rather than Induction so a third board added
-  // later hides it by default instead of inheriting a bell it can't serve.
-  // Everywhere else in the app there is no board in play, so it always shows;
-  // `/leads` is matched exactly because `/leads/form-collection` is a
-  // different page that happens to share the prefix.
-  const isOffBoard = pathname === '/leads' && board !== 'foundation'
 
   const { data: unread = 0 } = useQuery({
     // Same key the panel invalidates after reading, so the badge clears itself.
@@ -132,10 +120,6 @@ export function NotificationBell() {
     // A reminder arrives while you're on another page, so the count has to come
     // to you rather than wait for a navigation.
     refetchInterval: 60_000,
-    // Polled for everyone, not just Section Admins: a follow-up reminder goes
-    // to whoever scheduled the call, which is usually an Admin from the lead
-    // popup, and they can't be told about it if nobody ever asks.
-    enabled: !isOffBoard,
   })
 
   const listQuery = useQuery({
@@ -143,7 +127,7 @@ export function NotificationBell() {
     queryFn: () => notificationService.list({ page_size: 20 }),
     // Only fetched once the panel is opened - no reason to pull twenty rows on
     // every page load for a bell most people never click.
-    enabled: isOpen && !isOffBoard,
+    enabled: isOpen,
   })
 
   const refresh = () => {
@@ -193,12 +177,6 @@ export function NotificationBell() {
     setSelected([])
   }
 
-  // The bell renders null off-board but stays mounted, so an open panel would
-  // still be open when you came back to Foundation.
-  useEffect(() => {
-    if (isOffBoard) setIsOpen(false)
-  }, [isOffBoard])
-
   useEffect(() => {
     if (!isOpen) return undefined
     function onPointerDown(event) {
@@ -214,12 +192,6 @@ export function NotificationBell() {
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [isOpen])
-
-  // Section Admins always have the bell - reminders are addressed to them by
-  // design. Anyone else gets it only once something is actually waiting, so a
-  // follow-up they scheduled can reach them without putting a permanently
-  // empty bell in every other role's header.
-  if (isOffBoard || (!isSectionAdmin && unread === 0)) return null
 
   const notifications = listQuery.data?.items ?? []
   const label = unread > 0 ? `${unread} unread notification${unread === 1 ? '' : 's'}` : 'Notifications'
