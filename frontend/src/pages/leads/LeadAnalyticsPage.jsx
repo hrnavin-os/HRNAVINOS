@@ -1,13 +1,12 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowRightLeft, PhoneCall, Tag, UserX, Users } from 'lucide-react'
+import { ArrowRightLeft, PhoneCall, Tag, UserX } from 'lucide-react'
 import { inductionEntryService } from '@/services/inductionEntryService'
 import { getApiErrorMessage } from '@/services/apiClient'
-import { StatCard } from '@/components/ui/StatCard'
 import { DataTable } from '@/components/ui/DataTable'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
-import { BreakdownBars } from '@/components/analytics/BreakdownBars'
+import { DonutChart } from '@/components/analytics/DonutChart'
 import { REMARK_GROUPS, REMARK_GROUP_BY_VALUE } from '@/constants/inductionCallRemarks'
 
 const TABS = [
@@ -34,11 +33,29 @@ function percent(part, whole) {
 
 function Panel({ title, subtitle, children }) {
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
       {subtitle && <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>}
-      <div className="mt-4">{children}</div>
+      <div className="mt-5">{children}</div>
     </section>
+  )
+}
+
+// A single number and what share of the whole it is. Not a chart: one figure
+// against a total is a figure, and a one-slice pie would say the same thing
+// with more ink.
+function Figure({ label, value, share, icon: Icon, tone }) {
+  const plate = tone === 'emerald' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'
+  const accent = tone === 'emerald' ? 'text-emerald-600' : 'text-red-600'
+  return (
+    <div className="flex flex-col justify-center rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <span className={`mb-3 flex h-9 w-9 items-center justify-center rounded-lg ${plate}`}>
+        <Icon className="h-4.5 w-4.5" strokeWidth={2} aria-hidden="true" />
+      </span>
+      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-1 text-2xl font-bold leading-none text-slate-900">{value}</p>
+      <p className={`mt-1.5 text-xs font-semibold ${accent}`}>{share} of all candidates</p>
+    </div>
   )
 }
 
@@ -86,7 +103,9 @@ export function LeadAnalyticsPage() {
   const quit = items.reduce((sum, item) => sum + item.quit, 0)
 
   const isRemarks = tab === 'call_remark'
-  const chartRows = isRemarks ? groupRemarks(items) : items.slice(0, 10)
+  // No slicing here - the donut folds its own tail into "Other" past six, and
+  // truncating first would drop those rows from the total the ring is showing.
+  const chartRows = isRemarks ? groupRemarks(items) : items
 
   const columns = [
     {
@@ -148,27 +167,23 @@ export function LeadAnalyticsPage() {
         // Dimmed rather than replaced while refetching, so the page doesn't
         // jump between a skeleton and content on every tab switch.
         <div className={query.isFetching ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
-          {/* Three figures, not three one-bar charts: each is a single number
-              and a stat tile is the honest form for that. */}
-          <div className="mb-4 flex flex-wrap gap-3">
-            <StatCard label="Total Candidates" value={total} toneName="brand" icon={Users} />
-            <StatCard label="Moved to Foundation" value={moved} toneName="emerald" icon={ArrowRightLeft} />
-            <StatCard label="Quit" value={quit} toneName="red" icon={UserX} />
-          </div>
-
-          <div className="mb-4">
+          {/* The split, and the two figures that qualify it, side by side. The
+              total moved into the donut's centre when the stat cards came out -
+              it is the total OF that ring, so it belongs in it. Moved and Quit
+              stay as figures because each is a single number, which a slice of
+              a different pie would not have said any better. */}
+          <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_16rem]">
             <Panel
               title={isRemarks ? 'How induction calls landed' : 'Candidates by category'}
               subtitle={
                 isRemarks
-                  ? 'The thirty-one remarks rolled into the five outcomes they belong to. Every remark is listed below.'
-                  : items.length > 10
-                    ? `Top 10 of ${items.length} categories. All of them are listed below.`
-                    : 'Collected on the induction call form.'
+                  ? 'The thirty-one remarks grouped into the five outcomes they belong to.'
+                  : 'Collected on the induction call form.'
               }
             >
-              <BreakdownBars
+              <DonutChart
                 items={chartRows}
+                centerLabel="Candidates"
                 emptyMessage={
                   isRemarks
                     ? 'No call remarks recorded yet. Set one from the dropdown on the induction board.'
@@ -176,6 +191,17 @@ export function LeadAnalyticsPage() {
                 }
               />
             </Panel>
+
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-1">
+              <Figure
+                label="Moved to Foundation"
+                value={moved}
+                share={percent(moved, total)}
+                icon={ArrowRightLeft}
+                tone="emerald"
+              />
+              <Figure label="Quit" value={quit} share={percent(quit, total)} icon={UserX} tone="red" />
+            </div>
           </div>
 
           {/* The table view: the same numbers without relying on colour or bar
