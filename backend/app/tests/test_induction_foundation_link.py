@@ -281,3 +281,81 @@ async def test_a_lead_created_before_its_induction_entry_links_on_resubmission(c
 
     assert (await client.get(f"/api/v1/leads/{lead_id}", headers=auth_headers)).json()["induction_matched"] is True
     assert (await client.get("/api/v1/induction-entries", headers=auth_headers)).json()["total"] == 0
+
+
+# --------------------------------------------------------------------------
+# The two Induction tabs
+# --------------------------------------------------------------------------
+
+
+async def test_a_pending_entry_reports_itself_as_pending(client, auth_headers):
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())
+
+    row = (await client.get("/api/v1/induction-entries", headers=auth_headers)).json()["items"][0]
+    assert row["status"] == "pending_induction"
+    assert row["converted_at"] is None
+
+
+async def test_a_matched_entry_moves_to_the_other_tab(client, auth_headers):
+    """The status is derived from foundation_lead_id, which the mobile-number
+    match sets - so crossing tabs needs nothing else to happen."""
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())
+    await client.post(FOUNDATION_URL, json=foundation_payload())
+
+    pending = (await client.get("/api/v1/induction-entries", headers=auth_headers)).json()
+    moved = (
+        await client.get(
+            "/api/v1/induction-entries?status=moved_to_foundation", headers=auth_headers
+        )
+    ).json()
+
+    assert pending["total"] == 0
+    assert moved["total"] == 1
+    assert moved["items"][0]["status"] == "moved_to_foundation"
+    assert moved["items"][0]["converted_at"] is not None
+
+
+async def test_the_moved_tab_carries_the_foundation_stage(client, auth_headers):
+    """Foundation Status on that tab is the linked lead's own pipeline stage,
+    not a copy taken at the moment of the move."""
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())
+    await client.post(FOUNDATION_URL, json=foundation_payload())
+
+    lead_id = (await client.get("/api/v1/leads", headers=auth_headers)).json()["items"][0]["id"]
+    await client.put(f"/api/v1/leads/{lead_id}", headers=auth_headers, json={"status": "pre_screening"})
+
+    moved = (
+        await client.get(
+            "/api/v1/induction-entries?status=moved_to_foundation", headers=auth_headers
+        )
+    ).json()
+    assert moved["items"][0]["foundation_status"] == "pre_screening"
+
+
+async def test_each_entry_is_in_exactly_one_tab(client, auth_headers):
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())
+    await client.post(INDUCTION_URL, json=induction_payload(name="Meera", phone="9000000001"))
+    await client.post(FOUNDATION_URL, json=foundation_payload())
+
+    stats = (await client.get("/api/v1/induction-entries/stats", headers=auth_headers)).json()
+
+    assert stats["by_status"] == {"pending_induction": 1, "moved_to_foundation": 1}
+    # The cards count the open tab, so they agree with the rows beneath them.
+    assert stats["total"] == 1
+
+
+async def test_stats_follow_the_open_tab(client, auth_headers):
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())
+    await client.post(FOUNDATION_URL, json=foundation_payload())
+
+    moved_stats = (
+        await client.get(
+            "/api/v1/induction-entries/stats?status=moved_to_foundation", headers=auth_headers
+        )
+    ).json()
+    assert moved_stats["total"] == 1

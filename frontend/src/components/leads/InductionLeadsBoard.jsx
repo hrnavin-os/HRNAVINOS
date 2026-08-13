@@ -12,10 +12,20 @@ import { InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
 import { InductionUpdateModal } from '@/components/leads/InductionUpdateModal'
 import { useAuth } from '@/hooks/useAuth'
 import { PERMISSIONS } from '@/constants/permissions'
-import { formatDate } from '@/utils/formatters'
+import { LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
+import { formatDate, formatDateTime } from '@/utils/formatters'
 
 const dash = <span className="text-slate-400">—</span>
 const orDash = (value) => value || dash
+
+// Mirrors InductionStatus on the backend, which derives it from whether the
+// entry carries a foundation_lead_id.
+const INDUCTION_STATUS = { pending: 'pending_induction', moved: 'moved_to_foundation' }
+
+const TABS = [
+  { value: INDUCTION_STATUS.pending, label: 'Induction Leads' },
+  { value: INDUCTION_STATUS.moved, label: 'Moved to Foundation' },
+]
 
 // Induction submissions are their own records, not Leads, so this board has
 // its own columns rather than reusing the Foundation ones - there is no stage,
@@ -89,6 +99,46 @@ const columns = [
   },
 ]
 
+// What the Moved tab shows. A different set from the working columns on
+// purpose: once an entry has crossed over, sales person and payment mode are
+// induction bookkeeping, and what you actually want to know is who moved, when
+// they registered, when they crossed, and where they are now.
+const MOVED_COLUMNS = [
+  { key: 'name', header: 'Name', render: (row) => <span className="font-medium text-slate-900">{row.name}</span> },
+  { key: 'phone', header: 'Mobile Number' },
+  {
+    key: 'registration_date',
+    header: 'Induction Date',
+    align: 'center',
+    render: (row) => formatDate(row.registration_date),
+  },
+  {
+    key: 'converted_at',
+    header: 'Moved On',
+    align: 'center',
+    render: (row) => (row.converted_at ? formatDateTime(row.converted_at) : dash),
+  },
+  {
+    key: 'batch',
+    header: 'Batch',
+    align: 'center',
+    render: (row) => <Badge tone="blue">{row.batch}</Badge>,
+  },
+  {
+    // The linked lead's pipeline stage, resolved server-side for the page.
+    // Falls back to a plain dash rather than an empty cell if the lead has
+    // since been deleted - the entry survives it, so the row must too.
+    key: 'foundation_status',
+    header: 'Foundation Status',
+    align: 'center',
+    render: (row) => {
+      const stage = LEAD_STAGE_BY_VALUE[row.foundation_status]
+      if (!stage) return dash
+      return <Badge tone={stage.tone}>{stage.label}</Badge>
+    },
+  },
+]
+
 // A row's post-call details are "started" once any one of the four pages has
 // an answer - used to label the Update button so you can see at a glance which
 // entries still need working.
@@ -126,6 +176,12 @@ export function InductionLeadsBoard() {
   const [sectionFilter, setSectionFilter] = useState('')
   const [filters, setFilters] = useState(EMPTY_FILTERS)
 
+  // Which tab. Backed by a real status on the server (InductionStatus, derived
+  // from foundation_lead_id) rather than a client-side filter, so an entry is
+  // in exactly one tab and the counts come from the same source as the rows.
+  const [status, setStatus] = useState(INDUCTION_STATUS.pending)
+  const moved = status === INDUCTION_STATUS.moved
+
   const setFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }))
   const hasFilters = Object.values(filters).some(Boolean)
   // Empty strings would be sent as `?batch=` and match nothing, so only the
@@ -138,9 +194,11 @@ export function InductionLeadsBoard() {
 
   // Keyed under the list's own key so ResourceListPage's invalidation after an
   // edit or delete refreshes the cards too - React Query matches by prefix.
+  // The status is part of the key, or switching tabs would show the previous
+  // tab's counts until the refetch landed.
   const statsQuery = useQuery({
-    queryKey: ['induction-entries', 'stats'],
-    queryFn: inductionEntryService.getStats,
+    queryKey: ['induction-entries', 'stats', status],
+    queryFn: () => inductionEntryService.getStats(status),
   })
 
   // Sections are admin-managed and open-ended, so the cards read live from the
@@ -153,8 +211,8 @@ export function InductionLeadsBoard() {
   const [updatingEntry, setUpdatingEntry] = useState(null)
 
   const optionsQuery = useQuery({
-    queryKey: ['induction-entries', 'filter-options'],
-    queryFn: inductionEntryService.getFilterOptions,
+    queryKey: ['induction-entries', 'filter-options', status],
+    queryFn: () => inductionEntryService.getFilterOptions(status),
   })
 
   const sections = configQuery.data?.sections ?? []
@@ -165,10 +223,35 @@ export function InductionLeadsBoard() {
   const asOptions = (values) => (values ?? []).map((value) => ({ value, label: value }))
   const options = optionsQuery.data ?? {}
 
+  const byStatus = statsQuery.data?.by_status ?? {}
+
   return (
     <>
+      {/* Which entries are still in Induction and which have already crossed
+          to Foundation. Backed by a status on the server, not a filter applied
+          here, so the two tabs are the same partition the API works in. */}
+      <div className="mb-4 inline-flex gap-1 rounded-lg bg-slate-100 p-1">
+        {TABS.map((tab) => (
+          <button
+            key={tab.value}
+            type="button"
+            onClick={() => {
+              setStatus(tab.value)
+              setFilters(EMPTY_FILTERS)
+            }}
+            aria-pressed={status === tab.value}
+            className={`inline-flex items-center gap-2 rounded-md px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+              status === tab.value ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {tab.label}
+            <span className="tabular-nums text-xs font-medium opacity-70">{byStatus[tab.value] ?? 0}</span>
+          </button>
+        ))}
+      </div>
+
       <LeadSectionStats
-        allLabel="All Entries"
+        allLabel={moved ? 'All Moved' : 'All Entries'}
         total={statsQuery.data?.total ?? 0}
         sections={visibleSections}
         bySection={statsQuery.data?.by_section ?? {}}
@@ -240,61 +323,77 @@ export function InductionLeadsBoard() {
         title="Induction Entry"
         queryKey="induction-entries"
         service={inductionEntryService}
-        columns={[
-          // A Section Admin only ever sees their own section's entries, so
-          // every row would name them - a column of one repeated value.
-          ...(scopedSection ? columns.filter((column) => column.key !== 'assigned_to') : columns),
-          {
-            // Last column, before Actions: opens the four-page post-call form.
-            key: 'update',
-            header: 'Update',
-            align: 'center',
-            render: (row) => (
-              <Button
-                variant="secondary"
-                className="px-3! py-1! text-xs"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  setUpdatingEntry(row)
-                }}
-              >
-                <ClipboardList className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-                {hasDetails(row) ? 'Edit' : 'Update'}
-              </Button>
-            ),
-          },
-        ]}
+        // The Moved tab is a record of what happened, not a worklist: the
+        // post-call Update form belongs to an entry still being worked, and
+        // these have already crossed to Foundation, where the lead's own
+        // popup takes over.
+        columns={
+          moved
+            ? MOVED_COLUMNS
+            : [
+                // A Section Admin only ever sees their own section's entries, so
+                // every row would name them - a column of one repeated value.
+                ...(scopedSection ? columns.filter((column) => column.key !== 'assigned_to') : columns),
+                {
+                  // Last column, before Actions: opens the four-page post-call form.
+                  key: 'update',
+                  header: 'Update',
+                  align: 'center',
+                  render: (row) => (
+                    <Button
+                      variant="secondary"
+                      className="px-3! py-1! text-xs"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setUpdatingEntry(row)
+                      }}
+                    >
+                      <ClipboardList className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                      {hasDetails(row) ? 'Edit' : 'Update'}
+                    </Button>
+                  ),
+                },
+              ]
+        }
         serialNumber
-        extraParams={{ section: effectiveSection || undefined, ...activeFilters }}
+        extraParams={{ status, section: effectiveSection || undefined, ...activeFilters }}
+        // View stays on both tabs - the induction record is exactly what you
+        // want to read about somebody who has moved. Edit and delete don't:
+        // a moved entry is the history behind a Foundation lead, and editing
+        // the phone number there would break the match that put it here.
         rowActions={{
-        view: {
-          title: (row) => row.name,
-          maxWidth: 'max-w-xl',
-          // Hidden for the same reason as the column: it's always them.
-          renderBody: (row) => <InductionEntryDetail entry={row} hideAssignee={Boolean(scopedSection)} />,
-        },
-        edit: {
-          title: (row) => `Edit ${row.name}`,
-          permission: PERMISSIONS.LEADS_UPDATE,
-          fields: editFields,
-          // Dates arrive as ISO strings; <input type="date"> wants YYYY-MM-DD,
-          // which is the leading 10 characters either way.
-          defaults: (row) => ({
-            name: row.name,
-            email: row.email ?? '',
-            phone: row.phone,
-            registration_date: row.registration_date?.slice(0, 10) ?? '',
-            paid_date: row.paid_date?.slice(0, 10) ?? '',
-            sales_person: row.sales_person ?? '',
-            lead_source: row.lead_source ?? '',
-            payment_mode: row.payment_mode ?? '',
-            category: row.category ?? '',
-          }),
-        },
-          remove: {
-            permission: PERMISSIONS.LEADS_DELETE,
-            describe: (row) => `${row.name} (${row.phone})`,
+          view: {
+            title: (row) => row.name,
+            maxWidth: 'max-w-xl',
+            // Hidden for the same reason as the column: it's always them.
+            renderBody: (row) => <InductionEntryDetail entry={row} hideAssignee={Boolean(scopedSection)} />,
           },
+          ...(moved
+            ? {}
+            : {
+                edit: {
+                  title: (row) => `Edit ${row.name}`,
+                  permission: PERMISSIONS.LEADS_UPDATE,
+                  fields: editFields,
+                  // Dates arrive as ISO strings; <input type="date"> wants
+                  // YYYY-MM-DD, which is the leading 10 characters either way.
+                  defaults: (row) => ({
+                    name: row.name,
+                    email: row.email ?? '',
+                    phone: row.phone,
+                    registration_date: row.registration_date?.slice(0, 10) ?? '',
+                    paid_date: row.paid_date?.slice(0, 10) ?? '',
+                    sales_person: row.sales_person ?? '',
+                    lead_source: row.lead_source ?? '',
+                    payment_mode: row.payment_mode ?? '',
+                    category: row.category ?? '',
+                  }),
+                },
+                remove: {
+                  permission: PERMISSIONS.LEADS_DELETE,
+                  describe: (row) => `${row.name} (${row.phone})`,
+                },
+              }),
         }}
       />
 

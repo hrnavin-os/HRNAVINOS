@@ -3,6 +3,8 @@ import uuid
 from datetime import date, timedelta
 
 from app.exceptions.base import NotFoundError
+from app.models.enums import InductionStatus
+from app.models.lead import Lead
 from app.models.induction_entry import (
     InductionEntry,
     InductionOtherDetails,
@@ -11,7 +13,7 @@ from app.models.induction_entry import (
     InductionRemarks,
 )
 from app.models.user import User
-from app.repositories.induction_entry_repository import NOT_CONVERTED, InductionEntryRepository
+from app.repositories.induction_entry_repository import InductionEntryRepository, status_query
 from app.repositories.role_repository import RoleRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.common import PaginatedResponse, PaginationParams
@@ -85,7 +87,9 @@ class InductionEntryService:
         created_so_far = await InductionEntry.find({}).count()
         return rota[created_so_far % len(rota)]
 
-    async def to_response(self, entry: InductionEntry) -> InductionEntryResponse:
+    async def to_response(
+        self, entry: InductionEntry, *, foundation_status: str | None = None
+    ) -> InductionEntryResponse:
         # model_dump() also carries the BaseDocument fields (is_deleted,
         # created_by, revision_id...); the response schema ignores what it
         # doesn't declare, so they're harmless here.
@@ -93,8 +97,28 @@ class InductionEntryService:
         return InductionEntryResponse(
             **entry.model_dump(),
             batch=batch_for(entry.registration_date),
+            status=entry.status,
+            foundation_status=foundation_status,
             assigned_to_name=f"{assignee.first_name} {assignee.last_name}".strip() if assignee else None,
         )
+
+    async def foundation_statuses(self, entries: list[InductionEntry]) -> dict:
+        """{entry id: the linked lead's pipeline stage}, for the Moved tab.
+
+        One query for the page rather than one per row - the ids are collected
+        first and fetched together. Entries with no link aren't in the result,
+        which is every row of the other tab.
+        """
+        lead_ids = [entry.foundation_lead_id for entry in entries if entry.foundation_lead_id]
+        if not lead_ids:
+            return {}
+        leads = await Lead.find({"_id": {"$in": lead_ids}}).to_list()
+        stage_by_lead = {lead.id: lead.status.value for lead in leads}
+        return {
+            entry.id: stage_by_lead[entry.foundation_lead_id]
+            for entry in entries
+            if entry.foundation_lead_id in stage_by_lead
+        }
 
     async def create(self, data: InductionEntryCreate, *, actor_id: uuid.UUID | None) -> InductionEntry:
         # Assignment happens here rather than being a field on the form: the
@@ -127,14 +151,20 @@ class InductionEntryService:
             raise NotFoundError("Induction entry not found.")
         return entry
 
-    async def list(self, params: PaginationParams, *, filters: dict | None = None) -> PaginatedResponse:
-        """The active Induction board.
+    async def list(
+        self,
+        params: PaginationParams,
+        *,
+        filters: dict | None = None,
+        status: InductionStatus = InductionStatus.PENDING_INDUCTION,
+    ) -> PaginatedResponse:
+        """One tab of the Induction board.
 
-        Entries already linked to a Foundation lead are excluded here rather
-        than by the caller, so every route onto this board inherits the rule:
-        an entry that has moved to Foundation must not appear in both active
-        lists. The record still exists and is still reachable through the lead
-        it became - it has left the queue, it hasn't been deleted.
+        The status is applied here rather than by the caller, so every route
+        onto this board inherits the rule that an entry belongs to exactly one
+        tab - it can't be listed as both still in Induction and already moved.
+        A moved entry is never deleted; it has left the queue and is reachable
+        through the lead it became.
         """
         items, total = await self.entries.list(
             page=params.page,
@@ -143,7 +173,7 @@ class InductionEntryService:
             search_fields=["name", "phone", "email", "sales_person", "lead_source", "category"],
             sort_by=params.sort_by,
             sort_order=params.sort_order,
-            filters={**(filters or {}), **NOT_CONVERTED},
+            filters={**(filters or {}), **status_query(status)},
         )
         return PaginatedResponse.build(items, total, params.page, params.page_size)
 
@@ -171,7 +201,9 @@ class InductionEntryService:
         end = date(year + (month == 12), 1 if month == 12 else month + 1, 1) - timedelta(days=1)
         return start, end
 
-    async def filter_options(self, *, section: str | None = None) -> dict:
+    async def filter_options(
+        self, *, section: str | None = None, status: InductionStatus = InductionStatus.PENDING_INDUCTION
+    ) -> dict:
         """Distinct values actually present in the data, for the filter row.
 
         Deliberately read from the entries rather than the form config: the
@@ -180,7 +212,7 @@ class InductionEntryService:
         matches rows) would be worse than useless. Batches are derived per
         entry and returned newest-first.
         """
-        entries = await self.entries.list_all_for_options(section=section)
+        entries = await self.entries.list_all_for_options(section=section, status=status)
         distinct = {field: set() for field in ("sales_person", "lead_source", "payment_mode", "category")}
         batches: set[str] = set()
         assignees: dict[str, str] = {}
@@ -205,7 +237,9 @@ class InductionEntryService:
             "assigned_to": [{"value": key, "label": label} for key, label in sorted(assignees.items(), key=lambda kv: kv[1])],
         }
 
-    async def stats(self, *, section: str | None = None) -> dict:
+    async def stats(
+        self, *, section: str | None = None, status: InductionStatus = InductionStatus.PENDING_INDUCTION
+    ) -> dict:
         """Totals behind the board's stat cards - one per section, plus the
         overall count.
 
@@ -215,11 +249,16 @@ class InductionEntryService:
         sections, so anything that arrived while no Section Admin existed (and
         is therefore unassigned) is still counted somewhere.
         """
-        by_section = await self.entries.count_by_section_all()
+        by_section = await self.entries.count_by_section_all(status)
+        by_status = await self.entries.count_by_status()
         if section:
             scoped = by_section.get(section, 0)
-            return {"total": scoped, "by_section": {section: scoped}}
-        return {"total": await self.entries.count_all(), "by_section": by_section}
+            return {"total": scoped, "by_section": {section: scoped}, "by_status": by_status}
+        return {
+            "total": await self.entries.count_all(status),
+            "by_section": by_section,
+            "by_status": by_status,
+        }
 
     async def update(
         self, entry_id: uuid.UUID, data: InductionEntryUpdate, *, actor_id: uuid.UUID | None

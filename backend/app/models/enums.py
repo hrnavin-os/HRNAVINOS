@@ -77,6 +77,19 @@ class LeadStatus(StrEnum):
     LOST = "lost"
 
 
+class InductionStatus(StrEnum):
+    """Whether an induction entry has crossed over to Foundation.
+
+    Derived from InductionEntry.foundation_lead_id rather than stored beside
+    it. That id is written by the mobile-number match and is the fact itself -
+    a second status field would be a copy of it, and the copy is what goes
+    stale the day something sets one without the other.
+    """
+
+    PENDING_INDUCTION = "pending_induction"
+    MOVED_TO_FOUNDATION = "moved_to_foundation"
+
+
 class WhatsAppGroupStatus(StrEnum):
     """Where a candidate is in the WhatsApp group onboarding.
 

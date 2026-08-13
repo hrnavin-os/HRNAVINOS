@@ -4,6 +4,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
+from app.models.enums import InductionStatus
+
 
 class InductionEntryCreate(BaseModel):
     name: str = Field(min_length=2, max_length=150)
@@ -24,6 +26,10 @@ class InductionFormSubmitResponse(BaseModel):
 class InductionEntryStatsResponse(BaseModel):
     total: int
     by_section: dict[str, int]
+    # One count per tab, so each tab shows how much is behind it without being
+    # opened. Not scoped by section: it labels the tabs, which sit above the
+    # section cards rather than inside one.
+    by_status: dict[str, int] = {}
 
 
 class InductionQualificationSchema(BaseModel):
@@ -99,12 +105,17 @@ class InductionEntryResponse(BaseModel):
     placement: InductionPlacementSchema = Field(default_factory=InductionPlacementSchema)
     remarks: InductionRemarksSchema = Field(default_factory=InductionRemarksSchema)
     other_details: InductionOtherDetailsSchema = Field(default_factory=InductionOtherDetailsSchema)
+    # Which tab this entry belongs to, derived from foundation_lead_id - see
+    # InductionEntry.status. Sent so the row can say so without the client
+    # re-deriving the same rule from the id.
+    status: InductionStatus = InductionStatus.PENDING_INDUCTION
     # Set once this person submitted the Foundation Form with a matching mobile
-    # number. Present on the response even though a converted entry never
-    # appears in the board's list, because the lead's detail view fetches the
-    # entry directly to show where it came from.
+    # number. converted_at is the Foundation move date the Moved tab shows.
     foundation_lead_id: uuid.UUID | None = None
     converted_at: datetime | None = None
+    # The linked lead's pipeline stage. Resolved per page by the route, so it
+    # is None on the pending tab, where there is no lead to read it from.
+    foundation_status: str | None = None
     created_at: datetime
     updated_at: datetime
 

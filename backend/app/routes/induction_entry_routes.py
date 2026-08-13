@@ -10,6 +10,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query, status
 
 from app.core.dependencies import RequirePermissions, get_actor_scope
+from app.models.enums import InductionStatus
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.common import MessageResponse, PaginatedResponse, PaginationParams
@@ -46,6 +47,9 @@ async def list_entries(
     category: str | None = None,
     assigned_to: uuid.UUID | None = None,
     batch: str | None = None,
+    # Which tab. Defaults to the pending one, so any caller that predates the
+    # tabs still gets the active queue rather than everything.
+    status: InductionStatus = InductionStatus.PENDING_INDUCTION,
     sort_by: str = "registration_date",
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
@@ -74,9 +78,15 @@ async def list_entries(
             filters["registration_date"] = {"$gte": window[0], "$lte": window[1]}
 
     params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)
-    result = await service.list(params, filters=filters)
+    result = await service.list(params, filters=filters, status=status)
+    # Resolved for the whole page in one query; empty on the pending tab, where
+    # no row has a lead to read a stage from.
+    foundation = await service.foundation_statuses(result.items)
     return PaginatedResponse[InductionEntryResponse].build(
-        [await service.to_response(e) for e in result.items], result.total, result.page, result.page_size
+        [await service.to_response(e, foundation_status=foundation.get(e.id)) for e in result.items],
+        result.total,
+        result.page,
+        result.page_size,
     )
 
 
@@ -84,23 +94,27 @@ async def list_entries(
 # would otherwise swallow "stats" and try to parse it as a UUID.
 @router.get("/stats", response_model=InductionEntryStatsResponse)
 async def entry_stats(
+    status: InductionStatus = InductionStatus.PENDING_INDUCTION,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> InductionEntryStatsResponse:
     # Scope comes from the actor's role, not a query param, so a Section Admin
     # can't widen it - same rule the lead stats endpoint follows.
     scope = await get_actor_scope(actor)
-    return InductionEntryStatsResponse(**await InductionEntryService().stats(section=scope))
+    return InductionEntryStatsResponse(**await InductionEntryService().stats(section=scope, status=status))
 
 
 @router.get("/filter-options")
 async def filter_options(
+    status: InductionStatus = InductionStatus.PENDING_INDUCTION,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> dict:
     """Distinct values present in the data, so the filter row only ever offers
     options that actually match something. Scoped like the list is, or a
-    Section Admin's filters would offer values only other sections have."""
+    Section Admin's filters would offer values only other sections have - and
+    narrowed to the open tab, or the pending tab would offer values that only
+    moved entries carry."""
     scope = await get_actor_scope(actor)
-    return await InductionEntryService().filter_options(section=scope)
+    return await InductionEntryService().filter_options(section=scope, status=status)
 
 
 @router.get("/{entry_id}", response_model=InductionEntryResponse)

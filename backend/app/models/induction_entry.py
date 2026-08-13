@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from pymongo import IndexModel
 
 from app.database.base import BaseDocument
+from app.models.enums import InductionStatus
 
 
 # The four pages of the post-call update form. Grouped rather than flattened
@@ -101,6 +102,20 @@ class InductionEntry(BaseDocument):
             # both questions at once.
             IndexModel([("phone_normalized", 1), ("foundation_lead_id", 1)]),
         ]
+
+    @property
+    def status(self) -> InductionStatus:
+        """Which of the board's two tabs this entry belongs to.
+
+        A pure read of foundation_lead_id, which the mobile-number match sets -
+        so the status can never disagree with whether the entry is actually
+        linked, and nothing has to remember to update it.
+        """
+        return (
+            InductionStatus.MOVED_TO_FOUNDATION
+            if self.foundation_lead_id is not None
+            else InductionStatus.PENDING_INDUCTION
+        )
 
     def __repr__(self) -> str:
         return f"<InductionEntry {self.name} {self.registration_date}>"
