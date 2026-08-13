@@ -62,16 +62,32 @@ export function AttendancePage() {
 
   return (
     <div>
-      <div className="mb-6 grid max-w-lg grid-cols-2 gap-4">
-        <Select label="Batch" value={batchId} onChange={(event) => setBatchId(event.target.value)}>
-          <option value="">Select batch</option>
-          {(batches?.items ?? []).map((batch) => (
-            <option key={batch.id} value={batch.id}>
-              {batch.name}
-            </option>
-          ))}
-        </Select>
-        <Input label="Date" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+      {/* In the shared toolbar card, like the filter row on every other board -
+          these two were floating bare on the page background, which made the
+          only page in the ERP where the controls above a table weren't in a
+          band of their own. */}
+      <div className="mb-4 rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="w-full max-w-56 shrink-0">
+            <Select value={batchId} onChange={(event) => setBatchId(event.target.value)} aria-label="Batch">
+              <option value="">Select batch</option>
+              {(batches?.items ?? []).map((batch) => (
+                <option key={batch.id} value={batch.id}>
+                  {batch.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <span className="hidden h-7 w-px shrink-0 bg-slate-200 sm:block" />
+          <div className="w-full max-w-44 shrink-0">
+            <Input
+              type="date"
+              value={date}
+              onChange={(event) => setDate(event.target.value)}
+              aria-label="Date"
+            />
+          </div>
+        </div>
       </div>
 
       {batchId && loadingStudents && <LoadingSpinner />}

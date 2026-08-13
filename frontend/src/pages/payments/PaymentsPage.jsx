@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowDownLeft, ArrowUpRight } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, BookOpen, CheckCheck } from 'lucide-react'
 import { leadService } from '@/services/leadService'
+import { TabStrip } from '@/components/ui/TabStrip'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { IncomeApprovalsTab } from '@/components/payments/IncomeApprovalsTab'
 import { OverallIncomeTab } from '@/components/payments/OverallIncomeTab'
@@ -9,10 +10,22 @@ import { CashbookSummary } from '@/components/payments/CashbookSummary'
 import { CashbookFilters } from '@/components/payments/CashbookFilters'
 import { EMPTY_CASHBOOK_FILTERS, applyCashbookFilters } from '@/utils/cashbookFilters'
 
+// The money direction is the point of this control, so income and expense keep
+// their own accent rather than the neutral raised pill TabStrip uses.
+//
+// Named tokens rather than the raw hex these were written in. Same pixels -
+// #DCFCE7/#059669 and #FEF2F2/#DC2626 are green-100/emerald-600 and
+// red-50/red-600 exactly - but spelled the way the rest of the app spells
+// them, so a colour here can be matched to a colour anywhere else.
 const SPLIT_TAB_STYLES = {
-  income: { icon: ArrowDownLeft, active: 'bg-[#DCFCE7] text-[#059669]' },
-  expense: { icon: ArrowUpRight, active: 'bg-[#FEF2F2] text-[#DC2626]' },
+  income: { icon: ArrowDownLeft, active: 'bg-green-100 text-emerald-600' },
+  expense: { icon: ArrowUpRight, active: 'bg-red-50 text-red-600' },
 }
+
+const MAIN_TABS = [
+  { key: 'cashbook', label: 'Cashbook', icon: BookOpen },
+  { key: 'approvals', label: 'Approvals', icon: CheckCheck },
+]
 
 function SplitTabs({ tabs, active, onChange }) {
   return (
@@ -117,30 +130,7 @@ export function PaymentsPage() {
 
   return (
     <div>
-      <div className="mb-4 flex gap-1 border-b border-slate-200">
-        <button
-          type="button"
-          onClick={() => setMainTab('cashbook')}
-          className={`px-3 pb-2 text-sm font-semibold transition-colors ${
-            mainTab === 'cashbook'
-              ? 'border-b-2 border-brand-600 text-brand-600'
-              : 'border-b-2 border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Cashbook
-        </button>
-        <button
-          type="button"
-          onClick={() => setMainTab('approvals')}
-          className={`px-3 pb-2 text-sm font-semibold transition-colors ${
-            mainTab === 'approvals'
-              ? 'border-b-2 border-brand-600 text-brand-600'
-              : 'border-b-2 border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Approvals
-        </button>
-      </div>
+      <TabStrip tabs={MAIN_TABS} value={mainTab} onChange={setMainTab} className="mb-4" />
 
       {mainTab === 'cashbook' ? <CashbookTab /> : <ApprovalsTab />}
     </div>

@@ -4,6 +4,7 @@ import { ArrowRightLeft, Crown, PhoneCall, Tag, UserX } from 'lucide-react'
 import { inductionEntryService } from '@/services/inductionEntryService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { DataTable } from '@/components/ui/DataTable'
+import { TabStrip } from '@/components/ui/TabStrip'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { DonutChart } from '@/components/analytics/DonutChart'
@@ -187,24 +188,9 @@ export function LeadAnalyticsPage() {
           </p>
         </div>
 
-        <div className="inline-flex shrink-0 gap-1 rounded-full bg-slate-100 p-1">
-          {TABS.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => setTab(item.key)}
-              aria-pressed={tab === item.key}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
-                tab === item.key
-                  ? 'bg-brand-600 text-white shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <item.icon className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
-              {item.label}
-            </button>
-          ))}
-        </div>
+        {/* The shared strip, not the solid-filled pills this page briefly had -
+            the same control does the same job on five other boards. */}
+        <TabStrip tabs={TABS} value={tab} onChange={setTab} className="shrink-0" />
       </div>
 
       <ErrorMessage message={query.error ? getApiErrorMessage(query.error) : null} />

@@ -72,8 +72,17 @@ const TONE_STYLES = {
   },
 }
 
-export function StatCard({ label, value, toneName, isActive, onClick, icon: Icon }) {
+// `hint` is a line of qualifying text under the value ("For selected period").
+//
+// Without `onClick` the card renders as a plain div rather than a button: a
+// passive figure should not be focusable, should not announce a pressed state,
+// and should not lift under the pointer promising a click that does nothing.
+// That is what lets the Payments summary use this card instead of keeping its
+// own near-copy of it.
+export function StatCard({ label, value, toneName, isActive, onClick, icon: Icon, hint }) {
   const tone = TONE_STYLES[toneName] ?? TONE_STYLES.slate
+  const interactive = Boolean(onClick)
+  const Wrapper = interactive ? 'button' : 'div'
 
   return (
     // Fills the row. There was a max-width here to stop two cards taking half
@@ -81,13 +90,15 @@ export function StatCard({ label, value, toneName, isActive, onClick, icon: Icon
     // the card's - capped, a full row of four just ended short of the edge with
     // the table beneath running wider than the cards above it.
     // basis-44 keeps them from collapsing the other way when there are six.
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={isActive}
-      className={`group flex-1 basis-44 rounded-xl border px-3.5 py-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 ${
-        isActive ? `${tone.active} shadow-md` : tone.inactive
-      }`}
+    <Wrapper
+      {...(interactive
+        ? { type: 'button', onClick, 'aria-pressed': isActive }
+        : {})}
+      className={`group flex-1 basis-44 rounded-xl border px-3.5 py-3 text-left shadow-sm ${
+        interactive
+          ? 'transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500'
+          : ''
+      } ${isActive ? `${tone.active} shadow-md` : tone.inactive}`}
     >
       <div className="flex items-center gap-3">
         {Icon && (
@@ -112,8 +123,11 @@ export function StatCard({ label, value, toneName, isActive, onClick, icon: Icon
           >
             {value}
           </p>
+          {hint && (
+            <p className={`mt-1 truncate text-[11px] ${isActive ? 'text-white/70' : 'text-slate-400'}`}>{hint}</p>
+          )}
         </div>
       </div>
-    </button>
+    </Wrapper>
   )
 }

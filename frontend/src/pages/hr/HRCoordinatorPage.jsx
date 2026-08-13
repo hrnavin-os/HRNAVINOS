@@ -6,6 +6,7 @@ import { getApiErrorMessage } from '@/services/apiClient'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { DataTable } from '@/components/ui/DataTable'
+import { TabStrip } from '@/components/ui/TabStrip'
 import { HRStudentDetailModal } from '@/components/hr/HRStudentDetailModal'
 import { WhatsAppOnboardingBoard } from '@/pages/hr/WhatsAppOnboardingBoard'
 import { formatDate } from '@/utils/formatters'
@@ -132,22 +133,7 @@ export function HRCoordinatorPage() {
 
   return (
     <div>
-      <div className="mb-4 inline-flex gap-1 rounded-lg bg-slate-100 p-1">
-        {TABS.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() => setTab(item.key)}
-            aria-pressed={tab === item.key}
-            className={`inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-semibold transition-colors ${
-              tab === item.key ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <item.icon className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <TabStrip tabs={TABS} value={tab} onChange={setTab} className="mb-4" />
 
       {tab === 'onboarding' ? <WhatsAppOnboardingBoard /> : <LostStudents />}
     </div>

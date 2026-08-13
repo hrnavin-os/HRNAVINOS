@@ -105,7 +105,10 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
           ) : (
             rows.map((row, index) => (
               <tr
-                key={row.id}
+                // Falls back to the index for aggregate rows, which are grouped
+                // sums rather than records and carry no id - without it every
+                // row in a report table keys on undefined.
+                key={row.id ?? index}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 onKeyDown={onRowClick ? rowKeyDown(row) : undefined}
                 tabIndex={onRowClick ? 0 : undefined}

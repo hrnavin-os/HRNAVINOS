@@ -6,23 +6,12 @@ import { useSearchParams } from 'react-router-dom'
 //
 // Kept out of the component file so that one only exports a component; mixing
 // the two breaks React Fast Refresh for it.
-// A segmented control: a recessed track with the selected tab raised out of
-// it on white. Each board keeps its accent as the text colour of the raised
-// pill rather than filling it - on a white header a solid block of colour
-// reads as a button floating over the page rather than a selected tab.
+// Rendered by the shared components/ui/TabStrip, which supplies the track and
+// the idle state. Each board only overrides `active`, because Foundation
+// carries violet where the default raised pill is brand.
 export const LEAD_BOARDS = [
-  {
-    key: 'induction',
-    label: 'Induction',
-    active: 'bg-white text-brand-700 shadow-sm',
-    idle: 'text-slate-500 hover:text-slate-700',
-  },
-  {
-    key: 'foundation',
-    label: 'Foundation',
-    active: 'bg-white text-violet-700 shadow-sm',
-    idle: 'text-slate-500 hover:text-slate-700',
-  },
+  { key: 'induction', label: 'Induction', active: 'bg-white text-brand-700 shadow-sm' },
+  { key: 'foundation', label: 'Foundation', active: 'bg-white text-violet-700 shadow-sm' },
 ]
 
 export const DEFAULT_LEAD_BOARD = 'induction'

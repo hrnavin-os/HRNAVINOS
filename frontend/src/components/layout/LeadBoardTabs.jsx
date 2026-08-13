@@ -1,4 +1,5 @@
 import { useLocation } from 'react-router-dom'
+import { TabStrip } from '@/components/ui/TabStrip'
 import { LEAD_BOARDS, useLeadBoard } from '@/hooks/useLeadBoard'
 
 // The Induction / Foundation switch, rendered in the Topbar beside the page
@@ -19,23 +20,9 @@ export function LeadBoardTabs({ bar = false }) {
 
   if (pathname !== '/leads') return null
 
-  const tabs = (
-    <div className="inline-flex gap-1 rounded-lg bg-slate-100 p-1">
-      {LEAD_BOARDS.map((tab) => (
-        <button
-          key={tab.key}
-          type="button"
-          onClick={() => setBoard(tab.key)}
-          aria-pressed={board === tab.key}
-          className={`rounded-md px-4 py-1.5 text-sm font-semibold transition-colors ${
-            board === tab.key ? tab.active : tab.idle
-          }`}
-        >
-          {tab.label}
-        </button>
-      ))}
-    </div>
-  )
+  // Each board's `active` classes ride along on the tab, so Foundation keeps
+  // its violet while the strip itself stays the shared one.
+  const tabs = <TabStrip tabs={LEAD_BOARDS} value={board} onChange={setBoard} />
 
   if (!bar) return tabs
 

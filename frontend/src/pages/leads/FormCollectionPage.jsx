@@ -5,6 +5,7 @@ import { ClipboardCheck, Copy, ExternalLink, Pencil, Plus, Trash2, Users } from 
 import { Button } from '@/components/ui/Button'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { TabStrip } from '@/components/ui/TabStrip'
 import { leadService } from '@/services/leadService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
 import { getApiErrorMessage } from '@/services/apiClient'
@@ -108,22 +109,12 @@ function SectionCard({ section, tone, canConfigure, onEdit, onDelete, isDeleting
   )
 }
 
-// Each tab owns a colour, carried by a filled background when selected, so
-// which of the two forms you're looking at reads at a glance rather than from
-// a hairline underline.
+// Each tab keeps its accent as the raised pill's text colour, matching the
+// Induction/Foundation switch in the header - same two things being chosen
+// between, so it should not be a differently-shaped control.
 const TABS = [
-  {
-    key: 'induction',
-    label: 'Induction Call Form',
-    active: 'bg-brand-600 text-white shadow-sm',
-    idle: 'text-brand-700 hover:bg-brand-50',
-  },
-  {
-    key: 'foundation',
-    label: 'Foundation Call Form',
-    active: 'bg-violet-600 text-white shadow-sm',
-    idle: 'text-violet-700 hover:bg-violet-50',
-  },
+  { key: 'induction', label: 'Induction Call Form', active: 'bg-white text-brand-700 shadow-sm' },
+  { key: 'foundation', label: 'Foundation Call Form', active: 'bg-white text-violet-700 shadow-sm' },
 ]
 
 export function FormCollectionPage() {
@@ -132,21 +123,7 @@ export function FormCollectionPage() {
   return (
     <div>
       <div className="mb-5 flex justify-center">
-        <div className="inline-flex gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-          {TABS.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              aria-pressed={activeTab === tab.key}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
-                activeTab === tab.key ? tab.active : tab.idle
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <TabStrip tabs={TABS} value={activeTab} onChange={setActiveTab} />
       </div>
 
       {activeTab === 'induction' ? <InductionCallForm /> : <FoundationCallForm />}
