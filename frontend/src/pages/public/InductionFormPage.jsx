@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { ArrowLeft, ArrowRight, CheckCircle2, ClipboardCheck } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CheckCircle2 } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
 import { Combobox } from '@/components/ui/Combobox'
 import { Button } from '@/components/ui/Button'
@@ -10,6 +10,8 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { inductionFormService } from '@/services/inductionFormService'
 import { inductionFormConfigService } from '@/services/inductionFormConfigService'
 import { getApiErrorMessage } from '@/services/apiClient'
+import { PublicFormShell } from '@/components/public/PublicFormShell'
+import { FormProgress } from '@/components/public/FormProgress'
 
 // Which input a field gets is structural (a date is a date), so it's derived
 // from the key rather than being another thing to configure. Batch is absent
@@ -34,40 +36,9 @@ const pageOf = (field) => (field.options?.length > 0 ? 1 : 0)
 
 function Shell({ children }) {
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-10">
-      <div className="mx-auto w-full max-w-xl">
-        <div className="mb-6 flex items-center justify-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-linear-to-br from-brand-500 to-brand-700 text-white shadow-sm">
-            <ClipboardCheck className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
-          </span>
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900">Induction Call Form</h1>
-            <p className="text-xs uppercase tracking-wide text-slate-400">HRNAVINOS</p>
-          </div>
-        </div>
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function PageRail({ current }) {
-  return (
-    <div className="mb-5">
-      <div className="flex items-center gap-2">
-        {PAGES.map((page, index) => (
-          <div key={page.title} className="flex flex-1 flex-col gap-1.5">
-            <span
-              className={`h-1 rounded-full transition-colors ${index <= current ? 'bg-brand-600' : 'bg-slate-200'}`}
-            />
-            <span className={`text-[11px] font-medium ${index <= current ? 'text-brand-700' : 'text-slate-400'}`}>
-              {index + 1}. {page.title}
-            </span>
-          </div>
-        ))}
-      </div>
-      <p className="mt-2 text-xs text-slate-500">{PAGES[current].hint}</p>
-    </div>
+    <PublicFormShell title="Induction Call Form" subtitle="HRNAVINOS">
+      {children}
+    </PublicFormShell>
   )
 }
 
@@ -107,10 +78,13 @@ export function InductionFormPage() {
     mutation.mutate(Object.fromEntries(Object.entries(values).filter(([, value]) => value !== '')))
   }
 
+  // The shell already draws the card, so these branches render their contents
+  // straight into it rather than nesting a second bordered box inside the
+  // first.
   if (configQuery.isLoading) {
     return (
       <Shell>
-        <div className="rounded-xl border border-slate-200 bg-white p-10 shadow-sm">
+        <div className="py-6">
           <LoadingSpinner />
         </div>
       </Shell>
@@ -120,9 +94,7 @@ export function InductionFormPage() {
   if (configQuery.isError) {
     return (
       <Shell>
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <ErrorMessage message={getApiErrorMessage(configQuery.error)} />
-        </div>
+        <ErrorMessage message={getApiErrorMessage(configQuery.error)} />
       </Shell>
     )
   }
@@ -130,12 +102,12 @@ export function InductionFormPage() {
   if (submitted) {
     return (
       <Shell>
-        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-            <CheckCircle2 className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
+        <div className="flex flex-col items-center py-6 text-center">
+          <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+            <CheckCircle2 className="h-7 w-7" strokeWidth={2} aria-hidden="true" />
           </span>
-          <h2 className="text-base font-semibold text-slate-900">Details submitted</h2>
-          <p className="mt-1 text-sm text-slate-500">
+          <h2 className="text-lg font-semibold text-slate-900">Details submitted</h2>
+          <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-slate-500">
             The entry has been recorded and assigned to a section admin.
           </p>
           <div className="mt-5">
@@ -177,11 +149,11 @@ export function InductionFormPage() {
 
   return (
     <Shell>
-      <form
-        onSubmit={handleSubmit(onSubmit)}
-        className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
-      >
-        <PageRail current={page} />
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <FormProgress current={page + 1} labels={PAGES.map((item) => item.title)} />
+        {/* What this page is for, under the progress rather than beside it -
+            one line of guidance is worth more than a second row of labels. */}
+        <p className="mb-4 text-center text-xs text-slate-500">{PAGES[page].hint}</p>
         <ErrorMessage message={mutation.error ? getApiErrorMessage(mutation.error) : null} />
 
         <div className="space-y-4">

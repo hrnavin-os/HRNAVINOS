@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { BadgePercent, BookOpen, Calendar, Check, CheckCircle2 } from 'lucide-react'
+import { BadgePercent, BookOpen, Calendar, CheckCircle2 } from 'lucide-react'
 import { foundationFormService } from '@/services/foundationFormService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { Input } from '@/components/ui/Input'
@@ -11,6 +11,8 @@ import { Textarea } from '@/components/ui/Textarea'
 import { Button } from '@/components/ui/Button'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { PublicFormShell } from '@/components/public/PublicFormShell'
+import { FormProgress } from '@/components/public/FormProgress'
 
 // Keys with dedicated typed handling on submit (backend FoundationFormSubmit
 // fields) - anything else registered on the form goes into custom_fields.
@@ -20,42 +22,38 @@ const STEP_TYPE_LABELS = { details: 'Your Details', plan: 'Payment Plan', page3:
 
 function InfoBox({ title, icon: Icon, children }) {
   return (
-    <div className="mb-5 rounded-md border border-brand-200 bg-brand-50 p-4 text-sm text-slate-700">
+    // Left edge rather than a full tint, matching the panels used across the
+    // rest of the app - a solid wash on a form makes the note compete with the
+    // fields it is meant to support.
+    <div className="mb-5 overflow-hidden rounded-lg border border-slate-200 border-l-4 border-l-brand-500 bg-white">
       {title && (
-        <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-brand-700">
-          {Icon && <Icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />}
+        <div className="flex items-center gap-2 border-b border-slate-100 bg-brand-50/60 px-3.5 py-2 text-sm font-semibold text-brand-700">
+          {Icon && <Icon className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />}
           {title}
         </div>
       )}
-      <div className="whitespace-pre-line">{children}</div>
+      <div className="whitespace-pre-line px-3.5 py-3 text-sm leading-relaxed text-slate-700">{children}</div>
     </div>
   )
 }
 
-function StepIndicator({ current, labels }) {
-  const total = labels.length
+// The plan summary arrives as "₹15,000 (₹7,500 Per Month)" - the total, then
+// how it is broken up. Split so the amount can lead at full size instead of
+// sitting mid-sentence, which is the number somebody is actually choosing on.
+function splitAmount(summary) {
+  const match = String(summary ?? '').match(/^(.*?)\s*\((.+)\)$/)
+  return { total: match?.[1]?.trim() ?? summary, detail: match?.[2]?.trim() ?? null }
+}
+
+// One selectable option - a payment plan or a payment day. A bordered card that
+// fills in when chosen, so the choice is legible at a glance on a phone rather
+// than resting on a 13px radio dot.
+function ChoiceCard({ children, ...inputProps }) {
   return (
-    <div className="mb-6">
-      <div className="flex items-center justify-center gap-2">
-        {labels.map((_, i) => {
-          const n = i + 1
-          return (
-            <div key={n} className="flex items-center gap-2">
-              <div
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold
-                  ${n <= current ? 'bg-brand-600 text-white' : 'bg-slate-200 text-slate-500'}`}
-              >
-                {n < current ? <Check className="h-4 w-4" strokeWidth={3} aria-hidden="true" /> : n}
-              </div>
-              {n < total && <div className={`h-0.5 w-12 ${n < current ? 'bg-brand-600' : 'bg-slate-200'}`} />}
-            </div>
-          )
-        })}
-      </div>
-      <p className="mt-2 text-center text-xs font-medium text-slate-500">
-        Step {current} of {total} — {labels[current - 1]}
-      </p>
-    </div>
+    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-white p-3.5 transition-colors hover:border-slate-300 has-checked:border-brand-500 has-checked:bg-brand-50/60 has-checked:ring-1 has-checked:ring-brand-500">
+      <input type="radio" className="mt-1 h-4 w-4 shrink-0 text-brand-600 focus:ring-brand-500" {...inputProps} />
+      <span className="min-w-0 flex-1">{children}</span>
+    </label>
   )
 }
 
@@ -125,24 +123,22 @@ function PaymentTimelineField({ field, watchedValue, register, errors }) {
       </legend>
       <div className="space-y-2">
         {TIMELINE_OPTIONS.map((option) => (
-          <label
+          <ChoiceCard
             key={option.value}
-            className="flex cursor-pointer items-center gap-3 rounded-md border border-slate-300 p-3 text-sm
-              has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50 has-[:checked]:ring-1 has-[:checked]:ring-brand-500"
+            value={option.value}
+            {...register('payment_timeline', { required: field.required ? 'Please select when you will pay' : false })}
           >
-            <input
-              type="radio"
-              value={option.value}
-              {...register('payment_timeline', { required: field.required ? 'Please select when you will pay' : false })}
-            />
-            <span className="flex-1">
-              <span className="font-medium text-slate-800">{option.label}</span>{' '}
-              <span className="text-slate-500">({formatDate(option.date)})</span>
+            <span className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-slate-900">{option.label}</span>
+              <span className="text-xs text-slate-500">{formatDate(option.date)}</span>
             </span>
             {watchedValue === option.value && (
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-brand-600" strokeWidth={2} aria-hidden="true" />
+              <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-brand-700">
+                <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
+                Selected
+              </span>
             )}
-          </label>
+          </ChoiceCard>
         ))}
       </div>
       {errors.payment_timeline && <p className="mt-1 text-xs text-red-600">{errors.payment_timeline.message}</p>}
@@ -189,11 +185,18 @@ export function FoundationFormPage() {
   if (submitted) {
     return (
       <FormShell>
-        <div className="flex flex-col items-center py-8 text-center">
-          <CheckCircle2 className="mb-3 h-12 w-12 text-green-600" strokeWidth={1.5} aria-hidden="true" />
-          <h1 className="text-lg font-semibold text-slate-900">Thank you!</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Your details have been submitted successfully. Our team will get in touch with you shortly.
+        <div className="flex flex-col items-center py-6 text-center">
+          <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+            <CheckCircle2 className="h-7 w-7" strokeWidth={2} aria-hidden="true" />
+          </span>
+          <h2 className="text-lg font-semibold text-slate-900">Thank you!</h2>
+          <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-slate-500">
+            Your details have been submitted successfully. Our team will call you shortly to confirm your seat.
+          </p>
+          {/* Says what happens next rather than leaving somebody on a dead end
+              wondering whether it went through. */}
+          <p className="mt-4 rounded-lg bg-slate-50 px-3.5 py-2.5 text-xs text-slate-500">
+            You can close this page now — nothing else is needed from you.
           </p>
         </div>
       </FormShell>
@@ -241,7 +244,7 @@ export function FoundationFormPage() {
 
   return (
     <FormShell>
-      <StepIndicator current={stepIndex + 1} labels={stepLabels} />
+      <FormProgress current={stepIndex + 1} labels={stepLabels} />
       <form onSubmit={handleSubmit(onSubmit)}>
         {currentStep === 'details' && (
           <div className="space-y-4">
@@ -277,30 +280,38 @@ export function FoundationFormPage() {
               <legend className="mb-2 block text-sm font-medium text-slate-700">
                 Payment Details <span className="text-red-500">*</span>
               </legend>
-              <div className="space-y-2">
-                {category.plans.map((plan) => (
-                  <label
-                    key={plan.value}
-                    className="flex cursor-pointer items-start gap-3 rounded-md border border-slate-300 p-3 text-sm
-                      has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50 has-[:checked]:ring-1 has-[:checked]:ring-brand-500"
-                  >
-                    <input
-                      type="radio"
+              {/* Each plan reads as a priced card: the amount leads, the
+                  instalment breakdown sits under it, and the after-placement
+                  fee is a chip rather than the tail of a run-on sentence.
+                  It was one line - "Single Shot Payment - ₹15,000 (₹7,500 Per
+                  Month) | After Placement - ₹2,500" - which buries the two
+                  numbers the choice actually turns on. */}
+              <div className="space-y-2.5">
+                {category.plans.map((plan) => {
+                  const { total, detail } = splitAmount(plan.summary)
+                  return (
+                    <ChoiceCard
+                      key={plan.value}
                       value={plan.value}
-                      className="mt-0.5"
                       {...register('payment_plan', { required: 'Please select a payment option' })}
-                    />
-                    <span className="flex-1">
-                      <span className="font-medium text-slate-800">{plan.label}</span>
-                      {' - '}
-                      {plan.summary}
-                      {' | '}After Placement - {plan.after_placement}
-                    </span>
-                    {watchedPaymentPlan === plan.value && (
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" strokeWidth={2} aria-hidden="true" />
-                    )}
-                  </label>
-                ))}
+                    >
+                      <span className="flex flex-wrap items-baseline justify-between gap-x-2">
+                        <span className="text-sm font-semibold text-slate-900">{plan.label}</span>
+                        <span className="text-base font-bold text-brand-700">{total}</span>
+                      </span>
+                      {detail && <span className="mt-0.5 block text-xs text-slate-500">{detail}</span>}
+                      <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                        After placement {plan.after_placement}
+                      </span>
+                      {watchedPaymentPlan === plan.value && (
+                        <span className="ml-1.5 inline-flex items-center gap-1 text-xs font-medium text-brand-700">
+                          <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
+                          Selected
+                        </span>
+                      )}
+                    </ChoiceCard>
+                  )
+                })}
               </div>
               {errors.payment_plan && <p className="mt-1 text-xs text-red-600">{errors.payment_plan.message}</p>}
             </fieldset>
@@ -357,14 +368,8 @@ export function FoundationFormPage() {
 
 function FormShell({ children }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-10">
-      <div className="w-full max-w-xl">
-        <div className="mb-8 text-center">
-          <span className="text-2xl font-bold text-brand-700">HRNAVINOS</span>
-          <span className="ml-1 text-2xl font-light text-slate-500">ERP</span>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-8 shadow-md">{children}</div>
-      </div>
-    </div>
+    <PublicFormShell title="HRNAVINOS" subtitle="Enrolment Form">
+      {children}
+    </PublicFormShell>
   )
 }
