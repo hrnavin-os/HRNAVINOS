@@ -343,7 +343,7 @@ async def test_each_entry_is_in_exactly_one_tab(client, auth_headers):
 
     stats = (await client.get("/api/v1/induction-entries/stats", headers=auth_headers)).json()
 
-    assert stats["by_status"] == {"pending_induction": 1, "moved_to_foundation": 1}
+    assert stats["by_status"] == {"pending_induction": 1, "moved_to_foundation": 1, "quit": 0}
     # The cards count the open tab, so they agree with the rows beneath them.
     assert stats["total"] == 1
 
@@ -401,3 +401,104 @@ async def test_the_call_remark_survives_the_move_to_foundation(client, auth_head
         await client.get("/api/v1/induction-entries?status=moved_to_foundation", headers=auth_headers)
     ).json()
     assert moved["items"][0]["call_remark"] == "Will Join - Induction Call Completed"
+
+
+async def set_remark(client, auth_headers, entry_id, remark):
+    await client.put(
+        f"/api/v1/induction-entries/{entry_id}", headers=auth_headers, json={"call_remark": remark}
+    )
+
+
+async def test_a_quit_remark_moves_the_entry_to_the_quit_bucket(client, auth_headers):
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())
+    entry_id = (await client.get("/api/v1/induction-entries", headers=auth_headers)).json()["items"][0]["id"]
+
+    await set_remark(client, auth_headers, entry_id, "DAY-2 QUIT")
+
+    pending = (await client.get("/api/v1/induction-entries", headers=auth_headers)).json()
+    quit_rows = (await client.get("/api/v1/induction-entries?status=quit", headers=auth_headers)).json()
+
+    assert pending["total"] == 0
+    assert quit_rows["total"] == 1
+    assert quit_rows["items"][0]["status"] == "quit"
+
+
+async def test_quit_wins_over_having_moved_to_foundation(client, auth_headers):
+    """Quitting happens after the move as often as before it - DAY-3 QUIT is a
+    student who was already in a batch. They belong in one bucket, and it isn't
+    the one that says they are progressing."""
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())
+    await client.post(FOUNDATION_URL, json=foundation_payload())
+    entry_id = (
+        await client.get("/api/v1/induction-entries?status=moved_to_foundation", headers=auth_headers)
+    ).json()["items"][0]["id"]
+
+    await set_remark(client, auth_headers, entry_id, "DAY-3 QUIT")
+
+    moved = (
+        await client.get("/api/v1/induction-entries?status=moved_to_foundation", headers=auth_headers)
+    ).json()
+    quit_rows = (await client.get("/api/v1/induction-entries?status=quit", headers=auth_headers)).json()
+    assert moved["total"] == 0
+    assert quit_rows["total"] == 1
+
+
+async def test_a_non_quit_remark_leaves_the_bucket_alone(client, auth_headers):
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())
+    entry_id = (await client.get("/api/v1/induction-entries", headers=auth_headers)).json()["items"][0]["id"]
+
+    await set_remark(client, auth_headers, entry_id, "Call Scheduled Tomorrow")
+
+    assert (await client.get("/api/v1/induction-entries", headers=auth_headers)).json()["total"] == 1
+    assert (await client.get("/api/v1/induction-entries?status=quit", headers=auth_headers)).json()["total"] == 0
+
+
+async def test_every_quit_wording_is_recognised(client, auth_headers):
+    """Classified on the word rather than a list of the exact options, so the
+    backend holds no second copy of a list that lives in the frontend. This
+    pins that every wording actually offered is caught by it."""
+    await seed_programs(client)
+    quit_remarks = [
+        "Quit - Before Induction Call",
+        "QUIT - Induction call",
+        "Quit - After induction call",
+        "Before Class QUIT",
+        "QUIT-Refund Done",
+        "DAY-1 QUIT",
+        "DAY-5 QUIT",
+        "Quit - G1 - Before Demo Class",
+        "Quit-G1-After Demo Class",
+        "Quit-G2-Before Demo Class",
+        "Quit-G3 - After Demo Class Quit",
+    ]
+    for index, remark in enumerate(quit_remarks):
+        await client.post(INDUCTION_URL, json=induction_payload(name=remark, phone=f"90000000{index:02d}"))
+
+    entries = (await client.get("/api/v1/induction-entries?page_size=100", headers=auth_headers)).json()
+    for row in entries["items"]:
+        await set_remark(client, auth_headers, row["id"], row["name"])
+
+    quit_rows = (
+        await client.get("/api/v1/induction-entries?status=quit&page_size=100", headers=auth_headers)
+    ).json()
+    assert quit_rows["total"] == len(quit_remarks)
+
+
+async def test_the_three_buckets_partition_the_board(client, auth_headers):
+    """They are cards on one row that read as a total - so nobody may be
+    counted twice and nobody may be missing."""
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload(name="Still here"))
+    await client.post(INDUCTION_URL, json=induction_payload(name="Crossed", phone="9000000001"))
+    await client.post(INDUCTION_URL, json=induction_payload(name="Gone", phone="9000000002"))
+
+    rows = (await client.get("/api/v1/induction-entries?page_size=100", headers=auth_headers)).json()["items"]
+    gone = next(row for row in rows if row["name"] == "Gone")
+    await set_remark(client, auth_headers, gone["id"], "Quit - Before Induction Call")
+    await client.post(FOUNDATION_URL, json=foundation_payload(mobile_number="9000000001"))
+
+    stats = (await client.get("/api/v1/induction-entries/stats", headers=auth_headers)).json()
+    assert stats["by_status"] == {"pending_induction": 1, "moved_to_foundation": 1, "quit": 1}

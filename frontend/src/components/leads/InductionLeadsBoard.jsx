@@ -3,12 +3,12 @@ import { useQuery } from '@tanstack/react-query'
 import { ResourceListPage } from '@/components/resource/ResourceListPage'
 import { inductionEntryService } from '@/services/inductionEntryService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
-import { ClipboardList, X } from 'lucide-react'
+import { ArrowRightLeft, ClipboardList, Target, UserX, X } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { FilterDropdown } from '@/components/ui/FilterDropdown'
 import { Toast } from '@/components/ui/Toast'
-import { LeadSectionStats } from '@/components/leads/LeadSectionStats'
+import { StatCard } from '@/components/ui/StatCard'
 import { InductionCallRemarkCell } from '@/components/leads/InductionCallRemarkCell'
 import { InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
 import { InductionUpdateModal } from '@/components/leads/InductionUpdateModal'
@@ -20,13 +20,21 @@ import { formatDate, formatDateTime } from '@/utils/formatters'
 const dash = <span className="text-slate-400">—</span>
 const orDash = (value) => value || dash
 
-// Mirrors InductionStatus on the backend, which derives it from whether the
-// entry carries a foundation_lead_id.
-const INDUCTION_STATUS = { pending: 'pending_induction', moved: 'moved_to_foundation' }
+// Mirrors InductionStatus on the backend, which derives these from the call
+// remark and whether the entry carries a foundation_lead_id.
+const INDUCTION_STATUS = {
+  pending: 'pending_induction',
+  moved: 'moved_to_foundation',
+  quit: 'quit',
+}
 
-const TABS = [
-  { value: INDUCTION_STATUS.pending, label: 'Induction Leads' },
-  { value: INDUCTION_STATUS.moved, label: 'Moved to Foundation' },
+// The three cards double as the view selector, the way the Foundation board's
+// section cards do. They partition the board - quit takes precedence over the
+// other two - so the counts sum to everything it holds.
+const VIEWS = [
+  { value: INDUCTION_STATUS.pending, label: 'Induction Leads', tone: 'brand', icon: Target },
+  { value: INDUCTION_STATUS.moved, label: 'Moved to Foundation', tone: 'emerald', icon: ArrowRightLeft },
+  { value: INDUCTION_STATUS.quit, label: 'Quit Students', tone: 'red', icon: UserX },
 ]
 
 // Induction submissions are their own records, not Leads, so this board has
@@ -192,6 +200,7 @@ export function InductionLeadsBoard() {
   // in exactly one tab and the counts come from the same source as the rows.
   const [status, setStatus] = useState(INDUCTION_STATUS.pending)
   const moved = status === INDUCTION_STATUS.moved
+  const quit = status === INDUCTION_STATUS.quit
   // Inline cell edits have no form to attach a failure to, so they surface
   // here rather than reverting as if nothing happened.
   const [error, setError] = useState(null)
@@ -230,7 +239,6 @@ export function InductionLeadsBoard() {
   })
 
   const sections = configQuery.data?.sections ?? []
-  const visibleSections = scopedSection ? sections.filter((s) => s.code === scopedSection) : sections
 
   // Plain string lists come back for everything except Assigned To, which
   // needs an id to filter on and a name to show.
@@ -259,42 +267,47 @@ export function InductionLeadsBoard() {
 
   return (
     <>
-      {/* Which entries are still in Induction and which have already crossed
-          to Foundation. Backed by a status on the server, not a filter applied
-          here, so the two tabs are the same partition the API works in. */}
-      <div className="mb-4 inline-flex gap-1 rounded-lg bg-slate-100 p-1">
-        {TABS.map((tab) => (
-          <button
-            key={tab.value}
-            type="button"
+      {/* The cards are the view selector, replacing both the tab strip and the
+          per-section cards that used to sit here. Section is still filterable -
+          it moved into the filter row, where it sits beside the other six
+          rather than spending the whole top of the page on one dimension. */}
+      <div className="mb-4 flex flex-wrap gap-3">
+        {VIEWS.map((view) => (
+          <StatCard
+            key={view.value}
+            label={view.label}
+            value={byStatus[view.value] ?? 0}
+            toneName={view.tone}
+            icon={view.icon}
+            isActive={status === view.value}
             onClick={() => {
-              setStatus(tab.value)
+              setStatus(view.value)
               setFilters(EMPTY_FILTERS)
             }}
-            aria-pressed={status === tab.value}
-            className={`inline-flex items-center gap-2 rounded-md px-3.5 py-1.5 text-sm font-semibold transition-colors ${
-              status === tab.value ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            {tab.label}
-            <span className="tabular-nums text-xs font-medium opacity-70">{byStatus[tab.value] ?? 0}</span>
-          </button>
+          />
         ))}
       </div>
-
-      <LeadSectionStats
-        allLabel={moved ? 'All Moved' : 'All Entries'}
-        total={statsQuery.data?.total ?? 0}
-        sections={visibleSections}
-        bySection={statsQuery.data?.by_section ?? {}}
-        activeSection={effectiveSection}
-        onSelect={scopedSection ? () => {} : setSectionFilter}
-      />
       <ResourceListPage
         // Rendered inline beside the search box rather than as a band above
         // it - same job, and two stacked rows pushed the table off screen.
         renderFilters={() => (
           <>
+            {/* Section moved down here from the cards above. A Section Admin
+                is pinned to their own by their role, so offering them a
+                chooser would be a control that can only pick what they already
+                have. */}
+            {!scopedSection && (
+              <FilterDropdown
+                grow
+                label="Section"
+                value={sectionFilter}
+                options={sections.map((section) => ({
+                  value: section.code,
+                  label: section.label,
+                }))}
+                onChange={setSectionFilter}
+              />
+            )}
             <FilterDropdown
               grow
               label="Batch"
@@ -355,14 +368,16 @@ export function InductionLeadsBoard() {
         title="Induction Entry"
         queryKey="induction-entries"
         service={inductionEntryService}
-        // The Moved tab is a record of what happened, not a worklist: the
-        // post-call Update form belongs to an entry still being worked, and
-        // these have already crossed to Foundation, where the lead's own
-        // popup takes over.
+        // The post-call Update form belongs to an entry still being worked.
+        // Moved entries have crossed to Foundation, where the lead's own popup
+        // takes over, and a candidate who has quit is not going to be called
+        // through the four pages either - both are records of what happened.
         columns={
           moved
             ? movedColumns
-            : [
+            : quit
+              ? pendingColumns
+              : [
                 ...pendingColumns,
                 {
                   // Last column, before Actions: opens the four-page post-call form.

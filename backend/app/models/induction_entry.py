@@ -111,12 +111,17 @@ class InductionEntry(BaseDocument):
 
     @property
     def status(self) -> InductionStatus:
-        """Which of the board's two tabs this entry belongs to.
+        """Which of the board's three buckets this entry belongs to.
 
-        A pure read of foundation_lead_id, which the mobile-number match sets -
-        so the status can never disagree with whether the entry is actually
-        linked, and nothing has to remember to update it.
+        A pure read of the call remark and foundation_lead_id, which the
+        mobile-number match sets - so the status can never disagree with them,
+        and nothing has to remember to update it.
+
+        Quit is checked first, matching the query in the repository: somebody
+        who has quit is not still in Induction, whatever else is true of them.
         """
+        if self.call_remark and "quit" in self.call_remark.lower():
+            return InductionStatus.QUIT
         return (
             InductionStatus.MOVED_TO_FOUNDATION
             if self.foundation_lead_id is not None

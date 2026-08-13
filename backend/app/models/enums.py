@@ -78,16 +78,22 @@ class LeadStatus(StrEnum):
 
 
 class InductionStatus(StrEnum):
-    """Whether an induction entry has crossed over to Foundation.
+    """Which of the board's three buckets an induction entry sits in.
 
-    Derived from InductionEntry.foundation_lead_id rather than stored beside
-    it. That id is written by the mobile-number match and is the fact itself -
-    a second status field would be a copy of it, and the copy is what goes
-    stale the day something sets one without the other.
+    Derived, never stored: from InductionEntry.foundation_lead_id, which the
+    mobile-number match writes, and from the call remark. Those are the facts
+    themselves - a status field beside them would be a copy, and the copy is
+    what goes stale the day something sets one without the other.
+
+    A partition, not three overlapping filters. Quit wins over the other two:
+    somebody who has quit is not "currently in Induction" whatever else is true
+    of them, and counting them in two buckets would make the three cards sum to
+    more than the board holds.
     """
 
     PENDING_INDUCTION = "pending_induction"
     MOVED_TO_FOUNDATION = "moved_to_foundation"
+    QUIT = "quit"
 
 
 class WhatsAppGroupStatus(StrEnum):

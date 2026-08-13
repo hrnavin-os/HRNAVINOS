@@ -8,15 +8,35 @@ from app.repositories.base_repository import BaseRepository
 NOT_CONVERTED = {"foundation_lead_id": {"$eq": None}}
 CONVERTED = {"foundation_lead_id": {"$ne": None}}
 
+# A candidate has quit when their induction call remark says so.
+#
+# Matched on the word rather than against a list of the exact options, and that
+# is deliberate: every quit disposition contains "quit" and no other one does
+# ("Quit - Before Induction Call", "DAY-3 QUIT", "Quit-G2-After Demo Class"),
+# so this classifies them all without the backend holding a second copy of a
+# list that lives in the frontend - and a copy is what silently stops matching
+# the day somebody adds an option to one side only. New quit wordings are
+# covered automatically as long as they say quit, which they must to be
+# readable anyway.
+QUIT_REMARK = {"call_remark": {"$regex": "quit", "$options": "i"}}
+NOT_QUIT = {"call_remark": {"$not": {"$regex": "quit", "$options": "i"}}}
+
 
 def status_query(status: InductionStatus) -> dict:
     """The stored-field query behind a derived InductionStatus.
 
     Mirrors InductionEntry.status - that property answers for one entry, this
     lets the database answer for thousands without loading them. Both read the
-    same field, so they cannot classify the same entry differently.
+    same fields, so they cannot classify the same entry differently.
+
+    Quit is excluded from the other two rather than sitting alongside them, so
+    the three buckets partition the board and the cards sum to its total.
     """
-    return CONVERTED if status == InductionStatus.MOVED_TO_FOUNDATION else NOT_CONVERTED
+    if status == InductionStatus.QUIT:
+        return QUIT_REMARK
+    if status == InductionStatus.MOVED_TO_FOUNDATION:
+        return {**CONVERTED, **NOT_QUIT}
+    return {**NOT_CONVERTED, **NOT_QUIT}
 
 
 class InductionEntryRepository(BaseRepository[InductionEntry]):
