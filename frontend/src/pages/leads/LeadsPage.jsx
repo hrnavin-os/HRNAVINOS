@@ -53,21 +53,24 @@ const EXCLUDED_COURSE_OPTIONS = ['HR Recruitment', 'Nothing']
 // Every stage is a solid gradient with white text, so the column reads as one
 // consistent set rather than one filled chip among pale ones.
 //
-// The step numbers differ per hue on purpose. White text has to stay legible
-// against the *lightest* end of each gradient - the `from` stop - and the hues
-// are not equally light there. Matching blue's 500 numerically would put white
-// on yellow-500 at 1.92:1 and green-500 at 2.28:1, effectively unreadable.
-// These steps were chosen so every `from` stop clears 4.5:1 (blue 5.17, red
-// 4.83, yellow 4.92, purple 5.38, green 5.02, orange 5.18) - matched by
-// perceived lightness, not by step number. Re-check the contrast if you
-// retune these.
+// Solid fills, not gradients. Each one is the gradient's old `from` stop, which
+// is the end the contrast was measured against - so the pills keep exactly the
+// ratios below and only lose the darkening toward their right edge.
+//
+// The step numbers differ per hue on purpose. White text has to stay legible on
+// each, and the hues are not equally light at the same step. Matching blue's
+// 500 numerically would put white on yellow-500 at 1.92:1 and green-500 at
+// 2.28:1, effectively unreadable. These steps were chosen so every fill clears
+// 4.5:1 (blue 5.17, red 4.83, yellow 4.92, purple 5.38, green 5.02, orange
+// 5.18) - matched by perceived lightness, not by step number. Re-check the
+// contrast if you retune these.
 const STAGE_CELL_STYLES = {
-  new_lead: 'border-transparent bg-linear-to-r from-blue-600 to-blue-700 text-white',
-  rnr: 'border-transparent bg-linear-to-r from-red-600 to-red-700 text-white',
-  pre_screening: 'border-transparent bg-linear-to-r from-yellow-700 to-yellow-800 text-white',
-  financial_approval: 'border-transparent bg-linear-to-r from-purple-600 to-purple-700 text-white',
-  batch_confirmation: 'border-transparent bg-linear-to-r from-green-700 to-green-800 text-white',
-  lost: 'border-transparent bg-linear-to-r from-orange-700 to-orange-800 text-white',
+  new_lead: 'border-transparent bg-blue-600 text-white',
+  rnr: 'border-transparent bg-red-600 text-white',
+  pre_screening: 'border-transparent bg-yellow-700 text-white',
+  financial_approval: 'border-transparent bg-purple-600 text-white',
+  batch_confirmation: 'border-transparent bg-green-700 text-white',
+  lost: 'border-transparent bg-orange-700 text-white',
 }
 
 // Matches Lead.remarks' server-side cap, so an over-long paste is stopped at
@@ -607,9 +610,7 @@ function FoundationLeadsBoard() {
       align: 'center',
       render: (row) => {
         const stage = LEAD_STAGE_BY_VALUE[row.status]
-        const style =
-          STAGE_CELL_STYLES[row.status] ??
-          'border-transparent bg-linear-to-r from-slate-600 to-slate-700 text-white'
+        const style = STAGE_CELL_STYLES[row.status] ?? 'border-transparent bg-slate-600 text-white'
         return (
           <span className={`inline-flex items-center whitespace-nowrap rounded-md border px-2.5 py-0.5 text-xs font-medium ${style}`}>
             {stage?.label ?? titleCase(row.status)}
