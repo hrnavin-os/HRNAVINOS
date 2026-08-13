@@ -19,18 +19,13 @@ function ReportSection({ title, queryKey, queryFn, columns }) {
       <div className="border-b border-slate-200 px-4 py-3">
         <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
       </div>
-      {/* These are short aggregate tables inside a two-up grid, so the shared
-          viewport-height cap would leave them taller than their contents and
-          the grid rows uneven. */}
-      <div style={{ '--table-max-h': 'none' }}>
-        <DataTable
-          columns={columns}
-          rows={data}
-          isLoading={isLoading}
-          error={error ? getApiErrorMessage(error) : null}
-          emptyMessage="No data yet."
-        />
-      </div>
+      <DataTable
+        columns={columns}
+        rows={data}
+        isLoading={isLoading}
+        error={error ? getApiErrorMessage(error) : null}
+        emptyMessage="No data yet."
+      />
     </div>
   )
 }

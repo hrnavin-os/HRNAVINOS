@@ -41,26 +41,18 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
   }
 
   return (
-    // Capped height so the horizontal scrollbar stays put. Left to grow, the
-    // scroll box ends wherever the last row does, which on a long table is far
-    // below the fold - you had to scroll the page to the bottom to reach the
-    // bar that scrolls the columns. Bounded, the box scrolls its own rows and
-    // the bar sits at its bottom edge, on screen the whole time.
+    // Horizontal only. The box grows to whatever height its rows need, so a
+    // table never scrolls inside itself - the page scrolls instead.
     //
-    // The 20rem allows for the header, page padding, a stat row, the toolbar
-    // and the pagination beneath. Pages with less chrome than that get a table
-    // slightly shorter than it could be, which is the cheap direction to be
-    // wrong in; --table-max-h overrides it where that matters. Short tables
-    // never reach the cap and are unaffected.
-    // The cap is lifted below sm. On a phone the chrome above the table is
-    // taller relative to the viewport, so subtracting a desktop-sized 20rem
-    // left a box a couple of rows deep inside a page that scrolls anyway - and
-    // a pinned horizontal scrollbar buys nothing on a touch screen, where you
-    // drag the table itself.
-    <div
-      className="table-scroll w-full overflow-auto max-sm:max-h-none!"
-      style={{ maxHeight: 'var(--table-max-h, calc(100vh - 20rem))' }}
-    >
+    // This used to be capped to the viewport, which pinned the horizontal
+    // scrollbar to the bottom of the box where it was always reachable. The
+    // cost was a second scrollbar down the side of every table, and a six-row
+    // table that fit on screen anyway still got clipped and scrolled. The
+    // horizontal bar now sits under the last row.
+    //
+    // --table-max-h is still honoured for anywhere that wants the old bounded
+    // behaviour back; unset, max-height resolves to none.
+    <div className="table-scroll w-full overflow-x-auto" style={{ maxHeight: 'var(--table-max-h, none)' }}>
       <table className="min-w-full border-separate border-spacing-0">
         <thead>
           <tr>
@@ -68,11 +60,15 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
               <th
                 key={column.key}
                 scope="col"
-                // Sticky because the box scrolls its own rows now - column
-                // headings that scroll away leave you reading unlabelled
-                // columns. Works because the table is border-separate:
-                // collapsed borders are painted on the table, not the cell,
-                // and vanish the moment a header sticks.
+                // Sticky is inert while the box has no height cap - it only
+                // bites for anywhere that sets --table-max-h, where headings
+                // would otherwise scroll away and leave you reading unlabelled
+                // columns. Kept because it costs nothing and the alternative is
+                // re-deriving it the next time a table wants bounding.
+                //
+                // Works because the table is border-separate: collapsed borders
+                // are painted on the table, not the cell, and vanish the moment
+                // a header sticks.
                 className={`sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 ${EDGE_PADDING} ${
                   ALIGN[column.align] ?? ALIGN.left
                 }`}
