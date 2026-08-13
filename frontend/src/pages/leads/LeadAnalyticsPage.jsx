@@ -4,6 +4,7 @@ import { ArrowRightLeft, Crown, PhoneCall, Tag, UserX } from 'lucide-react'
 import { inductionEntryService } from '@/services/inductionEntryService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { DataTable } from '@/components/ui/DataTable'
+import { TableCard } from '@/components/ui/TableCard'
 import { TabStrip } from '@/components/ui/TabStrip'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
@@ -253,13 +254,13 @@ export function LeadAnalyticsPage() {
 
           {/* The table view: the same numbers without relying on colour or bar
               length, plus the conversion and quit rates the bars don't carry. */}
-          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          <TableCard>
             <DataTable
               columns={columns}
               rows={items.map((item) => ({ id: item.value, ...item }))}
               emptyMessage="Nothing recorded yet."
             />
-          </div>
+          </TableCard>
         </div>
       )}
     </div>

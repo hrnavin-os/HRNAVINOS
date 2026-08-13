@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { DataTable } from '@/components/ui/DataTable'
+import { TableCard } from '@/components/ui/TableCard'
 import { useAuth } from '@/hooks/useAuth'
 import { PERMISSIONS } from '@/constants/permissions'
 
@@ -93,7 +94,7 @@ export function AttendancePage() {
       {batchId && loadingStudents && <LoadingSpinner />}
 
       {batchId && students?.items?.length > 0 && (
-        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <TableCard>
           <DataTable
             columns={[
               {
@@ -130,7 +131,7 @@ export function AttendancePage() {
               </Button>
             </div>
           )}
-        </div>
+        </TableCard>
       )}
 
       {batchId && students && students.items.length === 0 && (

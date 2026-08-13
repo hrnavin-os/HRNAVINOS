@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { reportService } from '@/services/reportService'
 import { DataTable } from '@/components/ui/DataTable'
+import { TableCard } from '@/components/ui/TableCard'
 import { formatCurrency, titleCase } from '@/utils/formatters'
 import { getApiErrorMessage } from '@/services/apiClient'
 
@@ -15,7 +16,7 @@ function ReportSection({ title, queryKey, queryFn, columns }) {
   const { data, isLoading, error } = useQuery({ queryKey: [queryKey], queryFn })
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <TableCard>
       <div className="border-b border-slate-200 px-4 py-3">
         <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
       </div>
@@ -26,7 +27,7 @@ function ReportSection({ title, queryKey, queryFn, columns }) {
         error={error ? getApiErrorMessage(error) : null}
         emptyMessage="No data yet."
       />
-    </div>
+    </TableCard>
   )
 }
 

@@ -14,6 +14,7 @@ import { WhatsAppStatusPill } from '@/components/hr/WhatsAppStatusPill'
 import { WhatsAppStudentModal } from '@/components/hr/WhatsAppStudentModal'
 import { WHATSAPP_STATUS, WHATSAPP_STATUS_ORDER } from '@/constants/whatsappStatus'
 import { formatDateTime } from '@/utils/formatters'
+import { TableCard } from '@/components/ui/TableCard'
 
 const QUERY_KEY = 'whatsapp-onboarding'
 
@@ -362,7 +363,7 @@ export function WhatsAppOnboardingBoard() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <TableCard>
         <DataTable
           columns={columns}
           rows={rows}
@@ -374,7 +375,7 @@ export function WhatsAppOnboardingBoard() {
         <p className="border-t border-slate-100 px-4 py-2.5 text-xs text-slate-400">
           Showing <span className="font-semibold text-slate-600">{rows.length}</span> of {allRows.length}
         </p>
-      </div>
+      </TableCard>
 
       {viewing && (
         <WhatsAppStudentModal

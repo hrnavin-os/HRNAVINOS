@@ -11,6 +11,7 @@ import { formatCurrency, formatDate, titleCase } from '@/utils/formatters'
 import { getLeadPaymentSummary } from '@/utils/leadPayment'
 import { PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
 import { ReviewApprovalModal } from '@/components/payments/ReviewApprovalModal'
+import { TableCard } from '@/components/ui/TableCard'
 
 const columns = [
   { key: 'sno', header: 'S.No', render: (row) => row.__rowNumber },
@@ -91,9 +92,9 @@ export function IncomeApprovalsTab() {
 
   return (
     <>
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <TableCard>
         <DataTable columns={columns} rows={leads} emptyMessage="No leads awaiting financial approval." />
-      </div>
+      </TableCard>
       {reviewingLead && <ReviewApprovalModal lead={reviewingLead} onClose={() => setReviewingLead(null)} />}
     </>
   )

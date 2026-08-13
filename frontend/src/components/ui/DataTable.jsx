@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { Inbox } from 'lucide-react'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 
@@ -31,6 +32,42 @@ function SkeletonRows({ columns, rows = 5 }) {
 }
 
 export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No records found.', onRowClick }) {
+  const boxRef = useRef(null)
+  const barRef = useRef(null)
+  const [scrollWidth, setScrollWidth] = useState(0)
+  const [overflowing, setOverflowing] = useState(false)
+
+  // The proxy bar has to be exactly as wide as the table to scroll it 1:1, and
+  // the table's width isn't known at mount - columns arrive with the data. So
+  // it's measured, and re-measured whenever the box or the table resizes.
+  useEffect(() => {
+    const box = boxRef.current
+    if (!box) return undefined
+    const measure = () => {
+      setScrollWidth(box.scrollWidth)
+      // The +1 absorbs sub-pixel widths. Compared exactly, a table that fits
+      // reports a fractional pixel of overflow and every table in the app gets
+      // a scrollbar it doesn't need.
+      setOverflowing(box.scrollWidth > box.clientWidth + 1)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(box)
+    // The box is width-constrained by the card, so it alone never reports the
+    // change - the table inside it is what actually grows.
+    if (box.firstElementChild) observer.observe(box.firstElementChild)
+    return () => observer.disconnect()
+  }, [])
+
+  // Assigning only when the two differ is what stops them bouncing scroll
+  // events off each other: setting scrollLeft to the value it already holds
+  // fires no event, so the echo dies on the first hop.
+  const sync = (from, to) => () => {
+    if (from.current && to.current && to.current.scrollLeft !== from.current.scrollLeft) {
+      to.current.scrollLeft = from.current.scrollLeft
+    }
+  }
+
   // A clickable row has to be reachable and operable from the keyboard too -
   // a bare onClick on <tr> is mouse-only.
   const rowKeyDown = (row) => (event) => {
@@ -41,100 +78,126 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
   }
 
   return (
-    // Horizontal only. The box grows to whatever height its rows need, so a
-    // table never scrolls inside itself - the page scrolls instead.
-    //
-    // This used to be capped to the viewport, which pinned the horizontal
-    // scrollbar to the bottom of the box where it was always reachable. The
-    // cost was a second scrollbar down the side of every table, and a six-row
-    // table that fit on screen anyway still got clipped and scrolled. The
-    // horizontal bar now sits under the last row.
-    //
-    // --table-max-h is still honoured for anywhere that wants the old bounded
-    // behaviour back; unset, max-height resolves to none.
-    <div className="table-scroll w-full overflow-x-auto" style={{ maxHeight: 'var(--table-max-h, none)' }}>
-      <table className="min-w-full border-separate border-spacing-0">
-        <thead>
-          <tr>
-            {columns.map((column) => (
-              <th
-                key={column.key}
-                scope="col"
-                // Sticky is inert while the box has no height cap - it only
-                // bites for anywhere that sets --table-max-h, where headings
-                // would otherwise scroll away and leave you reading unlabelled
-                // columns. Kept because it costs nothing and the alternative is
-                // re-deriving it the next time a table wants bounding.
-                //
-                // Works because the table is border-separate: collapsed borders
-                // are painted on the table, not the cell, and vanish the moment
-                // a header sticks.
-                className={`sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 ${EDGE_PADDING} ${
-                  ALIGN[column.align] ?? ALIGN.left
-                }`}
-              >
-                {column.header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="bg-white">
-          {isLoading ? (
-            <SkeletonRows columns={columns} />
-          ) : error ? (
+    // The frame exists to bound how far the sticky bar can travel. Sticky is
+    // positioned within its nearest block-container ancestor, so without this
+    // the bar's range would be the whole card and it would drift down over the
+    // pagination. Bounded here, it can only reach the bottom of the table.
+    <div className="table-frame relative">
+      {/* Horizontal only, and no height cap: a table never scrolls inside
+          itself, the page scrolls it. Its own scrollbar is hidden (.table-box)
+          because the sticky proxy below is the one you see and drag - two bars
+          for one axis would be scrolling the same thing twice. */}
+      <div ref={boxRef} onScroll={sync(boxRef, barRef)} className="table-box w-full overflow-x-auto">
+        <table className="min-w-full border-separate border-spacing-0">
+          <thead>
             <tr>
-              <td colSpan={columns.length} className="px-4 py-10">
-                <ErrorMessage message={error} />
-              </td>
+              {columns.map((column) => (
+                <th
+                  key={column.key}
+                  scope="col"
+                  // Not sticky. It was, back when the box was capped to the
+                  // viewport and scrolled its own rows - headings that scrolled
+                  // away left you reading unlabelled columns. The box has no
+                  // height cap now, so there is nothing for a heading to stick
+                  // against and the class only looked like it did something.
+                  //
+                  // border-separate stays: it is what lets each cell paint its
+                  // own border, which the collapsed default would hoist onto the
+                  // table instead.
+                  className={`whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 ${EDGE_PADDING} ${
+                    ALIGN[column.align] ?? ALIGN.left
+                  }`}
+                >
+                  {column.header}
+                </th>
+              ))}
             </tr>
-          ) : !rows?.length ? (
-            <tr>
-              <td colSpan={columns.length} className="px-4 py-14">
-                <div className="flex flex-col items-center gap-2 text-center">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-400">
-                    <Inbox className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
-                  </span>
-                  <p className="max-w-md text-sm text-slate-500">{emptyMessage}</p>
-                </div>
-              </td>
-            </tr>
-          ) : (
-            rows.map((row, index) => (
-              <tr
-                // Falls back to the index for aggregate rows, which are grouped
-                // sums rather than records and carry no id - without it every
-                // row in a report table keys on undefined.
-                key={row.id ?? index}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
-                onKeyDown={onRowClick ? rowKeyDown(row) : undefined}
-                tabIndex={onRowClick ? 0 : undefined}
-                role={onRowClick ? 'button' : undefined}
-                className={`group transition-colors hover:bg-brand-50/50 ${
-                  onRowClick ? 'cursor-pointer focus:bg-brand-50/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500' : ''
-                }`}
-              >
-                {columns.map((column) => (
-                  <td
-                    key={column.key}
-                    // Cells stay on one line by default: a value wrapping to
-                    // two or three lines makes every row in the table that
-                    // tall, and the container already scrolls horizontally.
-                    // Opt a column out with `wrap: true` when the content is
-                    // genuinely long-form.
-                    className={`border-b border-slate-100 px-4 py-3 text-sm text-slate-700 group-last:border-b-0 ${EDGE_PADDING} ${
-                      ALIGN[column.align] ?? ALIGN.left
-                    } ${column.numeric ? 'tabular-nums' : ''} ${column.wrap ? '' : 'whitespace-nowrap'}`}
-                  >
-                    {/* Second arg is the row's index within this page; columns
-                        that don't need it simply ignore it. */}
-                    {column.render ? column.render(row, index) : row[column.key]}
-                  </td>
-                ))}
+          </thead>
+          <tbody className="bg-white">
+            {isLoading ? (
+              <SkeletonRows columns={columns} />
+            ) : error ? (
+              <tr>
+                <td colSpan={columns.length} className="px-4 py-10">
+                  <ErrorMessage message={error} />
+                </td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            ) : !rows?.length ? (
+              <tr>
+                <td colSpan={columns.length} className="px-4 py-14">
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                      <Inbox className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+                    </span>
+                    <p className="max-w-md text-sm text-slate-500">{emptyMessage}</p>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              rows.map((row, index) => (
+                <tr
+                  // Falls back to the index for aggregate rows, which are grouped
+                  // sums rather than records and carry no id - without it every
+                  // row in a report table keys on undefined.
+                  key={row.id ?? index}
+                  onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  onKeyDown={onRowClick ? rowKeyDown(row) : undefined}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  role={onRowClick ? 'button' : undefined}
+                  className={`group transition-colors hover:bg-brand-50/50 ${
+                    onRowClick ? 'cursor-pointer focus:bg-brand-50/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500' : ''
+                  }`}
+                >
+                  {columns.map((column) => (
+                    <td
+                      key={column.key}
+                      // Cells stay on one line by default: a value wrapping to
+                      // two or three lines makes every row in the table that
+                      // tall, and the container already scrolls horizontally.
+                      // Opt a column out with `wrap: true` when the content is
+                      // genuinely long-form.
+                      className={`border-b border-slate-100 px-4 py-3 text-sm text-slate-700 group-last:border-b-0 ${EDGE_PADDING} ${
+                        ALIGN[column.align] ?? ALIGN.left
+                      } ${column.numeric ? 'tabular-nums' : ''} ${column.wrap ? '' : 'whitespace-nowrap'}`}
+                    >
+                      {/* Second arg is the row's index within this page; columns
+                          that don't need it simply ignore it. */}
+                      {column.render ? column.render(row, index) : row[column.key]}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* The bar you actually see: an empty box as wide as the table, scrolled
+          in lockstep with it. A real scrollbar cannot be pinned - it belongs to
+          its box and sits at that box's bottom edge - so pinning one means
+          detaching it from the table and sticking the copy instead.
+
+          Only rendered when the table is wider than its card. A scrollbar for
+          content that already fits is a control that does nothing.
+
+          md and up only. It sticks to the bottom of the scrolling <main>, which
+          on a phone is behind the fixed tab bar - and a pinned bar buys nothing
+          on a touch screen, where you drag the table itself. Below md the box
+          keeps its own native scrollbar instead (see .table-box).
+
+          aria-hidden and not focusable: it duplicates a box the keyboard can
+          already scroll, so exposing it would put a second, identical stop in
+          the tab order. */}
+      {overflowing && (
+        <div
+          ref={barRef}
+          onScroll={sync(barRef, boxRef)}
+          aria-hidden="true"
+          className="table-scroll sticky bottom-0 z-20 hidden h-3 overflow-x-auto overflow-y-hidden bg-white md:block"
+        >
+          <div style={{ width: scrollWidth, height: 1 }} />
+        </div>
+      )}
     </div>
   )
 }

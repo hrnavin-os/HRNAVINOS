@@ -10,6 +10,7 @@ import {
   PAYMENT_PLAN_LABELS,
 } from '@/constants/installmentPaymentModes'
 import { IncomeDetailModal } from '@/components/payments/IncomeDetailModal'
+import { TableCard } from '@/components/ui/TableCard'
 
 const dash = <span className="text-slate-400">—</span>
 
@@ -98,7 +99,7 @@ export function OverallIncomeTab({ leads = [], isLoading, error }) {
 
   return (
     <>
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <TableCard>
         <DataTable
           columns={columns}
           rows={rows}
@@ -107,7 +108,7 @@ export function OverallIncomeTab({ leads = [], isLoading, error }) {
           emptyMessage="No approved income entries match this filter."
           onRowClick={(row) => setViewingLead(row)}
         />
-      </div>
+      </TableCard>
       {viewingLead && <IncomeDetailModal lead={viewingLead} onClose={() => setViewingLead(null)} />}
     </>
   )

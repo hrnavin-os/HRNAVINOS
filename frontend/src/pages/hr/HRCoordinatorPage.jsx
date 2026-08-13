@@ -6,6 +6,7 @@ import { getApiErrorMessage } from '@/services/apiClient'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { DataTable } from '@/components/ui/DataTable'
+import { TableCard } from '@/components/ui/TableCard'
 import { TabStrip } from '@/components/ui/TabStrip'
 import { HRStudentDetailModal } from '@/components/hr/HRStudentDetailModal'
 import { WhatsAppOnboardingBoard } from '@/pages/hr/WhatsAppOnboardingBoard'
@@ -103,7 +104,7 @@ function LostStudents() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <TableCard>
         <DataTable
           columns={columns}
           rows={rows}
@@ -115,7 +116,7 @@ function LostStudents() {
         <p className="border-t border-slate-100 px-4 py-2.5 text-xs text-slate-400">
           Showing <span className="font-semibold text-slate-600">{rows.length}</span> of {allRows.length}
         </p>
-      </div>
+      </TableCard>
 
       {viewing && (
         <HRStudentDetailModal

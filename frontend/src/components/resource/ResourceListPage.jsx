@@ -5,6 +5,7 @@ import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
 import { useAuth } from '@/hooks/useAuth'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { DataTable } from '@/components/ui/DataTable'
+import { TableCard } from '@/components/ui/TableCard'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { Pagination } from '@/components/ui/Pagination'
@@ -211,7 +212,7 @@ export function ResourceListPage({
           )}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <TableCard>
           <DataTable columns={tableColumns} rows={items} isLoading={isLoading} error={error} />
           <Pagination
             page={page}
@@ -220,7 +221,7 @@ export function ResourceListPage({
             total={total}
             pageSize={pageSize}
           />
-        </div>
+        </TableCard>
       )}
 
       {createFields && (

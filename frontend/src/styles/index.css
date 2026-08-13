@@ -91,3 +91,38 @@ body {
 .table-scroll::-webkit-scrollbar-thumb:hover {
   box-shadow: inset 0 0 0 4px #64748b;
 }
+
+/* The table's own scroll box. Its native bar is suppressed because the sticky
+   proxy rendered after it is the visible one - left on, the two would stack and
+   you would be offered the same axis twice. The box still scrolls: the wheel,
+   trackpad and keyboard all go through it as normal.
+
+   Only from md up, where the proxy is also rendered. Below that the proxy is
+   hidden - it would pin to the bottom of the scrolling <main>, which on a phone
+   is behind the fixed tab bar - so the native scrollbar has to stay, or a table
+   would scroll sideways with nothing on screen saying so. */
+@media (min-width: 48rem) {
+  .table-box {
+    scrollbar-width: none;
+  }
+
+  .table-box::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}
+
+/* TableCard cannot use overflow-hidden - it would make the sticky bar inert,
+   since a sticky child is positioned against its nearest scrollport and a
+   hidden box that never scrolls never offsets it. So the scroll box rounds its
+   own top corners, and only when it is the first thing in the card: elsewhere
+   (Reports puts a title bar above its table) those corners are mid-card and
+   rounding them would cut a notch out of the header band.
+
+   On the box rather than on the header cells, because the box clips its content
+   horizontally - a radius on the first cell scrolls away with it, a radius on
+   the box holds wherever the table is scrolled to. */
+.table-frame:first-child > .table-box {
+  border-start-start-radius: 0.5rem;
+  border-start-end-radius: 0.5rem;
+}

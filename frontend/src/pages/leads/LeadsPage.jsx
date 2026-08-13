@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { Toast } from '@/components/ui/Toast'
 import { DataTable } from '@/components/ui/DataTable'
+import { TableCard } from '@/components/ui/TableCard'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { FilterDropdown } from '@/components/ui/FilterDropdown'
 import { Pagination } from '@/components/ui/Pagination'
@@ -724,7 +725,7 @@ function FoundationLeadsBoard() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <TableCard>
         {/* Clicking anywhere on a row opens that lead, so there's no separate
             View column. Safe because every inline editor in the row (the
             payment-remarks select, the remarks popover) calls stopPropagation
@@ -746,7 +747,7 @@ function FoundationLeadsBoard() {
           total={filteredTotal}
           pageSize={pageSize}
         />
-      </div>
+      </TableCard>
 
       {openLead && <LeadDetailModal lead={openLead} onClose={closeLead} />}
 
