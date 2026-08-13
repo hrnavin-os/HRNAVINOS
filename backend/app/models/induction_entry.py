@@ -68,6 +68,12 @@ class InductionEntry(BaseDocument):
     lead_source: str | None = Field(default=None, max_length=150)
     payment_mode: str | None = Field(default=None, max_length=100)
     category: str | None = Field(default=None, max_length=150)
+    # Where this candidate stands after the induction call - set from a
+    # dropdown on the board. Open text rather than an enum for the same reason
+    # the fields above are: the list is long, entirely operational, and gets
+    # added to, and a closed enum would need a deploy every time a new
+    # disposition is wanted. The options live in the frontend constants.
+    call_remark: str | None = Field(default=None, max_length=100)
 
     # Set once, on create, by the round-robin in InductionEntryService. Both
     # are stored rather than derived: who owns a row must not change when

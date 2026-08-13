@@ -359,3 +359,45 @@ async def test_stats_follow_the_open_tab(client, auth_headers):
         )
     ).json()
     assert moved_stats["total"] == 1
+
+
+async def test_the_call_remark_saves_and_clears(client, auth_headers):
+    """Set from a dropdown on the board, so it goes through the ordinary update
+    endpoint - and clearing it has to work, or a remark picked by mistake could
+    never be taken off the candidate again."""
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())
+    entry_id = (await client.get("/api/v1/induction-entries", headers=auth_headers)).json()["items"][0]["id"]
+
+    saved = await client.put(
+        f"/api/v1/induction-entries/{entry_id}",
+        headers=auth_headers,
+        json={"call_remark": "Call Scheduled Today"},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["call_remark"] == "Call Scheduled Today"
+
+    cleared = await client.put(
+        f"/api/v1/induction-entries/{entry_id}", headers=auth_headers, json={"call_remark": None}
+    )
+    assert cleared.json()["call_remark"] is None
+
+
+async def test_the_call_remark_survives_the_move_to_foundation(client, auth_headers):
+    """It is set on the induction record, which the move links rather than
+    copies - so the Moved tab shows the remark the caller actually left."""
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())
+    entry_id = (await client.get("/api/v1/induction-entries", headers=auth_headers)).json()["items"][0]["id"]
+    await client.put(
+        f"/api/v1/induction-entries/{entry_id}",
+        headers=auth_headers,
+        json={"call_remark": "Will Join - Induction Call Completed"},
+    )
+
+    await client.post(FOUNDATION_URL, json=foundation_payload())
+
+    moved = (
+        await client.get("/api/v1/induction-entries?status=moved_to_foundation", headers=auth_headers)
+    ).json()
+    assert moved["items"][0]["call_remark"] == "Will Join - Induction Call Completed"

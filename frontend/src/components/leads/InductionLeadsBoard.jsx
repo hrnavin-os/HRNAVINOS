@@ -7,7 +7,9 @@ import { ClipboardList, X } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { FilterDropdown } from '@/components/ui/FilterDropdown'
+import { Toast } from '@/components/ui/Toast'
 import { LeadSectionStats } from '@/components/leads/LeadSectionStats'
+import { InductionCallRemarkCell } from '@/components/leads/InductionCallRemarkCell'
 import { InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
 import { InductionUpdateModal } from '@/components/leads/InductionUpdateModal'
 import { useAuth } from '@/hooks/useAuth'
@@ -139,6 +141,15 @@ const MOVED_COLUMNS = [
   },
 ]
 
+// Inserts a column immediately before a named one, appending if that column
+// isn't present - a Section Admin's table drops Assigned To, and the remark
+// still has to land somewhere rather than vanish with its anchor.
+function insertBefore(columnList, key, column) {
+  const index = columnList.findIndex((item) => item.key === key)
+  if (index === -1) return [...columnList, column]
+  return [...columnList.slice(0, index), column, ...columnList.slice(index)]
+}
+
 // A row's post-call details are "started" once any one of the four pages has
 // an answer - used to label the Update button so you can see at a glance which
 // entries still need working.
@@ -181,6 +192,9 @@ export function InductionLeadsBoard() {
   // in exactly one tab and the counts come from the same source as the rows.
   const [status, setStatus] = useState(INDUCTION_STATUS.pending)
   const moved = status === INDUCTION_STATUS.moved
+  // Inline cell edits have no form to attach a failure to, so they surface
+  // here rather than reverting as if nothing happened.
+  const [error, setError] = useState(null)
 
   const setFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }))
   const hasFilters = Object.values(filters).some(Boolean)
@@ -224,6 +238,24 @@ export function InductionLeadsBoard() {
   const options = optionsQuery.data ?? {}
 
   const byStatus = statsQuery.data?.by_status ?? {}
+
+  // Built here rather than at module scope because the cell needs somewhere to
+  // report a failed save - an inline edit has no form to hang an error on, and
+  // silently reverting would leave somebody believing it saved.
+  const remarkColumn = {
+    key: 'call_remark',
+    header: 'Induction Call Remarks',
+    render: (row) => <InductionCallRemarkCell entry={row} onError={setError} />,
+  }
+
+  const pendingColumns = insertBefore(
+    // A Section Admin only ever sees their own section's entries, so every row
+    // would name them - a column of one repeated value.
+    scopedSection ? columns.filter((column) => column.key !== 'assigned_to') : columns,
+    'assigned_to',
+    remarkColumn,
+  )
+  const movedColumns = insertBefore(MOVED_COLUMNS, 'foundation_status', remarkColumn)
 
   return (
     <>
@@ -329,11 +361,9 @@ export function InductionLeadsBoard() {
         // popup takes over.
         columns={
           moved
-            ? MOVED_COLUMNS
+            ? movedColumns
             : [
-                // A Section Admin only ever sees their own section's entries, so
-                // every row would name them - a column of one repeated value.
-                ...(scopedSection ? columns.filter((column) => column.key !== 'assigned_to') : columns),
+                ...pendingColumns,
                 {
                   // Last column, before Actions: opens the four-page post-call form.
                   key: 'update',
@@ -400,6 +430,8 @@ export function InductionLeadsBoard() {
       {updatingEntry && (
         <InductionUpdateModal entry={updatingEntry} onClose={() => setUpdatingEntry(null)} />
       )}
+
+      <Toast message={error} onDismiss={() => setError(null)} />
     </>
   )
 }

@@ -82,6 +82,7 @@ class InductionEntryUpdate(BaseModel):
     lead_source: str | None = Field(default=None, max_length=150)
     payment_mode: str | None = Field(default=None, max_length=150)
     category: str | None = Field(default=None, max_length=150)
+    call_remark: str | None = Field(default=None, max_length=100)
 
 
 class InductionEntryResponse(BaseModel):
@@ -97,6 +98,9 @@ class InductionEntryResponse(BaseModel):
     lead_source: str | None
     payment_mode: str | None
     category: str | None
+    # Where the candidate stands after the induction call, set from the board's
+    # dropdown. Open text, not an enum - see the field on the model.
+    call_remark: str | None = None
     # Set by the round-robin at creation, not by the form.
     assigned_to: uuid.UUID | None = None
     assigned_to_name: str | None = None
