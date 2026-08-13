@@ -76,15 +76,20 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
   })
 
   return (
-    // The cluster is capped and centred rather than stretched across the panel.
-    // Left to fill, the legend's label and its number end up at opposite ends
-    // of a 700px row with a chasm between them, and a reader has to track
-    // across it to pair the two.
+    // Two equal halves across the full panel: the ring centred in one, the
+    // legend starting at the head of the other.
+    //
+    // A grid rather than a flex row, because the halves have to stay equal.
+    // Flexed, the legend's max-width leaves slack that the ring's half then
+    // absorbs, and the ring drifts off toward the middle as the panel widens.
+    // Halving it is also what keeps the legend readable - stretched to fill,
+    // its label and its number sit at opposite ends of a 700px row with a
+    // chasm between them.
     <div
-      className="mx-auto flex max-w-2xl flex-col items-center gap-6 sm:flex-row sm:items-center sm:gap-8"
+      className="flex w-full flex-col items-center gap-6 sm:grid sm:grid-cols-2 sm:items-center sm:gap-8"
       onMouseLeave={() => setActive(null)}
     >
-      <div className="relative shrink-0">
+      <div className="relative flex w-full justify-center">
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
           {/* -90deg so the first slice starts at twelve o'clock, which is where
               a reader expects a donut to begin. */}
@@ -151,7 +156,11 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
             slice is equidistant from. Values lead, the label follows.
             Proportional figures - equal-width digits make a large standalone
             number look loose. */}
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
+        {/* Pinned to the centre at a fixed width rather than filling the box:
+            the box is now a half-panel wide, so inset-0 would spread a long
+            slice name straight out through the ring. w-32 sits inside the
+            148px hole. */}
+        <div className="pointer-events-none absolute left-1/2 top-1/2 flex w-32 -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center">
           <span className="text-3xl font-bold leading-none text-slate-900">
             {activeSlice ? activeSlice[valueKey] : total}
           </span>
@@ -171,7 +180,7 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
           two equal slices are still distinguishable - and hovering a row lights
           its slice, which is the only way to tell equal slices apart on the
           ring itself. */}
-      <ul className="w-full min-w-0 max-w-sm space-y-0.5">
+      <ul className="w-full min-w-0 max-w-md space-y-0.5">
         {slices.map((slice, index) => {
           const isActive = active === index
           return (
