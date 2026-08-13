@@ -46,9 +46,6 @@ function foldToSlices(items, valueKey = 'count') {
   ]
 }
 
-// How far the active arc thickens. The lift is what tells the reader the mark
-// responded to them, rather than only the legend changing somewhere else.
-const LIFT = 5
 // A transparent arc drawn over each slice, wider than the paint, so a thin
 // segment is still catchable - hovering a 3px arc dead-centre is a pinpoint
 // nobody hits.
@@ -79,8 +76,12 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
   })
 
   return (
+    // The cluster is capped and centred rather than stretched across the panel.
+    // Left to fill, the legend's label and its number end up at opposite ends
+    // of a 700px row with a chasm between them, and a reader has to track
+    // across it to pair the two.
     <div
-      className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:gap-8"
+      className="mx-auto flex max-w-2xl flex-col items-center gap-6 sm:flex-row sm:items-center sm:gap-8"
       onMouseLeave={() => setActive(null)}
     >
       <div className="relative shrink-0">
@@ -99,11 +100,15 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
                     r={RADIUS}
                     fill="none"
                     stroke={slice.color}
-                    strokeWidth={isActive ? STROKE + LIFT : STROKE}
+                    // Constant width. Hover changes colour only - a slice that
+                    // grows makes the ring's proportions wrong for as long as
+                    // the pointer is on it, and proportion is the one thing
+                    // this chart exists to show.
+                    strokeWidth={STROKE}
                     strokeDasharray={dash}
                     strokeDashoffset={-arcOffset}
-                    opacity={dimmed ? 0.35 : 1}
-                    className="transition-all duration-150"
+                    opacity={dimmed ? 0.3 : 1}
+                    className="transition-opacity duration-150"
                   />
                   {/* Focusable, so the keyboard gets what the pointer gets.
                       aria-label carries the same reading the centre shows. */}
@@ -166,7 +171,7 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
           two equal slices are still distinguishable - and hovering a row lights
           its slice, which is the only way to tell equal slices apart on the
           ring itself. */}
-      <ul className="w-full min-w-0 space-y-0.5">
+      <ul className="w-full min-w-0 max-w-sm space-y-0.5">
         {slices.map((slice, index) => {
           const isActive = active === index
           return (

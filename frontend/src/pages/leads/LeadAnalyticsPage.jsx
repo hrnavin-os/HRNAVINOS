@@ -44,17 +44,25 @@ function Panel({ title, subtitle, children }) {
 // A single number and what share of the whole it is. Not a chart: one figure
 // against a total is a figure, and a one-slice pie would say the same thing
 // with more ink.
+//
+// Laid out across rather than down. Stacked, the icon, label, value and share
+// made a card twice the height it needed and the pair left a column of empty
+// white beside a chart that is mostly whitespace already.
 function Figure({ label, value, share, icon: Icon, tone }) {
   const plate = tone === 'emerald' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'
   const accent = tone === 'emerald' ? 'text-emerald-600' : 'text-red-600'
   return (
-    <div className="flex flex-col justify-center rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <span className={`mb-3 flex h-9 w-9 items-center justify-center rounded-lg ${plate}`}>
-        <Icon className="h-4.5 w-4.5" strokeWidth={2} aria-hidden="true" />
+    <div className="flex items-center gap-3.5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${plate}`}>
+        <Icon className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
       </span>
-      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="mt-1 text-2xl font-bold leading-none text-slate-900">{value}</p>
-      <p className={`mt-1.5 text-xs font-semibold ${accent}`}>{share} of all candidates</p>
+      <div className="min-w-0">
+        <p className="truncate text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
+        <p className="mt-0.5 flex items-baseline gap-2">
+          <span className="text-2xl font-bold leading-none text-slate-900">{value}</span>
+          <span className={`text-xs font-semibold ${accent}`}>{share}</span>
+        </p>
+      </div>
     </div>
   )
 }
@@ -172,7 +180,7 @@ export function LeadAnalyticsPage() {
               it is the total OF that ring, so it belongs in it. Moved and Quit
               stay as figures because each is a single number, which a slice of
               a different pie would not have said any better. */}
-          <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_16rem]">
+          <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_15rem]">
             <Panel
               title={isRemarks ? 'How induction calls landed' : 'Candidates by category'}
               subtitle={
@@ -192,7 +200,9 @@ export function LeadAnalyticsPage() {
               />
             </Panel>
 
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-1">
+            {/* Content-height, not stretched: two short cards pulled to the
+                full height of a chart panel are two cards of empty space. */}
+            <div className="grid grid-cols-1 gap-4 self-start sm:grid-cols-2 lg:grid-cols-1">
               <Figure
                 label="Moved to Foundation"
                 value={moved}
