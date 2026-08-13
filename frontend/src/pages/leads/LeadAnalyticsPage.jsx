@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowRightLeft, PhoneCall, Tag, UserX } from 'lucide-react'
+import { ArrowRightLeft, Crown, PhoneCall, Tag, UserX } from 'lucide-react'
 import { inductionEntryService } from '@/services/inductionEntryService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { DataTable } from '@/components/ui/DataTable'
@@ -41,27 +41,52 @@ function Panel({ title, subtitle, children }) {
   )
 }
 
-// A single number and what share of the whole it is. Not a chart: one figure
-// against a total is a figure, and a one-slice pie would say the same thing
-// with more ink.
+const FIGURE_TONES = {
+  emerald: { wash: 'from-emerald-50/70', plate: 'bg-emerald-100 text-emerald-600', pill: 'bg-emerald-100 text-emerald-700' },
+  red: { wash: 'from-red-50/70', plate: 'bg-red-100 text-red-600', pill: 'bg-red-100 text-red-700' },
+  brand: { wash: 'from-brand-50/70', plate: 'bg-brand-100 text-brand-600', pill: 'bg-brand-100 text-brand-700' },
+}
+
+// A single number, what share of the whole it is, and nothing else. Not a
+// chart: one figure against a total is a figure, and a one-slice pie would say
+// the same thing with more ink.
 //
-// Laid out across rather than down. Stacked, the icon, label, value and share
-// made a card twice the height it needed and the pair left a column of empty
-// white beside a chart that is mostly whitespace already.
-function Figure({ label, value, share, icon: Icon, tone }) {
-  const plate = tone === 'emerald' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'
-  const accent = tone === 'emerald' ? 'text-emerald-600' : 'text-red-600'
+// The share sits in a tinted pill beside the value rather than as a line of
+// text under it - it is the comparison the number is only meaningful against,
+// so it belongs on the same baseline, not in a footnote.
+function Figure({ label, value, share, icon: Icon, tone = 'brand' }) {
+  const style = FIGURE_TONES[tone] ?? FIGURE_TONES.brand
+  // A count gets the big numeral; a name gets a readable size instead. Set at
+  // 2xl, "Referral - existing student" wraps to three lines and the card grows
+  // to twice its neighbours.
+  const isName = typeof value === 'string'
   return (
-    <div className="flex items-center gap-3.5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${plate}`}>
-        <Icon className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
-      </span>
-      <div className="min-w-0">
-        <p className="truncate text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
-        <p className="mt-0.5 flex items-baseline gap-2">
-          <span className="text-2xl font-bold leading-none text-slate-900">{value}</span>
-          <span className={`text-xs font-semibold ${accent}`}>{share}</span>
-        </p>
+    <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      {/* A wash behind the figure rather than a flat white card, so the row
+          reads as three related things and not three empty boxes. */}
+      <div className={`absolute inset-0 -z-10 bg-linear-to-br ${style.wash} to-transparent`} />
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-400">
+            {label}
+          </p>
+          <p className="mt-2 flex flex-wrap items-baseline gap-2">
+            <span
+              className={`font-bold leading-tight text-slate-900 ${
+                isName ? 'line-clamp-2 text-sm' : 'text-2xl leading-none'
+              }`}
+              title={isName ? value : undefined}
+            >
+              {value}
+            </span>
+            {share && (
+              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${style.pill}`}>{share}</span>
+            )}
+          </p>
+        </div>
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${style.plate}`}>
+          <Icon className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+        </span>
       </div>
     </div>
   )
@@ -109,6 +134,9 @@ export function LeadAnalyticsPage() {
   const total = data?.total ?? 0
   const moved = items.reduce((sum, item) => sum + item.moved, 0)
   const quit = items.reduce((sum, item) => sum + item.quit, 0)
+  // The API returns rows sorted by count descending, so the head is the biggest
+  // group. Read rather than re-sorted, so the card and the table can't disagree.
+  const largest = items[0] ?? null
 
   const isRemarks = tab === 'call_remark'
   // No slicing here - the donut folds its own tail into "Other" past six, and
@@ -148,23 +176,35 @@ export function LeadAnalyticsPage() {
 
   return (
     <div>
-      {/* One row of tabs above everything they scope, rather than a control
-          inside each panel. */}
-      <div className="mb-4 inline-flex gap-1 rounded-lg bg-slate-100 p-1">
-        {TABS.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() => setTab(item.key)}
-            aria-pressed={tab === item.key}
-            className={`inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-semibold transition-colors ${
-              tab === item.key ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <item.icon className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
-            {item.label}
-          </button>
-        ))}
+      {/* Title on the left, the one control that scopes the page on the right.
+          The Topbar already says "Dashboard"; this says which dashboard, which
+          the header cannot because it reads the nav label. */}
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-bold tracking-tight text-slate-900">Analytics Dashboard</h1>
+          <p className="mt-0.5 text-sm text-amber-600">
+            Induction call insights &amp; candidate categorization
+          </p>
+        </div>
+
+        <div className="inline-flex shrink-0 gap-1 rounded-full bg-slate-100 p-1">
+          {TABS.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setTab(item.key)}
+              aria-pressed={tab === item.key}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+                tab === item.key
+                  ? 'bg-brand-600 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <item.icon className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+              {item.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <ErrorMessage message={query.error ? getApiErrorMessage(query.error) : null} />
@@ -200,9 +240,9 @@ export function LeadAnalyticsPage() {
               />
             </Panel>
 
-            {/* Content-height, not stretched: two short cards pulled to the
-                full height of a chart panel are two cards of empty space. */}
-            <div className="grid grid-cols-1 gap-4 self-start sm:grid-cols-2 lg:grid-cols-1">
+            {/* Content-height, not stretched: short cards pulled to the full
+                height of a chart panel are cards of empty space. */}
+            <div className="grid grid-cols-1 gap-4 self-start sm:grid-cols-3 lg:grid-cols-1">
               <Figure
                 label="Moved to Foundation"
                 value={moved}
@@ -211,6 +251,17 @@ export function LeadAnalyticsPage() {
                 tone="emerald"
               />
               <Figure label="Quit" value={quit} share={percent(quit, total)} icon={UserX} tone="red" />
+              {/* A real third figure rather than the decorative tile the
+                  mock-up used - the biggest group and how much of the intake
+                  it is, which is the first thing anybody asks of a breakdown.
+                  Reads the top row, which the API already sorts by count. */}
+              <Figure
+                label={isRemarks ? 'Most common remark' : 'Largest category'}
+                value={largest ? largest.value : '—'}
+                share={largest ? percent(largest.count, total) : null}
+                icon={Crown}
+                tone="brand"
+              />
             </div>
           </div>
 
