@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowUpDown, Check, ChevronDown, Eye, Link2, Pencil, Search } from 'lucide-react'
+import { ArrowUpDown, Check, ChevronDown, Eye, Pencil, Search } from 'lucide-react'
 import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
 import { useAuth } from '@/hooks/useAuth'
 import { leadService } from '@/services/leadService'
@@ -456,9 +456,6 @@ function FoundationLeadsBoard() {
   const [sectionFilter, setSectionFilter] = useState('')
   const [courseFilter, setCourseFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  // '' | 'true' | 'false' - kept as the string the query param wants, since a
-  // tri-state boolean in component state reads worse than it looks.
-  const [originFilter, setOriginFilter] = useState('')
   const [sortOrder, setSortOrder] = useState('desc')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -506,7 +503,6 @@ function FoundationLeadsBoard() {
     section: effectiveSectionFilter || undefined,
     course_interest: courseFilter || undefined,
     status: statusFilter || undefined,
-    induction_matched: originFilter || undefined,
     sort_order: sortOrder,
     date_from: dateFrom || undefined,
     date_to: dateTo || undefined,
@@ -531,18 +527,6 @@ function FoundationLeadsBoard() {
         <div className="flex items-center gap-3">
           <LeadAvatar name={row.name} />
           <span className="font-medium text-slate-900">{row.name}</span>
-          {/* A quiet mark rather than its own column: it applies to a minority
-              of rows, and a column would spend real width on a blank cell for
-              everyone else. The tooltip carries the meaning. */}
-          {row.induction_matched && (
-            <span
-              title="Matched to an induction call on mobile number"
-              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"
-            >
-              <Link2 className="h-3 w-3" strokeWidth={2.5} aria-hidden="true" />
-              <span className="sr-only">From Induction</span>
-            </span>
-          )}
         </div>
       ),
     },
@@ -691,22 +675,6 @@ function FoundationLeadsBoard() {
             options={LEAD_STAGES.map((stage) => ({ value: stage.value, label: stage.label }))}
             onChange={(value) => {
               setStatusFilter(value)
-              setPage(1)
-            }}
-          />
-
-          {/* Separates leads that walked in through an induction call from
-              those who found the form cold - different conversations, and
-              until now there was no way to tell them apart on the board. */}
-          <FilterDropdown
-            label="Origin"
-            value={originFilter}
-            options={[
-              { value: 'true', label: 'From Induction' },
-              { value: 'false', label: 'Form only' },
-            ]}
-            onChange={(value) => {
-              setOriginFilter(value)
               setPage(1)
             }}
           />
