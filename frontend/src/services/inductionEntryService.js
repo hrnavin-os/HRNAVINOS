@@ -14,6 +14,12 @@ export const inductionEntryService = {
   // Distinct values present in the data, so a filter never offers an option
   // that matches nothing - including values typed into the form's comboboxes
   // that aren't on the configured dropdown list.
+  // Counts per distinct category or call remark, aggregated server-side for
+  // the analytics dashboard.
+  getAnalytics: async (dimension) => {
+    const { data } = await apiClient.get('/induction-entries/analytics', { params: { dimension } })
+    return data
+  },
   getFilterOptions: async (status) => {
     const { data } = await apiClient.get('/induction-entries/filter-options', {
       params: status ? { status } : {},

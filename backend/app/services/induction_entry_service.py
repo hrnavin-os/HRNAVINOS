@@ -2,7 +2,7 @@
 import uuid
 from datetime import date, timedelta
 
-from app.exceptions.base import NotFoundError
+from app.exceptions.base import BadRequestError, NotFoundError
 from app.models.enums import InductionStatus
 from app.models.lead import Lead
 from app.models.induction_entry import (
@@ -258,6 +258,69 @@ class InductionEntryService:
             "total": await self.entries.count_all(status),
             "by_section": by_section,
             "by_status": by_status,
+        }
+
+    # The two dimensions the analytics dashboard breaks entries down by. A
+    # closed map rather than interpolating the query param into the pipeline,
+    # so no caller can group by an arbitrary field.
+    _ANALYTICS_FIELDS = {"category": "$category", "call_remark": "$call_remark"}
+
+    async def analytics(self, dimension: str, *, section: str | None = None) -> dict:
+        """Counts per distinct value of one field, with how many of each went on
+        to Foundation and how many quit.
+
+        Aggregated in the database rather than by loading every entry: the
+        board is meant to keep working at a few thousand rows, and the counts
+        are the whole payload.
+
+        Each row carries moved and quit as well as the total, because the
+        interesting question isn't how many Freshers there were - it's how many
+        of them converted and how many walked. A bare count answers neither.
+        """
+        field = self._ANALYTICS_FIELDS.get(dimension)
+        if field is None:
+            raise BadRequestError(f"Unknown analytics dimension '{dimension}'.")
+
+        match: dict = {"is_deleted": False}
+        if section:
+            match["section"] = section
+
+        # Same "quit" rule the buckets use - matched on the word rather than a
+        # list of options, so this can't drift from them.
+        quit_match = {
+            "$regexMatch": {"input": {"$ifNull": ["$call_remark", ""]}, "regex": "quit", "options": "i"}
+        }
+        rows = await InductionEntry.aggregate(
+            [
+                {"$match": match},
+                {
+                    "$group": {
+                        "_id": field,
+                        "count": {"$sum": 1},
+                        "moved": {"$sum": {"$cond": [{"$ifNull": ["$foundation_lead_id", False]}, 1, 0]}},
+                        "quit": {"$sum": {"$cond": [quit_match, 1, 0]}},
+                    }
+                },
+                {"$sort": {"count": -1}},
+            ]
+        ).to_list()
+
+        return {
+            "dimension": dimension,
+            "total": sum(row["count"] for row in rows),
+            "items": [
+                {
+                    # Entries that were never given a value are a real finding -
+                    # "how much of the data is missing" is the first thing an
+                    # analytics view should be honest about - so they're a named
+                    # row rather than dropped.
+                    "value": row["_id"] or "Not set",
+                    "count": row["count"],
+                    "moved": row["moved"],
+                    "quit": row["quit"],
+                }
+                for row in rows
+            ],
         }
 
     async def update(

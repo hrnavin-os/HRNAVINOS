@@ -1,4 +1,5 @@
 import {
+  ChartColumn,
   LayoutDashboard,
   Target,
   GraduationCap,
@@ -38,12 +39,24 @@ export const NAV_ITEMS = [
   },
 
   {
+    // The lead analytics board. Sits above Lead Dashboard because it is the
+    // summary of what that board holds - you read the shape here and go there
+    // for the rows.
+    label: 'Dashboard',
+    shortLabel: 'Insights',
+    to: '/lead-analytics',
+    permission: PERMISSIONS.LEADS_VIEW,
+    icon: ChartColumn,
+    group: 'Admin',
+    hiddenForRoles: ['Finance'],
+    hiddenForScopedUsers: true,
+  },
+  {
     label: 'Lead Dashboard',
     shortLabel: 'Leads',
     to: '/leads',
     permission: PERMISSIONS.LEADS_VIEW,
     icon: Target,
-    group: 'Admin',
     hiddenForRoles: ['Finance'],
   },
   // Section Admins only: payment reminders from Finance are addressed to the

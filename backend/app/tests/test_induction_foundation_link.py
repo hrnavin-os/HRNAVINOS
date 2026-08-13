@@ -502,3 +502,75 @@ async def test_the_three_buckets_partition_the_board(client, auth_headers):
 
     stats = (await client.get("/api/v1/induction-entries/stats", headers=auth_headers)).json()
     assert stats["by_status"] == {"pending_induction": 1, "moved_to_foundation": 1, "quit": 1}
+
+
+# --------------------------------------------------------------------------
+# Analytics dashboard
+# --------------------------------------------------------------------------
+
+
+async def test_category_analytics_counts_conversions_and_quits(client, auth_headers):
+    """A bare count per category answers nothing useful - how many of them
+    converted and how many walked is the question the board exists for."""
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload(category="Fresher"))
+    # Names are at least two characters - the form rejects a single letter, so
+    # a one-character name here would silently create nothing.
+    await client.post(
+        INDUCTION_URL, json=induction_payload(name="Bala", phone="9000000001", category="Fresher")
+    )
+    await client.post(
+        INDUCTION_URL, json=induction_payload(name="Chitra", phone="9000000002", category="Job Switch")
+    )
+
+    # One Fresher crosses to Foundation, the other quits.
+    await client.post(FOUNDATION_URL, json=foundation_payload())
+    rows = (await client.get("/api/v1/induction-entries?page_size=100", headers=auth_headers)).json()["items"]
+    await set_remark(client, auth_headers, next(r["id"] for r in rows if r["name"] == "Bala"), "DAY-1 QUIT")
+
+    data = (
+        await client.get("/api/v1/induction-entries/analytics?dimension=category", headers=auth_headers)
+    ).json()
+
+    assert data["total"] == 3
+    by_value = {item["value"]: item for item in data["items"]}
+    assert by_value["Fresher"] == {"value": "Fresher", "count": 2, "moved": 1, "quit": 1}
+    assert by_value["Job Switch"]["count"] == 1
+
+
+async def test_analytics_names_the_entries_with_no_value(client, auth_headers):
+    """How much of the data is missing is itself a finding, so those entries
+    are a named row rather than quietly dropped."""
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())
+
+    data = (
+        await client.get("/api/v1/induction-entries/analytics?dimension=call_remark", headers=auth_headers)
+    ).json()
+
+    assert data["items"] == [{"value": "Not set", "count": 1, "moved": 0, "quit": 0}]
+
+
+async def test_analytics_is_sorted_biggest_first(client, auth_headers):
+    await seed_programs(client)
+    for index in range(3):
+        await client.post(
+            INDUCTION_URL,
+            json=induction_payload(name=f"A{index}", phone=f"900000000{index}", category="Fresher"),
+        )
+    await client.post(
+        INDUCTION_URL, json=induction_payload(name="Solo", phone="9111111111", category="Career Gap")
+    )
+
+    data = (
+        await client.get("/api/v1/induction-entries/analytics?dimension=category", headers=auth_headers)
+    ).json()
+
+    assert [item["value"] for item in data["items"]] == ["Fresher", "Career Gap"]
+
+
+async def test_analytics_refuses_an_unknown_dimension(client, auth_headers):
+    """The field is looked up in a closed map, so no caller can group the
+    collection by an arbitrary field."""
+    response = await client.get("/api/v1/induction-entries/analytics?dimension=phone", headers=auth_headers)
+    assert response.status_code == 422

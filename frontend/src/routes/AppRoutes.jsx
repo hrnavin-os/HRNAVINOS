@@ -5,6 +5,7 @@ import { ProtectedRoute } from '@/routes/ProtectedRoute'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { HomeRoute } from '@/routes/HomeRoute'
 import { LeadsPage } from '@/pages/leads/LeadsPage'
+import { LeadAnalyticsPage } from '@/pages/leads/LeadAnalyticsPage'
 import { FormCollectionPage } from '@/pages/leads/FormCollectionPage'
 import { FoundationFormPage } from '@/pages/public/FoundationFormPage'
 import { InductionFormPage } from '@/pages/public/InductionFormPage'
@@ -62,6 +63,9 @@ export function AppRoutes() {
             <Route path="/marketing-board" element={<MarketingBoardPage />} />
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.LEADS_VIEW} blockScoped />}>
+            {/* blockScoped, matching its nav entry: the board summarises every
+                section, which is not a Section Admin's to see. */}
+            <Route path="/lead-analytics" element={<LeadAnalyticsPage />} />
             <Route path="/leads/form-collection" element={<FormCollectionPage />} />
             <Route path="/leads/foundation-form" element={<Navigate to="/leads/form-collection" replace />} />
           </Route>

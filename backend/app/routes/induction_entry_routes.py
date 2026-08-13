@@ -6,6 +6,7 @@ the rows are lead-intake records. Reusing them means nobody has to re-grant
 permissions to existing roles before the tab works.
 """
 import uuid
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, status
 
@@ -15,6 +16,7 @@ from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.common import MessageResponse, PaginatedResponse, PaginationParams
 from app.schemas.induction_entry_schema import (
+    InductionAnalyticsResponse,
     InductionDetailsUpdate,
     InductionEntryCreate,
     InductionEntryResponse,
@@ -115,6 +117,22 @@ async def filter_options(
     moved entries carry."""
     scope = await get_actor_scope(actor)
     return await InductionEntryService().filter_options(section=scope, status=status)
+
+
+@router.get("/analytics", response_model=InductionAnalyticsResponse)
+async def analytics(
+    dimension: Literal["category", "call_remark"] = "category",
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
+) -> InductionAnalyticsResponse:
+    """Counts per distinct category or call remark, for the analytics board.
+
+    Declared before /{entry_id}, like the other fixed segments, or the dynamic
+    route swallows "analytics" and tries to parse it as a UUID. Scoped from the
+    actor's role for the same reason the list is - a Section Admin's numbers
+    must cover their own section, not everyone's.
+    """
+    scope = await get_actor_scope(actor)
+    return InductionAnalyticsResponse(**await InductionEntryService().analytics(dimension, section=scope))
 
 
 @router.get("/{entry_id}", response_model=InductionEntryResponse)

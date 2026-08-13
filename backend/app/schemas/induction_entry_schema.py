@@ -32,6 +32,26 @@ class InductionEntryStatsResponse(BaseModel):
     by_status: dict[str, int] = {}
 
 
+class InductionAnalyticsItem(BaseModel):
+    """One distinct value of whichever field is being broken down.
+
+    `moved` and `quit` sit beside the count because the useful question is not
+    how many arrived under a category, it's how many of them converted and how
+    many walked - a bare total answers neither.
+    """
+
+    value: str
+    count: int
+    moved: int
+    quit: int
+
+
+class InductionAnalyticsResponse(BaseModel):
+    dimension: str
+    total: int
+    items: list[InductionAnalyticsItem]
+
+
 class InductionQualificationSchema(BaseModel):
     ug_degree: str | None = Field(default=None, max_length=150)
     ug_passed_out_year: str | None = Field(default=None, max_length=10)
