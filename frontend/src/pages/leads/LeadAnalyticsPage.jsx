@@ -265,20 +265,19 @@ export function LeadAnalyticsPage() {
 
   return (
     <div>
-      {/* Title on the left, the one control that scopes the page on the right.
-          The Topbar already says "Dashboard"; this says which dashboard, which
+      {/* The Topbar already says "Dashboard"; this says which dashboard, which
           the header cannot because it reads the nav label. */}
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-bold tracking-tight text-slate-900">Analytics Dashboard</h1>
-          <p className="mt-0.5 text-sm text-amber-600">
-            Induction call insights &amp; candidate categorization
-          </p>
-        </div>
+      <div className="mb-5">
+        <h1 className="text-lg font-bold tracking-tight text-slate-900">Analytics Dashboard</h1>
+        <p className="mt-0.5 text-sm text-amber-600">
+          Induction call insights &amp; candidate categorization
+        </p>
 
-        {/* The shared strip, not the solid-filled pills this page briefly had -
-            the same control does the same job on five other boards. */}
-        <TabStrip tabs={TABS} value={tab} onChange={setTab} className="shrink-0" />
+        {/* On its own full-width row below the title rather than tucked into
+            the corner beside it. Four tabs need the whole width to divide, and
+            in the corner the longest of them decided the size of the strip
+            while the shortest sat in a pill half its neighbour's width. */}
+        <TabStrip equal tabs={TABS} value={tab} onChange={setTab} className="mt-4" />
       </div>
 
       <ErrorMessage message={query.error ? getApiErrorMessage(query.error) : null} />
