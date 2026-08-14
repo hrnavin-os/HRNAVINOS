@@ -121,10 +121,16 @@ async def filter_options(
 
 @router.get("/analytics", response_model=InductionAnalyticsResponse)
 async def analytics(
-    dimension: Literal["category", "call_remark"] = "category",
+    dimension: Literal["category", "call_remark", "sales_person", "lead_source"] = "category",
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> InductionAnalyticsResponse:
-    """Counts per distinct category or call remark, for the analytics board.
+    """Counts per distinct value of one induction-form field, for the analytics
+    board.
+
+    The Literal is the outer half of the guard on which fields are groupable -
+    it turns an unknown dimension into a 422 at the edge rather than letting it
+    reach the service. The service keeps its own closed map regardless, since it
+    is callable from elsewhere.
 
     Declared before /{entry_id}, like the other fixed segments, or the dynamic
     route swallows "analytics" and tries to parse it as a UUID. Scoped from the

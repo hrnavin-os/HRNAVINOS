@@ -569,6 +569,43 @@ async def test_analytics_is_sorted_biggest_first(client, auth_headers):
     assert [item["value"] for item in data["items"]] == ["Fresher", "Career Gap"]
 
 
+@pytest.mark.parametrize(
+    ("dimension", "first", "second"),
+    [("sales_person", "Priya", "Vikram"), ("lead_source", "Instagram", "Referral")],
+)
+async def test_analytics_groups_the_forms_free_text_fields(
+    client, auth_headers, dimension, first, second
+):
+    """Sales person and lead source have no fixed vocabulary the way category
+    and call remark do, so the grouping has to come out of the data itself -
+    and it still has to carry moved and quit, which is the whole point of
+    breaking the intake down by who sourced it."""
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload(**{dimension: first}))
+    await client.post(
+        INDUCTION_URL, json=induction_payload(name="Bala", phone="9000000001", **{dimension: first})
+    )
+    await client.post(
+        INDUCTION_URL, json=induction_payload(name="Chitra", phone="9000000002", **{dimension: second})
+    )
+
+    # One of the pair crosses to Foundation, the other quits.
+    await client.post(FOUNDATION_URL, json=foundation_payload())
+    rows = (await client.get("/api/v1/induction-entries?page_size=100", headers=auth_headers)).json()["items"]
+    await set_remark(client, auth_headers, next(r["id"] for r in rows if r["name"] == "Bala"), "DAY-1 QUIT")
+
+    data = (
+        await client.get(
+            f"/api/v1/induction-entries/analytics?dimension={dimension}", headers=auth_headers
+        )
+    ).json()
+
+    assert data["total"] == 3
+    by_value = {item["value"]: item for item in data["items"]}
+    assert by_value[first] == {"value": first, "count": 2, "moved": 1, "quit": 1}
+    assert by_value[second]["count"] == 1
+
+
 async def test_analytics_refuses_an_unknown_dimension(client, auth_headers):
     """The field is looked up in a closed map, so no caller can group the
     collection by an arbitrary field."""

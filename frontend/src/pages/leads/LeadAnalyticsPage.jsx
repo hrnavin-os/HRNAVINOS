@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowRightLeft, Crown, PhoneCall, Tag, UserX } from 'lucide-react'
+import { ArrowRightLeft, Crown, Megaphone, PhoneCall, Tag, UserRound, UserX } from 'lucide-react'
 import { inductionEntryService } from '@/services/inductionEntryService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { DataTable } from '@/components/ui/DataTable'
@@ -11,10 +11,58 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { DonutChart } from '@/components/analytics/DonutChart'
 import { REMARK_GROUPS, REMARK_GROUP_BY_VALUE } from '@/constants/inductionCallRemarks'
 
+// One entry per groupable field on the induction call form. Every string the
+// page changes per dimension lives here rather than in a ternary at each use:
+// with two tabs `isRemarks ? a : b` was readable, with four it would be a
+// four-way conditional repeated in five places, and adding a fifth dimension
+// would mean finding all of them.
+//
+// `key` must match a key in the backend's _ANALYTICS_FIELDS - that map is what
+// decides which fields are groupable at all, and this is only the menu of them.
 const TABS = [
-  { key: 'category', label: 'Category', icon: Tag },
-  { key: 'call_remark', label: 'Induction Call Remarks', icon: PhoneCall },
+  {
+    key: 'category',
+    label: 'Category',
+    icon: Tag,
+    column: 'Category',
+    title: 'Candidates by category',
+    subtitle: 'Collected on the induction call form.',
+    empty: 'No categories recorded yet.',
+    leader: 'Largest category',
+  },
+  {
+    key: 'call_remark',
+    label: 'Induction Call Remarks',
+    icon: PhoneCall,
+    column: 'Call Remark',
+    title: 'How induction calls landed',
+    subtitle: 'The thirty-one remarks grouped into the five outcomes they belong to.',
+    empty: 'No call remarks recorded yet. Set one from the dropdown on the induction board.',
+    leader: 'Most common remark',
+  },
+  {
+    key: 'sales_person',
+    label: 'Sales Person',
+    icon: UserRound,
+    column: 'Sales Person',
+    title: 'Candidates by sales person',
+    subtitle: 'Who the form credits, and how many of theirs went on to Foundation.',
+    empty: 'No sales person recorded on any induction entry yet.',
+    leader: 'Most entries',
+  },
+  {
+    key: 'lead_source',
+    label: 'Lead Source',
+    icon: Megaphone,
+    column: 'Lead Source',
+    title: 'Candidates by lead source',
+    subtitle: 'Which channel the induction lead arrived through.',
+    empty: 'No lead source recorded on any induction entry yet.',
+    leader: 'Largest source',
+  },
 ]
+
+const TAB_BY_KEY = Object.fromEntries(TABS.map((item) => [item.key, item]))
 
 // The bar colour for a remark group. Validated as a five-slot categorical
 // palette (worst adjacent CVD deltaE 25.2) - two of them sit under 3:1 against
@@ -140,15 +188,18 @@ export function LeadAnalyticsPage() {
   // group. Read rather than re-sorted, so the card and the table can't disagree.
   const largest = items[0] ?? null
 
-  const isRemarks = tab === 'call_remark'
-  // No slicing here - the donut folds its own tail into "Other" past six, and
-  // truncating first would drop those rows from the total the ring is showing.
-  const chartRows = isRemarks ? groupRemarks(items) : items
+  const active = TAB_BY_KEY[tab]
+  // Remarks are the one dimension with a fixed vocabulary worth folding: 31
+  // options that belong to five outcomes. Sales person and lead source are
+  // free text, so there is nothing to roll them into - they go to the donut as
+  // they come, and it folds its own tail into "Other" past six. No slicing
+  // here either, or those rows would leave the total the ring is showing.
+  const chartRows = tab === 'call_remark' ? groupRemarks(items) : items
 
   const columns = [
     {
       key: 'value',
-      header: isRemarks ? 'Call Remark' : 'Category',
+      header: active.column,
       render: (row) => <span className="font-medium text-slate-900">{row.value}</span>,
     },
     { key: 'count', header: 'Candidates', align: 'center', numeric: true },
@@ -208,23 +259,8 @@ export function LeadAnalyticsPage() {
               stay as figures because each is a single number, which a slice of
               a different pie would not have said any better. */}
           <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_15rem]">
-            <Panel
-              title={isRemarks ? 'How induction calls landed' : 'Candidates by category'}
-              subtitle={
-                isRemarks
-                  ? 'The thirty-one remarks grouped into the five outcomes they belong to.'
-                  : 'Collected on the induction call form.'
-              }
-            >
-              <DonutChart
-                items={chartRows}
-                centerLabel="Candidates"
-                emptyMessage={
-                  isRemarks
-                    ? 'No call remarks recorded yet. Set one from the dropdown on the induction board.'
-                    : 'No categories recorded yet.'
-                }
-              />
+            <Panel title={active.title} subtitle={active.subtitle}>
+              <DonutChart items={chartRows} centerLabel="Candidates" emptyMessage={active.empty} />
             </Panel>
 
             {/* Content-height, not stretched: short cards pulled to the full
@@ -243,7 +279,7 @@ export function LeadAnalyticsPage() {
                   it is, which is the first thing anybody asks of a breakdown.
                   Reads the top row, which the API already sorts by count. */}
               <Figure
-                label={isRemarks ? 'Most common remark' : 'Largest category'}
+                label={active.leader}
                 value={largest ? largest.value : '—'}
                 share={largest ? percent(largest.count, total) : null}
                 icon={Crown}

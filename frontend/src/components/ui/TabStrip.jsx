@@ -16,7 +16,12 @@
 // pill's classes for tabs that carry their own accent (Foundation's violet).
 export function TabStrip({ tabs, value, onChange, className = '' }) {
   return (
-    <div className={`inline-flex gap-1 rounded-lg bg-slate-100 p-1 ${className}`}>
+    // Scrolls rather than overflowing. Two tabs always fit; four of them with
+    // labels like "Induction Call Remarks" do not fit a phone, and a strip that
+    // overflows makes the whole page scroll sideways - a much worse failure
+    // than a short scroll inside the control itself. Tabs stay their natural
+    // width instead of being squashed to fit.
+    <div className={`inline-flex max-w-full gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1 ${className}`}>
       {tabs.map((tab) => {
         const isActive = value === tab.key
         return (
@@ -25,7 +30,7 @@ export function TabStrip({ tabs, value, onChange, className = '' }) {
             type="button"
             onClick={() => onChange(tab.key)}
             aria-pressed={isActive}
-            className={`inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-semibold transition-colors ${
               isActive
                 ? (tab.active ?? 'bg-white text-brand-700 shadow-sm')
                 : 'text-slate-500 hover:text-slate-700'

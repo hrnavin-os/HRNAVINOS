@@ -263,7 +263,16 @@ class InductionEntryService:
     # The two dimensions the analytics dashboard breaks entries down by. A
     # closed map rather than interpolating the query param into the pipeline,
     # so no caller can group by an arbitrary field.
-    _ANALYTICS_FIELDS = {"category": "$category", "call_remark": "$call_remark"}
+    # A closed map, not a field name taken from the caller: the dimension is
+    # interpolated straight into a $group _id, so anything reachable from the
+    # query string would be a way to read fields this endpoint never intended to
+    # expose. Adding a dimension means adding it here on purpose.
+    _ANALYTICS_FIELDS = {
+        "category": "$category",
+        "call_remark": "$call_remark",
+        "sales_person": "$sales_person",
+        "lead_source": "$lead_source",
+    }
 
     async def analytics(self, dimension: str, *, section: str | None = None) -> dict:
         """Counts per distinct value of one field, with how many of each went on
