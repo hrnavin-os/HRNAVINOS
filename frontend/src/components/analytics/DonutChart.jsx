@@ -20,6 +20,10 @@ const MAX_SLICES = 6
 // colour-blind-safety mechanism, not decoration.
 const SLICE_COLORS = ['#2563eb', '#ea580c', '#0d9488', '#7c3aed', '#db2777', '#65a30d']
 const OTHER_COLOR = '#94a3b8'
+// Entries with a count of zero. Deliberately not a palette hue: there is no arc
+// on the ring for the dot to point at, and giving it one would promise a slice
+// that isn't there.
+const EMPTY_COLOR = '#cbd5e1'
 
 const SIZE = 200
 const STROKE = 26
@@ -29,13 +33,26 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 // border would read as part of the mark.
 const GAP = 3
 
+// Empty entries are legend-only, and are held out of the fold entirely rather
+// than sorted to the back of it. A zero-length arc cannot be drawn, so letting
+// one take a slice slot would spend it on nothing - and a category list with
+// several empties would push real slices into "Other" to make room for
+// categories that aren't there.
+//
+// They keep their place at the end of the returned list so the legend can print
+// them, and the caller's total is unaffected because they add zero to it.
 function foldToSlices(items, valueKey = 'count') {
   const sorted = [...items].sort((a, b) => b[valueKey] - a[valueKey])
-  if (sorted.length <= MAX_SLICES) {
-    return sorted.map((item, index) => ({ ...item, color: item.color ?? SLICE_COLORS[index] }))
+  const filled = sorted.filter((item) => item[valueKey] > 0)
+  const empty = sorted
+    .filter((item) => item[valueKey] <= 0)
+    .map((item) => ({ ...item, color: EMPTY_COLOR }))
+
+  if (filled.length <= MAX_SLICES) {
+    return [...filled.map((item, index) => ({ ...item, color: item.color ?? SLICE_COLORS[index] })), ...empty]
   }
-  const head = sorted.slice(0, MAX_SLICES - 1).map((item, index) => ({ ...item, color: SLICE_COLORS[index] }))
-  const tail = sorted.slice(MAX_SLICES - 1)
+  const head = filled.slice(0, MAX_SLICES - 1).map((item, index) => ({ ...item, color: SLICE_COLORS[index] }))
+  const tail = filled.slice(MAX_SLICES - 1)
   return [
     ...head,
     {
@@ -43,6 +60,7 @@ function foldToSlices(items, valueKey = 'count') {
       [valueKey]: tail.reduce((sum, item) => sum + item[valueKey], 0),
       color: OTHER_COLOR,
     },
+    ...empty,
   ]
 }
 
@@ -64,13 +82,21 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
   const activeSlice = active === null ? null : slices[active]
 
   // Geometry once, so the arcs and their hit areas can't drift apart.
+  //
+  // Counted rather than taken from slices.length, which now includes the empty
+  // entries: one real category alongside five empty ones is still a full ring
+  // and must not have a gap cut out of it.
+  const filledCount = slices.filter((slice) => slice[valueKey] > 0).length
   let offset = 0
   const arcs = slices.map((slice) => {
     const length = (slice[valueKey] / total) * CIRCUMFERENCE
     // A single full-circle slice has no neighbour to be separated from, and
     // taking a gap out of it leaves a nick in an otherwise unbroken ring.
-    const drawn = slices.length === 1 ? length : Math.max(length - GAP, 0.5)
-    const arc = { slice, dash: `${drawn} ${CIRCUMFERENCE - drawn}`, offset }
+    const drawn = filledCount === 1 ? length : Math.max(length - GAP, 0.5)
+    // An empty entry contributes no arc and no offset. Left to the Math.max
+    // floor above it would paint a half-pixel tick on the ring for a category
+    // holding nobody.
+    const arc = { slice, dash: `${drawn} ${CIRCUMFERENCE - drawn}`, offset, empty: slice[valueKey] <= 0 }
     offset += length
     return arc
   })
@@ -94,7 +120,8 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
           {/* -90deg so the first slice starts at twelve o'clock, which is where
               a reader expects a donut to begin. */}
           <g transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}>
-            {arcs.map(({ slice, dash, offset: arcOffset }, index) => {
+            {arcs.map(({ slice, dash, offset: arcOffset, empty }, index) => {
+              if (empty) return null
               const isActive = active === index
               const dimmed = active !== null && !isActive
               return (
@@ -183,30 +210,54 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
       <ul className="w-full min-w-0 max-w-md space-y-0.5">
         {slices.map((slice, index) => {
           const isActive = active === index
+          const isEmpty = slice[valueKey] <= 0
+          const row = (
+            <>
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: slice.color }}
+                aria-hidden="true"
+              />
+              <span
+                className={`min-w-0 flex-1 truncate ${isEmpty ? 'text-slate-400' : 'text-slate-700'}`}
+                title={slice.value}
+              >
+                {slice.value}
+              </span>
+              <span
+                className={`shrink-0 font-semibold tabular-nums ${isEmpty ? 'text-slate-400' : 'text-slate-900'}`}
+              >
+                {slice[valueKey]}
+              </span>
+              <span className="w-10 shrink-0 text-right text-xs tabular-nums text-slate-400">
+                {share(slice[valueKey])}%
+              </span>
+            </>
+          )
+
           return (
             <li key={slice.value}>
-              <button
-                type="button"
-                onMouseEnter={() => setActive(index)}
-                onFocus={() => setActive(index)}
-                onBlur={() => setActive(null)}
-                className={`flex w-full items-center gap-2.5 rounded-md px-2 py-1 text-left text-sm transition-colors ${
-                  isActive ? 'bg-slate-100' : 'hover:bg-slate-50'
-                } ${active !== null && !isActive ? 'opacity-50' : ''}`}
-              >
-                <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: slice.color }}
-                  aria-hidden="true"
-                />
-                <span className="min-w-0 flex-1 truncate text-slate-700" title={slice.value}>
-                  {slice.value}
-                </span>
-                <span className="shrink-0 font-semibold tabular-nums text-slate-900">{slice[valueKey]}</span>
-                <span className="w-10 shrink-0 text-right text-xs tabular-nums text-slate-400">
-                  {share(slice[valueKey])}%
-                </span>
-              </button>
+              {/* An empty entry is printed, not offered. Hovering it would dim
+                  the whole ring to highlight a slice that isn't drawn, so it
+                  is a plain row - and muted, so the eye reads the categories
+                  that have people in them first. */}
+              {isEmpty ? (
+                <div className="flex w-full items-center gap-2.5 rounded-md px-2 py-1 text-left text-sm">
+                  {row}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onMouseEnter={() => setActive(index)}
+                  onFocus={() => setActive(index)}
+                  onBlur={() => setActive(null)}
+                  className={`flex w-full items-center gap-2.5 rounded-md px-2 py-1 text-left text-sm transition-colors ${
+                    isActive ? 'bg-slate-100' : 'hover:bg-slate-50'
+                  } ${active !== null && !isActive ? 'opacity-50' : ''}`}
+                >
+                  {row}
+                </button>
+              )}
             </li>
           )
         })}

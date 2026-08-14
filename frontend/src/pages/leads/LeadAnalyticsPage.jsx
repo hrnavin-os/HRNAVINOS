@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowRightLeft, Crown, Megaphone, PhoneCall, Tag, UserRound, UserX } from 'lucide-react'
 import { inductionEntryService } from '@/services/inductionEntryService'
+import { inductionFormConfigService } from '@/services/inductionFormConfigService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { DataTable } from '@/components/ui/DataTable'
 import { TableCard } from '@/components/ui/TableCard'
@@ -168,6 +169,26 @@ function groupRemarks(items) {
   return rows.sort((a, b) => b.count - a.count)
 }
 
+// Every category the form offers, whether anyone has been put in it or not.
+//
+// The aggregation can only return values that exist in the data, so a category
+// nobody has been filed under is simply absent - and absent reads as "doesn't
+// exist" rather than "nobody yet", which are very different findings. The list
+// of what could have been chosen is the form config, so the two are merged
+// here: the configured options at zero, then whatever the data holds.
+function withEmptyCategories(items, options) {
+  if (!options.length) return items
+  const byValue = new Map(items.map((item) => [item.value, item]))
+  const configured = options.map(
+    (option) => byValue.get(option) ?? { value: option, count: 0, moved: 0, quit: 0 },
+  )
+  // Values the data carries that the dropdown no longer offers: "Not set", and
+  // anything recorded before an option was renamed or removed. Dropping them
+  // would leave the ring's total disagreeing with the board's count.
+  const unlisted = items.filter((item) => !options.includes(item.value))
+  return [...configured, ...unlisted]
+}
+
 export function LeadAnalyticsPage() {
   const [tab, setTab] = useState('category')
 
@@ -179,6 +200,17 @@ export function LeadAnalyticsPage() {
     placeholderData: (previous) => previous,
   })
 
+  // The admin-editable option list behind the form's Category dropdown. Read
+  // from the config rather than hardcoded, so adding a category in Admin >
+  // Form Collection puts it on this board at zero without a deploy. Gated by
+  // LEADS_VIEW, the same permission as this page.
+  const configQuery = useQuery({
+    queryKey: ['induction-form-config'],
+    queryFn: inductionFormConfigService.get,
+  })
+  const categoryOptions =
+    configQuery.data?.fields?.find((field) => field.key === 'category')?.options ?? []
+
   const data = query.data
   const items = data?.items ?? []
   const total = data?.total ?? 0
@@ -189,12 +221,16 @@ export function LeadAnalyticsPage() {
   const largest = items[0] ?? null
 
   const active = TAB_BY_KEY[tab]
+  // Category is the one dimension with an authoritative list of what the
+  // answers could have been, so it is the one that can show the empties. Sales
+  // person and lead source are free text - there is no roster of salespeople
+  // the form knows about, so "every value at zero" isn't a set that exists.
+  const rows = tab === 'category' ? withEmptyCategories(items, categoryOptions) : items
   // Remarks are the one dimension with a fixed vocabulary worth folding: 31
-  // options that belong to five outcomes. Sales person and lead source are
-  // free text, so there is nothing to roll them into - they go to the donut as
-  // they come, and it folds its own tail into "Other" past six. No slicing
-  // here either, or those rows would leave the total the ring is showing.
-  const chartRows = tab === 'call_remark' ? groupRemarks(items) : items
+  // options that belong to five outcomes. The others go to the donut as they
+  // come, and it folds its own tail into "Other" past six. No slicing here
+  // either, or those rows would leave the total the ring is showing.
+  const chartRows = tab === 'call_remark' ? groupRemarks(items) : rows
 
   const columns = [
     {
@@ -289,11 +325,13 @@ export function LeadAnalyticsPage() {
           </div>
 
           {/* The table view: the same numbers without relying on colour or bar
-              length, plus the conversion and quit rates the bars don't carry. */}
+              length, plus the conversion and quit rates the bars don't carry.
+              Fed from `rows`, the same list the chart gets, so an empty
+              category appears in both or neither. */}
           <TableCard>
             <DataTable
               columns={columns}
-              rows={items.map((item) => ({ id: item.value, ...item }))}
+              rows={rows.map((item) => ({ id: item.value, ...item }))}
               emptyMessage="Nothing recorded yet."
             />
           </TableCard>
