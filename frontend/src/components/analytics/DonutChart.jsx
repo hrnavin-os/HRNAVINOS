@@ -101,18 +101,28 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
     return arc
   })
 
+  // Past six entries the legend runs taller than the ring beside it and the
+  // cluster goes lopsided - eleven categories made a column half again as tall
+  // as the donut, with the empties trailing off the bottom. Split in two, it
+  // comes back to about the ring's height.
+  const splitLegend = slices.length > 6
+  // Ceiling, so an odd count puts the extra row in the first column and the
+  // second is never the longer of the two.
+  const legendRows = Math.ceil(slices.length / 2)
+
   return (
-    // Two equal halves across the full panel: the ring centred in one, the
-    // legend starting at the head of the other.
+    // The ring centred in one half, the legend starting at the head of the
+    // other. A grid rather than a flex row, because the halves have to stay
+    // put: flexed, the legend's max-width leaves slack that the ring's half
+    // then absorbs, and the ring drifts toward the middle as the panel widens.
     //
-    // A grid rather than a flex row, because the halves have to stay equal.
-    // Flexed, the legend's max-width leaves slack that the ring's half then
-    // absorbs, and the ring drifts off toward the middle as the panel widens.
-    // Halving it is also what keeps the legend readable - stretched to fill,
-    // its label and its number sit at opposite ends of a 700px row with a
-    // chasm between them.
+    // A split legend gets the ring down to its own width instead of half the
+    // panel, because two columns squeezed into a half leave each one narrower
+    // than the labels - and a legend of truncated labels identifies nothing.
     <div
-      className="flex w-full flex-col items-center gap-6 sm:grid sm:grid-cols-2 sm:items-center sm:gap-8"
+      className={`flex w-full flex-col items-center gap-6 sm:grid sm:items-center sm:gap-8 ${
+        splitLegend ? 'sm:grid-cols-[auto_1fr]' : 'sm:grid-cols-2'
+      }`}
       onMouseLeave={() => setActive(null)}
     >
       <div className="relative flex w-full justify-center">
@@ -206,8 +216,23 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
           carried by colour alone. Each row repeats the count and the share, so
           two equal slices are still distinguishable - and hovering a row lights
           its slice, which is the only way to tell equal slices apart on the
-          ring itself. */}
-      <ul className="w-full min-w-0 max-w-md space-y-0.5">
+          ring itself.
+
+          Split, it flows DOWN each column and then across - grid-flow-col with
+          a fixed row count. The default row-major flow would deal the ranked
+          list left-right-left-right, so reading the biggest categories in order
+          would mean zig-zagging between columns.
+
+          One column below sm regardless: two columns on a phone is two
+          truncated columns. */}
+      <ul
+        style={splitLegend ? { '--legend-rows': legendRows } : undefined}
+        className={`w-full min-w-0 ${
+          splitLegend
+            ? 'grid gap-x-6 gap-y-0.5 sm:grid-flow-col sm:grid-rows-[repeat(var(--legend-rows),auto)]'
+            : 'max-w-md space-y-0.5'
+        }`}
+      >
         {slices.map((slice, index) => {
           const isActive = active === index
           const isEmpty = slice[valueKey] <= 0
