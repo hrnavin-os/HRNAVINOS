@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Pin } from 'lucide-react'
 
 // Part-to-whole for one breakdown: how the candidates divide across categories
 // or call outcomes.
@@ -70,7 +71,15 @@ function foldToSlices(items, valueKey = 'count') {
 const HIT_STROKE = STROKE + 16
 
 export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', emptyMessage = 'Nothing to show yet.' }) {
-  const [active, setActive] = useState(null)
+  // Two sources for one highlight. Hover is the transient one and wins while
+  // the pointer is over the chart; a pin survives the pointer leaving, which is
+  // the whole point of it - you can pin a slice and then read its figures, or
+  // point at the panel while talking about it, without the readout snapping
+  // back to the total the moment you move away.
+  const [hovered, setHovered] = useState(null)
+  const [pinned, setPinned] = useState(null)
+  const active = hovered ?? pinned
+
   const slices = foldToSlices(items, valueKey)
   const total = slices.reduce((sum, item) => sum + item[valueKey], 0)
 
@@ -80,6 +89,9 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
 
   const share = (value) => Math.round((value / total) * 100)
   const activeSlice = active === null ? null : slices[active]
+  // Clicking the pinned slice again releases it, so the same gesture that turns
+  // the pin on turns it off and there is no separate control to find.
+  const togglePin = (index) => setPinned((current) => (current === index ? null : index))
 
   // Geometry once, so the arcs and their hit areas can't drift apart.
   //
@@ -114,21 +126,17 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
     : [slices]
 
   return (
-    // The ring centred in one half, the legend starting at the head of the
-    // other. A grid rather than a flex row, because the halves have to stay
-    // put: flexed, the legend's max-width leaves slack that the ring's half
-    // then absorbs, and the ring drifts toward the middle as the panel widens.
-    //
-    // A split legend gets the ring down to its own width instead of half the
-    // panel, because two columns squeezed into a half leave each one narrower
-    // than the labels - and a legend of truncated labels identifies nothing.
+    // Ring and legend centred as one group. They used to be two fixed halves of
+    // the panel, which left the ring pinned against the left edge and a field
+    // of white to the right of the legend - the panel is far wider than the
+    // pair needs, and splitting it just decided where the emptiness went.
+    // Centred, the whitespace falls evenly on both sides and the two read as
+    // one object.
     <div
-      className={`flex w-full flex-col items-center gap-6 sm:grid sm:items-center sm:gap-8 ${
-        splitLegend ? 'sm:grid-cols-[auto_1fr]' : 'sm:grid-cols-2'
-      }`}
-      onMouseLeave={() => setActive(null)}
+      className="flex w-full flex-col items-center justify-center gap-8 sm:flex-row sm:items-center lg:gap-12"
+      onMouseLeave={() => setHovered(null)}
     >
-      <div className="relative flex w-full justify-center">
+      <div className="relative shrink-0">
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
           {/* -90deg so the first slice starts at twelve o'clock, which is where
               a reader expects a donut to begin. */}
@@ -168,6 +176,7 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
                     strokeDashoffset={-arcOffset}
                     tabIndex={0}
                     role="button"
+                    aria-pressed={pinned === index}
                     aria-label={`${slice.value}: ${slice[valueKey]}, ${share(slice[valueKey])}%`}
                     // pointer-events: stroke explicitly. The default,
                     // visiblePainted, only hit-tests where paint actually
@@ -175,14 +184,21 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
                     // transparent stroke counts - which would leave these
                     // catching nothing.
                     style={{ pointerEvents: 'stroke' }}
-                    // No focus ring: focusing a slice thickens it and swaps
-                    // the centre readout to its value, which is a stronger
-                    // and better-placed indication than an outline traced
-                    // around a dashed arc.
+                    // No focus ring: focusing a slice dims its neighbours and
+                    // swaps the centre readout to its value, which is a
+                    // stronger and better-placed indication than an outline
+                    // traced around a dashed arc.
                     className="cursor-pointer outline-none"
-                    onMouseEnter={() => setActive(index)}
-                    onFocus={() => setActive(index)}
-                    onBlur={() => setActive(null)}
+                    onMouseEnter={() => setHovered(index)}
+                    onFocus={() => setHovered(index)}
+                    onBlur={() => setHovered(null)}
+                    onClick={() => togglePin(index)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        togglePin(index)
+                      }
+                    }}
                   />
                 </g>
               )
@@ -196,10 +212,9 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
             slice is equidistant from. Values lead, the label follows.
             Proportional figures - equal-width digits make a large standalone
             number look loose. */}
-        {/* Pinned to the centre at a fixed width rather than filling the box:
-            the box is now a half-panel wide, so inset-0 would spread a long
-            slice name straight out through the ring. w-32 sits inside the
-            148px hole. */}
+        {/* Centred at a fixed width rather than filling the box, which is as
+            wide as the ring: w-32 sits inside the 148px hole, so a long slice
+            name wraps in the middle instead of spilling out through the arc. */}
         <div className="pointer-events-none absolute left-1/2 top-1/2 flex w-32 -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center">
           <span className="text-3xl font-bold leading-none text-slate-900">
             {activeSlice ? activeSlice[valueKey] : total}
@@ -210,6 +225,15 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
           {activeSlice && (
             <span className="mt-0.5 text-[11px] font-semibold text-slate-500">
               {share(activeSlice[valueKey])}%
+            </span>
+          )}
+          {/* Says the readout will stay put after the pointer leaves. Without
+              it a pin is invisible until you move away and notice the centre
+              didn't reset, which is a thing to discover rather than be told. */}
+          {pinned !== null && hovered === null && (
+            <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
+              <Pin className="h-2.5 w-2.5" strokeWidth={2.5} aria-hidden="true" />
+              Pinned
             </span>
           )}
         </div>
@@ -233,22 +257,32 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
           down a column stays in rank order instead of the list being dealt
           left-right-left-right. They wrap back to one column when there is no
           room for two. */}
-      <div className={`flex w-full min-w-0 ${splitLegend ? 'flex-wrap gap-x-10 gap-y-1' : ''}`}>
+      <div className="flex min-w-0 flex-wrap justify-center gap-x-8 gap-y-2">
         {legendColumns.map((chunk, chunkIndex) => (
-          <table key={chunkIndex} className="w-auto max-w-full border-separate border-spacing-0 text-sm">
+          <table
+            key={chunkIndex}
+            // A rule between the columns rather than a wider gap. Two blocks of
+            // rows floating in space read as two separate lists - one of which
+            // was all zeros and all grey, so it looked like something had gone
+            // wrong. A hairline says they are one legend in two columns.
+            className={`w-auto max-w-full border-separate border-spacing-0 text-sm ${
+              chunkIndex > 0 ? 'border-l border-slate-100 pl-8' : ''
+            }`}
+          >
             <tbody>
               {chunk.map((slice, rowIndex) => {
                 // Index into `slices`, which is what `active` refers to - the
                 // chunk's own index would light the wrong arc in column two.
                 const index = chunkIndex * legendRows + rowIndex
                 const isActive = active === index
+                const isPinned = pinned === index
                 const isEmpty = slice[valueKey] <= 0
                 // The background lives on the cells, not the row: a <tr> takes
                 // a colour but will not clip a radius, so the rounded ends have
                 // to come from the first and last cell.
-                const cell = `py-1 transition-colors first:rounded-l-md last:rounded-r-md ${
+                const cell = `py-1.5 transition-colors first:rounded-l-md last:rounded-r-md ${
                   isActive ? 'bg-slate-100' : isEmpty ? '' : 'group-hover:bg-slate-50'
-                } ${active !== null && !isActive ? 'opacity-50' : ''}`
+                } ${active !== null && !isActive ? 'opacity-40' : ''}`
 
                 return (
                   // An empty entry is printed, not offered: hovering it would
@@ -257,19 +291,37 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
                   // should reach the categories with people in them first.
                   <tr
                     key={slice.value}
-                    className={`group ${isEmpty ? '' : 'cursor-default outline-none'}`}
+                    className={`group ${isEmpty ? '' : 'cursor-pointer outline-none'}`}
                     {...(isEmpty
                       ? {}
                       : {
                           tabIndex: 0,
-                          onMouseEnter: () => setActive(index),
-                          onFocus: () => setActive(index),
-                          onBlur: () => setActive(null),
+                          // aria-pressed is only meaningful on a button, so the
+                          // role has to come with it. Same trade the shared
+                          // DataTable makes for clickable rows: the control
+                          // semantics matter more here than the row ones.
+                          role: 'button',
+                          'aria-pressed': isPinned,
+                          onMouseEnter: () => setHovered(index),
+                          onFocus: () => setHovered(index),
+                          onBlur: () => setHovered(null),
+                          onClick: () => togglePin(index),
+                          onKeyDown: (event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              togglePin(index)
+                            }
+                          },
                         })}
                   >
                     <td className={`${cell} pl-2 pr-2.5`}>
+                      {/* The pinned row's swatch grows a halo, so which slice
+                          is held is legible from the legend and not only from
+                          the badge in the middle of the ring. */}
                       <span
-                        className="block h-2.5 w-2.5 rounded-full"
+                        className={`block h-2.5 w-2.5 rounded-full transition-shadow ${
+                          isPinned ? 'ring-2 ring-slate-300 ring-offset-1' : ''
+                        }`}
                         style={{ backgroundColor: slice.color }}
                         aria-hidden="true"
                       />
