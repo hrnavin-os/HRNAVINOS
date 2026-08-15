@@ -162,21 +162,26 @@ function groupRemarks(items) {
     else ungrouped += item.count
   }
 
-  const rows = totals.filter((row) => row.count > 0)
+  // All five outcomes, including the ones nothing landed in. An outcome with
+  // nobody in it is a finding - "no candidate quit" is worth reading - and
+  // dropping it made the row look like a kind of outcome that doesn't exist.
+  const rows = [...totals]
   // "Not set" and anything typed before the dropdown existed. Named rather
   // than dropped: how much of the data is missing is itself a finding.
   if (ungrouped) rows.push({ value: 'No remark yet', color: '#94a3b8', count: ungrouped })
   return rows.sort((a, b) => b.count - a.count)
 }
 
-// Every category the form offers, whether anyone has been put in it or not.
+// Every value the form offers, whether anyone has been filed under it or not.
 //
-// The aggregation can only return values that exist in the data, so a category
-// nobody has been filed under is simply absent - and absent reads as "doesn't
-// exist" rather than "nobody yet", which are very different findings. The list
-// of what could have been chosen is the form config, so the two are merged
-// here: the configured options at zero, then whatever the data holds.
-function withEmptyCategories(items, options) {
+// The aggregation can only return values that exist in the data, so an option
+// nobody chose is simply absent - and absent reads as "doesn't exist" rather
+// than "nobody yet", which are very different findings. A sales person with no
+// entries is exactly the thing this board should be able to say out loud.
+//
+// The list of what could have been chosen is the form config, so the two are
+// merged here: the configured options at zero, then whatever the data holds.
+function withConfiguredValues(items, options) {
   if (!options.length) return items
   const byValue = new Map(items.map((item) => [item.value, item]))
   const configured = options.map(
@@ -200,16 +205,18 @@ export function LeadAnalyticsPage() {
     placeholderData: (previous) => previous,
   })
 
-  // The admin-editable option list behind the form's Category dropdown. Read
-  // from the config rather than hardcoded, so adding a category in Admin >
-  // Form Collection puts it on this board at zero without a deploy. Gated by
+  // The admin-editable option lists behind the form's dropdowns, keyed by field
+  // - Category, Sales Person and Lead Source all have one. Read from the config
+  // rather than hardcoded, so adding a category or a salesperson in Admin >
+  // Form Collection puts them on this board at zero without a deploy. Gated by
   // LEADS_VIEW, the same permission as this page.
   const configQuery = useQuery({
     queryKey: ['induction-form-config'],
     queryFn: inductionFormConfigService.get,
   })
-  const categoryOptions =
-    configQuery.data?.fields?.find((field) => field.key === 'category')?.options ?? []
+  const optionsByField = Object.fromEntries(
+    (configQuery.data?.fields ?? []).map((field) => [field.key, field.options ?? []]),
+  )
 
   const data = query.data
   const items = data?.items ?? []
@@ -221,15 +228,15 @@ export function LeadAnalyticsPage() {
   const largest = items[0] ?? null
 
   const active = TAB_BY_KEY[tab]
-  // Category is the one dimension with an authoritative list of what the
-  // answers could have been, so it is the one that can show the empties. Sales
-  // person and lead source are free text - there is no roster of salespeople
-  // the form knows about, so "every value at zero" isn't a set that exists.
-  const rows = tab === 'category' ? withEmptyCategories(items, categoryOptions) : items
-  // Remarks are the one dimension with a fixed vocabulary worth folding: 31
-  // options that belong to five outcomes. The others go to the donut as they
-  // come, and it folds its own tail into "Other" past six. No slicing here
-  // either, or those rows would leave the total the ring is showing.
+  // Every dimension shows its full roster, not only the values somebody has
+  // been filed under. Three of them get it from the form config; the call
+  // remark is set on the board rather than the form, so its roster is the five
+  // outcome groups, which groupRemarks always returns in full.
+  const rows = tab === 'call_remark' ? items : withConfiguredValues(items, optionsByField[tab] ?? [])
+  // Remarks are the one dimension worth folding: 31 options that belong to
+  // five outcomes, and thirty-one slices is a list rather than a chart. The
+  // full detail stays in the table underneath, which is why the table keeps
+  // the raw rows here while the ring gets the groups.
   const chartRows = tab === 'call_remark' ? groupRemarks(items) : rows
 
   const columns = [
