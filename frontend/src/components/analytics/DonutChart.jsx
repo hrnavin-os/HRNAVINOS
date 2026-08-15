@@ -108,7 +108,10 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
   const splitLegend = slices.length > 6
   // Ceiling, so an odd count puts the extra row in the first column and the
   // second is never the longer of the two.
-  const legendRows = Math.ceil(slices.length / 2)
+  const legendRows = splitLegend ? Math.ceil(slices.length / 2) : slices.length
+  const legendColumns = splitLegend
+    ? [slices.slice(0, legendRows), slices.slice(legendRows)]
+    : [slices]
 
   return (
     // The ring centred in one half, the legend starting at the head of the
@@ -218,75 +221,87 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
           its slice, which is the only way to tell equal slices apart on the
           ring itself.
 
-          Split, it flows DOWN each column and then across - grid-flow-col with
-          a fixed row count. The default row-major flow would deal the ranked
-          list left-right-left-right, so reading the biggest categories in order
-          would mean zig-zagging between columns.
+          A real table, and not for markup's sake: auto table layout sizes each
+          column to its own content, so the count lands immediately after the
+          longest name and every row's numbers line up underneath. A flex or
+          grid row cannot do both at once - a track that stretches to align the
+          numbers is a track that pushes them to the far edge, which is what
+          left a hand's width of nothing between a short name and its count.
 
-          One column below sm regardless: two columns on a phone is two
-          truncated columns. */}
-      <ul
-        style={splitLegend ? { '--legend-rows': legendRows } : undefined}
-        className={`w-full min-w-0 ${
-          splitLegend
-            ? 'grid gap-x-6 gap-y-0.5 sm:grid-flow-col sm:grid-rows-[repeat(var(--legend-rows),auto)]'
-            : 'max-w-md space-y-0.5'
-        }`}
-      >
-        {slices.map((slice, index) => {
-          const isActive = active === index
-          const isEmpty = slice[valueKey] <= 0
-          const row = (
-            <>
-              <span
-                className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: slice.color }}
-                aria-hidden="true"
-              />
-              <span
-                className={`min-w-0 flex-1 truncate ${isEmpty ? 'text-slate-400' : 'text-slate-700'}`}
-                title={slice.value}
-              >
-                {slice.value}
-              </span>
-              <span
-                className={`shrink-0 font-semibold tabular-nums ${isEmpty ? 'text-slate-400' : 'text-slate-900'}`}
-              >
-                {slice[valueKey]}
-              </span>
-              <span className="w-10 shrink-0 text-right text-xs tabular-nums text-slate-400">
-                {share(slice[valueKey])}%
-              </span>
-            </>
-          )
+          Split as two tables side by side rather than one list reflowing into
+          columns, so each column sizes to its own longest label - and reading
+          down a column stays in rank order instead of the list being dealt
+          left-right-left-right. They wrap back to one column when there is no
+          room for two. */}
+      <div className={`flex w-full min-w-0 ${splitLegend ? 'flex-wrap gap-x-10 gap-y-1' : ''}`}>
+        {legendColumns.map((chunk, chunkIndex) => (
+          <table key={chunkIndex} className="w-auto max-w-full border-separate border-spacing-0 text-sm">
+            <tbody>
+              {chunk.map((slice, rowIndex) => {
+                // Index into `slices`, which is what `active` refers to - the
+                // chunk's own index would light the wrong arc in column two.
+                const index = chunkIndex * legendRows + rowIndex
+                const isActive = active === index
+                const isEmpty = slice[valueKey] <= 0
+                // The background lives on the cells, not the row: a <tr> takes
+                // a colour but will not clip a radius, so the rounded ends have
+                // to come from the first and last cell.
+                const cell = `py-1 transition-colors first:rounded-l-md last:rounded-r-md ${
+                  isActive ? 'bg-slate-100' : isEmpty ? '' : 'group-hover:bg-slate-50'
+                } ${active !== null && !isActive ? 'opacity-50' : ''}`
 
-          return (
-            <li key={slice.value}>
-              {/* An empty entry is printed, not offered. Hovering it would dim
-                  the whole ring to highlight a slice that isn't drawn, so it
-                  is a plain row - and muted, so the eye reads the categories
-                  that have people in them first. */}
-              {isEmpty ? (
-                <div className="flex w-full items-center gap-2.5 rounded-md px-2 py-1 text-left text-sm">
-                  {row}
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onMouseEnter={() => setActive(index)}
-                  onFocus={() => setActive(index)}
-                  onBlur={() => setActive(null)}
-                  className={`flex w-full items-center gap-2.5 rounded-md px-2 py-1 text-left text-sm transition-colors ${
-                    isActive ? 'bg-slate-100' : 'hover:bg-slate-50'
-                  } ${active !== null && !isActive ? 'opacity-50' : ''}`}
-                >
-                  {row}
-                </button>
-              )}
-            </li>
-          )
-        })}
-      </ul>
+                return (
+                  // An empty entry is printed, not offered: hovering it would
+                  // dim the whole ring to highlight a slice that isn't drawn.
+                  // So no handlers, no tab stop, and muted text - the eye
+                  // should reach the categories with people in them first.
+                  <tr
+                    key={slice.value}
+                    className={`group ${isEmpty ? '' : 'cursor-default outline-none'}`}
+                    {...(isEmpty
+                      ? {}
+                      : {
+                          tabIndex: 0,
+                          onMouseEnter: () => setActive(index),
+                          onFocus: () => setActive(index),
+                          onBlur: () => setActive(null),
+                        })}
+                  >
+                    <td className={`${cell} pl-2 pr-2.5`}>
+                      <span
+                        className="block h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: slice.color }}
+                        aria-hidden="true"
+                      />
+                    </td>
+                    <td className={`${cell} pr-5`}>
+                      {/* The truncation floor. Without it the table would grow
+                          to whatever the longest category is called and push
+                          the numbers off the panel. */}
+                      <span
+                        className={`block max-w-80 truncate ${isEmpty ? 'text-slate-400' : 'text-slate-700'}`}
+                        title={slice.value}
+                      >
+                        {slice.value}
+                      </span>
+                    </td>
+                    <td
+                      className={`${cell} pr-3 text-right font-semibold tabular-nums ${
+                        isEmpty ? 'text-slate-400' : 'text-slate-900'
+                      }`}
+                    >
+                      {slice[valueKey]}
+                    </td>
+                    <td className={`${cell} pr-2 text-right text-xs tabular-nums text-slate-400`}>
+                      {share(slice[valueKey])}%
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        ))}
+      </div>
     </div>
   )
 }
