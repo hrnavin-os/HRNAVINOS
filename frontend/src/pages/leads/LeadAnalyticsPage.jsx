@@ -265,19 +265,24 @@ export function LeadAnalyticsPage() {
 
   return (
     <div>
-      {/* The Topbar already says "Dashboard"; this says which dashboard, which
-          the header cannot because it reads the nav label. */}
-      <div className="mb-5">
-        <h1 className="text-lg font-bold tracking-tight text-slate-900">Analytics Dashboard</h1>
-        <p className="mt-0.5 text-sm text-amber-600">
-          Induction call insights &amp; candidate categorization
-        </p>
+      {/* Title and tabs on one line. The Topbar already says "Dashboard"; this
+          says which dashboard, which the header cannot because it reads the
+          nav label. */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0">
+          <h1 className="text-lg font-bold tracking-tight text-slate-900">Analytics Dashboard</h1>
+          <p className="mt-0.5 text-sm text-amber-600">
+            Induction call insights &amp; candidate categorization
+          </p>
+        </div>
 
-        {/* On its own full-width row below the title rather than tucked into
-            the corner beside it. Four tabs need the whole width to divide, and
-            in the corner the longest of them decided the size of the strip
-            while the shortest sat in a pill half its neighbour's width. */}
-        <TabStrip equal tabs={TABS} value={tab} onChange={setTab} className="mt-4" />
+        {/* Takes the width the title leaves and divides it four ways, so the
+            tabs stay equal without the strip needing a row of its own. The
+            basis is the wrap trigger rather than a size: once the title and
+            the strip can no longer both have their share, the strip drops to
+            its own full-width line instead of squeezing four labels into the
+            corner. */}
+        <TabStrip equal tabs={TABS} value={tab} onChange={setTab} className="min-w-0 flex-1 basis-lg" />
       </div>
 
       <ErrorMessage message={query.error ? getApiErrorMessage(query.error) : null} />
