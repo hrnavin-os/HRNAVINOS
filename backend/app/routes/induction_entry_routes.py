@@ -6,6 +6,7 @@ the rows are lead-intake records. Reusing them means nobody has to re-grant
 permissions to existing roles before the tab works.
 """
 import uuid
+from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, status
@@ -26,6 +27,25 @@ from app.schemas.induction_entry_schema import (
 from app.services.induction_entry_service import InductionEntryService
 
 router = APIRouter(prefix="/induction-entries", tags=["Induction Call Form"])
+
+
+def _date_window(*ranges: tuple[date, date] | tuple[date | None, date | None] | None) -> dict:
+    """The overlap of every given (start, end) pair, as a Mongo range.
+
+    Batch and the Date filter both narrow registration_date, so asking for
+    Batch-29 and "last 7 days" has to mean the days in both - the tightest
+    bound on each side wins. Either end of any range may be missing, and an
+    empty result means nothing was asked for, so no clause is added at all.
+    """
+    bounds = [pair for pair in ranges if pair]
+    lower = [start for start, _ in bounds if start]
+    upper = [end for _, end in bounds if end]
+    query: dict = {}
+    if lower:
+        query["$gte"] = max(lower)
+    if upper:
+        query["$lte"] = min(upper)
+    return query
 
 
 @router.post("", response_model=InductionEntryResponse, status_code=status.HTTP_201_CREATED)
@@ -49,6 +69,10 @@ async def list_entries(
     category: str | None = None,
     assigned_to: uuid.UUID | None = None,
     batch: str | None = None,
+    # Registration-date window behind the board's Date filter, either end
+    # optional: "everything since March" is as real a question as a range.
+    date_from: date | None = None,
+    date_to: date | None = None,
     # Which tab. Defaults to the pending one, so any caller that predates the
     # tabs still gets the active queue rather than everything.
     status: InductionStatus = InductionStatus.PENDING_INDUCTION,
@@ -73,11 +97,13 @@ async def list_entries(
         if value
     }
     # Batch is derived from registration_date rather than stored, so filtering
-    # by it becomes a range query over the month it represents.
-    if batch:
-        window = service.batch_date_range(batch)
-        if window:
-            filters["registration_date"] = {"$gte": window[0], "$lte": window[1]}
+    # by it becomes a range query over the month it represents - the same field
+    # the Date filter narrows, which is why the two intersect below rather than
+    # one overwriting the other.
+    batch_window = service.batch_date_range(batch) if batch else None
+    window = _date_window((date_from, date_to), batch_window)
+    if window:
+        filters["registration_date"] = window
 
     params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)
     result = await service.list(params, filters=filters, status=status)

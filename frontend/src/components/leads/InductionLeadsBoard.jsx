@@ -3,9 +3,10 @@ import { useQuery } from '@tanstack/react-query'
 import { ResourceListPage } from '@/components/resource/ResourceListPage'
 import { inductionEntryService } from '@/services/inductionEntryService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
-import { ArrowRightLeft, ClipboardList, Target, UserX, X } from 'lucide-react'
+import { ArrowDownUp, ArrowRightLeft, ClipboardList, Target, UserX, X } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { DateFilter } from '@/components/ui/DateFilter'
 import { FilterDropdown } from '@/components/ui/FilterDropdown'
 import { Toast } from '@/components/ui/Toast'
 import { StatCard } from '@/components/ui/StatCard'
@@ -194,6 +195,13 @@ export function InductionLeadsBoard() {
   const scopedSection = user?.scoped_section || null
   const [sectionFilter, setSectionFilter] = useState('')
   const [filters, setFilters] = useState(EMPTY_FILTERS)
+  // A registration-date window: { from, to, preset } or null. Kept out of
+  // `filters` because it is one filter that sends two params, and folding it
+  // in would make the "Clear (n)" count read one date range as two.
+  const [dateRange, setDateRange] = useState(null)
+  // Newest or oldest registration first. Not a filter - it hides nothing - so
+  // it sits outside `filters` and survives clearing them.
+  const [sortOrder, setSortOrder] = useState('desc')
 
   // Which tab. Backed by a real status on the server (InductionStatus, derived
   // from foundation_lead_id) rather than a client-side filter, so an entry is
@@ -206,10 +214,21 @@ export function InductionLeadsBoard() {
   const [error, setError] = useState(null)
 
   const setFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }))
-  const hasFilters = Object.values(filters).some(Boolean)
   // Empty strings would be sent as `?batch=` and match nothing, so only the
-  // set ones reach the query.
-  const activeFilters = Object.fromEntries(Object.entries(filters).filter(([, value]) => value))
+  // set ones reach the query. The date range adds its own two, either of which
+  // may be missing - an open-ended "since March" is a real question.
+  const activeFilters = {
+    ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value)),
+    ...(dateRange?.from ? { date_from: dateRange.from } : {}),
+    ...(dateRange?.to ? { date_to: dateRange.to } : {}),
+  }
+  // Counted as one, however many params it sends.
+  const filterCount = Object.values(filters).filter(Boolean).length + (dateRange ? 1 : 0)
+
+  function clearFilters() {
+    setFilters(EMPTY_FILTERS)
+    setDateRange(null)
+  }
 
   // A Section Admin is pinned to their own section, exactly as on the
   // Foundation board - the role carries it, so it can't be changed by clicking.
@@ -282,7 +301,7 @@ export function InductionLeadsBoard() {
             isActive={status === view.value}
             onClick={() => {
               setStatus(view.value)
-              setFilters(EMPTY_FILTERS)
+              clearFilters()
             }}
           />
         ))}
@@ -315,6 +334,10 @@ export function InductionLeadsBoard() {
               options={asOptions(options.batch)}
               onChange={(value) => setFilter('batch', value)}
             />
+            {/* Sits beside Batch because they narrow the same field: Batch is
+                a whole month of registrations, this is any window inside or
+                across them. */}
+            <DateFilter grow value={dateRange} onChange={setDateRange} />
             <FilterDropdown
               grow
               label="Sales Person"
@@ -350,17 +373,30 @@ export function InductionLeadsBoard() {
               options={options.assigned_to ?? []}
               onChange={(value) => setFilter('assigned_to', value)}
             />
-            {hasFilters && (
+            {/* Newest or oldest first, and it always says which. A dropdown
+                would have needed a third, "unset" state that means the same
+                as one of the two - so it's a toggle that shows the order it
+                is in, not the order it would switch to. */}
+            <button
+              type="button"
+              onClick={() => setSortOrder((current) => (current === 'desc' ? 'asc' : 'desc'))}
+              title="Order by registration date"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-2 text-sm font-medium text-slate-600 transition-colors hover:border-slate-400 hover:bg-slate-50"
+            >
+              <ArrowDownUp className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden="true" />
+              {sortOrder === 'desc' ? 'Newest' : 'Oldest'}
+            </button>
+            {filterCount > 0 && (
               // Deliberately not a Button: it must not take a filter-sized
               // slot in the row, and it counts what it will undo so you can
               // see at a glance how narrowed the list is.
               <button
                 type="button"
-                onClick={() => setFilters(EMPTY_FILTERS)}
+                onClick={clearFilters}
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
               >
                 <X className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                Clear ({Object.keys(activeFilters).length})
+                Clear ({filterCount})
               </button>
             )}
           </>
@@ -401,7 +437,7 @@ export function InductionLeadsBoard() {
               ]
         }
         serialNumber
-        extraParams={{ status, section: effectiveSection || undefined, ...activeFilters }}
+        extraParams={{ status, sort_order: sortOrder, section: effectiveSection || undefined, ...activeFilters }}
         // View stays on both tabs - the induction record is exactly what you
         // want to read about somebody who has moved. Edit and delete don't:
         // a moved entry is the history behind a Foundation lead, and editing

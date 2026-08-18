@@ -605,3 +605,67 @@ async def test_analytics_refuses_an_unknown_dimension(client, auth_headers):
     collection by an arbitrary field."""
     response = await client.get("/api/v1/induction-entries/analytics?dimension=phone", headers=auth_headers)
     assert response.status_code == 422
+
+
+# --------------------------------------------------------------------------
+# Date window and ordering
+# --------------------------------------------------------------------------
+LIST_URL = "/api/v1/induction-entries"
+
+
+async def seed_three_months(client) -> None:
+    """One entry per month, so a window can be asked for that holds exactly
+    one of them - and a boundary date can be tested for inclusiveness."""
+    await seed_programs(client)
+    for index, (name, day) in enumerate(
+        [("March", "2026-03-10"), ("April", "2026-04-02"), ("May", "2026-05-20")]
+    ):
+        await client.post(
+            INDUCTION_URL,
+            json=induction_payload(name=name, phone=f"90000001{index:02d}", registration_date=day),
+        )
+
+
+async def names_at(client, auth_headers, query: str) -> list[str]:
+    rows = (await client.get(f"{LIST_URL}?{query}&page_size=100", headers=auth_headers)).json()
+    return [row["name"] for row in rows["items"]]
+
+
+async def test_the_date_filter_narrows_to_its_window(client, auth_headers):
+    """Both ends inclusive: a filter that quietly drops the entries registered
+    on the last day of the range is the kind of thing nobody notices until a
+    month's numbers are short."""
+    await seed_three_months(client)
+
+    assert await names_at(client, auth_headers, "date_from=2026-04-01&date_to=2026-04-30") == ["April"]
+    assert await names_at(client, auth_headers, "date_from=2026-04-02&date_to=2026-04-02") == ["April"]
+
+
+async def test_either_end_of_the_date_filter_may_be_left_open(client, auth_headers):
+    """Asking for everything since March is a real question, so one bound is
+    enough - the other simply isn't applied."""
+    await seed_three_months(client)
+
+    assert sorted(await names_at(client, auth_headers, "date_from=2026-04-01")) == ["April", "May"]
+    assert sorted(await names_at(client, auth_headers, "date_to=2026-04-30")) == ["April", "March"]
+
+
+async def test_batch_and_the_date_filter_intersect(client, auth_headers):
+    """Both narrow registration_date. Whichever the route reads second must not
+    replace the other, or picking a batch would silently widen the dates back
+    out to the whole month."""
+    await seed_three_months(client)
+    rows = (await client.get(f"{LIST_URL}?page_size=100", headers=auth_headers)).json()["items"]
+    april_batch = next(row["batch"] for row in rows if row["name"] == "April")
+
+    assert await names_at(client, auth_headers, f"batch={april_batch}") == ["April"]
+    assert await names_at(client, auth_headers, f"batch={april_batch}&date_from=2026-05-01") == []
+
+
+async def test_the_board_can_be_ordered_oldest_first(client, auth_headers):
+    """The Newest/Oldest toggle sorts on registration date, which is what the
+    board shows and what its batches are derived from."""
+    await seed_three_months(client)
+
+    assert await names_at(client, auth_headers, "sort_order=asc") == ["March", "April", "May"]
+    assert await names_at(client, auth_headers, "sort_order=desc") == ["May", "April", "March"]
