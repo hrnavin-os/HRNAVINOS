@@ -669,3 +669,34 @@ async def test_the_board_can_be_ordered_oldest_first(client, auth_headers):
 
     assert await names_at(client, auth_headers, "sort_order=asc") == ["March", "April", "May"]
     assert await names_at(client, auth_headers, "sort_order=desc") == ["May", "April", "March"]
+
+
+async def test_the_analytics_filters_narrow_the_breakdown(client, auth_headers):
+    """The dashboard's filter rail is applied inside the aggregation, so every
+    panel on the canvas counts the same population - a filter that only
+    narrowed the table would leave the ring beside it answering for everyone."""
+    await seed_programs(client)
+    await client.post(
+        INDUCTION_URL,
+        json=induction_payload(name="March", phone="9000000210", registration_date="2026-03-10", category="Fresher"),
+    )
+    await client.post(
+        INDUCTION_URL,
+        json=induction_payload(
+            name="August", phone="9000000211", registration_date="2026-08-04", category="Career Gap"
+        ),
+    )
+
+    everything = (
+        await client.get("/api/v1/induction-entries/analytics?dimension=category", headers=auth_headers)
+    ).json()
+    august = (
+        await client.get(
+            "/api/v1/induction-entries/analytics?dimension=category&date_from=2026-08-01&date_to=2026-08-31",
+            headers=auth_headers,
+        )
+    ).json()
+
+    assert everything["total"] == 2
+    assert august["total"] == 1
+    assert [item["value"] for item in august["items"]] == ["Career Gap"]

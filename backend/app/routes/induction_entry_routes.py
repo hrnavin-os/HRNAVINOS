@@ -148,6 +148,11 @@ async def filter_options(
 @router.get("/analytics", response_model=InductionAnalyticsResponse)
 async def analytics(
     dimension: Literal["category", "call_remark", "sales_person", "lead_source"] = "category",
+    # The dashboard's filter rail, applied inside the aggregation so every
+    # view on the canvas counts the same population.
+    date_from: date | None = None,
+    date_to: date | None = None,
+    section: str | None = None,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> InductionAnalyticsResponse:
     """Counts per distinct value of one induction-form field, for the analytics
@@ -164,7 +169,10 @@ async def analytics(
     must cover their own section, not everyone's.
     """
     scope = await get_actor_scope(actor)
-    return InductionAnalyticsResponse(**await InductionEntryService().analytics(dimension, section=scope))
+    data = await InductionEntryService().analytics(
+        dimension, section=scope or section, date_from=date_from, date_to=date_to
+    )
+    return InductionAnalyticsResponse(**data)
 
 
 @router.get("/{entry_id}", response_model=InductionEntryResponse)

@@ -70,18 +70,32 @@ function foldToSlices(items, valueKey = 'count') {
 // nobody hits.
 const HIT_STROKE = STROKE + 16
 
-export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', emptyMessage = 'Nothing to show yet.' }) {
+export function DonutChart({
+  items,
+  valueKey = 'count',
+  centerLabel = 'Total',
+  emptyMessage = 'Nothing to show yet.',
+  // Optional: hand the pin to the page, so a slice picked here highlights the
+  // same value in the bars and the table beside it. Left out, the chart keeps
+  // its own pin and behaves exactly as it always has.
+  selected,
+  onSelect,
+}) {
   // Two sources for one highlight. Hover is the transient one and wins while
   // the pointer is over the chart; a pin survives the pointer leaving, which is
   // the whole point of it - you can pin a slice and then read its figures, or
   // point at the panel while talking about it, without the readout snapping
   // back to the total the moment you move away.
   const [hovered, setHovered] = useState(null)
-  const [pinned, setPinned] = useState(null)
-  const active = hovered ?? pinned
+  const [ownPin, setOwnPin] = useState(null)
 
   const slices = foldToSlices(items, valueKey)
   const total = slices.reduce((sum, item) => sum + item[valueKey], 0)
+
+  const controlled = typeof onSelect === 'function'
+  const pinnedIndex = controlled ? slices.findIndex((slice) => slice.value === selected) : ownPin
+  const pinned = pinnedIndex >= 0 ? pinnedIndex : null
+  const active = hovered ?? pinned
 
   if (!total) {
     return <p className="rounded-lg bg-slate-50 px-3 py-10 text-center text-sm text-slate-500">{emptyMessage}</p>
@@ -91,7 +105,17 @@ export function DonutChart({ items, valueKey = 'count', centerLabel = 'Total', e
   const activeSlice = active === null ? null : slices[active]
   // Clicking the pinned slice again releases it, so the same gesture that turns
   // the pin on turns it off and there is no separate control to find.
-  const togglePin = (index) => setPinned((current) => (current === index ? null : index))
+  const togglePin = (index) => {
+    if (!controlled) {
+      setOwnPin((current) => (current === index ? null : index))
+      return
+    }
+    const value = slices[index]?.value
+    // "Other (3)" is several values folded into one arc, so there is nothing
+    // for the other views to highlight - clicking it clears instead.
+    const foldable = value === selected || value?.startsWith('Other (')
+    onSelect(foldable ? null : value)
+  }
 
   // Geometry once, so the arcs and their hit areas can't drift apart.
   //

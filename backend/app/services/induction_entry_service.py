@@ -1,6 +1,6 @@
 """Business logic for the Induction Call Form."""
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 
 from app.exceptions.base import BadRequestError, NotFoundError
 from app.models.enums import InductionStatus
@@ -274,7 +274,14 @@ class InductionEntryService:
         "lead_source": "$lead_source",
     }
 
-    async def analytics(self, dimension: str, *, section: str | None = None) -> dict:
+    async def analytics(
+        self,
+        dimension: str,
+        *,
+        section: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> dict:
         """Counts per distinct value of one field, with how many of each went on
         to Foundation and how many quit.
 
@@ -285,6 +292,10 @@ class InductionEntryService:
         Each row carries moved and quit as well as the total, because the
         interesting question isn't how many Freshers there were - it's how many
         of them converted and how many walked. A bare count answers neither.
+
+        The window and the section are the dashboard's filter rail. Applied
+        here, inside the one $match every view on the canvas is built on, so
+        two panels on the same screen cannot end up counting different people.
         """
         field = self._ANALYTICS_FIELDS.get(dimension)
         if field is None:
@@ -293,6 +304,18 @@ class InductionEntryService:
         match: dict = {"is_deleted": False}
         if section:
             match["section"] = section
+        # Registration dates are stored as midnight datetimes, and a pipeline
+        # stage isn't passed through the ODM's encoder the way a find() query
+        # is - so the bounds are converted here rather than left as dates.
+        # Midnight on date_to still takes in that whole day, because every
+        # stored value is midnight.
+        window: dict = {}
+        if date_from:
+            window["$gte"] = datetime.combine(date_from, time.min)
+        if date_to:
+            window["$lte"] = datetime.combine(date_to, time.min)
+        if window:
+            match["registration_date"] = window
 
         # Same "quit" rule the buckets use - matched on the word rather than a
         # list of options, so this can't drift from them.

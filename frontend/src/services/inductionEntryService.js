@@ -16,8 +16,13 @@ export const inductionEntryService = {
   // that aren't on the configured dropdown list.
   // Counts per distinct category or call remark, aggregated server-side for
   // the analytics dashboard.
-  getAnalytics: async (dimension) => {
-    const { data } = await apiClient.get('/induction-entries/analytics', { params: { dimension } })
+  // `filters` is the dashboard's filter rail - a registration-date window and
+  // a section - applied inside the aggregation so every view on the canvas is
+  // counting the same population.
+  getAnalytics: async (dimension, filters = {}) => {
+    const { data } = await apiClient.get('/induction-entries/analytics', {
+      params: { dimension, ...filters },
+    })
     return data
   },
   getFilterOptions: async (status) => {
