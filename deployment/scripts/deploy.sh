@@ -7,6 +7,22 @@
 # Usage: bash deployment/scripts/deploy.sh
 set -euo pipefail
 
+# True when a dependency install is actually needed: the lock file's checksum
+# differs from the one recorded at the last successful install, or the
+# installed tree is missing entirely. Most deploys change only app code, and
+# both installers below were paying full price on every one of them - npm ci
+# especially, since it deletes node_modules before it starts.
+#   $1 lock file   $2 stamp file   $3 directory that must exist
+needs_install() {
+    [ -d "$3" ] || return 0
+    [ -f "$2" ] || return 0
+    [ "$(cat "$2")" != "$(sha256sum "$1" | cut -d' ' -f1)" ]
+}
+
+stamp_install() {
+    sha256sum "$1" | cut -d' ' -f1 > "$2"
+}
+
 APP_DIR="/var/www/hrnavinos-erp"
 BACKEND_DIR="$APP_DIR/backend"
 FRONTEND_DIR="$APP_DIR/frontend"
@@ -22,8 +38,13 @@ if [ ! -d .venv ]; then
     python3.12 -m venv .venv
 fi
 source .venv/bin/activate
-pip install --upgrade pip -q
-pip install -r requirements.txt -q
+if needs_install requirements.txt .venv/.requirements-sha .venv/lib; then
+    pip install --upgrade pip -q
+    pip install -r requirements.txt -q
+    stamp_install requirements.txt .venv/.requirements-sha
+else
+    echo "    requirements.txt unchanged, skipping"
+fi
 
 echo "==> Restarting backend service"
 sudo systemctl restart hrnavinos-backend
@@ -35,7 +56,14 @@ sudo systemctl is-active --quiet hrnavinos-backend || {
 
 echo "==> Building frontend"
 cd "$FRONTEND_DIR"
-npm ci
+if needs_install package-lock.json node_modules/.package-lock-sha node_modules; then
+    npm ci
+    # Stamped after, not before: npm ci empties node_modules first, which
+    # would take the stamp with it.
+    stamp_install package-lock.json node_modules/.package-lock-sha
+else
+    echo "    package-lock.json unchanged, skipping npm ci"
+fi
 npm run build
 
 echo "==> Restarting frontend process"

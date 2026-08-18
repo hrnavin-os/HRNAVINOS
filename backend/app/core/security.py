@@ -9,7 +9,20 @@ from passlib.context import CryptContext
 
 from app.config.settings import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt is slow on purpose: that cost is the defence against an offline
+# attack on a stolen hash, so production keeps the library default.
+#
+# It is dead weight in tests, though. Nearly every test seeds a Super Admin
+# and logs in, which is one hash plus one verify - 660ms measured, on a suite
+# where that is most of the wall clock. Four rounds is the bcrypt minimum and
+# runs in 2ms. Keyed off APP_ENV, which conftest.py pins to "test" before any
+# app module is imported, so it can only ever be lowered by the test harness
+# and never by configuration.
+# Empty outside tests, so production stays on passlib's own default rather
+# than a number pinned here that would stop tracking it.
+_COST = {"bcrypt__rounds": 4} if settings.APP_ENV == "test" else {}
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", **_COST)
 
 
 class TokenType(StrEnum):
