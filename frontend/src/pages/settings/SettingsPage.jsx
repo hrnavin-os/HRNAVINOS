@@ -8,10 +8,11 @@ import { Button } from '@/components/ui/Button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { useAuth } from '@/hooks/useAuth'
+import { ResetLeadsCard } from '@/components/settings/ResetLeadsCard'
 import { PERMISSIONS } from '@/constants/permissions'
 
 export function SettingsPage() {
-  const { hasPermission } = useAuth()
+  const { user, hasPermission } = useAuth()
   const canUpdate = hasPermission(PERMISSIONS.SETTINGS_UPDATE)
   const queryClient = useQueryClient()
 
@@ -70,6 +71,11 @@ export function SettingsPage() {
           </div>
         )}
       </form>
+
+      {/* Super Admin only, matched to the endpoint's own gate rather than a
+          permission code - showing a button that always 403s is worse than not
+          showing it. */}
+      {user?.role === 'Super Admin' && <ResetLeadsCard />}
     </div>
   )
 }
