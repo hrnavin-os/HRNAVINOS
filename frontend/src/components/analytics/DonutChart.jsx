@@ -137,18 +137,6 @@ export function DonutChart({
     return arc
   })
 
-  // Past six entries the legend runs taller than the ring beside it and the
-  // cluster goes lopsided - eleven categories made a column half again as tall
-  // as the donut, with the empties trailing off the bottom. Split in two, it
-  // comes back to about the ring's height.
-  const splitLegend = slices.length > 6
-  // Ceiling, so an odd count puts the extra row in the first column and the
-  // second is never the longer of the two.
-  const legendRows = splitLegend ? Math.ceil(slices.length / 2) : slices.length
-  const legendColumns = splitLegend
-    ? [slices.slice(0, legendRows), slices.slice(legendRows)]
-    : [slices]
-
   return (
     // Ring and legend centred as one group. They used to be two fixed halves of
     // the panel, which left the ring pinned against the left edge and a field
@@ -280,126 +268,96 @@ export function DonutChart({
           numbers is a track that pushes them to the far edge, which is what
           left a hand's width of nothing between a short name and its count.
 
-          Split as two tables side by side rather than one list reflowing into
-          columns, so each column sizes to its own longest label - and reading
-          down a column stays in rank order instead of the list being dealt
-          left-right-left-right. They wrap back to one column when there is no
-          room for two. */}
-      <div
-        // A grid rather than a wrapping flex row. Wrapped, the second column
-        // dropped below the first while keeping the rule and the indent that
-        // only make sense beside it - which read as a stray box under the
-        // legend. As a grid the two columns are either side by side or the
-        // list is simply one column, and the divider comes with the layout
-        // that earns it.
-        // Split at xl, not lg: the ring keeps 200px whatever happens, so at
-        // 1024 the two columns get about 175px each and every label of any
-        // length truncates. One taller column reads better than two clipped
-        // ones.
-        className={`grid min-w-0 justify-center gap-x-8 gap-y-2 ${
-          splitLegend ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1'
-        }`}
-      >
-        {legendColumns.map((chunk, chunkIndex) => (
-          <table
-            key={chunkIndex}
-            // A rule between the columns rather than a wider gap. Two blocks of
-            // rows floating in space read as two separate lists - one of which
-            // was all zeros and all grey, so it looked like something had gone
-            // wrong. A hairline says they are one legend in two columns, and it
-            // is drawn only at the width where they actually are.
-            className={`w-auto max-w-full border-separate border-spacing-0 text-sm ${
-              chunkIndex > 0 ? 'xl:border-l xl:border-slate-100 xl:pl-8' : ''
-            }`}
-          >
-            <tbody>
-              {chunk.map((slice, rowIndex) => {
-                // Index into `slices`, which is what `active` refers to - the
-                // chunk's own index would light the wrong arc in column two.
-                const index = chunkIndex * legendRows + rowIndex
-                const isActive = active === index
-                const isPinned = pinned === index
-                const isEmpty = slice[valueKey] <= 0
-                // The background lives on the cells, not the row: a <tr> takes
-                // a colour but will not clip a radius, so the rounded ends have
-                // to come from the first and last cell.
-                const cell = `py-1.5 transition-colors first:rounded-l-md last:rounded-r-md ${
-                  isActive ? 'bg-slate-100' : isEmpty ? '' : 'group-hover:bg-slate-50'
-                } ${active !== null && !isActive ? 'opacity-40' : ''}`
+          One column, however many entries there are. Two columns were tried
+          and were worse in every way that mattered: each had to truncate its
+          labels to fit beside the ring, the rank order had to be read down one
+          column and back up the other, and the second column was usually the
+          all-grey empty ones, which read as something having gone wrong. A
+          taller list is simply a taller list. */}
+      <div className="flex min-w-0 justify-center">
+        <table className="w-auto max-w-full border-separate border-spacing-0 text-sm">
+          <tbody>
+            {slices.map((slice, index) => {
+              const isActive = active === index
+              const isPinned = pinned === index
+              const isEmpty = slice[valueKey] <= 0
+              // The background lives on the cells, not the row: a <tr> takes
+              // a colour but will not clip a radius, so the rounded ends have
+              // to come from the first and last cell.
+              const cell = `py-1.5 transition-colors first:rounded-l-md last:rounded-r-md ${
+                isActive ? 'bg-slate-100' : isEmpty ? '' : 'group-hover:bg-slate-50'
+              } ${active !== null && !isActive ? 'opacity-40' : ''}`
 
-                return (
-                  // An empty entry is printed, not offered: hovering it would
-                  // dim the whole ring to highlight a slice that isn't drawn.
-                  // So no handlers, no tab stop, and muted text - the eye
-                  // should reach the categories with people in them first.
-                  <tr
-                    key={slice.value}
-                    className={`group ${isEmpty ? '' : 'cursor-pointer outline-none'}`}
-                    {...(isEmpty
-                      ? {}
-                      : {
-                          tabIndex: 0,
-                          // aria-pressed is only meaningful on a button, so the
-                          // role has to come with it. Same trade the shared
-                          // DataTable makes for clickable rows: the control
-                          // semantics matter more here than the row ones.
-                          role: 'button',
-                          'aria-pressed': isPinned,
-                          onMouseEnter: () => setHovered(index),
-                          onFocus: () => setHovered(index),
-                          onBlur: () => setHovered(null),
-                          onClick: () => togglePin(index),
-                          onKeyDown: (event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault()
-                              togglePin(index)
-                            }
-                          },
-                        })}
-                  >
-                    <td className={`${cell} pl-2 pr-2.5`}>
-                      {/* The pinned row's swatch grows a halo, so which slice
-                          is held is legible from the legend and not only from
-                          the badge in the middle of the ring. */}
-                      <span
-                        className={`block h-2.5 w-2.5 rounded-full transition-shadow ${
-                          isPinned ? 'ring-2 ring-slate-300 ring-offset-1' : ''
-                        }`}
-                        style={{ backgroundColor: slice.color }}
-                        aria-hidden="true"
-                      />
-                    </td>
-                    <td className={`${cell} pr-5`}>
-                      {/* The truncation floor. Without it the table grows to
-                          whatever the longest category is called and pushes
-                          the numbers off the panel - and it has to be tighter
-                          in two columns than in one, because two columns of
-                          20rem plus a 200px ring is wider than the card. */}
-                      <span
-                        className={`block truncate ${splitLegend ? 'max-w-44' : 'max-w-80'} ${
-                          isEmpty ? 'text-slate-400' : 'text-slate-700'
-                        }`}
-                        title={slice.value}
-                      >
-                        {slice.value}
-                      </span>
-                    </td>
-                    <td
-                      className={`${cell} pr-3 text-right font-semibold tabular-nums ${
-                        isEmpty ? 'text-slate-400' : 'text-slate-900'
+              return (
+                // An empty entry is printed, not offered: hovering it would
+                // dim the whole ring to highlight a slice that isn't drawn.
+                // So no handlers, no tab stop, and muted text - the eye
+                // should reach the categories with people in them first.
+                <tr
+                  key={slice.value}
+                  className={`group ${isEmpty ? '' : 'cursor-pointer outline-none'}`}
+                  {...(isEmpty
+                    ? {}
+                    : {
+                        tabIndex: 0,
+                        // aria-pressed is only meaningful on a button, so the
+                        // role has to come with it. Same trade the shared
+                        // DataTable makes for clickable rows: the control
+                        // semantics matter more here than the row ones.
+                        role: 'button',
+                        'aria-pressed': isPinned,
+                        onMouseEnter: () => setHovered(index),
+                        onFocus: () => setHovered(index),
+                        onBlur: () => setHovered(null),
+                        onClick: () => togglePin(index),
+                        onKeyDown: (event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            togglePin(index)
+                          }
+                        },
+                      })}
+                >
+                  <td className={`${cell} pl-2 pr-2.5`}>
+                    {/* The pinned row's swatch grows a halo, so which slice
+                        is held is legible from the legend and not only from
+                        the badge in the middle of the ring. */}
+                    <span
+                      className={`block h-2.5 w-2.5 rounded-full transition-shadow ${
+                        isPinned ? 'ring-2 ring-slate-300 ring-offset-1' : ''
                       }`}
+                      style={{ backgroundColor: slice.color }}
+                      aria-hidden="true"
+                    />
+                  </td>
+                  <td className={`${cell} pr-5`}>
+                    {/* The truncation floor. Without it the table grows to
+                        whatever the longest category is called and pushes
+                        the numbers off the panel. */}
+                    <span
+                      className={`block max-w-80 truncate ${
+                        isEmpty ? 'text-slate-400' : 'text-slate-700'
+                      }`}
+                      title={slice.value}
                     >
-                      {slice[valueKey]}
-                    </td>
-                    <td className={`${cell} pr-2 text-right text-xs tabular-nums text-slate-400`}>
-                      {share(slice[valueKey])}%
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        ))}
+                      {slice.value}
+                    </span>
+                  </td>
+                  <td
+                    className={`${cell} pr-3 text-right font-semibold tabular-nums ${
+                      isEmpty ? 'text-slate-400' : 'text-slate-900'
+                    }`}
+                  >
+                    {slice[valueKey]}
+                  </td>
+                  <td className={`${cell} pr-2 text-right text-xs tabular-nums text-slate-400`}>
+                    {share(slice[valueKey])}%
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   )
