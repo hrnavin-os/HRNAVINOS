@@ -3,11 +3,12 @@ import { useQuery } from '@tanstack/react-query'
 import { ResourceListPage } from '@/components/resource/ResourceListPage'
 import { inductionEntryService } from '@/services/inductionEntryService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
-import { ArrowDownUp, ArrowRightLeft, ClipboardList, Target, UserX, X } from 'lucide-react'
+import { ArrowRightLeft, ClipboardList, Target, UserX, X } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { DateFilter } from '@/components/ui/DateFilter'
 import { FilterDropdown } from '@/components/ui/FilterDropdown'
+import { SortOrderSelect } from '@/components/ui/SortOrderSelect'
 import { Toast } from '@/components/ui/Toast'
 import { StatCard } from '@/components/ui/StatCard'
 import { InductionCallRemarkCell } from '@/components/leads/InductionCallRemarkCell'
@@ -310,7 +311,12 @@ export function InductionLeadsBoard() {
         // Rendered inline beside the search box rather than as a band above
         // it - same job, and two stacked rows pushed the table off screen.
         renderFilters={() => (
-          <>
+          // Eight filters and a sort don't fit one line at any realistic
+          // width, so they're laid out as a grid rather than left to wrap:
+          // every control is the same width, the second row's columns line up
+          // under the first row's, and a row that doesn't fill up leaves a gap
+          // instead of stretching whatever landed on it to the full width.
+          <div className="grid min-w-0 flex-1 grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {/* Section moved down here from the cards above. A Section Admin
                 is pinned to their own by their role, so offering them a
                 chooser would be a control that can only pick what they already
@@ -373,33 +379,26 @@ export function InductionLeadsBoard() {
               options={options.assigned_to ?? []}
               onChange={(value) => setFilter('assigned_to', value)}
             />
-            {/* Newest or oldest first, and it always says which. A dropdown
-                would have needed a third, "unset" state that means the same
-                as one of the two - so it's a toggle that shows the order it
-                is in, not the order it would switch to. */}
-            <button
-              type="button"
-              onClick={() => setSortOrder((current) => (current === 'desc' ? 'asc' : 'desc'))}
-              title="Order by registration date"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-2 text-sm font-medium text-slate-600 transition-colors hover:border-slate-400 hover:bg-slate-50"
-            >
-              <ArrowDownUp className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden="true" />
-              {sortOrder === 'desc' ? 'Newest' : 'Oldest'}
-            </button>
+            {/* Orders by registration date. The same control the Foundation
+                board uses, so the two boards can't word their ordering
+                differently - and it always shows the order the list is in
+                rather than the one it would switch to. */}
+            <SortOrderSelect grow value={sortOrder} onChange={setSortOrder} />
             {filterCount > 0 && (
-              // Deliberately not a Button: it must not take a filter-sized
-              // slot in the row, and it counts what it will undo so you can
-              // see at a glance how narrowed the list is.
+              // Takes a cell like everything else so the grid keeps its
+              // rhythm, but dashed and unfilled: it undoes the row rather than
+              // adding to it. Counts what it will clear, so you can see at a
+              // glance how narrowed the list is.
               <button
                 type="button"
                 onClick={clearFilters}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-slate-300 px-2.5 py-2 text-sm font-medium text-slate-500 transition-colors hover:border-slate-400 hover:bg-slate-100 hover:text-slate-700"
               >
                 <X className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
                 Clear ({filterCount})
               </button>
             )}
-          </>
+          </div>
         )}
         title="Induction Entry"
         queryKey="induction-entries"

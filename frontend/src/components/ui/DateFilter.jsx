@@ -40,8 +40,11 @@ function rangeLabel({ from, to, preset }) {
 }
 
 /**
- * Date filter for the board's filter row: five presets, or a From/To pair for
- * anything they don't cover.
+ * Date filter for a board's filter row: five presets, or a From/To pair for
+ * anything they don't cover. Distinct from DateRangeFilter, which is the
+ * plain two-input popover the Admin and Finance pages hang off a secondary
+ * button - this one wears FilterShell's chrome so it belongs in a row of
+ * filter dropdowns, and leads with the windows worth one click.
  *
  * `value` is `{ from, to, preset }` or null, where from/to are YYYY-MM-DD and
  * either may be missing - an open-ended "everything since March" is a real

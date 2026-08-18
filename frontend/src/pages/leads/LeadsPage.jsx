@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowUpDown, Check, ChevronDown, Eye, Pencil, Search } from 'lucide-react'
+import { Check, ChevronDown, Eye, Pencil, Search } from 'lucide-react'
 import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
 import { useAuth } from '@/hooks/useAuth'
 import { leadService } from '@/services/leadService'
@@ -18,6 +18,7 @@ import { TableCard } from '@/components/ui/TableCard'
 import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
 import { FilterDropdown } from '@/components/ui/FilterDropdown'
 import { Pagination } from '@/components/ui/Pagination'
+import { SortOrderSelect } from '@/components/ui/SortOrderSelect'
 import { LeadSectionStageStats, LeadSectionStats } from '@/components/leads/LeadSectionStats'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { LeadDetailModal } from '@/components/leads/LeadDetailModal'
@@ -325,76 +326,6 @@ function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, on
     </div>
   )
 }
-
-const SORT_OPTIONS = [
-  { value: 'desc', label: 'Newest first' },
-  { value: 'asc', label: 'Oldest first' },
-]
-
-// Sort filter for the lead table. A custom listbox rather than a native
-// <select> because the browser draws the native option list itself, dropping
-// the styling below and keeping the OS blue highlight.
-//
-// Chrome deliberately matches FilterDropdown: it sits in the same toolbar row,
-// and the milk-white/Lexend treatment it used to carry made one control in the
-// row look like it came from a different app.
-function SortOrderSelect({ value, onChange }) {
-  const [isOpen, setIsOpen] = useState(false)
-  const selectedLabel = SORT_OPTIONS.find((option) => option.value === value)?.label
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setIsOpen((open) => !open)}
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-        className={`flex w-38 items-center justify-between gap-2 rounded-md border px-3.5 py-2 text-sm
-          font-medium text-slate-600 outline-none transition-colors ${
-            isOpen
-              ? 'border-brand-400 bg-white ring-1 ring-brand-400'
-              : 'border-slate-300 bg-white hover:border-slate-400 hover:bg-slate-50'
-          }`}
-      >
-        <span className="truncate">{selectedLabel}</span>
-        <ArrowUpDown className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden="true" />
-      </button>
-      {isOpen && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div
-            role="listbox"
-            className="absolute left-0 z-50 mt-1 w-38 overflow-hidden rounded-lg border border-slate-200 bg-white p-1 shadow-xl"
-          >
-            {SORT_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                role="option"
-                aria-selected={value === option.value}
-                onClick={() => {
-                  onChange(option.value)
-                  setIsOpen(false)
-                }}
-                className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-sm ${
-                  value === option.value
-                    ? 'bg-brand-50 font-medium text-brand-700'
-                    : 'font-normal text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                {option.label}
-                {value === option.value && (
-                  <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} aria-hidden="true" />
-                )}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
 
 // The two boards read different collections - induction submissions are their
 // own records, not Leads - so they're separate components rather than one

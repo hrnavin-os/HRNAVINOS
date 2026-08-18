@@ -18,9 +18,9 @@ function menuPositionFor(rect, menuWidth, gap = 4) {
 //
 // The menu is portaled to <body> (positioned from the button's own bounding
 // rect) so it isn't clipped by DataTable's overflow-x-auto row container.
-// `grow` lets a row of these share the full width evenly instead of bunching
-// at the left. Off by default so the Foundation board's row, where they sit
-// beside other controls, keeps its natural widths.
+// `grow` fills the cell it is placed in, for the Induction board's toolbar,
+// which lays its filters out as a grid. Off by default so the Foundation
+// board's row, where they sit beside other controls, keeps its natural widths.
 export function FilterShell({ label, activeLabel, onClear, grow = false, menuWidth = 260, children }) {
   const shellRef = useRef(null)
   const [menuPosition, setMenuPosition] = useState(null)
@@ -40,7 +40,7 @@ export function FilterShell({ label, activeLabel, onClear, grow = false, menuWid
   const close = () => setMenuPosition(null)
 
   return (
-    <div className={grow ? 'min-w-32 flex-1' : 'inline-block'}>
+    <div className={grow ? 'w-full min-w-0' : 'inline-block'}>
       {/* The border lives on this shell rather than the trigger so the clear
           "x" can sit inside the same outline - two adjacent bordered buttons
           read as two controls, which is not what this is. */}

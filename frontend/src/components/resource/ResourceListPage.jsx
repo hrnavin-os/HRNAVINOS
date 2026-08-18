@@ -153,7 +153,7 @@ export function ResourceListPage({
           controls read as a single band above the table rather than three
           things floating on the page background. */}
       <div className="mb-4 rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-start gap-2">
           <div className="w-full max-w-56 shrink-0">
             <Input
               placeholder="Search..."
