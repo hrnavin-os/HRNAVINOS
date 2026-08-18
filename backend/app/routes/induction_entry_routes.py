@@ -16,6 +16,7 @@ from app.models.enums import InductionStatus
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.common import MessageResponse, PaginatedResponse, PaginationParams
+from app.schemas.induction_analytics_schema import InductionDashboardResponse
 from app.schemas.induction_entry_schema import (
     InductionAnalyticsResponse,
     InductionDetailsUpdate,
@@ -24,6 +25,7 @@ from app.schemas.induction_entry_schema import (
     InductionEntryStatsResponse,
     InductionEntryUpdate,
 )
+from app.services.induction_analytics_service import InductionAnalyticsService
 from app.services.induction_entry_service import InductionEntryService
 
 router = APIRouter(prefix="/induction-entries", tags=["Induction Call Form"])
@@ -143,6 +145,35 @@ async def filter_options(
     moved entries carry."""
     scope = await get_actor_scope(actor)
     return await InductionEntryService().filter_options(section=scope, status=status)
+
+
+@router.get("/analytics/dashboard", response_model=InductionDashboardResponse)
+async def analytics_dashboard(
+    # The slicer bar. One window and one section for all five boards, so they
+    # can never end up describing different populations on the same screen.
+    date_from: date | None = None,
+    date_to: date | None = None,
+    section: str | None = None,
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
+) -> InductionDashboardResponse:
+    """The five decision boards: funnel, calls, team, channels and trend.
+
+    One request rather than five, because the slicers move all of them at once
+    and five round trips would let the boards refresh out of step - a screen
+    where the funnel already answers for last month and the trend still answers
+    for last year is worse than a slow one.
+
+    Declared before /{entry_id}, like every other fixed segment, or the dynamic
+    route swallows "analytics" and tries to parse it as a UUID.
+    """
+    # Scoped from the actor's role for the same reason the list is: a Section
+    # Admin's numbers must cover their own section, not everyone's, and the
+    # query param must not be able to widen that.
+    scope = await get_actor_scope(actor)
+    data = await InductionAnalyticsService().dashboard(
+        section=scope or section, date_from=date_from, date_to=date_to
+    )
+    return InductionDashboardResponse(**data)
 
 
 @router.get("/analytics", response_model=InductionAnalyticsResponse)

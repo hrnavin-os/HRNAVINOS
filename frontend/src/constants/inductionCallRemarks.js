@@ -15,6 +15,10 @@ export const REMARK_GROUPS = [
     key: 'done',
     label: 'Completed',
     tone: 'emerald',
+    // Chart hex, kept beside the badge classes so a slice and a badge for the
+    // same outcome can never end up different colours. The six were validated
+    // together as a categorical palette - see constants/analyticsPalette.js.
+    color: '#059669',
     // Selected-cell styling, then the row inside the open menu.
     badge: 'border-emerald-200 bg-emerald-50 text-emerald-700',
     dot: 'bg-emerald-500',
@@ -25,6 +29,7 @@ export const REMARK_GROUPS = [
     key: 'scheduled',
     label: 'Scheduled',
     tone: 'blue',
+    color: '#2563eb',
     badge: 'border-blue-200 bg-blue-50 text-blue-700',
     dot: 'bg-blue-500',
     text: 'text-blue-700',
@@ -37,10 +42,11 @@ export const REMARK_GROUPS = [
   {
     key: 'absent',
     label: 'Not attended',
-    tone: 'amber',
-    badge: 'border-amber-200 bg-amber-50 text-amber-700',
-    dot: 'bg-amber-500',
-    text: 'text-amber-700',
+    tone: 'orange',
+    color: '#ea580c',
+    badge: 'border-orange-200 bg-orange-50 text-orange-700',
+    dot: 'bg-orange-500',
+    text: 'text-orange-700',
     options: [
       'Not attended - Induction session',
       'Not available - Foundation session',
@@ -50,12 +56,14 @@ export const REMARK_GROUPS = [
   {
     key: 'unreachable',
     label: 'Not reached',
-    tone: 'slate',
-    // Grey rather than another warm hue: nobody was reached at all, which is a
-    // different thing from someone who was reached and didn't turn up.
-    badge: 'border-slate-300 bg-slate-100 text-slate-700',
-    dot: 'bg-slate-400',
-    text: 'text-slate-600',
+    tone: 'cyan',
+    color: '#0891b2',
+    // Its own hue rather than a grey: nobody was reached at all, which is a
+    // different thing from someone who was reached and didn't turn up - and a
+    // grey slice on a chart reads as 'no value', which this is not.
+    badge: 'border-cyan-200 bg-cyan-50 text-cyan-700',
+    dot: 'bg-cyan-500',
+    text: 'text-cyan-700',
     options: [
       "Didn't Pick Up - Attempt 1",
       "Didn't Pick Up - Attempt 2",
@@ -68,6 +76,7 @@ export const REMARK_GROUPS = [
     key: 'moved',
     label: 'Moved',
     tone: 'violet',
+    color: '#7c3aed',
     badge: 'border-violet-200 bg-violet-50 text-violet-700',
     dot: 'bg-violet-500',
     text: 'text-violet-700',
@@ -81,6 +90,7 @@ export const REMARK_GROUPS = [
     key: 'quit',
     label: 'Quit',
     tone: 'red',
+    color: '#dc2626',
     badge: 'border-red-200 bg-red-50 text-red-700',
     dot: 'bg-red-500',
     text: 'text-red-700',
