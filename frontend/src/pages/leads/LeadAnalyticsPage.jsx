@@ -1,122 +1,354 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Filter, Megaphone, PhoneCall, TrendingUp, Users } from 'lucide-react'
+import { ArrowRightLeft, Crown, Megaphone, PhoneCall, Tag, UserRound, UserX } from 'lucide-react'
 import { inductionEntryService } from '@/services/inductionEntryService'
-import { foundationFormConfigService } from '@/services/foundationFormConfigService'
+import { inductionFormConfigService } from '@/services/inductionFormConfigService'
 import { getApiErrorMessage } from '@/services/apiClient'
-import { useAuth } from '@/hooks/useAuth'
-import { DateFilter } from '@/components/ui/DateFilter'
-import { FilterDropdown } from '@/components/ui/FilterDropdown'
+import { DataTable } from '@/components/ui/DataTable'
+import { TableCard } from '@/components/ui/TableCard'
 import { TabStrip } from '@/components/ui/TabStrip'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
-import { FunnelBoard } from '@/components/analytics/boards/FunnelBoard'
-import { CallsBoard } from '@/components/analytics/boards/CallsBoard'
-import { TeamBoard } from '@/components/analytics/boards/TeamBoard'
-import { ChannelsBoard } from '@/components/analytics/boards/ChannelsBoard'
-import { TrendBoard } from '@/components/analytics/boards/TrendBoard'
+import { DonutChart } from '@/components/analytics/DonutChart'
+import { REMARK_GROUPS, REMARK_GROUP_BY_VALUE } from '@/constants/inductionCallRemarks'
 
-// Five boards, each answering one decision rather than one dimension.
+// One entry per groupable field on the induction call form. Every string the
+// page changes per dimension lives here rather than in a ternary at each use:
+// with two tabs `isRemarks ? a : b` was readable, with four it would be a
+// four-way conditional repeated in five places, and adding a fifth dimension
+// would mean finding all of them.
 //
-// The page used to be four tabs of "count by field", which is a breakdown, not
-// a dashboard - it could say how many Freshers there were but not whether the
-// calling was keeping up, who was being left behind, or whether last month was
-// better than this one. A board is named for the question it settles.
-const BOARDS = [
-  { key: 'funnel', label: 'Funnel', icon: Filter },
-  { key: 'calls', label: 'Calls', icon: PhoneCall },
-  { key: 'team', label: 'Team', icon: Users },
-  { key: 'channels', label: 'Channels', icon: Megaphone },
-  { key: 'trend', label: 'Trend', icon: TrendingUp },
+// `key` must match a key in the backend's _ANALYTICS_FIELDS - that map is what
+// decides which fields are groupable at all, and this is only the menu of them.
+const TABS = [
+  {
+    key: 'category',
+    label: 'Category',
+    icon: Tag,
+    column: 'Category',
+    title: 'Candidates by category',
+    subtitle: 'Collected on the induction call form.',
+    empty: 'No categories recorded yet.',
+    leader: 'Largest category',
+  },
+  {
+    key: 'call_remark',
+    label: 'Induction Call Remarks',
+    icon: PhoneCall,
+    column: 'Call Remark',
+    title: 'How induction calls landed',
+    subtitle: 'The nineteen remarks grouped into the six outcomes they belong to.',
+    empty: 'No call remarks recorded yet. Set one from the dropdown on the induction board.',
+    leader: 'Most common remark',
+  },
+  {
+    key: 'sales_person',
+    label: 'Sales Person',
+    icon: UserRound,
+    column: 'Sales Person',
+    title: 'Candidates by sales person',
+    subtitle: 'Who the form credits, and how many of theirs went on to Foundation.',
+    empty: 'No sales person recorded on any induction entry yet.',
+    leader: 'Most entries',
+  },
+  {
+    key: 'lead_source',
+    label: 'Lead Source',
+    icon: Megaphone,
+    column: 'Lead Source',
+    title: 'Candidates by lead source',
+    subtitle: 'Which channel the induction lead arrived through.',
+    empty: 'No lead source recorded on any induction entry yet.',
+    leader: 'Largest source',
+  },
 ]
 
-export function LeadAnalyticsPage() {
-  const { user } = useAuth()
-  // A Section Admin is pinned to their own section by their role, exactly as
-  // on the board - so the slicer isn't offered to them at all rather than
-  // being offered and ignored.
-  const scopedSection = user?.scoped_section || null
+const TAB_BY_KEY = Object.fromEntries(TABS.map((item) => [item.key, item]))
 
-  const [board, setBoard] = useState('funnel')
-  const [dateRange, setDateRange] = useState(null)
-  const [section, setSection] = useState('')
+// The bar colour for a remark group. Validated as a five-slot categorical
+// palette (worst adjacent CVD deltaE 25.2) - two of them sit under 3:1 against
+// white, which is why every bar is labelled and the table below repeats the
+// numbers rather than colour carrying them alone.
+const GROUP_COLOR = {
+  done: '#10b981',
+  scheduled: '#3b82f6',
+  absent: '#f59e0b',
+  unreachable: '#64748b',
+  moved: '#8b5cf6',
+  quit: '#ef4444',
+}
 
-  const configQuery = useQuery({
-    queryKey: ['foundation-form-config'],
-    queryFn: foundationFormConfigService.get,
-  })
-  const sections = configQuery.data?.sections ?? []
+function percent(part, whole) {
+  if (!whole) return '—'
+  return `${Math.round((part / whole) * 100)}%`
+}
 
-  // One request for all five boards. Five would let them refresh out of step,
-  // and a screen where the funnel already answers for last month while the
-  // trend still answers for last year is worse than a slow one.
-  const params = {
-    date_from: dateRange?.from || undefined,
-    date_to: dateRange?.to || undefined,
-    section: section || undefined,
+function Panel({ title, subtitle, children }) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+      {subtitle && <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>}
+      <div className="mt-5">{children}</div>
+    </section>
+  )
+}
+
+const FIGURE_TONES = {
+  emerald: { wash: 'from-emerald-50/70', plate: 'bg-emerald-100 text-emerald-600', pill: 'bg-emerald-100 text-emerald-700' },
+  red: { wash: 'from-red-50/70', plate: 'bg-red-100 text-red-600', pill: 'bg-red-100 text-red-700' },
+  brand: { wash: 'from-brand-50/70', plate: 'bg-brand-100 text-brand-600', pill: 'bg-brand-100 text-brand-700' },
+}
+
+// A single number, what share of the whole it is, and nothing else. Not a
+// chart: one figure against a total is a figure, and a one-slice pie would say
+// the same thing with more ink.
+//
+// The share sits in a tinted pill beside the value rather than as a line of
+// text under it - it is the comparison the number is only meaningful against,
+// so it belongs on the same baseline, not in a footnote.
+function Figure({ label, value, share, icon: Icon, tone = 'brand' }) {
+  const style = FIGURE_TONES[tone] ?? FIGURE_TONES.brand
+  // A count gets the big numeral; a name gets a readable size instead. Set at
+  // 2xl, "Referral - existing student" wraps to three lines and the card grows
+  // to twice its neighbours.
+  const isName = typeof value === 'string'
+  return (
+    <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      {/* A wash behind the figure rather than a flat white card, so the row
+          reads as three related things and not three empty boxes. */}
+      <div className={`absolute inset-0 -z-10 bg-linear-to-br ${style.wash} to-transparent`} />
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-400">
+            {label}
+          </p>
+          <p className="mt-2 flex flex-wrap items-baseline gap-2">
+            <span
+              className={`font-bold leading-tight text-slate-900 ${
+                isName ? 'line-clamp-2 text-sm' : 'text-2xl leading-none'
+              }`}
+              title={isName ? value : undefined}
+            >
+              {value}
+            </span>
+            {share && (
+              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${style.pill}`}>{share}</span>
+            )}
+          </p>
+        </div>
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${style.plate}`}>
+          <Icon className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// Rolls the individual remarks up into the six groups the board already
+// colours by. Nineteen bars is a list, not a chart - the useful shape is how
+// the calls landed across six kinds of outcome, and the full detail stays in
+// the table underneath.
+function groupRemarks(items) {
+  const totals = REMARK_GROUPS.map((group) => ({
+    value: group.label,
+    color: GROUP_COLOR[group.key],
+    count: 0,
+  }))
+  const byLabel = Object.fromEntries(totals.map((row) => [row.value, row]))
+  let ungrouped = 0
+
+  for (const item of items) {
+    const group = REMARK_GROUP_BY_VALUE[item.value]
+    if (group) byLabel[group.label].count += item.count
+    else ungrouped += item.count
   }
+
+  // All six outcomes, including the ones nothing landed in. An outcome with
+  // nobody in it is a finding - "no candidate quit" is worth reading - and
+  // dropping it made the row look like a kind of outcome that doesn't exist.
+  const rows = [...totals]
+  // "Not set" and anything typed before the dropdown existed. Named rather
+  // than dropped: how much of the data is missing is itself a finding.
+  if (ungrouped) rows.push({ value: 'No remark yet', color: '#94a3b8', count: ungrouped })
+  return rows.sort((a, b) => b.count - a.count)
+}
+
+// Every value the form offers, whether anyone has been filed under it or not.
+//
+// The aggregation can only return values that exist in the data, so an option
+// nobody chose is simply absent - and absent reads as "doesn't exist" rather
+// than "nobody yet", which are very different findings. A sales person with no
+// entries is exactly the thing this board should be able to say out loud.
+//
+// The list of what could have been chosen is the form config, so the two are
+// merged here: the configured options at zero, then whatever the data holds.
+function withConfiguredValues(items, options) {
+  if (!options.length) return items
+  const byValue = new Map(items.map((item) => [item.value, item]))
+  const configured = options.map(
+    (option) => byValue.get(option) ?? { value: option, count: 0, moved: 0, quit: 0 },
+  )
+  // Values the data carries that the dropdown no longer offers: "Not set", and
+  // anything recorded before an option was renamed or removed. Dropping them
+  // would leave the ring's total disagreeing with the board's count.
+  const unlisted = items.filter((item) => !options.includes(item.value))
+  return [...configured, ...unlisted]
+}
+
+export function LeadAnalyticsPage() {
+  const [tab, setTab] = useState('category')
+
   const query = useQuery({
-    queryKey: ['induction-dashboard', params],
-    queryFn: () => inductionEntryService.getDashboard(params),
-    // Holds the previous numbers while the next load, so moving a slicer
+    queryKey: ['induction-analytics', tab],
+    queryFn: () => inductionEntryService.getAnalytics(tab),
+    // Holds the previous breakdown while the next loads, so switching tabs
     // doesn't collapse the page to a spinner and back.
     placeholderData: (previous) => previous,
   })
 
+  // The admin-editable option lists behind the form's dropdowns, keyed by field
+  // - Category, Sales Person and Lead Source all have one. Read from the config
+  // rather than hardcoded, so adding a category or a salesperson in Admin >
+  // Form Collection puts them on this board at zero without a deploy. Gated by
+  // LEADS_VIEW, the same permission as this page.
+  const configQuery = useQuery({
+    queryKey: ['induction-form-config'],
+    queryFn: inductionFormConfigService.get,
+  })
+  const optionsByField = Object.fromEntries(
+    (configQuery.data?.fields ?? []).map((field) => [field.key, field.options ?? []]),
+  )
+
   const data = query.data
+  const items = data?.items ?? []
+  const total = data?.total ?? 0
+  const moved = items.reduce((sum, item) => sum + item.moved, 0)
+  const quit = items.reduce((sum, item) => sum + item.quit, 0)
+  // The API returns rows sorted by count descending, so the head is the biggest
+  // group. Read rather than re-sorted, so the card and the table can't disagree.
+  const largest = items[0] ?? null
+
+  const active = TAB_BY_KEY[tab]
+  // Every dimension shows its full roster, not only the values somebody has
+  // been filed under. Three of them get it from the form config; the call
+  // remark is set on the board rather than the form, so its roster is the six
+  // outcome groups, which groupRemarks always returns in full.
+  const rows = tab === 'call_remark' ? items : withConfiguredValues(items, optionsByField[tab] ?? [])
+  // Remarks are the one dimension worth folding: 19 options that belong to
+  // six outcomes, and nineteen slices is a list rather than a chart. The
+  // full detail stays in the table underneath, which is why the table keeps
+  // the raw rows here while the ring gets the groups.
+  const chartRows = tab === 'call_remark' ? groupRemarks(items) : rows
+
+  const columns = [
+    {
+      key: 'value',
+      header: active.column,
+      render: (row) => <span className="font-medium text-slate-900">{row.value}</span>,
+    },
+    { key: 'count', header: 'Candidates', align: 'center', numeric: true },
+    { key: 'moved', header: 'Moved to Foundation', align: 'center', numeric: true },
+    {
+      key: 'conversion',
+      header: 'Converted',
+      align: 'center',
+      render: (row) => (
+        <span className={row.moved ? 'font-semibold text-emerald-600' : 'text-slate-400'}>
+          {percent(row.moved, row.count)}
+        </span>
+      ),
+    },
+    { key: 'quit', header: 'Quit', align: 'center', numeric: true },
+    {
+      key: 'quit_rate',
+      header: 'Quit rate',
+      align: 'center',
+      render: (row) => (
+        <span className={row.quit ? 'font-semibold text-red-600' : 'text-slate-400'}>
+          {percent(row.quit, row.count)}
+        </span>
+      ),
+    },
+  ]
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+      {/* Title and tabs on one line. The Topbar already says "Dashboard"; this
+          says which dashboard, which the header cannot because it reads the
+          nav label. */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <div className="min-w-0">
           <h1 className="text-lg font-bold tracking-tight text-slate-900">Analytics Dashboard</h1>
           <p className="mt-0.5 text-sm text-amber-600">
             Induction call insights &amp; candidate categorization
           </p>
         </div>
-        <TabStrip equal tabs={BOARDS} value={board} onChange={setBoard} className="min-w-0 flex-1 basis-lg" />
-      </div>
 
-      {/* The slicer bar. One window and one section for all five boards, so
-          two boards on the same screen can never be describing different
-          populations - the failure that makes a dashboard untrustworthy
-          rather than merely wrong. */}
-      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-        <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Showing</span>
-        <div className="w-56">
-          <DateFilter grow label="Registration date" value={dateRange} onChange={setDateRange} />
-        </div>
-        {!scopedSection && (
-          <div className="w-44">
-            <FilterDropdown
-              grow
-              label="Section"
-              value={section}
-              options={sections.map((item) => ({ value: item.code, label: item.label }))}
-              onChange={setSection}
-            />
-          </div>
-        )}
-        <span className="ml-auto text-xs text-slate-500">
-          {data ? `${data.total} candidate${data.total === 1 ? '' : 's'} in scope` : '—'}
-        </span>
+        {/* Takes the width the title leaves and divides it four ways, so the
+            tabs stay equal without the strip needing a row of its own. The
+            basis is the wrap trigger rather than a size: once the title and
+            the strip can no longer both have their share, the strip drops to
+            its own full-width line instead of squeezing four labels into the
+            corner. */}
+        <TabStrip equal tabs={TABS} value={tab} onChange={setTab} className="min-w-0 flex-1 basis-lg" />
       </div>
 
       <ErrorMessage message={query.error ? getApiErrorMessage(query.error) : null} />
 
       {query.isLoading && !data ? (
         <LoadingSpinner />
-      ) : data ? (
+      ) : (
         // Dimmed rather than replaced while refetching, so the page doesn't
-        // jump between a skeleton and content every time a slicer moves.
+        // jump between a skeleton and content on every tab switch.
         <div className={query.isFetching ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
-          {board === 'funnel' && <FunnelBoard funnel={data.funnel} />}
-          {board === 'calls' && <CallsBoard calls={data.calls} total={data.total} />}
-          {board === 'team' && <TeamBoard team={data.team} />}
-          {board === 'channels' && <ChannelsBoard channels={data.channels} />}
-          {board === 'trend' && <TrendBoard trend={data.trend} />}
+          {/* The split, and the two figures that qualify it, side by side. The
+              total moved into the donut's centre when the stat cards came out -
+              it is the total OF that ring, so it belongs in it. Moved and Quit
+              stay as figures because each is a single number, which a slice of
+              a different pie would not have said any better. */}
+          <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_15rem]">
+            <Panel title={active.title} subtitle={active.subtitle}>
+              <DonutChart items={chartRows} centerLabel="Candidates" emptyMessage={active.empty} />
+            </Panel>
+
+            {/* Content-height, not stretched: short cards pulled to the full
+                height of a chart panel are cards of empty space. */}
+            <div className="grid grid-cols-1 gap-4 self-start sm:grid-cols-3 lg:grid-cols-1">
+              <Figure
+                label="Moved to Foundation"
+                value={moved}
+                share={percent(moved, total)}
+                icon={ArrowRightLeft}
+                tone="emerald"
+              />
+              <Figure label="Quit" value={quit} share={percent(quit, total)} icon={UserX} tone="red" />
+              {/* A real third figure rather than the decorative tile the
+                  mock-up used - the biggest group and how much of the intake
+                  it is, which is the first thing anybody asks of a breakdown.
+                  Reads the top row, which the API already sorts by count. */}
+              <Figure
+                label={active.leader}
+                value={largest ? largest.value : '—'}
+                share={largest ? percent(largest.count, total) : null}
+                icon={Crown}
+                tone="brand"
+              />
+            </div>
+          </div>
+
+          {/* The table view: the same numbers without relying on colour or bar
+              length, plus the conversion and quit rates the bars don't carry.
+              Fed from `rows`, the same list the chart gets, so an empty
+              category appears in both or neither. */}
+          <TableCard>
+            <DataTable
+              columns={columns}
+              rows={rows.map((item) => ({ id: item.value, ...item }))}
+              emptyMessage="Nothing recorded yet."
+            />
+          </TableCard>
         </div>
-      ) : null}
+      )}
     </div>
   )
 }

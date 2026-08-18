@@ -20,13 +20,6 @@ export const inductionEntryService = {
     const { data } = await apiClient.get('/induction-entries/analytics', { params: { dimension } })
     return data
   },
-  // All five decision boards in one payload, narrowed by the dashboard's
-  // slicers. One request rather than five, so the boards can't refresh out of
-  // step with each other while a slicer is being moved.
-  getDashboard: async (params = {}) => {
-    const { data } = await apiClient.get('/induction-entries/analytics/dashboard', { params })
-    return data
-  },
   getFilterOptions: async (status) => {
     const { data } = await apiClient.get('/induction-entries/filter-options', {
       params: status ? { status } : {},
