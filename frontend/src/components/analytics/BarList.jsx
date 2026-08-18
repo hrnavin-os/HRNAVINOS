@@ -31,7 +31,13 @@ export function BarList({
 }) {
   const [hovered, setHovered] = useState(null)
   const ordered = sorted ? [...items].sort((a, b) => b[metric] - a[metric]) : items
-  const rows = ordered.slice(0, limit)
+  // A bar of zero draws nothing, so a run of them at the foot of a ranking is
+  // a column of labels against an empty track - height spent saying "no". They
+  // are counted in a line underneath instead, and the table below the canvas
+  // still lists them by name.
+  const drawn = sorted ? ordered.filter((row) => row[metric] > 0) : ordered
+  const untouched = ordered.length - drawn.length
+  const rows = drawn.slice(0, limit)
   // Scaled to the biggest bar, not to the total: at a 40/5/3 split, scaling to
   // the total leaves every bar but the first a sliver against an empty track.
   const peak = Math.max(...rows.map((row) => row[metric]), 1)
@@ -92,11 +98,14 @@ export function BarList({
           </li>
         )
       })}
-      {items.length > limit && (
-        // Named rather than silently cut: a list that stops at eight without
-        // saying so reads as the whole answer.
+      {/* Named rather than silently cut: a list that stops at ten without
+          saying so reads as the whole answer. */}
+      {drawn.length > limit && (
+        <li className="pt-1 text-xs text-slate-400">+ {drawn.length - limit} more, in the table below</li>
+      )}
+      {untouched > 0 && (
         <li className="pt-1 text-xs text-slate-400">
-          + {items.length - limit} more, in the table below
+          {untouched} with nobody in {untouched === 1 ? 'it' : 'them'} yet
         </li>
       )}
     </ul>

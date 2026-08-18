@@ -370,11 +370,15 @@ export function DonutChart({
                       />
                     </td>
                     <td className={`${cell} pr-5`}>
-                      {/* The truncation floor. Without it the table would grow
-                          to whatever the longest category is called and push
-                          the numbers off the panel. */}
+                      {/* The truncation floor. Without it the table grows to
+                          whatever the longest category is called and pushes
+                          the numbers off the panel - and it has to be tighter
+                          in two columns than in one, because two columns of
+                          20rem plus a 200px ring is wider than the card. */}
                       <span
-                        className={`block max-w-80 truncate ${isEmpty ? 'text-slate-400' : 'text-slate-700'}`}
+                        className={`block truncate ${splitLegend ? 'max-w-44' : 'max-w-80'} ${
+                          isEmpty ? 'text-slate-400' : 'text-slate-700'
+                        }`}
                         title={slice.value}
                       >
                         {slice.value}

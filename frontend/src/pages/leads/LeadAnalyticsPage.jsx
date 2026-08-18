@@ -342,7 +342,10 @@ export function LeadAnalyticsPage() {
               from its content lets the ring and its legend push the card wider
               than the column, which is what spilled the panel's own header off
               the right of the page. */}
-          <div className="mb-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,21rem)]">
+          {/* items-start, or both cards are stretched to the taller one and
+              the ring ends up sitting at the top of a card half of which is
+              empty. Each panel is as tall as what it holds. */}
+          <div className="mb-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,21rem)]">
             <Panel
               className="min-w-0"
               title={active.title}
