@@ -157,7 +157,11 @@ export function DonutChart({
     // Centred, the whitespace falls evenly on both sides and the two read as
     // one object.
     <div
-      className="flex w-full flex-col items-center justify-center gap-8 sm:flex-row sm:items-center lg:gap-12"
+      // min-w-0 is load-bearing: a grid or flex item defaults to min-width
+      // auto, so the ring's fixed 200px plus a legend sized to its longest
+      // label would push this whole panel wider than the column it sits in and
+      // spill the card's own header off the right edge.
+      className="flex w-full min-w-0 flex-col items-center justify-center gap-8 sm:flex-row sm:items-center lg:gap-10"
       onMouseLeave={() => setHovered(null)}
     >
       <div className="relative shrink-0">
@@ -281,16 +285,31 @@ export function DonutChart({
           down a column stays in rank order instead of the list being dealt
           left-right-left-right. They wrap back to one column when there is no
           room for two. */}
-      <div className="flex min-w-0 flex-wrap justify-center gap-x-8 gap-y-2">
+      <div
+        // A grid rather than a wrapping flex row. Wrapped, the second column
+        // dropped below the first while keeping the rule and the indent that
+        // only make sense beside it - which read as a stray box under the
+        // legend. As a grid the two columns are either side by side or the
+        // list is simply one column, and the divider comes with the layout
+        // that earns it.
+        // Split at xl, not lg: the ring keeps 200px whatever happens, so at
+        // 1024 the two columns get about 175px each and every label of any
+        // length truncates. One taller column reads better than two clipped
+        // ones.
+        className={`grid min-w-0 justify-center gap-x-8 gap-y-2 ${
+          splitLegend ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1'
+        }`}
+      >
         {legendColumns.map((chunk, chunkIndex) => (
           <table
             key={chunkIndex}
             // A rule between the columns rather than a wider gap. Two blocks of
             // rows floating in space read as two separate lists - one of which
             // was all zeros and all grey, so it looked like something had gone
-            // wrong. A hairline says they are one legend in two columns.
+            // wrong. A hairline says they are one legend in two columns, and it
+            // is drawn only at the width where they actually are.
             className={`w-auto max-w-full border-separate border-spacing-0 text-sm ${
-              chunkIndex > 0 ? 'border-l border-slate-100 pl-8' : ''
+              chunkIndex > 0 ? 'xl:border-l xl:border-slate-100 xl:pl-8' : ''
             }`}
           >
             <tbody>

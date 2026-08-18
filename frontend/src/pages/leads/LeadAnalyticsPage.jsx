@@ -338,15 +338,15 @@ export function LeadAnalyticsPage() {
               bars for the ranking. Both read the same rows, and clicking a
               mark in either highlights it in the other and in the table
               underneath. */}
-          <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_22rem]">
+          {/* minmax(0, ...) rather than plain fractions: a grid track sized
+              from its content lets the ring and its legend push the card wider
+              than the column, which is what spilled the panel's own header off
+              the right of the page. */}
+          <div className="mb-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,21rem)]">
             <Panel
+              className="min-w-0"
               title={active.title}
-              subtitle={active.subtitle}
-              action={
-                <span className="hidden shrink-0 text-[11px] text-slate-400 sm:block">
-                  Click a slice to highlight
-                </span>
-              }
+              subtitle={`${active.subtitle} Click a slice to highlight it in every view.`}
             >
               <DonutChart
                 items={chartRows}
@@ -356,7 +356,11 @@ export function LeadAnalyticsPage() {
                 onSelect={pick}
               />
             </Panel>
-            <Panel title="Ranked by volume" subtitle={`Largest ${active.column.toLowerCase()} first.`}>
+            <Panel
+              className="min-w-0"
+              title="Ranked by volume"
+              subtitle={`Largest ${active.column.toLowerCase()} first. Click a bar to highlight it.`}
+            >
               {rows.length ? (
                 <BarList items={rows} limit={10} isSelected={isRowSelected} onSelect={pick} />
               ) : (
