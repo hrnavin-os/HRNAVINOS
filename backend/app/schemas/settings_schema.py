@@ -29,3 +29,28 @@ class SettingsResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# The exact phrase the caller must send to reset leads. A confirmation the
+# client types is the only guard an API can offer against a request that was
+# never meant to be sent - the destructive part of this endpoint is not
+# reachable by a stray POST with an empty body.
+RESET_LEADS_CONFIRMATION = "DELETE ALL LEADS"
+
+
+class ResetLeadsRequest(BaseModel):
+    confirm: str = Field(description=f'Must be exactly "{RESET_LEADS_CONFIRMATION}".')
+
+
+class ResetLeadsResponse(BaseModel):
+    """What the reset actually touched, counted rather than assumed.
+
+    Reported per collection because the three are not the same kind of change:
+    leads and their allocations are removed, while induction entries are only
+    unlinked - the induction record survives, which is the whole point of it
+    being a separate document.
+    """
+
+    leads_deleted: int
+    allocations_deleted: int
+    induction_entries_unlinked: int
