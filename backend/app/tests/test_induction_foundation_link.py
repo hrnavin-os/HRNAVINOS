@@ -372,10 +372,10 @@ async def test_the_call_remark_saves_and_clears(client, auth_headers):
     saved = await client.put(
         f"/api/v1/induction-entries/{entry_id}",
         headers=auth_headers,
-        json={"call_remark": "Call Scheduled Today"},
+        json={"call_remark": "Induction Call Scheduled - Today"},
     )
     assert saved.status_code == 200
-    assert saved.json()["call_remark"] == "Call Scheduled Today"
+    assert saved.json()["call_remark"] == "Induction Call Scheduled - Today"
 
     cleared = await client.put(
         f"/api/v1/induction-entries/{entry_id}", headers=auth_headers, json={"call_remark": None}
@@ -392,7 +392,7 @@ async def test_the_call_remark_survives_the_move_to_foundation(client, auth_head
     await client.put(
         f"/api/v1/induction-entries/{entry_id}",
         headers=auth_headers,
-        json={"call_remark": "Will Join - Induction Call Completed"},
+        json={"call_remark": "Induction Call Completed - Phone Call"},
     )
 
     await client.post(FOUNDATION_URL, json=foundation_payload())
@@ -400,7 +400,7 @@ async def test_the_call_remark_survives_the_move_to_foundation(client, auth_head
     moved = (
         await client.get("/api/v1/induction-entries?status=moved_to_foundation", headers=auth_headers)
     ).json()
-    assert moved["items"][0]["call_remark"] == "Will Join - Induction Call Completed"
+    assert moved["items"][0]["call_remark"] == "Induction Call Completed - Phone Call"
 
 
 async def set_remark(client, auth_headers, entry_id, remark):
@@ -414,7 +414,7 @@ async def test_a_quit_remark_moves_the_entry_to_the_quit_bucket(client, auth_hea
     await client.post(INDUCTION_URL, json=induction_payload())
     entry_id = (await client.get("/api/v1/induction-entries", headers=auth_headers)).json()["items"][0]["id"]
 
-    await set_remark(client, auth_headers, entry_id, "DAY-2 QUIT")
+    await set_remark(client, auth_headers, entry_id, "Quit - After Foundation Session")
 
     pending = (await client.get("/api/v1/induction-entries", headers=auth_headers)).json()
     quit_rows = (await client.get("/api/v1/induction-entries?status=quit", headers=auth_headers)).json()
@@ -435,7 +435,7 @@ async def test_quit_wins_over_having_moved_to_foundation(client, auth_headers):
         await client.get("/api/v1/induction-entries?status=moved_to_foundation", headers=auth_headers)
     ).json()["items"][0]["id"]
 
-    await set_remark(client, auth_headers, entry_id, "DAY-3 QUIT")
+    await set_remark(client, auth_headers, entry_id, "Quit - After Foundation Session")
 
     moved = (
         await client.get("/api/v1/induction-entries?status=moved_to_foundation", headers=auth_headers)
@@ -450,7 +450,7 @@ async def test_a_non_quit_remark_leaves_the_bucket_alone(client, auth_headers):
     await client.post(INDUCTION_URL, json=induction_payload())
     entry_id = (await client.get("/api/v1/induction-entries", headers=auth_headers)).json()["items"][0]["id"]
 
-    await set_remark(client, auth_headers, entry_id, "Call Scheduled Tomorrow")
+    await set_remark(client, auth_headers, entry_id, "Induction Call Scheduled - Tomorrow")
 
     assert (await client.get("/api/v1/induction-entries", headers=auth_headers)).json()["total"] == 1
     assert (await client.get("/api/v1/induction-entries?status=quit", headers=auth_headers)).json()["total"] == 0
@@ -463,16 +463,8 @@ async def test_every_quit_wording_is_recognised(client, auth_headers):
     await seed_programs(client)
     quit_remarks = [
         "Quit - Before Induction Call",
-        "QUIT - Induction call",
-        "Quit - After induction call",
-        "Before Class QUIT",
-        "QUIT-Refund Done",
-        "DAY-1 QUIT",
-        "DAY-5 QUIT",
-        "Quit - G1 - Before Demo Class",
-        "Quit-G1-After Demo Class",
-        "Quit-G2-Before Demo Class",
-        "Quit-G3 - After Demo Class Quit",
+        "Quit - After Induction Call (Foundation Session Not Attended)",
+        "Quit - After Foundation Session",
     ]
     for index, remark in enumerate(quit_remarks):
         await client.post(INDUCTION_URL, json=induction_payload(name=remark, phone=f"90000000{index:02d}"))
@@ -526,7 +518,8 @@ async def test_category_analytics_counts_conversions_and_quits(client, auth_head
     # One Fresher crosses to Foundation, the other quits.
     await client.post(FOUNDATION_URL, json=foundation_payload())
     rows = (await client.get("/api/v1/induction-entries?page_size=100", headers=auth_headers)).json()["items"]
-    await set_remark(client, auth_headers, next(r["id"] for r in rows if r["name"] == "Bala"), "DAY-1 QUIT")
+    bala = next(r["id"] for r in rows if r["name"] == "Bala")
+    await set_remark(client, auth_headers, bala, "Quit - After Foundation Session")
 
     data = (
         await client.get("/api/v1/induction-entries/analytics?dimension=category", headers=auth_headers)
@@ -592,7 +585,8 @@ async def test_analytics_groups_the_forms_free_text_fields(
     # One of the pair crosses to Foundation, the other quits.
     await client.post(FOUNDATION_URL, json=foundation_payload())
     rows = (await client.get("/api/v1/induction-entries?page_size=100", headers=auth_headers)).json()["items"]
-    await set_remark(client, auth_headers, next(r["id"] for r in rows if r["name"] == "Bala"), "DAY-1 QUIT")
+    bala = next(r["id"] for r in rows if r["name"] == "Bala")
+    await set_remark(client, auth_headers, bala, "Quit - After Foundation Session")
 
     data = (
         await client.get(

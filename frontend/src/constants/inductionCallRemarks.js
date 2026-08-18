@@ -1,10 +1,11 @@
 // Where a candidate stands after the induction call.
 //
 // Grouped rather than listed flat, and the group is what carries the colour:
-// thirty-one dispositions each with their own hue would be a colour wheel, not
-// a signal. What a reader actually needs from across the table is which of five
-// things happened - done, scheduled, chasing, quit, moved - and the label says
-// the rest.
+// nineteen dispositions each with their own hue would be a colour wheel, not a
+// signal. What a reader actually needs from across the table is which of six
+// things happened - completed, scheduled, absent, unreachable, moved, quit -
+// and the label says the rest. The menu shows no group headings; the colour is
+// the split.
 //
 // The list is data, not an enum. It's operational and gets added to, so the
 // stored value is plain text (InductionEntry.call_remark) and a new option is
@@ -17,14 +18,8 @@ export const REMARK_GROUPS = [
     // Selected-cell styling, then the row inside the open menu.
     badge: 'border-emerald-200 bg-emerald-50 text-emerald-700',
     dot: 'bg-emerald-500',
-    options: [
-      'Induction Call Done- Phone',
-      'Phone Call Done-Day 1',
-      'Phone Call Done-Day 2',
-      'Phone Call Done-Day 3',
-      'Will Join - Induction Call Completed',
-      'Induction Call Finished-Discuss',
-    ],
+    text: 'text-emerald-700',
+    options: ['Induction Call Completed - Gmeet', 'Induction Call Completed - Phone Call'],
   },
   {
     key: 'scheduled',
@@ -32,24 +27,41 @@ export const REMARK_GROUPS = [
     tone: 'blue',
     badge: 'border-blue-200 bg-blue-50 text-blue-700',
     dot: 'bg-blue-500',
+    text: 'text-blue-700',
     options: [
-      'Call Scheduled Today',
-      'Call Scheduled Tomorrow',
-      'Call Scheduled Day After Tomorrow',
-      'Call Scheduled Upcoming Dates',
+      'Induction Call Scheduled - Today',
+      'Induction Call Scheduled - Tomorrow',
+      'Induction Call Scheduled - Upcoming Date',
     ],
   },
   {
-    key: 'chasing',
-    label: 'Not reached',
+    key: 'absent',
+    label: 'Not attended',
     tone: 'amber',
     badge: 'border-amber-200 bg-amber-50 text-amber-700',
     dot: 'bg-amber-500',
+    text: 'text-amber-700',
     options: [
-      'Informed Sales Team to Connect',
-      "Didn't Pick Call",
-      'Switch Off / Out Of Service / Not Reachable',
-      "Didn't Attend Induction call",
+      'Not attended - Induction session',
+      'Not available - Foundation session',
+      'Induction Not Attended - Foundation Session Attended',
+    ],
+  },
+  {
+    key: 'unreachable',
+    label: 'Not reached',
+    tone: 'slate',
+    // Grey rather than another warm hue: nobody was reached at all, which is a
+    // different thing from someone who was reached and didn't turn up.
+    badge: 'border-slate-300 bg-slate-100 text-slate-700',
+    dot: 'bg-slate-400',
+    text: 'text-slate-600',
+    options: [
+      "Didn't Pick Up - Attempt 1",
+      "Didn't Pick Up - Attempt 2",
+      "Didn't Pick Up - Attempt 3",
+      "Didn't Pick Up - Informed sales team",
+      'Switchoff / Out of service / Not reachable',
     ],
   },
   {
@@ -58,7 +70,12 @@ export const REMARK_GROUPS = [
     tone: 'violet',
     badge: 'border-violet-200 bg-violet-50 text-violet-700',
     dot: 'bg-violet-500',
-    options: ['Move to Next Batch'],
+    text: 'text-violet-700',
+    options: [
+      'Moved to Group 2 foundation session',
+      'Moved to Group 3 foundation session',
+      'Moved to next batch',
+    ],
   },
   {
     key: 'quit',
@@ -66,23 +83,11 @@ export const REMARK_GROUPS = [
     tone: 'red',
     badge: 'border-red-200 bg-red-50 text-red-700',
     dot: 'bg-red-500',
+    text: 'text-red-700',
     options: [
       'Quit - Before Induction Call',
-      'QUIT - Induction call',
-      'Quit - After induction call',
-      'Before Class QUIT',
-      'QUIT-Refund Done',
-      'DAY-1 QUIT',
-      'DAY-2 QUIT',
-      'DAY-3 QUIT',
-      'DAY-4 QUIT',
-      'DAY-5 QUIT',
-      'Quit - G1 - Before Demo Class',
-      'Quit-G1-After Demo Class',
-      'Quit-G2-Before Demo Class',
-      'Quit-G2-After Demo Class',
-      'Quit-G3-Before Demo Class Quit',
-      'Quit-G3 - After Demo Class Quit',
+      'Quit - After Induction Call (Foundation Session Not Attended)',
+      'Quit - After Foundation Session',
     ],
   },
 ]
@@ -92,3 +97,28 @@ export const REMARK_GROUPS = [
 export const REMARK_GROUP_BY_VALUE = Object.fromEntries(
   REMARK_GROUPS.flatMap((group) => group.options.map((option) => [option, group])),
 )
+
+// Typing "didnt pick 2" should find "Didn't Pick Up - Attempt 2". Punctuation
+// is the part nobody types the same way twice - dashes, slashes, apostrophes -
+// so it's dropped on both sides and only the words are matched.
+function words(text) {
+  return text
+    .toLowerCase()
+    .replace(/[‘’']/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+// Every typed word has to appear, in any order: the query is a filter, not a
+// prefix, so "phone completed" finds the Gmeet-or-phone pair either way round.
+export function remarkMatches(option, query) {
+  const needle = words(query)
+  if (!needle) return true
+  const haystack = words(option)
+  return needle.split(' ').every((word) => haystack.includes(word))
+}
+
+export function isKnownRemark(value) {
+  const typed = words(value ?? '')
+  return REMARK_GROUPS.some((group) => group.options.some((option) => words(option) === typed))
+}

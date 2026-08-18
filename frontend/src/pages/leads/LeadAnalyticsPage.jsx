@@ -72,7 +72,8 @@ const TAB_BY_KEY = Object.fromEntries(TABS.map((item) => [item.key, item]))
 const GROUP_COLOR = {
   done: '#10b981',
   scheduled: '#3b82f6',
-  chasing: '#f59e0b',
+  absent: '#f59e0b',
+  unreachable: '#64748b',
   moved: '#8b5cf6',
   quit: '#ef4444',
 }
@@ -143,9 +144,9 @@ function Figure({ label, value, share, icon: Icon, tone = 'brand' }) {
   )
 }
 
-// Rolls the individual remarks up into the five groups the board already
-// colours by. Thirty-one bars is a list, not a chart - the useful shape is how
-// the calls landed across five kinds of outcome, and the full detail stays in
+// Rolls the individual remarks up into the six groups the board already
+// colours by. Nineteen bars is a list, not a chart - the useful shape is how
+// the calls landed across six kinds of outcome, and the full detail stays in
 // the table underneath.
 function groupRemarks(items) {
   const totals = REMARK_GROUPS.map((group) => ({
@@ -162,7 +163,7 @@ function groupRemarks(items) {
     else ungrouped += item.count
   }
 
-  // All five outcomes, including the ones nothing landed in. An outcome with
+  // All six outcomes, including the ones nothing landed in. An outcome with
   // nobody in it is a finding - "no candidate quit" is worth reading - and
   // dropping it made the row look like a kind of outcome that doesn't exist.
   const rows = [...totals]
@@ -230,11 +231,11 @@ export function LeadAnalyticsPage() {
   const active = TAB_BY_KEY[tab]
   // Every dimension shows its full roster, not only the values somebody has
   // been filed under. Three of them get it from the form config; the call
-  // remark is set on the board rather than the form, so its roster is the five
+  // remark is set on the board rather than the form, so its roster is the six
   // outcome groups, which groupRemarks always returns in full.
   const rows = tab === 'call_remark' ? items : withConfiguredValues(items, optionsByField[tab] ?? [])
-  // Remarks are the one dimension worth folding: 31 options that belong to
-  // five outcomes, and thirty-one slices is a list rather than a chart. The
+  // Remarks are the one dimension worth folding: 19 options that belong to
+  // six outcomes, and nineteen slices is a list rather than a chart. The
   // full detail stays in the table underneath, which is why the table keeps
   // the raw rows here while the ring gets the groups.
   const chartRows = tab === 'call_remark' ? groupRemarks(items) : rows
