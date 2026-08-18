@@ -700,3 +700,54 @@ async def test_the_analytics_filters_narrow_the_breakdown(client, auth_headers):
     assert everything["total"] == 2
     assert august["total"] == 1
     assert [item["value"] for item in august["items"]] == ["Career Gap"]
+
+
+async def test_the_analytics_compares_against_the_previous_period(client, auth_headers):
+    """The arrows on the stat tiles need a period to point away from. With a
+    window set that is the window of the same length before it; the label says
+    which, because an arrow with no period named is a number nobody can
+    check."""
+    await seed_programs(client)
+    await client.post(
+        INDUCTION_URL,
+        json=induction_payload(name="Earlier", phone="9000000220", registration_date="2026-08-02"),
+    )
+    await client.post(
+        INDUCTION_URL,
+        json=induction_payload(name="Later A", phone="9000000221", registration_date="2026-08-12"),
+    )
+    await client.post(
+        INDUCTION_URL,
+        json=induction_payload(name="Later B", phone="9000000222", registration_date="2026-08-13"),
+    )
+
+    data = (
+        await client.get(
+            "/api/v1/induction-entries/analytics?dimension=category"
+            "&date_from=2026-08-11&date_to=2026-08-20",
+            headers=auth_headers,
+        )
+    ).json()
+
+    assert data["current"]["total"] == 2
+    # The ten days before the eleventh, which is where "Earlier" sits.
+    assert data["comparison"]["total"] == 1
+    assert data["comparison"]["label"] == "vs previous 10 days"
+
+
+async def test_a_one_ended_window_has_no_period_to_compare_with(client, auth_headers):
+    """"Everything since March" has no length, so there is no equal period
+    before it - and inventing one would put an authoritative arrow on a
+    comparison nobody asked for."""
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload(phone="9000000230"))
+
+    data = (
+        await client.get(
+            "/api/v1/induction-entries/analytics?dimension=category&date_from=2026-01-01",
+            headers=auth_headers,
+        )
+    ).json()
+
+    assert data["comparison"] is None
+    assert data["current"] is None

@@ -1,25 +1,32 @@
 import { useState } from 'react'
-import { BAR, MUTED } from '@/constants/analyticsPalette'
+import { MUTED } from '@/constants/analyticsPalette'
 
 /**
  * A ranked list of one measure: how many candidates per source, per person,
  * per category.
  *
- * Bars rather than a donut once a breakdown runs past a handful of values -
- * arcs can't be compared past six slices, and a list of labelled bars stays
- * readable at twenty. One hue throughout, because the bar's length already
- * carries the number and colouring by rank would repaint every bar the moment
- * a filter changed the order.
+ * Bars rather than a second ring: arcs cannot be compared past about six
+ * slices, and a list of labelled bars stays readable at twenty. Rank, label,
+ * bar, count and share sit in fixed columns so the numbers line up down the
+ * list instead of drifting with the length of each name.
  *
- * items: [{ value, count, moved, quit, uncalled }] - the shape every breakdown
- * on this dashboard returns. `metric` picks which of them the bar draws.
+ * A bar wears the colour its slice has on the ring beside it - the same entity
+ * in the same colour in both views, which is what lets a reader carry one
+ * across to the other. Colour follows the entity, never its rank: a filter
+ * that changes the order must not repaint the survivors, so anything the ring
+ * folded away or has never seen gets the neutral instead of borrowing a hue
+ * from whoever it displaced.
+ *
+ * items: [{ value, count, moved, quit, ... }] - the shape every breakdown here
+ * returns. `metric` picks which field the bar draws.
  */
 export function BarList({
   items,
   metric = 'count',
-  color = BAR,
-  limit = 8,
+  limit = 7,
   emptyLabel = 'Not set',
+  // value -> hex, from the ring beside this list.
+  colors,
   // Off for a scale that already has an order of its own - a set of buckets
   // running oldest to newest would turn into a ranking that reads backwards.
   sorted = true,
@@ -44,95 +51,114 @@ export function BarList({
   const total = items.reduce((sum, row) => sum + row[metric], 0)
 
   return (
-    <ul className="space-y-3">
-      {rows.map((row) => {
-        const isEmptyValue = row.value === emptyLabel
-        const lit = isSelected ? isSelected(row) : true
-        return (
-          <li
-            key={row.value}
-            // Dimmed rather than dropped when something else is selected: a
-            // list that removes its other rows loses the comparison the
-            // selection was made against.
-            className={`relative transition-opacity ${lit ? '' : 'opacity-35'} ${
-              onSelect ? 'cursor-pointer' : ''
-            }`}
-            onMouseEnter={() => setHovered(row.value)}
-            onMouseLeave={() => setHovered(null)}
-            onFocus={() => setHovered(row.value)}
-            onBlur={() => setHovered(null)}
-            onClick={() => onSelect?.(row.value)}
-            onKeyDown={(event) => {
-              if (onSelect && (event.key === 'Enter' || event.key === ' ')) {
-                event.preventDefault()
-                onSelect(row.value)
-              }
-            }}
-            tabIndex={0}
-          >
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="min-w-0 truncate text-sm text-slate-700" title={row.value}>
-                {row.value}
-              </span>
-              <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">
-                {row[metric]}
-                <span className="ml-1.5 text-xs font-normal text-slate-400">
-                  {total ? `${Math.round((row[metric] / total) * 100)}%` : '0%'}
-                </span>
-              </span>
-            </div>
-            {/* A recessive track behind the bar, so a small value still shows
-                where the scale ends rather than floating in white space. */}
-            <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100">
-              <div
-                className="h-full rounded-full transition-[width] duration-300"
-                style={{
-                  width: `${Math.max((row[metric] / peak) * 100, row[metric] ? 2 : 0)}%`,
-                  // "Not set" is the absence of a value, not one more of the
-                  // things being compared, so it never wears the series hue.
-                  backgroundColor: isEmptyValue ? MUTED : color,
+    <div>
+      <table className="w-full border-separate border-spacing-0 text-sm">
+        <thead>
+          <tr className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            <th className="w-8 pb-2" />
+            <th className="pb-2 text-left font-semibold">Value</th>
+            <th className="w-14 pb-2 pr-2 text-right font-semibold">Count</th>
+            <th className="w-20 pb-2 text-right font-semibold">% of total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => {
+            const lit = isSelected ? isSelected(row) : true
+            const color = row.value === emptyLabel ? MUTED : colors?.get(row.value) ?? MUTED
+            return (
+              <tr
+                key={row.value}
+                // Dimmed rather than dropped when something else is selected:
+                // a list that removes its other rows loses the comparison the
+                // selection was made against.
+                className={`group transition-opacity ${lit ? '' : 'opacity-35'} ${
+                  onSelect ? 'cursor-pointer' : ''
+                }`}
+                onMouseEnter={() => setHovered(row.value)}
+                onMouseLeave={() => setHovered(null)}
+                onFocus={() => setHovered(row.value)}
+                onBlur={() => setHovered(null)}
+                onClick={() => onSelect?.(row.value)}
+                onKeyDown={(event) => {
+                  if (onSelect && (event.key === 'Enter' || event.key === ' ')) {
+                    event.preventDefault()
+                    onSelect(row.value)
+                  }
                 }}
-              />
-            </div>
-            {hovered === row.value && <Tooltip row={row} />}
-          </li>
-        )
-      })}
-      {/* Named rather than silently cut: a list that stops at ten without
+                tabIndex={onSelect ? 0 : undefined}
+              >
+                {/* The rank, said out loud. The order is already the ranking,
+                    but "third" is a fact people quote, and counting rows to
+                    find it is work the list can do for them. */}
+                <td className="py-2 pr-2 align-top text-xs font-semibold tabular-nums text-slate-300">
+                  {index + 1}
+                </td>
+                <td className="py-2 pr-3 align-top">
+                  <span className="block truncate font-medium text-slate-700" title={row.value}>
+                    {row.value}
+                  </span>
+                  {/* The bar under the label rather than in its own column:
+                      given a column it would be as narrow as the longest name
+                      allowed, and a bar too short to compare is decoration. */}
+                  <span className="mt-1.5 block h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                    <span
+                      className="block h-full rounded-full transition-[width] duration-300"
+                      style={{
+                        width: `${Math.max((row[metric] / peak) * 100, row[metric] ? 2 : 0)}%`,
+                        backgroundColor: color,
+                      }}
+                    />
+                  </span>
+                </td>
+                <td className="py-2 pr-2 align-top text-right font-semibold tabular-nums text-slate-900">
+                  {row[metric]}
+                </td>
+                <td className="py-2 align-top text-right text-xs tabular-nums text-slate-400">
+                  {total ? Math.round((row[metric] / total) * 1000) / 10 : 0}%
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+
+      {hovered && <Tooltip row={rows.find((row) => row.value === hovered)} />}
+
+      {/* Named rather than silently cut: a list that stops at seven without
           saying so reads as the whole answer. */}
-      {drawn.length > limit && (
-        <li className="pt-1 text-xs text-slate-400">+ {drawn.length - limit} more, in the table below</li>
+      {(drawn.length > limit || untouched > 0) && (
+        <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-400">
+          {drawn.length > limit && `${drawn.length - limit} more not shown`}
+          {drawn.length > limit && untouched > 0 && ' · '}
+          {untouched > 0 && `${untouched} with nobody in ${untouched === 1 ? 'it' : 'them'} yet`}
+          {' · all of them are in the table below'}
+        </p>
       )}
-      {untouched > 0 && (
-        <li className="pt-1 text-xs text-slate-400">
-          {untouched} with nobody in {untouched === 1 ? 'it' : 'them'} yet
-        </li>
-      )}
-    </ul>
+    </div>
   )
 }
 
 // What the bar can't say: of these, how many crossed to Foundation, how many
-// walked, how many nobody has called yet.
+// walked, how many nobody has called yet. Anchored under the list rather than
+// floating at the pointer, so it never covers the row above the one being
+// read.
 function Tooltip({ row }) {
+  if (!row || row.moved === undefined) return null
   return (
-    <div className="pointer-events-none absolute right-0 top-full z-20 mt-1 w-48 rounded-lg border border-slate-200 bg-white p-2.5 text-xs shadow-lg">
-      <p className="mb-1.5 truncate font-semibold text-slate-900">{row.value}</p>
-      <dl className="space-y-1">
-        <Line label="Candidates" value={row.count} />
-        {row.moved !== undefined && <Line label="Moved to Foundation" value={row.moved} />}
-        {row.quit !== undefined && <Line label="Quit" value={row.quit} />}
-        {row.uncalled !== undefined && <Line label="Not called yet" value={row.uncalled} />}
-      </dl>
-    </div>
+    <dl className="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-xs">
+      <span className="font-semibold text-slate-900">{row.value}</span>
+      <Line label="Moved" value={row.moved} />
+      <Line label="Quit" value={row.quit} />
+      {row.uncalled !== undefined && <Line label="Not called" value={row.uncalled} />}
+    </dl>
   )
 }
 
 function Line({ label, value }) {
   return (
-    <div className="flex items-baseline justify-between gap-3">
+    <span className="flex items-baseline gap-1.5">
       <dt className="text-slate-500">{label}</dt>
       <dd className="font-semibold tabular-nums text-slate-800">{value}</dd>
-    </div>
+    </span>
   )
 }

@@ -337,9 +337,13 @@ class InductionEntryService:
             ]
         ).to_list()
 
+        current, comparison = await self._period_comparison(section, date_from, date_to)
+
         return {
             "dimension": dimension,
             "total": sum(row["count"] for row in rows),
+            "current": current,
+            "comparison": comparison,
             "items": [
                 {
                     # Entries that were never given a value are a real finding -
@@ -354,6 +358,70 @@ class InductionEntryService:
                 for row in rows
             ],
         }
+
+    async def _period_comparison(
+        self, section: str | None, date_from: date | None, date_to: date | None
+    ) -> tuple[dict, dict] | tuple[None, None]:
+        """This period's three headline figures and the previous period's.
+
+        "Previous" means the window of the same length ending the day before
+        this one starts, so a fortnight is compared against the fortnight
+        before it rather than against a fixed month.
+
+        With no window set the board totals everything, and there is no period
+        before all time - so the trend is measured over the last thirty days
+        against the thirty before, and the label says so rather than letting a
+        reader take the arrow for a movement in the headline number.
+        """
+        today = date.today()
+        if date_from and date_to:
+            span = (date_to - date_from).days + 1
+            current = (date_from, date_to)
+            label = f"vs previous {span} days"
+        elif date_from or date_to:
+            # One open end has no length, so there is nothing to step back by.
+            return None, None
+        else:
+            span = 30
+            current = (today - timedelta(days=29), today)
+            label = "last 30 days vs the 30 before"
+        earlier = (current[0] - timedelta(days=span), current[0] - timedelta(days=1))
+
+        return (
+            {"label": label, **await self._headline(section, *current)},
+            {"label": label, **await self._headline(section, *earlier)},
+        )
+
+    async def _headline(self, section: str | None, start: date, end: date) -> dict:
+        """How many registered in a window, how many of them moved, how many
+        quit. The same three numbers the stat tiles lead with."""
+        match: dict = {
+            "is_deleted": False,
+            "registration_date": {
+                "$gte": datetime.combine(start, time.min),
+                "$lte": datetime.combine(end, time.min),
+            },
+        }
+        if section:
+            match["section"] = section
+        quit_match = {
+            "$regexMatch": {"input": {"$ifNull": ["$call_remark", ""]}, "regex": "quit", "options": "i"}
+        }
+        rows = await InductionEntry.aggregate(
+            [
+                {"$match": match},
+                {
+                    "$group": {
+                        "_id": None,
+                        "total": {"$sum": 1},
+                        "moved": {"$sum": {"$cond": [{"$ifNull": ["$foundation_lead_id", False]}, 1, 0]}},
+                        "quit": {"$sum": {"$cond": [quit_match, 1, 0]}},
+                    }
+                },
+            ]
+        ).to_list()
+        row = rows[0] if rows else {}
+        return {key: row.get(key, 0) for key in ("total", "moved", "quit")}
 
     async def update(
         self, entry_id: uuid.UUID, data: InductionEntryUpdate, *, actor_id: uuid.UUID | None

@@ -1,6 +1,18 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowRightLeft, Crown, Megaphone, PhoneCall, Tag, UserRound, UserX, Users, X } from 'lucide-react'
+import {
+  ArrowRightLeft,
+  Activity,
+  Crown,
+  Megaphone,
+  PhoneCall,
+  Tag,
+  UserRound,
+  UserX,
+  Users,
+  X,
+  XCircle,
+} from 'lucide-react'
 import { inductionEntryService } from '@/services/inductionEntryService'
 import { inductionFormConfigService } from '@/services/inductionFormConfigService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
@@ -13,9 +25,9 @@ import { TabStrip } from '@/components/ui/TabStrip'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { BarList } from '@/components/analytics/BarList'
-import { DonutChart } from '@/components/analytics/DonutChart'
-import { Panel } from '@/components/analytics/Panel'
-import { StatTile } from '@/components/analytics/StatTile'
+import { DonutChart, foldToSlices } from '@/components/analytics/DonutChart'
+import { EmptyNote, Panel, SegmentedToggle } from '@/components/analytics/Panel'
+import { MiniStatStrip, StatTile } from '@/components/analytics/StatTile'
 import { percent } from '@/constants/analyticsPalette'
 import { REMARK_GROUPS, REMARK_GROUP_BY_VALUE } from '@/constants/inductionCallRemarks'
 
@@ -33,8 +45,11 @@ const TABS = [
     label: 'Category',
     icon: Tag,
     column: 'Category',
-    title: 'Candidates by category',
-    subtitle: 'Collected on the induction call form.',
+    noun: 'category',
+    plural: 'categories',
+    title: 'Candidates by Category',
+    subtitle: 'Distribution of candidates across the categories the form records.',
+    hint: 'Counts every induction entry in the current filters, including those with no category set.',
     empty: 'No categories recorded yet.',
     leader: 'Largest category',
   },
@@ -43,8 +58,11 @@ const TABS = [
     label: 'Induction Call Remarks',
     icon: PhoneCall,
     column: 'Call Remark',
-    title: 'How induction calls landed',
+    noun: 'outcome',
+    plural: 'remarks',
+    title: 'Candidates by Call Outcome',
     subtitle: 'The nineteen remarks grouped into the six outcomes they belong to.',
+    hint: 'The ring groups the remarks into outcomes; the ranking beside it keeps the exact wording each caller chose.',
     empty: 'No call remarks recorded yet. Set one from the dropdown on the induction board.',
     leader: 'Most common remark',
   },
@@ -53,8 +71,11 @@ const TABS = [
     label: 'Sales Person',
     icon: UserRound,
     column: 'Sales Person',
-    title: 'Candidates by sales person',
+    noun: 'sales person',
+    plural: 'sales people',
+    title: 'Candidates by Sales Person',
     subtitle: 'Who the form credits, and how many of theirs went on to Foundation.',
+    hint: 'The sales person is recorded on the induction form, not the round-robin assignee who works the entry.',
     empty: 'No sales person recorded on any induction entry yet.',
     leader: 'Most entries',
   },
@@ -63,8 +84,11 @@ const TABS = [
     label: 'Lead Source',
     icon: Megaphone,
     column: 'Lead Source',
-    title: 'Candidates by lead source',
+    noun: 'source',
+    plural: 'sources',
+    title: 'Candidates by Lead Source',
     subtitle: 'Which channel the induction lead arrived through.',
+    hint: 'Whatever the form recorded, including sources that are no longer offered on the dropdown.',
     empty: 'No lead source recorded on any induction entry yet.',
     leader: 'Largest source',
   },
@@ -72,10 +96,17 @@ const TABS = [
 
 const TAB_BY_KEY = Object.fromEntries(TABS.map((item) => [item.key, item]))
 
+const MEASURES = [
+  { value: 'count', label: 'Count' },
+  { value: 'share', label: 'Percentage' },
+]
+
+const TOP_N = [5, 7, 10, 25]
+
 // Rolls the individual remarks up into the six groups the board already
 // colours by. Nineteen slices is a list, not a chart - the useful shape is how
 // the calls landed across six kinds of outcome, and the individual wordings
-// keep their detail in the bars and the table beside the ring.
+// keep their detail in the ranking and the table beside the ring.
 function groupRemarks(items) {
   const totals = REMARK_GROUPS.map((group) => ({ value: group.label, color: group.color, count: 0 }))
   const byLabel = Object.fromEntries(totals.map((row) => [row.value, row]))
@@ -116,6 +147,15 @@ function withConfiguredValues(items, options) {
   return [...configured, ...unlisted]
 }
 
+// Percentage change against the previous period. Undefined when there was
+// nothing to compare against: a rise "from zero" is not a percentage, and
+// printing one would put an authoritative-looking number on a division that
+// never happened.
+function change(now, before) {
+  if (!before) return undefined
+  return Math.round(((now - before) / before) * 100)
+}
+
 export function LeadAnalyticsPage() {
   const { user } = useAuth()
   // A Section Admin is pinned to their own section by their role, exactly as
@@ -126,7 +166,9 @@ export function LeadAnalyticsPage() {
   const [tab, setTab] = useState('category')
   const [dateRange, setDateRange] = useState(null)
   const [section, setSection] = useState('')
-  // The highlighted value, shared by all three views on the canvas. One string
+  const [measure, setMeasure] = useState('count')
+  const [topN, setTopN] = useState(7)
+  // The highlighted value, shared by every view on the canvas. One string
   // rather than a per-panel selection: the whole point of a dashboard is that
   // the panels are looking at the same thing.
   const [selected, setSelected] = useState(null)
@@ -182,12 +224,24 @@ export function LeadAnalyticsPage() {
   // disagree.
   const largest = items[0] ?? null
 
+  // What the period arrows compare. Not always the headline figures: with no
+  // window set the board totals everything, and there is no period before all
+  // time - so the server measures the last thirty days against the thirty
+  // before and says so in the label.
+  const now = data?.current
+  const before = data?.comparison
+
   const active = TAB_BY_KEY[tab]
   const isRemarks = tab === 'call_remark'
   const rows = isRemarks ? items : withConfiguredValues(items, optionsByField[tab] ?? [])
   const chartRows = isRemarks ? groupRemarks(items) : rows
 
-  // The ring on the remarks tab shows outcomes, the bars and the table show
+  // The ring's own colour assignment, read back so the ranking can wear it
+  // too. The same entity keeps the same colour in both views, which is what
+  // lets a reader carry one across to the other.
+  const colors = new Map(foldToSlices(chartRows).map((slice) => [slice.value, slice.color]))
+
+  // The ring on the remarks tab shows outcomes, the ranking and the table show
   // the wordings inside them - so a highlight has to travel between the two
   // levels. One string does it in both directions: a picked outcome lights
   // every remark in it, and a picked remark lights its outcome.
@@ -209,11 +263,15 @@ export function LeadAnalyticsPage() {
       header: active.column,
       render: (row) => (
         <span
-          className={`font-medium ${
+          className={`flex items-center gap-2 font-medium ${
             selected && !isRowSelected(row) ? 'text-slate-400' : 'text-slate-900'
           }`}
         >
-          {row.value === selected && <span className="mr-1.5 text-brand-500">●</span>}
+          <span
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ backgroundColor: colors.get(row.value) ?? '#cbd5e1' }}
+            aria-hidden="true"
+          />
           {row.value}
         </span>
       ),
@@ -304,18 +362,21 @@ export function LeadAnalyticsPage() {
         // Dimmed rather than replaced while refetching, so the page doesn't
         // jump between a skeleton and content on every tab switch.
         <div className={query.isFetching ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
-          <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatTile
-              label={selected ? 'Highlighted' : 'Candidates'}
+              label={selected ? 'Highlighted candidates' : 'Total candidates'}
               value={focusCount}
               share={selected ? percent(focusCount, total) : null}
+              delta={selected ? undefined : change(now?.total, before?.total)}
+              deltaLabel={selected ? `of ${total} in scope` : before?.label}
               icon={Users}
-              hint={selected ? `of ${total} in scope` : 'In the current filters'}
             />
             <StatTile
               label="Moved to Foundation"
               value={focusMoved}
               share={percent(focusMoved, focusCount)}
+              delta={selected ? undefined : change(now?.moved, before?.moved)}
+              deltaLabel={selected ? null : before?.label}
               icon={ArrowRightLeft}
               tone="emerald"
             />
@@ -323,6 +384,11 @@ export function LeadAnalyticsPage() {
               label="Quit"
               value={focusQuit}
               share={percent(focusQuit, focusCount)}
+              delta={selected ? undefined : change(now?.quit, before?.quit)}
+              deltaLabel={selected ? null : before?.label}
+              // More people quitting is not good news, whichever way the
+              // arrow points.
+              invert
               icon={UserX}
               tone="red"
             />
@@ -330,52 +396,104 @@ export function LeadAnalyticsPage() {
               label={active.leader}
               value={largest ? largest.value : '—'}
               share={largest ? percent(largest.count, total) : null}
+              deltaLabel={largest ? `${largest.count} candidates` : null}
               icon={Crown}
             />
           </div>
 
-          {/* Two coordinated views side by side: the ring for the split, the
-              bars for the ranking. Both read the same rows, and clicking a
-              mark in either highlights it in the other and in the table
-              underneath. */}
-          {/* minmax(0, ...) rather than plain fractions: a grid track sized
-              from its content lets the ring and its legend push the card wider
-              than the column, which is what spilled the panel's own header off
-              the right of the page. */}
-          {/* items-start, or both cards are stretched to the taller one and
-              the ring ends up sitting at the top of a card half of which is
-              empty. Each panel is as tall as what it holds. */}
-          <div className="mb-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,21rem)]">
+          {/* items-start, or both cards are stretched to the taller of the two
+              and the ring ends up at the top of a card half of which is empty.
+              minmax(0, ...) rather than plain fractions, or a track sized from
+              its content lets the ring push the card past its column. */}
+          <div className="mb-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,30rem)]">
             <Panel
               className="min-w-0"
               title={active.title}
-              subtitle={`${active.subtitle} Click a slice to highlight it in every view.`}
+              subtitle={active.subtitle}
+              hint={active.hint}
+              action={
+                <SegmentedToggle
+                  label="Show counts or percentages"
+                  options={MEASURES}
+                  value={measure}
+                  onChange={setMeasure}
+                />
+              }
             >
               <DonutChart
                 items={chartRows}
                 centerLabel="Candidates"
                 emptyMessage={active.empty}
+                measure={measure}
                 selected={donutSelection}
                 onSelect={pick}
               />
+              <div className="mt-6">
+                {/* The three states every candidate is in, along the foot of
+                    the panel whose total they divide. They are shares of the
+                    same fourteen the ring above is about, so they belong to
+                    it rather than to a row of tiles of their own. */}
+                <MiniStatStrip
+                  items={[
+                    {
+                      label: 'Active candidates',
+                      value: total - quit,
+                      share: percent(total - quit, total),
+                      icon: Users,
+                      tone: 'brand',
+                    },
+                    {
+                      label: 'Still in induction',
+                      value: total - moved - quit,
+                      share: percent(total - moved - quit, total),
+                      icon: Activity,
+                      tone: 'amber',
+                    },
+                    {
+                      label: 'Dropped out',
+                      value: quit,
+                      share: percent(quit, total),
+                      icon: XCircle,
+                      tone: 'red',
+                    },
+                  ]}
+                />
+              </div>
             </Panel>
+
             <Panel
               className="min-w-0"
-              title="Ranked by volume"
-              subtitle={`Largest ${active.column.toLowerCase()} first. Click a bar to highlight it.`}
+              title="Candidates by Volume"
+              subtitle={`Ranking ${active.plural} by the number of candidates.`}
+              hint="Same colours as the ring, so a value can be carried from one view to the other. Click a row to highlight it everywhere."
+              action={
+                <FilterDropdown
+                  label="Rows"
+                  value={String(topN)}
+                  options={TOP_N.map((size) => ({ value: String(size), label: `Top ${size}` }))}
+                  onChange={(value) => setTopN(Number(value) || 7)}
+                />
+              }
             >
               {rows.length ? (
-                <BarList items={rows} limit={10} isSelected={isRowSelected} onSelect={pick} />
+                <BarList
+                  items={rows}
+                  limit={topN}
+                  colors={colors}
+                  isSelected={isRowSelected}
+                  onSelect={pick}
+                />
               ) : (
-                <p className="py-6 text-center text-sm text-slate-400">{active.empty}</p>
+                <EmptyNote>{active.empty}</EmptyNote>
               )}
             </Panel>
           </div>
 
           {/* The table view: the same numbers without relying on colour or bar
-              length, plus the conversion and quit rates the marks don't carry. */}
+              length, plus the conversion and quit rates the marks don't
+              carry. */}
           <Panel
-            title={`Conversion by ${active.column.toLowerCase()}`}
+            title={`Conversion by ${active.noun}`}
             subtitle="Every value, including the ones nobody has been filed under."
           >
             <DataTable

@@ -46,10 +46,32 @@ class InductionAnalyticsItem(BaseModel):
     quit: int
 
 
+class InductionAnalyticsComparison(BaseModel):
+    """The same three figures for the period before this one, so the board can
+    say whether things are moving rather than only where they stand.
+
+    `label` is written by the service because only it knows what "before this
+    one" turned out to mean - the window the filters describe, or the last
+    thirty days when they describe none.
+    """
+
+    label: str
+    total: int
+    moved: int
+    quit: int
+
+
 class InductionAnalyticsResponse(BaseModel):
     dimension: str
     total: int
     items: list[InductionAnalyticsItem]
+    # Absent only if there is no earlier period to compare against.
+    comparison: InductionAnalyticsComparison | None = None
+    # The current figures the comparison is against - which are not always the
+    # headline totals: with no window set the board totals everything, and
+    # comparing all time against last month would be nonsense, so the trend is
+    # measured over the last thirty days instead and says so.
+    current: InductionAnalyticsComparison | None = None
 
 
 class InductionQualificationSchema(BaseModel):

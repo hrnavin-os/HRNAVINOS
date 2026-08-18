@@ -42,7 +42,7 @@ const GAP = 3
 //
 // They keep their place at the end of the returned list so the legend can print
 // them, and the caller's total is unaffected because they add zero to it.
-function foldToSlices(items, valueKey = 'count') {
+export function foldToSlices(items, valueKey = 'count') {
   const sorted = [...items].sort((a, b) => b[valueKey] - a[valueKey])
   const filled = sorted.filter((item) => item[valueKey] > 0)
   const empty = sorted
@@ -75,6 +75,9 @@ export function DonutChart({
   valueKey = 'count',
   centerLabel = 'Total',
   emptyMessage = 'Nothing to show yet.',
+  // 'count' or 'share' - which of the two columns the legend leads with.
+  // Both are always printed; this only decides which one is the figure.
+  measure = 'count',
   // Optional: hand the pin to the page, so a slice picked here highlights the
   // same value in the bars and the table beside it. Left out, the chart keeps
   // its own pin and behaves exactly as it always has.
@@ -101,7 +104,11 @@ export function DonutChart({
     return <p className="rounded-lg bg-slate-50 px-3 py-10 text-center text-sm text-slate-500">{emptyMessage}</p>
   }
 
-  const share = (value) => Math.round((value / total) * 100)
+  // One decimal, and none when it lands on a whole number: 35.7% and 14.3%
+  // are different sizes of slice, and a legend that rounded both to 36% and
+  // 14% would say two equal slices were unequal and two unequal ones equal.
+  const byShare = measure === 'share'
+  const share = (value) => Math.round((value / total) * 1000) / 10
   const activeSlice = active === null ? null : slices[active]
   // Clicking the pinned slice again releases it, so the same gesture that turns
   // the pin on turns it off and there is no separate control to find.
@@ -276,6 +283,17 @@ export function DonutChart({
           taller list is simply a taller list. */}
       <div className="flex min-w-0 justify-center">
         <table className="w-auto max-w-full border-separate border-spacing-0 text-sm">
+          {/* Headed, because two columns of bare numbers beside a list of
+              names is a table asking to be misread - the count and the share
+              are not obviously which from the figures alone. */}
+          <thead>
+            <tr className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              <th className="pb-2" />
+              <th className="pb-2" />
+              <th className="pb-2 pr-3 text-right font-semibold">Count</th>
+              <th className="pb-2 pr-2 text-right font-semibold">% of total</th>
+            </tr>
+          </thead>
           <tbody>
             {slices.map((slice, index) => {
               const isActive = active === index
@@ -343,14 +361,22 @@ export function DonutChart({
                       {slice.value}
                     </span>
                   </td>
+                  {/* Whichever measure the panel is set to reads as the
+                      figure; the other stays beside it, smaller, so
+                      switching never costs you the number you were not
+                      looking at. */}
                   <td
-                    className={`${cell} pr-3 text-right font-semibold tabular-nums ${
-                      isEmpty ? 'text-slate-400' : 'text-slate-900'
-                    }`}
+                    className={`${cell} pr-3 text-right tabular-nums ${
+                      byShare ? 'text-xs text-slate-400' : 'font-semibold'
+                    } ${isEmpty || byShare ? 'text-slate-400' : 'text-slate-900'}`}
                   >
                     {slice[valueKey]}
                   </td>
-                  <td className={`${cell} pr-2 text-right text-xs tabular-nums text-slate-400`}>
+                  <td
+                    className={`${cell} pr-2 text-right tabular-nums ${
+                      byShare ? 'font-semibold' : 'text-xs text-slate-400'
+                    } ${isEmpty || !byShare ? 'text-slate-400' : 'text-slate-900'}`}
+                  >
                     {share(slice[valueKey])}%
                   </td>
                 </tr>
