@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { anchorPopup } from '@/utils/anchorPopup'
 import { Check, ChevronDown, Search } from 'lucide-react'
 
 // Typing "didnt pick 2" should find "Didn't Pick Up - Attempt 2", and "career
@@ -27,14 +28,6 @@ export function optionMatches(option, query) {
 // because the table scrolls in both directions - a menu rendered inside the
 // row would be clipped by that container, and the list is taller than the row
 // it hangs off by a long way.
-function menuPositionFor(rect, width = 320, height = 340) {
-  const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))
-  // Flips above the trigger when there isn't room below, so a row near the
-  // bottom of the page doesn't open a menu you have to scroll to see.
-  const openUp = rect.bottom + height > window.innerHeight && rect.top > height
-  return { left, top: openUp ? Math.max(8, rect.top - height - 4) : rect.bottom + 4 }
-}
-
 /**
  * A table cell that is also a dropdown: click the value, pick another, it
  * saves.
@@ -100,7 +93,7 @@ export function InlineSelectCell({
       return
     }
     setQuery('')
-    setMenu(menuPositionFor(triggerRef.current.getBoundingClientRect()))
+    setMenu(anchorPopup(triggerRef.current.getBoundingClientRect()))
   }
 
   function choose(next) {
