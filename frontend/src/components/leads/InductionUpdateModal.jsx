@@ -82,11 +82,22 @@ export function InductionUpdateModal({ entry, onClose }) {
 
   // Seeded from what's already saved, so reopening the form shows previous
   // answers rather than a blank slate.
-  const [form, setForm] = useState({
-    qualification: { ...entry.qualification },
-    placement: { ...entry.placement },
-    remarks: { ...entry.remarks },
-    other_details: { ...entry.other_details },
+  //
+  // The call date and time are held out on purpose. They are edited in the
+  // board's schedule column now, and this form posts whatever is in its state:
+  // left in, opening the modal would capture the value at open time and write
+  // it back on save, silently undoing an edit made in the column meanwhile.
+  // The server merges each page with exclude_unset, so a key never sent is a
+  // key left exactly as the column set it.
+  const [form, setForm] = useState(() => {
+    // Underscored: destructured only to drop them from the rest.
+    const { induction_call_date: _date, scheduled_time: _time, ...otherDetails } = entry.other_details ?? {}
+    return {
+      qualification: { ...entry.qualification },
+      placement: { ...entry.placement },
+      remarks: { ...entry.remarks },
+      other_details: otherDetails,
+    }
   })
 
   const set = (group, key, value) =>
@@ -212,19 +223,15 @@ export function InductionUpdateModal({ entry, onClose }) {
 
         {step === 3 && (
           <div className="space-y-3">
+            {/* The call date and time are not here any more - they are edited
+                inline in the board's "Induction Call Schedule" column. They are
+                the one thing on this page you need to see and change without
+                opening anything, which is exactly what a four-page modal is
+                bad at. The fields stay on the record and this form still leaves
+                them alone: update_details merges per page with exclude_unset,
+                so saving this page without them keeps whatever the column
+                set. */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Input
-                type="date"
-                label="Induction Call Date"
-                value={form.other_details.induction_call_date?.slice(0, 10) ?? ''}
-                onChange={(e) => set('other_details', 'induction_call_date', e.target.value || null)}
-              />
-              <Input
-                type="time"
-                label="Scheduled Time"
-                value={form.other_details.scheduled_time ?? ''}
-                onChange={(e) => set('other_details', 'scheduled_time', e.target.value)}
-              />
               <YesNoSelect
                 label="Terms & Condition Form Signed"
                 value={form.other_details.terms_form_signed}

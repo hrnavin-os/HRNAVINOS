@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ResourceListPage } from '@/components/resource/ResourceListPage'
 import { inductionEntryService } from '@/services/inductionEntryService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
+import { inductionFormConfigService } from '@/services/inductionFormConfigService'
 import { ArrowRightLeft, ClipboardList, Target, UserX, X } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -12,6 +13,7 @@ import { SortOrderSelect } from '@/components/ui/SortOrderSelect'
 import { Toast } from '@/components/ui/Toast'
 import { StatCard } from '@/components/ui/StatCard'
 import { InductionCallRemarkCell } from '@/components/leads/InductionCallRemarkCell'
+import { InductionCategoryCell } from '@/components/leads/InductionCategoryCell'
 import { InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
 import { InductionUpdateModal } from '@/components/leads/InductionUpdateModal'
 import { useAuth } from '@/hooks/useAuth'
@@ -89,11 +91,6 @@ const columns = [
     key: 'payment_mode',
     header: 'Payment Mode',
     render: (row) => (row.payment_mode ? <span className="text-slate-700">{row.payment_mode}</span> : dash),
-  },
-  {
-    key: 'category',
-    header: 'Category',
-    render: (row) => (row.category ? <Badge tone="emerald">{row.category}</Badge> : dash),
   },
   {
     // Assigned round-robin across Section Admins when the form is submitted.
@@ -258,6 +255,14 @@ export function InductionLeadsBoard() {
     queryFn: () => inductionEntryService.getFilterOptions(status),
   })
 
+  // The induction form's own dropdown lists, for the Category cell. Read from
+  // the config rather than hardcoded, so a category added in Admin > Form
+  // Collection is offered on the board without a deploy.
+  const inductionConfigQuery = useQuery({
+    queryKey: ['induction-form-config'],
+    queryFn: inductionFormConfigService.get,
+  })
+
   const sections = configQuery.data?.sections ?? []
 
   // Plain string lists come back for everything except Assigned To, which
@@ -265,21 +270,44 @@ export function InductionLeadsBoard() {
   const asOptions = (values) => (values ?? []).map((value) => ({ value, label: value }))
   const options = optionsQuery.data ?? {}
 
+  // What the Category cell offers. The configured list leads, so an option
+  // nobody has been filed under yet is still there to pick; anything already
+  // in the data that the list no longer offers follows it, or an entry
+  // recorded before a rename would show a value its own dropdown denies.
+  const configuredCategories =
+    (inductionConfigQuery.data?.fields ?? []).find((field) => field.key === 'category')?.options ?? []
+  const categoryOptions = [
+    ...configuredCategories,
+    ...(options.category ?? []).filter((value) => !configuredCategories.includes(value)),
+  ]
+
   const byStatus = statsQuery.data?.by_status ?? {}
 
-  // Built here rather than at module scope because the cell needs somewhere to
+  // Built here rather than at module scope because the cells need somewhere to
   // report a failed save - an inline edit has no form to hang an error on, and
-  // silently reverting would leave somebody believing it saved.
+  // silently reverting would leave somebody believing it saved. The category
+  // cell also needs the configured options, which arrive from a query.
   const remarkColumn = {
     key: 'call_remark',
     header: 'Induction Call Remarks',
     render: (row) => <InductionCallRemarkCell entry={row} onError={setError} />,
   }
+  const categoryColumn = {
+    key: 'category',
+    header: 'Category',
+    render: (row) => <InductionCategoryCell entry={row} options={categoryOptions} onError={setError} />,
+  }
 
+  // Category then remark, in that order, which is the order they are filled
+  // in: what kind of candidate this is, then how the call with them went.
   const pendingColumns = insertBefore(
-    // A Section Admin only ever sees their own section's entries, so every row
-    // would name them - a column of one repeated value.
-    scopedSection ? columns.filter((column) => column.key !== 'assigned_to') : columns,
+    insertBefore(
+      // A Section Admin only ever sees their own section's entries, so every
+      // row would name them - a column of one repeated value.
+      scopedSection ? columns.filter((column) => column.key !== 'assigned_to') : columns,
+      'assigned_to',
+      categoryColumn,
+    ),
     'assigned_to',
     remarkColumn,
   )

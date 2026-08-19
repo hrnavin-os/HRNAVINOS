@@ -97,28 +97,3 @@ export const REMARK_GROUPS = [
 export const REMARK_GROUP_BY_VALUE = Object.fromEntries(
   REMARK_GROUPS.flatMap((group) => group.options.map((option) => [option, group])),
 )
-
-// Typing "didnt pick 2" should find "Didn't Pick Up - Attempt 2". Punctuation
-// is the part nobody types the same way twice - dashes, slashes, apostrophes -
-// so it's dropped on both sides and only the words are matched.
-function words(text) {
-  return text
-    .toLowerCase()
-    .replace(/[‘’']/g, '')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
-}
-
-// Every typed word has to appear, in any order: the query is a filter, not a
-// prefix, so "phone completed" finds the Gmeet-or-phone pair either way round.
-export function remarkMatches(option, query) {
-  const needle = words(query)
-  if (!needle) return true
-  const haystack = words(option)
-  return needle.split(' ').every((word) => haystack.includes(word))
-}
-
-export function isKnownRemark(value) {
-  const typed = words(value ?? '')
-  return REMARK_GROUPS.some((group) => group.options.some((option) => words(option) === typed))
-}
