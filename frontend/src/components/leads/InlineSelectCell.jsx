@@ -130,7 +130,17 @@ export function InlineSelectCell({
       {menu &&
         createPortal(
           <>
-            <div className="fixed inset-0 z-40" onClick={() => setMenu(null)} />
+            {/* Click-away. Stops here rather than bubbling: React routes a
+                portal's events up the component tree, so a dismissing click
+                would otherwise also reach the table row and open its detail
+                popup. */}
+            <div
+              className="fixed inset-0 z-40"
+              onClick={(event) => {
+                event.stopPropagation()
+                setMenu(null)
+              }}
+            />
             <div
               style={{ top: menu.top, left: menu.left }}
               className="fixed z-50 flex max-h-[21rem] w-80 flex-col rounded-lg border border-slate-200 bg-white shadow-xl"

@@ -130,7 +130,14 @@ export function InductionScheduleCell({ entry, onError }) {
             {/* Click-away. Its own element rather than a document listener, so
                 dismissing cannot also reach the row underneath and open the
                 detail popup. */}
-            <div className="fixed inset-0 z-40" onClick={() => setPopup(null)} aria-hidden="true" />
+            <div
+              className="fixed inset-0 z-40"
+              onClick={(event) => {
+                event.stopPropagation()
+                setPopup(null)
+              }}
+              aria-hidden="true"
+            />
             <div
               style={{ top: popup.top, left: popup.left, width: POPUP_WIDTH }}
               className="fixed z-50 rounded-lg border border-slate-200 bg-white p-3 shadow-xl"

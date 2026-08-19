@@ -68,13 +68,40 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
     }
   }
 
+  // Anything a cell puts in the row that is operable in its own right: the
+  // inline dropdowns, the remarks popover, the schedule editor, an action
+  // button. A click or a keypress that lands on one of these belongs to it,
+  // not to the row underneath.
+  //
+  // Matched on the DOM rather than on React's tree, which is what makes it
+  // work for the popups: they are portaled to <body>, so they are nowhere
+  // near the row in the document, but React still routes their events up the
+  // component tree and into these handlers.
+  const CONTROLS = 'button, a, input, textarea, select, [role="button"], [contenteditable="true"]'
+
   // A clickable row has to be reachable and operable from the keyboard too -
   // a bare onClick on <tr> is mouse-only.
+  //
+  // Only when the row itself has the key, though. Space is "press this row"
+  // to a focused row and a space character to everything else, and a handler
+  // that took both preventDefault()ed the space out of the remarks box and
+  // opened the detail popup on top of it - the keypress went to the row that
+  // happened to contain the textarea rather than to the textarea.
   const rowKeyDown = (row) => (event) => {
+    if (event.target !== event.currentTarget) return
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
       onRowClick(row)
     }
+  }
+
+  // Same rule for the pointer: clicking a dropdown option, a popover's Save,
+  // or the click-away behind one must not also open the row. Handled here
+  // rather than by a stopPropagation in every cell that grows a popup, which
+  // is a thing each new one has to remember and one of them always forgets.
+  const rowClick = (row) => (event) => {
+    if (event.target.closest?.(CONTROLS)) return
+    onRowClick(row)
   }
 
   return (
@@ -140,7 +167,7 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
                   // sums rather than records and carry no id - without it every
                   // row in a report table keys on undefined.
                   key={row.id ?? index}
-                  onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  onClick={onRowClick ? rowClick(row) : undefined}
                   onKeyDown={onRowClick ? rowKeyDown(row) : undefined}
                   tabIndex={onRowClick ? 0 : undefined}
                   role={onRowClick ? 'button' : undefined}
