@@ -13,6 +13,7 @@ import { SortOrderSelect } from '@/components/ui/SortOrderSelect'
 import { Toast } from '@/components/ui/Toast'
 import { StatCard } from '@/components/ui/StatCard'
 import { InductionCallRemarkCell } from '@/components/leads/InductionCallRemarkCell'
+import { InductionScheduleCell } from '@/components/leads/InductionScheduleCell'
 import { InductionCategoryCell } from '@/components/leads/InductionCategoryCell'
 import { InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
 import { InductionUpdateModal } from '@/components/leads/InductionUpdateModal'
@@ -297,21 +298,38 @@ export function InductionLeadsBoard() {
     header: 'Category',
     render: (row) => <InductionCategoryCell entry={row} options={categoryOptions} onError={setError} />,
   }
+  // One column for the date and the time, because they are one fact - a date
+  // with no time is half an appointment. Both used to live on the fourth page
+  // of the Update modal, which meant opening a four-step form to read the one
+  // thing you need when deciding who to call next.
+  const scheduleColumn = {
+    key: 'induction_schedule',
+    header: 'Induction Call Schedule',
+    render: (row) => <InductionScheduleCell entry={row} onError={setError} />,
+  }
 
-  // Category then remark, in that order, which is the order they are filled
-  // in: what kind of candidate this is, then how the call with them went.
+  // Category, then schedule, then remark - the order they get filled in: what
+  // kind of candidate this is, when the call is, then how it went.
   const pendingColumns = insertBefore(
     insertBefore(
-      // A Section Admin only ever sees their own section's entries, so every
-      // row would name them - a column of one repeated value.
-      scopedSection ? columns.filter((column) => column.key !== 'assigned_to') : columns,
+      insertBefore(
+        // A Section Admin only ever sees their own section's entries, so every
+        // row would name them - a column of one repeated value.
+        scopedSection ? columns.filter((column) => column.key !== 'assigned_to') : columns,
+        'assigned_to',
+        categoryColumn,
+      ),
       'assigned_to',
-      categoryColumn,
+      scheduleColumn,
     ),
     'assigned_to',
     remarkColumn,
   )
-  const movedColumns = insertBefore(MOVED_COLUMNS, 'foundation_status', remarkColumn)
+  const movedColumns = insertBefore(
+    insertBefore(MOVED_COLUMNS, 'foundation_status', scheduleColumn),
+    'foundation_status',
+    remarkColumn,
+  )
 
   return (
     <>
