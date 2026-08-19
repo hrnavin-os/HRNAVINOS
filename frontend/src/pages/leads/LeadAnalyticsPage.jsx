@@ -24,9 +24,8 @@ import { FilterDropdown } from '@/components/ui/FilterDropdown'
 import { TabStrip } from '@/components/ui/TabStrip'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
-import { BarList } from '@/components/analytics/BarList'
 import { DonutChart, foldToSlices } from '@/components/analytics/DonutChart'
-import { EmptyNote, Panel, SegmentedToggle } from '@/components/analytics/Panel'
+import { Panel, SegmentedToggle } from '@/components/analytics/Panel'
 import { MiniStatStrip, StatTile } from '@/components/analytics/StatTile'
 import { percent } from '@/constants/analyticsPalette'
 import { REMARK_GROUPS, REMARK_GROUP_BY_VALUE } from '@/constants/inductionCallRemarks'
@@ -101,8 +100,6 @@ const MEASURES = [
   { value: 'share', label: 'Percentage' },
 ]
 
-const TOP_N = [5, 7, 10, 25]
-
 // Rolls the individual remarks up into the six groups the board already
 // colours by. Nineteen slices is a list, not a chart - the useful shape is how
 // the calls landed across six kinds of outcome, and the individual wordings
@@ -167,7 +164,6 @@ export function LeadAnalyticsPage() {
   const [dateRange, setDateRange] = useState(null)
   const [section, setSection] = useState('')
   const [measure, setMeasure] = useState('count')
-  const [topN, setTopN] = useState(7)
   // The highlighted value, shared by every view on the canvas. One string
   // rather than a per-panel selection: the whole point of a dashboard is that
   // the panels are looking at the same thing.
@@ -401,11 +397,9 @@ export function LeadAnalyticsPage() {
             />
           </div>
 
-          {/* items-start, or both cards are stretched to the taller of the two
-              and the ring ends up at the top of a card half of which is empty.
-              minmax(0, ...) rather than plain fractions, or a track sized from
-              its content lets the ring push the card past its column. */}
-          <div className="mb-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,30rem)]">
+          {/* One panel wide now that the bar list is gone - the two-column
+              grid it shared existed only to sit the two side by side. */}
+          <div className="mb-4">
             <Panel
               className="min-w-0"
               title={active.title}
@@ -461,32 +455,6 @@ export function LeadAnalyticsPage() {
               </div>
             </Panel>
 
-            <Panel
-              className="min-w-0"
-              title="Candidates by Volume"
-              subtitle={`Ranking ${active.plural} by the number of candidates.`}
-              hint="Same colours as the ring, so a value can be carried from one view to the other. Click a row to highlight it everywhere."
-              action={
-                <FilterDropdown
-                  label="Rows"
-                  value={String(topN)}
-                  options={TOP_N.map((size) => ({ value: String(size), label: `Top ${size}` }))}
-                  onChange={(value) => setTopN(Number(value) || 7)}
-                />
-              }
-            >
-              {rows.length ? (
-                <BarList
-                  items={rows}
-                  limit={topN}
-                  colors={colors}
-                  isSelected={isRowSelected}
-                  onSelect={pick}
-                />
-              ) : (
-                <EmptyNote>{active.empty}</EmptyNote>
-              )}
-            </Panel>
           </div>
 
           {/* The table view: the same numbers without relying on colour or bar
