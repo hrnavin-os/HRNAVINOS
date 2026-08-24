@@ -93,6 +93,8 @@ class LeadService:
             remarks=lead.remarks,
             payment_option=lead.payment_option,
             payment_call_remarks=lead.payment_call_remarks,
+            paying_amount=lead.paying_amount,
+            qr_code=lead.qr_code,
             batch_number=lead.batch_number,
             group_assigned_at=lead.group_assigned_at,
             lost_reason=lead.lost_reason,
