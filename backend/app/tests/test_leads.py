@@ -118,7 +118,7 @@ async def test_paying_amount_and_qr_code_round_trip(client, auth_headers):
         await client.post(
             "/api/v1/leads",
             headers=auth_headers,
-            json={"name": "Nirmal Raj", "phone": "8760875793"},
+            json={"name": "Nirmal Raj", "phone": "8760875793", "course_interest": "Recruitment + Internship"},
         )
     ).json()
 
@@ -144,7 +144,9 @@ async def test_paying_amount_and_qr_code_round_trip(client, auth_headers):
 async def test_paying_amount_rejects_a_negative(client, auth_headers):
     lead = (
         await client.post(
-            "/api/v1/leads", headers=auth_headers, json={"name": "Nirmal Raj", "phone": "8760875793"}
+            "/api/v1/leads",
+            headers=auth_headers,
+            json={"name": "Nirmal Raj", "phone": "8760875793", "course_interest": "Recruitment + Internship"},
         )
     ).json()
 
