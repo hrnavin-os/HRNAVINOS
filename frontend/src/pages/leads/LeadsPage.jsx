@@ -21,6 +21,7 @@ import { Pagination } from '@/components/ui/Pagination'
 import { SortOrderSelect } from '@/components/ui/SortOrderSelect'
 import { LeadSectionStageStats, LeadSectionStats } from '@/components/leads/LeadSectionStats'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
+import { LeadCourseCell } from '@/components/leads/LeadCourseCell'
 import { LeadDetailModal } from '@/components/leads/LeadDetailModal'
 import { InductionLeadsBoard } from '@/components/leads/InductionLeadsBoard'
 import { useLeadBoard } from '@/hooks/useLeadBoard'
@@ -417,6 +418,10 @@ function FoundationLeadsBoard() {
   const sectionByCode = Object.fromEntries(sectionOptions.map((section) => [section.code, section]))
 
   const courseOptionsQuery = useQuery({ queryKey: ['lead-course-options'], queryFn: leadService.getCourseOptions })
+  // Everything the Course cell can offer, which is more than the filter's
+  // list: a course nobody is on yet is a dead end to filter by and the point
+  // of being able to set one.
+  const courseCatalogQuery = useQuery({ queryKey: ['lead-course-catalog'], queryFn: leadService.getCourseCatalog })
   // Junk values from test leads created outside the real Foundation Form
   // programs - not real courses, so they don't belong in the filter list.
   const courseOptions = (courseOptionsQuery.data ?? []).filter(
@@ -472,7 +477,19 @@ function FoundationLeadsBoard() {
         </div>
       ),
     },
-    { key: 'course', header: 'Course', align: 'center', render: (row) => row.course_interest ?? '—' },
+    {
+      key: 'course',
+      header: 'Course',
+      align: 'center',
+      render: (row) => (
+        <LeadCourseCell
+          key={row.id}
+          lead={row}
+          options={courseCatalogQuery.data ?? []}
+          onError={setEditError}
+        />
+      ),
+    },
     // Redundant once a section is already active (every visible row is that
     // section by definition) - only shown in the unscoped "All Sections"
     // view, and never for a Section Admin.

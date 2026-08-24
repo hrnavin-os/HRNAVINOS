@@ -97,6 +97,24 @@ async def list_course_options(
     return await LeadService().course_options()
 
 
+@router.get("/course-catalog", response_model=list[str])
+async def list_course_catalog(
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
+) -> list[str]:
+    """Every course a lead can be moved onto, for the board's Course dropdown.
+
+    Separate from /course-options, which is the distinct values in use: that is
+    right for a filter, where an option matching nothing is a dead end, and
+    wrong for setting one, where putting somebody on a course nobody is on yet
+    is the whole point.
+
+    Behind LEADS_VIEW rather than PROGRAMS_VIEW - anyone who can work the board
+    can read the list of courses it offers, and gating it on the Programs
+    module would leave the dropdown empty for the people who actually use it.
+    """
+    return await LeadService().course_catalog()
+
+
 @router.get("/pending-review", response_model=list[LeadResponse])
 async def list_pending_review_leads(
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),

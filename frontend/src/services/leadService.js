@@ -15,6 +15,13 @@ export const leadService = {
     const { data } = await apiClient.get('/leads/course-options')
     return data
   },
+  // Every course a lead can be moved onto - the live programs, plus any
+  // value already in the data that is no longer one. Distinct from
+  // getCourseOptions, which is what is in use and is what the filter wants.
+  getCourseCatalog: async () => {
+    const { data } = await apiClient.get('/leads/course-catalog')
+    return data
+  },
   getTimeline: async (id) => {
     const { data } = await apiClient.get(`/leads/${id}/timeline`)
     return data

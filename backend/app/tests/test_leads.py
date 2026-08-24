@@ -63,3 +63,26 @@ async def test_filter_leads_by_status(client, auth_headers):
     body = response.json()
     assert body["total"] == 1
     assert body["items"][0]["id"] == lead_two
+
+
+async def test_the_course_catalog_offers_courses_nobody_is_on_yet(client, auth_headers):
+    """The Course cell on the board sets a course; the filter beside it picks
+    from what is in use. They need different lists - a filter offering a course
+    nobody is on returns nothing, and a dropdown that only offers courses
+    somebody is already on cannot move the first person onto a new one."""
+    await client.post(
+        "/api/v1/leads",
+        headers=auth_headers,
+        json={"name": "Ravi Kumar", "phone": "9876543210", "course_interest": "Data Science"},
+    )
+
+    catalog = (await client.get("/api/v1/leads/course-catalog", headers=auth_headers)).json()
+    in_use = (await client.get("/api/v1/leads/course-options", headers=auth_headers)).json()
+
+    # The live programs lead, so a lead can be moved onto any of them.
+    assert "Recruitment + Internship" in catalog
+    assert "Recruitment + Internship" not in in_use
+    # A value in the data that is not a program is still offered, or the lead
+    # carrying it would show a course its own dropdown denies.
+    assert "Data Science" in catalog
+    assert catalog.index("Data Science") > catalog.index("Recruitment + Internship")

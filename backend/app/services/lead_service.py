@@ -246,6 +246,23 @@ class LeadService:
     async def course_options(self) -> List[str]:
         return await self.leads.distinct_course_interests()
 
+    async def course_catalog(self) -> List[str]:
+        """Every course a lead can be moved onto, for the board's Course cell.
+
+        Not the same list as course_options, which is the distinct values in
+        use and is right for a filter - a filter offering a course nobody is on
+        would return nothing. Setting one is the opposite case: the whole point
+        is to be able to put somebody on a course nobody is on yet, so the live
+        programs lead.
+
+        In-use values that are no longer programs follow them, or a lead
+        recorded before a rename would show a course its own dropdown denies -
+        and picking anything else would be the only way to close the menu.
+        """
+        names = [program.name for program in await self.programs.list_active()]
+        in_use = [value for value in await self.leads.distinct_course_interests() if value not in names]
+        return names + in_use
+
     def _validate_stage_transition(self, lead: Lead, new: LeadStatus) -> None:
         """Financial Approval and Batch Confirmation are pipeline gates: each
         can only be entered from the stage directly before it, and only once
