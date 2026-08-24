@@ -112,6 +112,15 @@ class Lead(BaseDocument):
     # installments (the structured Foundation Form payment-collection flow).
     payment_option: PaymentOption | None = None
     payment_call_remarks: PaymentCallRemark | None = None
+    # What the candidate actually paid, typed in by whoever took the payment.
+    # Deliberately not derived from the installments: this is the manual
+    # tracking pair above, used while a lead is still being chased on the
+    # phone and before any structured collection has happened.
+    paying_amount: MongoDecimal | None = None
+    # Which QR code / account the money came through. Free text rather than an
+    # enum: the list is a roster of people and accounts that changes without a
+    # deploy, and an enum would reject a value the moment somebody is added.
+    qr_code: str | None = Field(default=None, max_length=100)
     # Ticked by an HR Coordinator to record that they've dealt with this lead
     # in the batch queue. Purely their own working marker - it doesn't move the
     # lead's stage or affect allocation.

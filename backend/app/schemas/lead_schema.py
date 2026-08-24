@@ -45,6 +45,8 @@ class LeadUpdate(BaseModel):
     remarks: str | None = Field(default=None, max_length=2000)
     payment_option: PaymentOption | None = None
     payment_call_remarks: PaymentCallRemark | None = None
+    paying_amount: Decimal | None = Field(default=None, ge=0)
+    qr_code: str | None = Field(default=None, max_length=100)
     batch_number: str | None = Field(default=None, max_length=50)
     # Required by LeadService.update whenever status moves to Lost.
     lost_reason: str | None = Field(default=None, max_length=500)
@@ -109,6 +111,8 @@ class LeadResponse(BaseModel):
     remarks: str | None = None
     payment_option: PaymentOption | None = None
     payment_call_remarks: PaymentCallRemark | None = None
+    paying_amount: Decimal | None = None
+    qr_code: str | None = None
     batch_number: str | None = None
     group_assigned_at: datetime | None = None
     lost_reason: str | None = None

@@ -65,11 +65,14 @@ async def test_filter_leads_by_status(client, auth_headers):
     assert body["items"][0]["id"] == lead_two
 
 
-async def test_the_course_catalog_offers_courses_nobody_is_on_yet(client, auth_headers):
-    """The Course cell on the board sets a course; the filter beside it picks
-    from what is in use. They need different lists - a filter offering a course
-    nobody is on returns nothing, and a dropdown that only offers courses
-    somebody is already on cannot move the first person onto a new one."""
+async def test_the_course_catalog_is_the_programs_and_only_the_programs(client, auth_headers):
+    """Programs Management is where the courses are decided. The board's Course
+    dropdown offers those and nothing else - padded with whatever is already
+    recorded, it would quietly re-admit the junk from imports and test rows, and
+    the list would grow by being wrong rather than by anybody adding a course.
+
+    The filter's list is the other way round on purpose: it is the values in
+    use, because an option that matches no lead is a dead end to filter by."""
     await client.post(
         "/api/v1/leads",
         headers=auth_headers,
@@ -79,10 +82,73 @@ async def test_the_course_catalog_offers_courses_nobody_is_on_yet(client, auth_h
     catalog = (await client.get("/api/v1/leads/course-catalog", headers=auth_headers)).json()
     in_use = (await client.get("/api/v1/leads/course-options", headers=auth_headers)).json()
 
-    # The live programs lead, so a lead can be moved onto any of them.
     assert "Recruitment + Internship" in catalog
-    assert "Recruitment + Internship" not in in_use
-    # A value in the data that is not a program is still offered, or the lead
-    # carrying it would show a course its own dropdown denies.
-    assert "Data Science" in catalog
-    assert catalog.index("Data Science") > catalog.index("Recruitment + Internship")
+    assert "Data Science" not in catalog
+    # And the filter still answers for the data rather than the catalogue.
+    assert in_use == ["Data Science"]
+
+
+async def test_admin_keeps_the_programs_tab_on_an_existing_database(client, auth_headers):
+    """DEFAULT_ROLE_PERMISSIONS is a seed, not a migration: adding a permission
+    to a role there changes what a fresh database gets and leaves every
+    existing one as it was. The startup backfill closes that gap, which is the
+    only reason the Programs tab appears for an Admin who was created before
+    the role gained it."""
+    from app.database.backfills import backfill_role_permissions
+    from app.models.permission import Permission
+    from app.models.role import Role
+
+    admin = await Role.find_one({"name": "Admin", "is_deleted": False})
+    programs_view = await Permission.find_one({"code": "programs.view"})
+    # Put the role back to before it was granted the permission.
+    admin.permission_ids = [pid for pid in admin.permission_ids if pid != programs_view.id]
+    await admin.save()
+
+    granted = await backfill_role_permissions()
+
+    assert granted >= 1
+    restored = await Role.find_one({"name": "Admin", "is_deleted": False})
+    assert programs_view.id in restored.permission_ids
+
+
+async def test_paying_amount_and_qr_code_round_trip(client, auth_headers):
+    """The two manual payment-tracking columns on the board. Written by an
+    inline cell, so nothing else validates them on the way in."""
+    lead = (
+        await client.post(
+            "/api/v1/leads",
+            headers=auth_headers,
+            json={"name": "Nirmal Raj", "phone": "8760875793"},
+        )
+    ).json()
+
+    updated = await client.put(
+        f"/api/v1/leads/{lead['id']}",
+        headers=auth_headers,
+        json={"paying_amount": "24500.50", "qr_code": "Chitra-Axis"},
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["paying_amount"] == "24500.50"
+    assert updated.json()["qr_code"] == "Chitra-Axis"
+
+    # Both clear back to unset - a value picked by mistake has to come off.
+    cleared = await client.put(
+        f"/api/v1/leads/{lead['id']}",
+        headers=auth_headers,
+        json={"paying_amount": None, "qr_code": None},
+    )
+    assert cleared.json()["paying_amount"] is None
+    assert cleared.json()["qr_code"] is None
+
+
+async def test_paying_amount_rejects_a_negative(client, auth_headers):
+    lead = (
+        await client.post(
+            "/api/v1/leads", headers=auth_headers, json={"name": "Nirmal Raj", "phone": "8760875793"}
+        )
+    ).json()
+
+    response = await client.put(
+        f"/api/v1/leads/{lead['id']}", headers=auth_headers, json={"paying_amount": "-1"}
+    )
+    assert response.status_code == 422

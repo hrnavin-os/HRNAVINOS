@@ -2,14 +2,14 @@ import { useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, Eye, Pencil, Search } from 'lucide-react'
+import { Check, ChevronDown, Eye, Pencil, Search, X } from 'lucide-react'
 import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
 import { useAuth } from '@/hooks/useAuth'
 import { leadService } from '@/services/leadService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
-import { formatDate, titleCase } from '@/utils/formatters'
+import { formatCurrency, formatDate, titleCase } from '@/utils/formatters'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { Toast } from '@/components/ui/Toast'
@@ -25,7 +25,12 @@ import { LeadCourseCell } from '@/components/leads/LeadCourseCell'
 import { LeadDetailModal } from '@/components/leads/LeadDetailModal'
 import { InductionLeadsBoard } from '@/components/leads/InductionLeadsBoard'
 import { useLeadBoard } from '@/hooks/useLeadBoard'
-import { PAYMENT_PLAN_TONES, CALL_REMARK_OPTIONS, CALL_REMARK_BY_VALUE } from '@/constants/paymentOptions'
+import {
+  PAYMENT_PLAN_TONES,
+  CALL_REMARK_OPTIONS,
+  CALL_REMARK_BY_VALUE,
+  QR_CODE_OPTIONS,
+} from '@/constants/paymentOptions'
 import { PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
 
 // Anchors a portaled popup under its trigger, clamped so it never runs off
@@ -237,12 +242,109 @@ function RemarksCell({ lead, onError }) {
 // `displayByValue` is looked up before `options` so a value that's been
 // retired from the picker still renders its own label instead of falling
 // back to the "Select…" placeholder, which would read as empty data.
-function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, onError }) {
+// The amount someone actually paid, typed straight into the row.
+//
+// Not derived from the installments: this is the manual pair beside Payment
+// Remarks, filled in while a lead is still being chased on the phone and
+// before any structured collection has happened.
+//
+// Reads as text until you click it, so a column of amounts stays a column of
+// amounts rather than a wall of input boxes.
+function AmountCell({ lead, onError }) {
+  const queryClient = useQueryClient()
+  const [isEditing, setIsEditing] = useState(false)
+  const [value, setValue] = useState(lead.paying_amount ?? '')
+
+  const mutation = useMutation({
+    // Empty clears the field rather than sending "", which the decimal column
+    // would reject.
+    mutationFn: () => leadService.update(lead.id, { paying_amount: value === '' ? null : Number(value) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      setIsEditing(false)
+    },
+    onError: (error) => onError(`Couldn't save the amount for ${lead.name}: ${getApiErrorMessage(error)}`),
+  })
+
+  function open(event) {
+    event.stopPropagation()
+    setValue(lead.paying_amount ?? '')
+    mutation.reset()
+    setIsEditing(true)
+  }
+
+  if (!isEditing) {
+    return (
+      <button
+        type="button"
+        onClick={open}
+        className="w-full rounded-md px-2 py-1 text-sm tabular-nums transition-colors hover:bg-slate-100"
+      >
+        {lead.paying_amount === null || lead.paying_amount === undefined ? (
+          <span className="text-slate-400">Add amount</span>
+        ) : (
+          <span className="font-medium text-slate-900">{formatCurrency(lead.paying_amount)}</span>
+        )}
+      </button>
+    )
+  }
+
+  return (
+    <div
+      className="flex items-center gap-1"
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') mutation.mutate()
+        if (event.key === 'Escape') setIsEditing(false)
+      }}
+    >
+      <input
+        autoFocus
+        type="number"
+        min="0"
+        step="0.01"
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder="0"
+        className="w-24 rounded-md border border-slate-300 px-2 py-1 text-sm tabular-nums text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+      />
+      <button
+        type="button"
+        onClick={() => mutation.mutate()}
+        disabled={mutation.isPending}
+        aria-label="Save amount"
+        className="rounded p-1 text-emerald-600 transition-colors hover:bg-emerald-50 disabled:opacity-50"
+      >
+        <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        onClick={() => setIsEditing(false)}
+        disabled={mutation.isPending}
+        aria-label="Cancel"
+        className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50"
+      >
+        <X className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
+      </button>
+    </div>
+  )
+}
+
+// Past this many options the menu grows a search box. Seven payment remarks
+// are quicker to read than to filter; thirty QR accounts are not.
+const SEARCHABLE_FROM = 10
+
+function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, onError, plain = false }) {
   const queryClient = useQueryClient()
   const buttonRef = useRef(null)
   const [menuPosition, setMenuPosition] = useState(null)
+  const [query, setQuery] = useState('')
   const stored = lead[field]
   const current = displayByValue?.[stored] ?? options.find((option) => option.value === stored)
+
+  const searchable = options.length >= SEARCHABLE_FROM
+  const needle = query.trim().toLowerCase()
+  const shown = needle ? options.filter((option) => option.label.toLowerCase().includes(needle)) : options
 
   const mutation = useMutation({
     mutationFn: (value) => leadService.update(lead.id, { [field]: value }),
@@ -256,6 +358,9 @@ function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, on
       setMenuPosition(null)
       return
     }
+    // Reopening always starts from the whole list rather than the last filter,
+    // which would otherwise hide most of it with no sign why.
+    setQuery('')
     const rect = buttonRef.current.getBoundingClientRect()
     setMenuPosition(popupPositionFor(rect, 256))
   }
@@ -277,7 +382,15 @@ function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, on
           current ? '' : 'w-full min-w-36 justify-between border border-slate-200 bg-slate-50 px-3 py-1.5 hover:bg-slate-100'
         }`}
       >
-        {current ? <Badge tone={current.tone}>{current.label}</Badge> : <span className="text-sm text-slate-400">{placeholder}</span>}
+        {current ? (
+          plain ? (
+            <span className="truncate text-sm text-slate-900">{current.label}</span>
+          ) : (
+            <Badge tone={current.tone}>{current.label}</Badge>
+          )
+        ) : (
+          <span className="text-sm text-slate-400">{placeholder}</span>
+        )}
         <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden="true" />
       </button>
       {menuPosition &&
@@ -289,6 +402,15 @@ function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, on
               onClick={(event) => event.stopPropagation()}
               className="fixed z-50 max-h-72 w-64 overflow-y-auto rounded-md border border-slate-200 bg-white p-1.5 shadow-lg"
             >
+              {searchable && (
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search…"
+                  className="mb-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              )}
               {/* Clears the field back to unset - without it a value picked
                   by mistake could never be taken off the lead again. */}
               <button
@@ -304,7 +426,7 @@ function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, on
               >
                 {placeholder}
               </button>
-              {options.map((option) => (
+              {shown.map((option) => (
                 <button
                   key={option.value}
                   type="button"
@@ -317,9 +439,16 @@ function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, on
                     stored === option.value ? 'bg-slate-50' : ''
                   }`}
                 >
-                  <Badge tone={option.tone}>{option.label}</Badge>
+                  {plain ? (
+                    <span className="block truncate px-1 text-sm text-slate-700">{option.label}</span>
+                  ) : (
+                    <Badge tone={option.tone}>{option.label}</Badge>
+                  )}
                 </button>
               ))}
+              {searchable && !shown.length && (
+                <p className="px-2 py-3 text-center text-sm text-slate-400">No match for “{query}”.</p>
+              )}
             </div>
           </>,
           document.body,
@@ -520,6 +649,32 @@ function FoundationLeadsBoard() {
         ) : (
           <span className="text-sm text-slate-400">—</span>
         ),
+    },
+    // Between Payment Method and Payment Remarks: how much, through which
+    // account, then what the caller made of it.
+    {
+      key: 'paying_amount',
+      header: 'Paying Amount',
+      align: 'center',
+      render: (row) => <AmountCell key={row.id} lead={row} onError={setEditError} />,
+    },
+    {
+      key: 'qr_code',
+      header: 'QR-Code',
+      align: 'center',
+      render: (row) => (
+        <SelectBadgeCell
+          key={row.id}
+          lead={row}
+          field="qr_code"
+          options={QR_CODE_OPTIONS}
+          placeholder="Select…"
+          // Plain text, not a badge - thirty accounts cannot each carry a
+          // meaningful colour, and colouring some would imply a grouping.
+          plain
+          onError={setEditError}
+        />
+      ),
     },
     {
       key: 'payment_call_remarks',

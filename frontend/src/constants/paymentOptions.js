@@ -23,3 +23,43 @@ export const CALL_REMARK_OPTIONS = [
 ]
 
 export const CALL_REMARK_BY_VALUE = Object.fromEntries(CALL_REMARK_OPTIONS.map((option) => [option.value, option]))
+
+// The QR codes / accounts a payment can come through - a roster of people and
+// accounts rather than a fixed vocabulary, which is why the column stores free
+// text and this list is only the menu. A name retired from here still displays
+// on the leads that already carry it.
+//
+// No tones: thirty entries cannot each have a meaningful colour, and colouring
+// some but not others would imply a grouping that isn't there.
+export const QR_CODE_OPTIONS = [
+  'Periyasamy Gold',
+  'Raja Gold',
+  'Chitra-Axis',
+  'Chitra-KVB',
+  'Jaganaathan-Axis',
+  'Santhosh',
+  'Kalaianbu',
+  'Sneha',
+  'Navin',
+  'Deepan',
+  'Pugazh',
+  'Vedhagiri',
+  'Sudha',
+  'Vikasini',
+  'Kadhar',
+  'Abinesh',
+  'Ganapathy',
+  'Aravindan',
+  'Anitha',
+  'Shanmugaraj N',
+  'Abi Elakkuvan',
+  'Rubika',
+  'Razor pay',
+  'Swathi',
+  'Gomatheeshwari',
+  'Dhanush',
+  'Pavithra S',
+  'Kabil',
+  'Nandha Kumar',
+  'Pradeep Kumar',
+].map((name) => ({ value: name, label: name }))
