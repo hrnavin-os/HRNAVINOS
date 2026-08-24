@@ -1,17 +1,16 @@
 name: Deploy to VPS
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    branches: [main]
-    types: [completed]
+  push:
+    branches:
+      - main
 
 jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     environment: production
+
     steps:
       # Pulls code as its own SSH step, separate from running deploy.sh:
       # deploy.sh lives in this same repo, and `git reset --hard` rewriting
