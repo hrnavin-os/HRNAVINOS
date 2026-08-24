@@ -100,7 +100,13 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
   // rather than by a stopPropagation in every cell that grows a popup, which
   // is a thing each new one has to remember and one of them always forgets.
   const rowClick = (row) => (event) => {
-    if (event.target.closest?.(CONTROLS)) return
+    // Compared against the row, because the row is itself one of these: it
+    // carries role="button" so the keyboard can operate it. Without the
+    // comparison, closest() walking up from any cell finds the <tr> and every
+    // click on every row looked like a click on a control - which is exactly
+    // what stopped the detail popups opening at all.
+    const control = event.target.closest?.(CONTROLS)
+    if (control && control !== event.currentTarget) return
     onRowClick(row)
   }
 
