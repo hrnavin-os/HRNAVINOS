@@ -120,14 +120,18 @@ class Permissions(StrEnum):
     # ---------- Form Collection ----------
     FORM_COLLECTION_CONFIGURE = "form_collection.configure"
 
-    # ---------- Terms & Conditions ----------
-    # Split three ways because they are three different jobs: reading who has
-    # signed, recording that somebody has, and rewriting the document they are
-    # signing. The last one changes what everybody else is agreeing to, so it
-    # is not something to hand out with the register.
-    TERMS_VIEW = "terms.view"
-    TERMS_SIGN = "terms.sign"
-    TERMS_CONFIGURE = "terms.configure"
+    # ---------- Induction Attendance ----------
+    # Its own codes rather than the ATTENDANCE_* ones above: those are the
+    # classroom register a Tutor marks, and reusing them would hand every tutor
+    # the induction programme's board.
+    #
+    # Split three ways because they are three different jobs: reading where
+    # students stand, recording that one attended or signed, and rewriting the
+    # terms document itself. The last changes what everybody else is agreeing
+    # to, so it is not something to hand out with the register.
+    INDUCTION_ATTENDANCE_VIEW = "induction_attendance.view"
+    INDUCTION_ATTENDANCE_MARK = "induction_attendance.mark"
+    INDUCTION_ATTENDANCE_CONFIGURE = "induction_attendance.configure"
 
 
 def all_permission_definitions() -> list[dict[str, str]]:

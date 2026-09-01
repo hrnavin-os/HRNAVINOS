@@ -64,6 +64,41 @@ class InductionOtherDetails(BaseModel):
     confidence: str | None = Field(default=None, max_length=50)
 
 
+class AttendanceMark(BaseModel):
+    """One yes/no marker on a student, with who set it and when.
+
+    `marked` is deliberately three-valued. None is "nobody has said" - which is
+    not the same as "no", and matters for the markers that have an automatic
+    answer to fall back on: a coordinator's explicit False has to be able to
+    override what the data would otherwise imply, and it cannot if False is
+    also the empty state.
+    """
+
+    marked: bool | None = None
+    at: datetime | None = None
+    by: uuid.UUID | None = None
+    # The marker's name snapshotted at write time, so a page of rows renders
+    # without a user lookup each.
+    by_name: str | None = Field(default=None, max_length=150)
+
+
+class InductionAttendance(BaseModel):
+    """The induction programme's attendance markers, other than the terms
+    signature - which predates this and stays where the update form's fourth
+    page has always written it (other_details.terms_form_signed).
+
+    One object rather than six loose fields so a marker added later is one
+    entry here, and so the whole set can be read in a single attribute.
+    """
+
+    polls_selected: AttendanceMark = Field(default_factory=AttendanceMark)
+    success_meet_attended: AttendanceMark = Field(default_factory=AttendanceMark)
+    # Has an automatic answer as well as a manual one: an entry linked to a
+    # Foundation Form submission attended the foundation class by definition.
+    # See the marker registry in attendance_service.
+    foundation_class_attended: AttendanceMark = Field(default_factory=AttendanceMark)
+
+
 class InductionEntry(BaseDocument):
     name: str = Field(max_length=150)
     email: str | None = Field(default=None, max_length=255)
@@ -102,6 +137,10 @@ class InductionEntry(BaseDocument):
     placement: InductionPlacement = Field(default_factory=InductionPlacement)
     remarks: InductionRemarks = Field(default_factory=InductionRemarks)
     other_details: InductionOtherDetails = Field(default_factory=InductionOtherDetails)
+    # The attendance board's markers. Defaults to an empty set, so every row
+    # that predates the board reads back as "nobody has said" rather than
+    # needing a migration.
+    attendance: InductionAttendance = Field(default_factory=InductionAttendance)
 
     # Set when this person later submits the Foundation Form with a matching
     # mobile number. The entry itself is never deleted or emptied - the whole

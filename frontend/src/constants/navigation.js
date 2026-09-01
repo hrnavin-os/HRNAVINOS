@@ -12,7 +12,7 @@ import {
   ShieldCheck,
   Settings,
   FileCheck2,
-  FileSignature,
+  ClipboardList,
 } from 'lucide-react'
 import { PERMISSIONS } from '@/constants/permissions'
 
@@ -83,12 +83,12 @@ export const NAV_ITEMS = [
   },
   {
     // Sits with the other Admin boards rather than under Administration: it is
-    // worked daily by whoever is chasing signed forms, not configured once.
-    label: 'Terms & Conditions',
-    shortLabel: 'Terms',
-    to: '/terms',
-    permission: PERMISSIONS.TERMS_VIEW,
-    icon: FileSignature,
+    // worked daily by whoever is chasing signed forms and marking who turned
+    // up, not configured once.
+    label: 'Attendance',
+    to: '/induction-attendance',
+    permission: PERMISSIONS.INDUCTION_ATTENDANCE_VIEW,
+    icon: ClipboardList,
     hiddenForScopedUsers: true,
   },
   {

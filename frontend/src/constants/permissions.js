@@ -18,9 +18,11 @@ export const PERMISSIONS = {
 
   AUDIT_LOGS_VIEW: 'audit_logs.view',
 
-  TERMS_VIEW: 'terms.view',
-  TERMS_SIGN: 'terms.sign',
-  TERMS_CONFIGURE: 'terms.configure',
+  // The induction Attendance board. Its own codes rather than the
+  // ATTENDANCE_* ones - those are the classroom register a Tutor marks.
+  INDUCTION_ATTENDANCE_VIEW: 'induction_attendance.view',
+  INDUCTION_ATTENDANCE_MARK: 'induction_attendance.mark',
+  INDUCTION_ATTENDANCE_CONFIGURE: 'induction_attendance.configure',
 
   LEADS_VIEW: 'leads.view',
   LEADS_CREATE: 'leads.create',

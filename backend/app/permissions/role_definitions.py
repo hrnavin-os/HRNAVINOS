@@ -13,9 +13,10 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     ],
     "Admin": [
         P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.FORM_COLLECTION_CONFIGURE,
-        # The Terms & Conditions register: this role is the one that chases
-        # signatures, so it also owns the wording being signed.
-        P.TERMS_VIEW, P.TERMS_SIGN, P.TERMS_CONFIGURE,
+        # The induction Attendance board: this role is the one that chases
+        # signed terms and marks who turned up, so it also owns the wording
+        # being signed.
+        P.INDUCTION_ATTENDANCE_VIEW, P.INDUCTION_ATTENDANCE_MARK, P.INDUCTION_ATTENDANCE_CONFIGURE,
         # Programs drive the public form's program dropdown, which is the same
         # surface FORM_COLLECTION_CONFIGURE already lets this role shape.
         P.PROGRAMS_VIEW, P.PROGRAMS_CREATE, P.PROGRAMS_UPDATE, P.PROGRAMS_DELETE,
