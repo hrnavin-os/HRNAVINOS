@@ -7,6 +7,7 @@ import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
 import { useAuth } from '@/hooks/useAuth'
 import { leadService } from '@/services/leadService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
+import { foundationFormService } from '@/services/foundationFormService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
 import { PERMISSIONS } from '@/constants/permissions'
@@ -353,6 +354,160 @@ function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, on
   )
 }
 
+// Anything already recorded against the current plan's installments. Changing
+// the plan rebuilds them from the price list, so this is what would be lost.
+function hasCollectedPayments(lead) {
+  return (lead.installments ?? []).some(
+    (installment) =>
+      installment.paid ||
+      installment.proof_url ||
+      installment.transaction_id ||
+      installment.upi_id ||
+      installment.mode ||
+      installment.scheduled_at,
+  )
+}
+
+/**
+ * The lead's payment plan, changed from the table.
+ *
+ * Goes through the same assign-plan call the detail modal uses rather than
+ * writing the field directly: the plan is what the installment schedule is
+ * built from, so the two have to be set together or the row would claim a plan
+ * whose amounts belong to a different one.
+ *
+ * That rebuild is also why a plan with money already recorded against it asks
+ * first - amounts, proofs and dates on the old schedule don't survive it.
+ *
+ * Only the plans this lead's program actually offers are listed, since the
+ * price list is per category and the API rejects the rest anyway. A lead with
+ * no program yet has nothing to price a plan from, so it stays read-only here
+ * and is set in the detail modal, which asks for the program too.
+ */
+function PaymentPlanCell({ lead, pricing, onError }) {
+  const queryClient = useQueryClient()
+  const buttonRef = useRef(null)
+  const [menuPosition, setMenuPosition] = useState(null)
+
+  const program = pricing?.programs.find((option) => option.value === lead.program_interest)
+  const category = program ? pricing.categories[program.category] : null
+  const options = (category?.plans ?? []).map((plan) => ({
+    value: plan.value,
+    // The board's own short labels, not the price list's sentence-long ones,
+    // so the column reads the same as every other surface naming a plan.
+    label: PAYMENT_PLAN_LABELS[plan.value] ?? plan.label,
+    summary: plan.summary,
+    tone: PAYMENT_PLAN_TONES[plan.value] ?? 'slate',
+  }))
+
+  const mutation = useMutation({
+    mutationFn: (paymentPlan) =>
+      leadService.assignPlan(lead.id, { programInterest: lead.program_interest, paymentPlan }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['leads'] }),
+    onError: (error) =>
+      onError(`Couldn't change the payment method for ${lead.name}: ${getApiErrorMessage(error)}`),
+  })
+
+  const currentBadge = lead.payment_plan ? (
+    <Badge tone={PAYMENT_PLAN_TONES[lead.payment_plan] ?? 'slate'}>
+      {PAYMENT_PLAN_LABELS[lead.payment_plan] ?? titleCase(lead.payment_plan)}
+    </Badge>
+  ) : null
+
+  // No program, or one retired from the price list: the row click still opens
+  // the detail modal, which is where both are chosen together.
+  if (!options.length) {
+    return (
+      <span title="Set this lead's program in their detail view to pick a payment method">
+        {currentBadge ?? <span className="text-sm text-slate-400">—</span>}
+      </span>
+    )
+  }
+
+  function toggle(event) {
+    event.stopPropagation()
+    if (menuPosition) {
+      setMenuPosition(null)
+      return
+    }
+    const rect = buttonRef.current.getBoundingClientRect()
+    setMenuPosition(popupPositionFor(rect, 256))
+  }
+
+  // Portal clicks bubble through the component tree rather than the DOM one,
+  // so the backdrop has to stop the event from reaching the row behind it.
+  function close(event) {
+    event?.stopPropagation()
+    setMenuPosition(null)
+  }
+
+  function choose(event, value) {
+    event.stopPropagation()
+    close(event)
+    if (value === lead.payment_plan) return
+    if (
+      hasCollectedPayments(lead) &&
+      !window.confirm(
+        `Change ${lead.name}'s payment method to "${PAYMENT_PLAN_LABELS[value] ?? value}"?\n\n` +
+          'The installment schedule is rebuilt from the price list, so amounts, proofs, ' +
+          'modes and dates already recorded against the current plan will be lost.',
+      )
+    ) {
+      return
+    }
+    mutation.mutate(value)
+  }
+
+  return (
+    <div className="inline-block">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={toggle}
+        disabled={mutation.isPending}
+        className={`flex items-center gap-1.5 rounded-full px-1 py-1 hover:bg-slate-50 disabled:opacity-60 ${
+          lead.payment_plan
+            ? ''
+            : 'w-full min-w-36 justify-between border border-slate-200 bg-slate-50 px-3 py-1.5 hover:bg-slate-100'
+        }`}
+      >
+        {currentBadge ?? <span className="text-sm text-slate-400">Select…</span>}
+        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden="true" />
+      </button>
+      {menuPosition &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-40" onClick={close} />
+            <div
+              style={{ top: menuPosition.top, left: menuPosition.left }}
+              onClick={(event) => event.stopPropagation()}
+              className="fixed z-50 max-h-72 w-64 overflow-y-auto rounded-md border border-slate-200 bg-white p-1.5 shadow-lg"
+            >
+              {/* No "clear" here, unlike the other select cells: a lead with a
+                  schedule but no plan is a row nothing can price. */}
+              {options.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={(event) => choose(event, option.value)}
+                  className={`block w-full rounded px-1 py-1 text-left hover:bg-slate-50 ${
+                    lead.payment_plan === option.value ? 'bg-slate-50' : ''
+                  }`}
+                >
+                  <Badge tone={option.tone}>{option.label}</Badge>
+                  {/* What the plan costs, so the choice isn't made on its name
+                      alone - the same summary the public form shows. */}
+                  <span className="mt-0.5 block px-1 text-xs text-slate-500">{option.summary}</span>
+                </button>
+              ))}
+            </div>
+          </>,
+          document.body,
+        )}
+    </div>
+  )
+}
+
 // The two boards read different collections - induction submissions are their
 // own records, not Leads - so they're separate components rather than one
 // table with a filter. Splitting here also means the Foundation board's
@@ -444,6 +599,12 @@ function FoundationLeadsBoard() {
   const sectionOptions = configQuery.data?.sections ?? []
   const sectionByCode = Object.fromEntries(sectionOptions.map((section) => [section.code, section]))
 
+  // The price list behind the Payment Method column: which plans a lead's
+  // program offers, and what each costs. Fetched once for the board rather
+  // than per row, under the key the detail modal and the public form already
+  // share.
+  const pricingQuery = useQuery({ queryKey: ['foundation-form-pricing'], queryFn: foundationFormService.getPricing })
+
   const courseOptionsQuery = useQuery({ queryKey: ['lead-course-options'], queryFn: leadService.getCourseOptions })
   // Everything the Course cell can offer, which is more than the filter's
   // list: a course nobody is on yet is a dead end to filter by and the point
@@ -531,22 +692,13 @@ function FoundationLeadsBoard() {
           },
         ]),
     { key: 'date', header: 'Date', align: 'center', render: (row) => formatDate(row.created_at) },
-    // Read-only on purpose: changing a plan rebuilds its installments from
-    // the pricing table (LeadService.assign_plan), which would discard any
-    // amounts, proofs and dates already collected against the old one. The
-    // Lead Detail modal owns assigning/changing it, where that's explicit.
     {
       key: 'payment_plan',
       header: 'Payment Method',
       align: 'center',
-      render: (row) =>
-        row.payment_plan ? (
-          <Badge tone={PAYMENT_PLAN_TONES[row.payment_plan] ?? 'slate'}>
-            {PAYMENT_PLAN_LABELS[row.payment_plan] ?? titleCase(row.payment_plan)}
-          </Badge>
-        ) : (
-          <span className="text-sm text-slate-400">—</span>
-        ),
+      render: (row) => (
+        <PaymentPlanCell key={row.id} lead={row} pricing={pricingQuery.data} onError={setEditError} />
+      ),
     },
     // Between Payment Method and Payment Remarks: how much, through which
     // account, then what the caller made of it.
