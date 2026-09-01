@@ -27,13 +27,13 @@ import { formatDate } from '@/utils/formatters'
 // in slate tokens. A light hue is hard to read as text, and identity already
 // comes from the coloured plate beside it.
 const DETAIL_TONES = {
-  blue: 'bg-linear-to-br from-blue-500 to-blue-700',
-  violet: 'bg-linear-to-br from-violet-500 to-violet-700',
-  emerald: 'bg-linear-to-br from-emerald-500 to-emerald-700',
-  amber: 'bg-linear-to-br from-amber-500 to-amber-700',
-  rose: 'bg-linear-to-br from-rose-500 to-rose-700',
-  cyan: 'bg-linear-to-br from-cyan-500 to-cyan-700',
-  slate: 'bg-linear-to-br from-slate-500 to-slate-700',
+  blue: 'bg-blue-600',
+  violet: 'bg-violet-600',
+  emerald: 'bg-emerald-600',
+  amber: 'bg-amber-600',
+  rose: 'bg-rose-600',
+  cyan: 'bg-cyan-600',
+  slate: 'bg-slate-600',
 }
 
 const SECTION_EDGE = {
@@ -186,7 +186,7 @@ export function InductionEntryDetail({ entry, hideAssignee = false }) {
           tiles below gave up, so one thing on this tab carries real colour and
           it's the thing you look for first. */}
       <div className="flex items-center gap-3 rounded-lg border border-brand-100 bg-brand-50 px-3.5 py-2.5">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-brand-500 to-brand-700 text-white shadow-sm">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-brand-600 text-white">
           <Layers className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
         </span>
         <div className="min-w-0">

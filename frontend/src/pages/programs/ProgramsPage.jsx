@@ -134,7 +134,7 @@ function ProgramDetail({ program, category }) {
 
 function ProgramCard({ row, category, actions }) {
   return (
-    <div className="flex h-full flex-col rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
+    <div className="flex h-full flex-col rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-colors hover:border-slate-300">
       <div className="mb-2 flex items-start justify-between gap-2">
         <h3 className="text-sm font-semibold leading-snug text-slate-900">{row.name}</h3>
         {statusBadge(row)}

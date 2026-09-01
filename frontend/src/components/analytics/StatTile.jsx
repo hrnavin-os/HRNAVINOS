@@ -116,7 +116,7 @@ export function MiniStatStrip({ items }) {
                 {label}
               </p>
               <p className="mt-0.5 flex items-baseline gap-1.5">
-                <span className="text-base font-bold leading-none text-slate-900">{value}</span>
+                <span className="text-base font-semibold leading-none text-slate-900">{value}</span>
                 {share && (
                   <span className={`rounded px-1 py-0.5 text-[10px] font-bold ${style.pill}`}>{share}</span>
                 )}

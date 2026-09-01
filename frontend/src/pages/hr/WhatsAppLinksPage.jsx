@@ -45,13 +45,13 @@ function SectionLinkCard({ section }) {
   const isDirty = value.trim() !== saved
 
   return (
-    <div className="flex min-w-72 flex-1 flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="flex min-w-72 flex-1 flex-col rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-center gap-2.5">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-100 text-green-600">
           <MessageCircle className="h-4.5 w-4.5" strokeWidth={2} aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <h3 className="truncate text-base font-semibold text-slate-900">{section.label}</h3>
+          <h3 className="truncate text-sm font-semibold text-slate-900">{section.label}</h3>
           <p className="text-xs text-slate-500">WhatsApp Group</p>
         </div>
       </div>

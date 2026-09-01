@@ -90,7 +90,7 @@ export function GoogleSheetsIntegration() {
       )}
       <ErrorMessage message={mutationError ? getApiErrorMessage(mutationError) : null} />
 
-      <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
         <div className="flex items-start gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-600 shadow-sm">
             <FileSpreadsheet className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
@@ -129,7 +129,7 @@ export function GoogleSheetsIntegration() {
 
       {isConnected && (
         <>
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-center gap-2">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs font-semibold text-white">
                 1
@@ -150,7 +150,7 @@ export function GoogleSheetsIntegration() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold text-slate-900">Connected Sheets</h3>

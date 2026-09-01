@@ -380,7 +380,7 @@ export function PaymentDetailModal({
         <div className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
           <LeadAvatar name={lead.name} size="h-12 w-12" />
           <div className="min-w-0">
-            <h2 className="truncate text-lg font-semibold text-slate-900">{lead.name}</h2>
+            <h2 className="truncate text-base font-semibold text-slate-900">{lead.name}</h2>
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               {statusBadge}
               {/* Same tone maps as the Cashbook table, so a plan and a mode

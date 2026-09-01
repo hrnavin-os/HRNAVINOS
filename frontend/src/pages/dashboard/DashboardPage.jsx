@@ -29,7 +29,7 @@ export function DashboardPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold text-slate-900">Welcome back, {user?.first_name}</h1>
+      <h1 className="text-base font-semibold text-slate-900">Welcome back, {user?.first_name}</h1>
       <p className="mt-1 text-sm text-slate-500">Here's what's happening across the institute today.</p>
 
       {isLoading && <LoadingSpinner />}

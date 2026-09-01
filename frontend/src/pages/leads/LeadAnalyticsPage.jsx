@@ -311,7 +311,7 @@ export function LeadAnalyticsPage() {
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="h-9 w-1 shrink-0 rounded-full bg-brand-500" aria-hidden="true" />
             <div className="min-w-0">
-              <h1 className="text-base font-bold tracking-tight text-slate-900">Analytics Dashboard</h1>
+              <h1 className="text-base font-semibold tracking-tight text-slate-900">Analytics Dashboard</h1>
               <p className="text-[11px] font-medium text-amber-600">
                 Induction call insights &amp; candidate categorization
               </p>

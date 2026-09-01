@@ -80,7 +80,7 @@ function MoreSheet({ items, isOpen, onClose }) {
               {({ isActive }) => (
                 <>
                   <span
-                    className={`flex h-11 w-11 items-center justify-center rounded-xl transition-colors ${
+                    className={`flex h-10 w-10 items-center justify-center rounded-md transition-colors ${
                       isActive ? 'bg-brand-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500'
                     }`}
                   >

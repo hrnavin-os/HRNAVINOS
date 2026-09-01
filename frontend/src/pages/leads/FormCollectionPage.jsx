@@ -40,20 +40,20 @@ function SectionCard({ section, tone, canConfigure, onEdit, onDelete, isDeleting
       onKeyDown={(event) => {
         if (event.key === 'Enter') navigate(`/leads?section=${section.code}`)
       }}
-      className={`flex h-full cursor-pointer flex-col justify-between gap-4 rounded-xl border p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${
+      className={`flex h-full cursor-pointer flex-col justify-between gap-4 rounded-lg border p-4 shadow-sm transition-colors hover:border-slate-300 ${
         CARD_TONE_CLASSES[tone] ?? CARD_TONE_CLASSES.blue
       }`}
     >
       <div className="flex min-w-0 items-center gap-4">
         <span
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white shadow-sm ${
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-white ${
             CARD_PLATE_CLASSES[tone] ?? CARD_PLATE_CLASSES.blue
           }`}
         >
           <ClipboardCheck className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <h3 className="text-base font-semibold text-slate-900">{section.label}</h3>
+          <h3 className="text-sm font-semibold text-slate-900">{section.label}</h3>
           <p className="mt-0.5 flex items-center gap-1.5 text-sm text-slate-600">
             <Users className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
             {countQuery.isLoading ? 'Loading…' : `${countQuery.data?.total ?? 0} submissions`}

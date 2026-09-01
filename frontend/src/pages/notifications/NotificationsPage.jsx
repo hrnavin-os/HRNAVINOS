@@ -22,20 +22,20 @@ import { formatDateTime } from '@/utils/formatters'
 // Accent per notification type. The icon carries it as well as the colour, so
 // a warning is still distinguishable without relying on hue alone.
 const TYPE_STYLES = {
-  info: { icon: Info, plate: 'bg-linear-to-br from-blue-500 to-blue-700', ring: 'border-blue-100', wash: 'from-blue-50/70' },
+  info: { icon: Info, plate: 'bg-blue-600', ring: 'border-blue-200', wash: 'bg-blue-50/40' },
   success: {
     icon: CircleCheck,
-    plate: 'bg-linear-to-br from-emerald-500 to-emerald-700',
-    ring: 'border-emerald-100',
-    wash: 'from-emerald-50/70',
+    plate: 'bg-emerald-600',
+    ring: 'border-emerald-200',
+    wash: 'bg-emerald-50/40',
   },
   warning: {
     icon: AlertTriangle,
-    plate: 'bg-linear-to-br from-amber-500 to-amber-700',
-    ring: 'border-amber-100',
-    wash: 'from-amber-50/70',
+    plate: 'bg-amber-500',
+    ring: 'border-amber-200',
+    wash: 'bg-amber-50/40',
   },
-  error: { icon: CircleAlert, plate: 'bg-linear-to-br from-red-500 to-red-700', ring: 'border-red-100', wash: 'from-red-50/70' },
+  error: { icon: CircleAlert, plate: 'bg-red-600', ring: 'border-red-200', wash: 'bg-red-50/40' },
 }
 
 // A div wrapping its own buttons rather than one big button: the card carries
@@ -48,11 +48,20 @@ function NotificationCard({ notification, onOpen, onDelete, isBusy, isDeleting, 
 
   return (
     <div
-      className={`group relative flex h-full flex-col overflow-hidden rounded-xl border bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${
-        isSelected ? 'border-brand-400 ring-2 ring-brand-200' : isUnread ? style.ring : 'border-slate-200'
+      // Hover darkens the border rather than lifting the card. These sit in a
+      // grid of a dozen, and a grid where each tile jumps as the pointer
+      // crosses it is a grid that never sits still while you read it.
+      className={`group relative flex h-full flex-col overflow-hidden rounded-lg border bg-white shadow-sm transition-colors ${
+        isSelected
+          ? 'border-brand-400 ring-1 ring-brand-200'
+          : isUnread
+            ? `${style.ring} hover:border-slate-300`
+            : 'border-slate-200 hover:border-slate-300'
       } ${isDeleting ? 'opacity-50' : ''}`}
     >
-      {isUnread && <div className={`absolute inset-0 -z-10 bg-linear-to-br ${style.wash} to-transparent`} />}
+      {/* A flat tint on an unread card, not a fading wash - it says "not read
+          yet" and nothing more, so it should not also be a gradient. */}
+      {isUnread && <div className={`absolute inset-0 -z-10 ${style.wash}`} />}
 
       <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
         {selectMode ? (
@@ -87,7 +96,7 @@ function NotificationCard({ notification, onOpen, onDelete, isBusy, isDeleting, 
       >
         <div className="flex items-start gap-3">
           <span
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white shadow-sm ${style.plate}`}
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-white ${style.plate}`}
           >
             <Icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
           </span>

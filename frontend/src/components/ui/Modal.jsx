@@ -29,7 +29,7 @@ export function Modal({ title, header, isOpen, onClose, children, maxWidth = 'ma
           is wasted when the panel is the only thing on screen anyway. */}
       <div className={`flex max-h-[92vh] w-full sm:max-h-[85vh] ${maxWidth} flex-col rounded-lg bg-white shadow-xl ring-1 ring-slate-900/5`}>
         <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3 sm:px-5">
-          {header ?? <h2 className="text-sm font-semibold text-slate-900">{title}</h2>}
+          {header ?? <h2 className="text-base font-semibold text-slate-900">{title}</h2>}
           <button
             type="button"
             onClick={onClose}

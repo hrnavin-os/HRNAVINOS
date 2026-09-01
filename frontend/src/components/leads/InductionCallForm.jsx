@@ -27,13 +27,13 @@ export function InductionCallForm() {
     // Same grid the Foundation tab uses, so switching tabs doesn't reflow the
     // page - a single card here, but it sits in the same column.
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-      <div className={`flex h-full flex-col justify-between gap-4 rounded-xl border p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${CARD_TONE_CLASSES.blue}`}>
+      <div className={`flex h-full flex-col justify-between gap-4 rounded-lg border p-4 shadow-sm ${CARD_TONE_CLASSES.blue}`}>
       <div className="flex min-w-0 items-center gap-4">
-        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white shadow-sm ${CARD_PLATE_CLASSES.blue}`}>
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-white ${CARD_PLATE_CLASSES.blue}`}>
           <ClipboardCheck className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <h3 className="text-base font-semibold text-slate-900">Induction Call Form</h3>
+          <h3 className="text-sm font-semibold text-slate-900">Induction Call Form</h3>
           <p className="mt-0.5 text-sm text-slate-600">
             Share this link to collect details. Each submission is assigned to a section admin automatically.
           </p>

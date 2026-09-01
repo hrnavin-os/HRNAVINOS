@@ -26,11 +26,14 @@ export const CARD_TONE_CLASSES = {
 
 // The icon plate keeps the accent at full strength - it's the one element
 // small enough to carry a saturated colour without shouting.
+//
+// One step, not a gradient: at 40px a two-stop ramp is not read as depth, only
+// as an edge that doesn't match the flat plates everywhere else in the app.
 export const CARD_PLATE_CLASSES = {
-  blue: 'bg-linear-to-br from-blue-500 to-blue-700',
-  emerald: 'bg-linear-to-br from-emerald-500 to-emerald-700',
-  violet: 'bg-linear-to-br from-violet-500 to-violet-700',
-  amber: 'bg-linear-to-br from-amber-500 to-amber-700',
-  rose: 'bg-linear-to-br from-rose-500 to-rose-700',
-  cyan: 'bg-linear-to-br from-cyan-500 to-cyan-700',
+  blue: 'bg-blue-600',
+  emerald: 'bg-emerald-600',
+  violet: 'bg-violet-600',
+  amber: 'bg-amber-500',
+  rose: 'bg-rose-600',
+  cyan: 'bg-cyan-600',
 }

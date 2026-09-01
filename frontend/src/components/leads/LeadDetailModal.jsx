@@ -114,12 +114,12 @@ function toDateTimeInputValue(value) {
 // coloured labels competed with the values they were labelling, and the
 // lighter ones (cyan, emerald) were hard to read at this size.
 const INFO_TONE_CLASSES = {
-  blue: 'bg-linear-to-br from-blue-500 to-blue-700',
-  violet: 'bg-linear-to-br from-violet-500 to-violet-700',
-  emerald: 'bg-linear-to-br from-emerald-500 to-emerald-700',
-  purple: 'bg-linear-to-br from-purple-500 to-purple-700',
-  cyan: 'bg-linear-to-br from-cyan-500 to-cyan-700',
-  rose: 'bg-linear-to-br from-rose-500 to-rose-700',
+  blue: 'bg-blue-600',
+  violet: 'bg-violet-600',
+  emerald: 'bg-emerald-600',
+  purple: 'bg-purple-600',
+  cyan: 'bg-cyan-600',
+  rose: 'bg-rose-600',
 }
 
 // Source, Assigned To and Created were dropped as noise: the first two are
@@ -134,8 +134,8 @@ const INFO_ITEMS = (lead) => [
 function InfoCard({ item }) {
   const plate = INFO_TONE_CLASSES[item.tone] ?? INFO_TONE_CLASSES.blue
   return (
-    <div className="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md">
-      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white shadow-sm ${plate}`}>
+    <div className="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-white ${plate}`}>
         <item.icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
       </span>
       <div className="min-w-0">
@@ -263,16 +263,16 @@ function PlanAssignmentForm({ onAssign, isAssigning, error }) {
   const category = selectedProgram ? categories[selectedProgram.category] : null
 
   return (
-    <div className="rounded-2xl border border-brand-200 bg-brand-50 p-4">
+    <div className="rounded-lg border border-brand-200 bg-brand-50 p-4">
       <div className="mb-3 flex items-center gap-2.5">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-100 text-brand-600">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-brand-100 text-brand-600">
           <Wallet className="h-4.5 w-4.5" strokeWidth={2} aria-hidden="true" />
         </span>
         <p className="text-sm font-semibold text-slate-800">
           Follow-Up : payment selected by student in foundation form
         </p>
       </div>
-      <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
         <Select
           label="Program"
           value={programInterest}
