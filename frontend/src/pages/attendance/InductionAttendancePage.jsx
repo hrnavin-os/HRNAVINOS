@@ -22,7 +22,7 @@ import { DataTable } from '@/components/ui/DataTable'
 import { FilterDropdown } from '@/components/ui/FilterDropdown'
 import { Input } from '@/components/ui/Input'
 import { Pagination } from '@/components/ui/Pagination'
-import { TabStrip } from '@/components/ui/TabStrip'
+import { StatCard } from '@/components/ui/StatCard'
 import { TableCard } from '@/components/ui/TableCard'
 import { Toast } from '@/components/ui/Toast'
 import { formatDate, formatDateTime } from '@/utils/formatters'
@@ -36,6 +36,7 @@ import { formatDate, formatDateTime } from '@/utils/formatters'
 const TABS = [
   {
     key: 'terms',
+    tone: 'brand',
     label: 'Terms & Condition',
     icon: FileSignature,
     yes: 'Signed',
@@ -44,6 +45,7 @@ const TABS = [
   },
   {
     key: 'polls',
+    tone: 'violet',
     label: 'Polls',
     icon: ListChecks,
     yes: 'Selected',
@@ -52,6 +54,7 @@ const TABS = [
   },
   {
     key: 'success_meet',
+    tone: 'amber',
     label: 'Success Meet',
     icon: Sparkles,
     yes: 'Attended',
@@ -60,6 +63,7 @@ const TABS = [
   },
   {
     key: 'foundation_class',
+    tone: 'emerald',
     label: 'Foundation Class',
     icon: GraduationCap,
     yes: 'Attended',
@@ -278,25 +282,37 @@ export function InductionAttendancePage() {
               </p>
             </div>
           </div>
-          <TabStrip
-            equal
-            // The count rides in the tab, so how much each marker is missing is
-            // readable without opening it.
-            tabs={TABS.map((tab) => ({
-              ...tab,
-              label: stats?.markers?.[tab.key]
-                ? `${tab.label} (${stats.markers[tab.key].yes}/${stats.markers[tab.key].total})`
-                : tab.label,
-            }))}
-            value={marker}
-            onChange={setMarker}
-            className="min-w-0 flex-1 basis-2xl"
-          />
+          <span className="rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
+            {query.total} {query.total === 1 ? 'student' : 'students'}
+          </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 bg-slate-50/70 px-4 py-2.5">
+        {/* The four markers as cards rather than a tab strip: each one is a
+            figure as much as a destination - how many of the roll have signed,
+            been selected, turned up - and a tab strip can only whisper that in
+            brackets after a label. The open one fills solid, the way the
+            induction and section card rows select. */}
+        <div className="flex flex-wrap gap-3 border-t border-slate-200 bg-slate-50/70 px-4 py-3">
+          {TABS.map((tab) => {
+            const split = stats?.markers?.[tab.key]
+            return (
+              <StatCard
+                key={tab.key}
+                label={tab.label}
+                value={split ? split.yes : '—'}
+                hint={split ? `of ${split.total} students` : null}
+                toneName={tab.tone}
+                icon={tab.icon}
+                isActive={marker === tab.key}
+                onClick={() => setMarker(tab.key)}
+              />
+            )
+          })}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 bg-white px-4 py-2.5">
           {/* The split of the open marker. A segmented control rather than a
-              second tab strip, so the two levels don't read as equals. */}
+              second card row, so the two levels don't read as equals. */}
           <div role="group" aria-label="Filter by mark" className="inline-flex rounded-md border border-slate-200 bg-white p-0.5">
             {STATES.map((option) => (
               <button
@@ -339,9 +355,6 @@ export function InductionAttendancePage() {
               rightElement={<Search className="h-4 w-4 text-slate-400" aria-hidden="true" />}
             />
           </div>
-          <span className="ml-auto rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
-            {query.total} {query.total === 1 ? 'student' : 'students'}
-          </span>
         </div>
 
         {active.auto && (
