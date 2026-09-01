@@ -1,11 +1,20 @@
 import { TrendingDown, TrendingUp } from 'lucide-react'
 
+// Each tone carries three things: the tinted plate behind the icon, the pill
+// the share rides in, and the rail down the tile's left edge. The rail is what
+// makes a row of tiles read as a strip of related figures at a glance - the
+// colour is the tile's identity, repeated at a size you can see from across
+// the room, which a 32px icon chip alone cannot do.
 const TONES = {
-  brand: { plate: 'bg-brand-50 text-brand-600', pill: 'bg-brand-50 text-brand-700' },
-  emerald: { plate: 'bg-emerald-50 text-emerald-600', pill: 'bg-emerald-50 text-emerald-700' },
-  red: { plate: 'bg-red-50 text-red-600', pill: 'bg-red-50 text-red-700' },
-  amber: { plate: 'bg-amber-50 text-amber-600', pill: 'bg-amber-50 text-amber-700' },
-  slate: { plate: 'bg-slate-100 text-slate-500', pill: 'bg-slate-100 text-slate-600' },
+  brand: { plate: 'bg-brand-50 text-brand-600', pill: 'bg-brand-50 text-brand-700', rail: 'bg-brand-500' },
+  emerald: {
+    plate: 'bg-emerald-50 text-emerald-600',
+    pill: 'bg-emerald-50 text-emerald-700',
+    rail: 'bg-emerald-500',
+  },
+  red: { plate: 'bg-red-50 text-red-600', pill: 'bg-red-50 text-red-700', rail: 'bg-red-500' },
+  amber: { plate: 'bg-amber-50 text-amber-600', pill: 'bg-amber-50 text-amber-700', rail: 'bg-amber-500' },
+  slate: { plate: 'bg-slate-100 text-slate-500', pill: 'bg-slate-100 text-slate-600', rail: 'bg-slate-300' },
 }
 
 /**
@@ -35,40 +44,48 @@ export function StatTile({ label, value, share, delta, deltaLabel, invert = fals
   const Arrow = rising ? TrendingUp : TrendingDown
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
-      <div className="flex items-start justify-between gap-3">
-        <p className="min-w-0 text-[11px] font-semibold uppercase leading-tight tracking-wide text-slate-400">
+    <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-white pl-4 pr-3.5 py-3 shadow-sm transition-shadow hover:shadow">
+      <span className={`absolute inset-y-0 left-0 w-1 ${style.rail}`} aria-hidden="true" />
+      <div className="flex items-start justify-between gap-2">
+        <p className="min-w-0 text-[10px] font-semibold uppercase leading-tight tracking-wider text-slate-500">
           {label}
         </p>
         {Icon && (
-          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${style.plate}`}>
-            <Icon className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${style.plate}`}>
+            <Icon className="h-4 w-4" strokeWidth={2.2} aria-hidden="true" />
           </span>
         )}
       </div>
-      <p className="mt-2 flex flex-wrap items-baseline gap-2">
+      <p className="mt-1.5 flex flex-wrap items-baseline gap-1.5">
         <span
-          className={`font-bold leading-none text-slate-900 ${isName ? 'line-clamp-2 text-lg' : 'text-3xl'}`}
+          className={`font-bold leading-none tracking-tight text-slate-900 ${
+            isName ? 'line-clamp-2 text-base leading-snug' : 'text-2xl'
+          }`}
           title={isName ? value : undefined}
         >
           {value}
         </span>
-        {share && <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${style.pill}`}>{share}</span>}
+        {share && (
+          <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${style.pill}`}>{share}</span>
+        )}
       </p>
       {typeof delta === 'number' ? (
-        <p className="mt-2.5 flex items-center gap-1.5 text-xs">
-          <Arrow
-            className={`h-3.5 w-3.5 shrink-0 ${good ? 'text-emerald-600' : 'text-red-600'}`}
-            strokeWidth={2.5}
-            aria-hidden="true"
-          />
-          <span className={`font-semibold ${good ? 'text-emerald-600' : 'text-red-600'}`}>
+        <p className="mt-2 flex items-center gap-1.5 text-[11px]">
+          {/* The movement in its own tinted chip rather than as loose coloured
+              text: it is a second, smaller reading of the same figure, and the
+              chip is what keeps it from competing with the number above. */}
+          <span
+            className={`inline-flex items-center gap-0.5 rounded px-1 py-0.5 font-bold ${
+              good ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+            }`}
+          >
+            <Arrow className="h-3 w-3 shrink-0" strokeWidth={2.5} aria-hidden="true" />
             {Math.abs(delta)}%
           </span>
           <span className="truncate text-slate-400">{deltaLabel}</span>
         </p>
       ) : (
-        deltaLabel && <p className="mt-2.5 truncate text-xs text-slate-400">{deltaLabel}</p>
+        deltaLabel && <p className="mt-2 truncate text-[11px] text-slate-400">{deltaLabel}</p>
       )}
     </div>
   )
@@ -84,23 +101,25 @@ export function StatTile({ label, value, share, delta, deltaLabel, invert = fals
  */
 export function MiniStatStrip({ items }) {
   return (
-    <div className="grid divide-y divide-slate-100 rounded-xl border border-slate-200 bg-slate-50/50 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+    <div className="grid divide-y divide-slate-200 rounded-lg border border-slate-200 bg-slate-50 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
       {items.map(({ label, value, share, icon: Icon, tone = 'brand' }) => {
         const style = TONES[tone] ?? TONES.brand
         return (
-          <div key={label} className="flex items-center gap-3 px-4 py-3">
+          <div key={label} className="flex items-center gap-2.5 px-3.5 py-2.5">
             {Icon && (
-              <span
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${style.plate}`}
-              >
-                <Icon className="h-4.5 w-4.5" strokeWidth={2} aria-hidden="true" />
+              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${style.plate}`}>
+                <Icon className="h-4 w-4" strokeWidth={2.2} aria-hidden="true" />
               </span>
             )}
             <div className="min-w-0">
-              <p className="truncate text-xs font-medium text-slate-500">{label}</p>
-              <p className="mt-0.5 flex items-baseline gap-2">
-                <span className="text-lg font-bold leading-none text-slate-900">{value}</span>
-                {share && <span className={`text-xs font-semibold ${style.pill} bg-transparent`}>{share}</span>}
+              <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                {label}
+              </p>
+              <p className="mt-0.5 flex items-baseline gap-1.5">
+                <span className="text-base font-bold leading-none text-slate-900">{value}</span>
+                {share && (
+                  <span className={`rounded px-1 py-0.5 text-[10px] font-bold ${style.pill}`}>{share}</span>
+                )}
               </p>
             </div>
           </div>

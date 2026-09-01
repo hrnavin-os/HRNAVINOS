@@ -7,6 +7,11 @@ import { Info } from 'lucide-react'
  * One shape for all of them, so a screen of six panels reads as one screen
  * rather than six widgets that each arrived from somewhere else.
  *
+ * The header is a banded strip - accent bar, title, hairline underneath -
+ * rather than text floating above the content. On a dense board the eye needs
+ * to find where one panel ends and the next begins without measuring
+ * whitespace, and a ruled header does that at any zoom level.
+ *
  * `hint` becomes the little (i) beside the title. It carries the caveat a
  * subtitle shouldn't have to - how a number is derived, what it excludes -
  * where it is available to anyone who wants it and in nobody's way.
@@ -14,24 +19,30 @@ import { Info } from 'lucide-react'
 export function Panel({ title, subtitle, hint, action, children, className = '' }) {
   return (
     <section
-      className={`rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md ${className}`}
+      className={`overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm ${className}`}
     >
-      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-        <div className="min-w-0">
-          <h2 className="flex items-center gap-1.5 text-base font-semibold text-slate-900">
-            <span className="min-w-0 truncate">{title}</span>
-            {hint && (
-              <span title={hint} className="shrink-0 text-slate-300 transition-colors hover:text-slate-500">
-                <Info className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                <span className="sr-only">{hint}</span>
-              </span>
-            )}
-          </h2>
-          {subtitle && <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-slate-200 bg-slate-50/70 px-4 py-2.5">
+        <div className="flex min-w-0 items-start gap-2.5">
+          {/* The accent bar. Same device as the KPI rail one row above, so the
+              header reads as belonging to the same board rather than to a
+              chart library that was dropped into it. */}
+          <span className="mt-0.5 h-8 w-1 shrink-0 rounded-full bg-brand-500" aria-hidden="true" />
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-1.5 text-sm font-bold text-slate-900">
+              <span className="min-w-0 truncate">{title}</span>
+              {hint && (
+                <span title={hint} className="shrink-0 text-slate-300 transition-colors hover:text-slate-500">
+                  <Info className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                  <span className="sr-only">{hint}</span>
+                </span>
+              )}
+            </h2>
+            {subtitle && <p className="mt-0.5 text-[11px] leading-snug text-slate-500">{subtitle}</p>}
+          </div>
         </div>
         {action && <div className="shrink-0">{action}</div>}
       </div>
-      <div className="mt-5">{children}</div>
+      <div className="p-4">{children}</div>
     </section>
   )
 }
@@ -46,17 +57,19 @@ export function Panel({ title, subtitle, hint, action, children, className = '' 
  */
 export function SegmentedToggle({ options, value, onChange, label }) {
   return (
-    <div role="group" aria-label={label} className="inline-flex rounded-lg bg-slate-100 p-1">
+    <div
+      role="group"
+      aria-label={label}
+      className="inline-flex rounded-md border border-slate-200 bg-white p-0.5"
+    >
       {options.map((option) => (
         <button
           key={option.value}
           type="button"
           onClick={() => onChange(option.value)}
           aria-pressed={value === option.value}
-          className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
-            value === option.value
-              ? 'bg-white text-brand-700 shadow-sm'
-              : 'text-slate-500 hover:text-slate-700'
+          className={`rounded px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide transition-colors ${
+            value === option.value ? 'bg-brand-600 text-white' : 'text-slate-500 hover:text-slate-700'
           }`}
         >
           {option.label}

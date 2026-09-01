@@ -299,55 +299,68 @@ export function LeadAnalyticsPage() {
 
   return (
     <div>
-      {/* Title and tabs on one line. The Topbar already says "Dashboard"; this
-          says which dashboard, which the header cannot because it reads the
-          nav label. */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-        <div className="min-w-0">
-          <h1 className="text-lg font-bold tracking-tight text-slate-900">Analytics Dashboard</h1>
-          <p className="mt-0.5 text-sm text-amber-600">
-            Induction call insights &amp; candidate categorization
-          </p>
-        </div>
-        <TabStrip equal tabs={TABS} value={tab} onChange={openTab} className="min-w-0 flex-1 basis-lg" />
-      </div>
-
-      {/* The filter rail. One window and one section for every view on the
-          canvas, so two panels on the same screen can never end up describing
-          different populations - the failure that makes a dashboard
-          untrustworthy rather than merely wrong. */}
-      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-        <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Filters</span>
-        <div className="w-56">
-          <DateFilter grow label="Registration date" value={dateRange} onChange={setDateRange} />
-        </div>
-        {!scopedSection && (
-          <div className="w-44">
-            <FilterDropdown
-              grow
-              label="Section"
-              value={section}
-              options={sections.map((item) => ({ value: item.code, label: item.label }))}
-              onChange={setSection}
-            />
+      {/* The control deck: what this board is, which dimension it is cut by,
+          and the window it covers - one card in two bands rather than three
+          rows floating on the page. Everything that answers "what am I looking
+          at" is then one block at the top, and the panels below start where
+          the reading starts.
+          (The Topbar already says "Dashboard"; this says which dashboard,
+          which the header cannot because it reads the nav label.) */}
+      <div className="mb-3 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="h-9 w-1 shrink-0 rounded-full bg-brand-500" aria-hidden="true" />
+            <div className="min-w-0">
+              <h1 className="text-base font-bold tracking-tight text-slate-900">Analytics Dashboard</h1>
+              <p className="text-[11px] font-medium text-amber-600">
+                Induction call insights &amp; candidate categorization
+              </p>
+            </div>
           </div>
-        )}
-        {selected && (
-          // The highlight is a filter you set by clicking a chart, so it says
-          // so in the same row as the ones you set from a menu - and can be
-          // dropped from here without hunting for the mark you clicked.
-          <button
-            type="button"
-            onClick={() => setSelected(null)}
-            className="inline-flex items-center gap-1.5 rounded-md border border-brand-300 bg-brand-50 px-2.5 py-2 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-100"
-          >
-            {selected}
-            <X className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
-          </button>
-        )}
-        <span className="ml-auto text-xs text-slate-500">
-          {selected ? `${focusCount} of ${total} highlighted` : `${total} candidates in scope`}
-        </span>
+          <TabStrip equal tabs={TABS} value={tab} onChange={openTab} className="min-w-0 flex-1 basis-lg" />
+        </div>
+
+        {/* The filter band. One window and one section for every view on the
+            canvas, so two panels on the same screen can never end up
+            describing different populations - the failure that makes a
+            dashboard untrustworthy rather than merely wrong. */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 bg-slate-50/70 px-4 py-2.5">
+          <span className="mr-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Filters</span>
+          <div className="w-56">
+            <DateFilter grow label="Registration date" value={dateRange} onChange={setDateRange} />
+          </div>
+          {!scopedSection && (
+            <div className="w-44">
+              <FilterDropdown
+                grow
+                label="Section"
+                value={section}
+                options={sections.map((item) => ({ value: item.code, label: item.label }))}
+                onChange={setSection}
+              />
+            </div>
+          )}
+          {selected && (
+            // The highlight is a filter you set by clicking a chart, so it
+            // says so in the same row as the ones you set from a menu - and
+            // can be dropped from here without hunting for the mark you
+            // clicked.
+            <button
+              type="button"
+              onClick={() => setSelected(null)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-brand-300 bg-brand-50 px-2.5 py-1.5 text-xs font-bold text-brand-700 transition-colors hover:bg-brand-100"
+            >
+              {selected}
+              <X className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
+            </button>
+          )}
+          {/* The population every figure below is drawn from, stated once. In
+              a pill rather than loose text: it is a reading of the current
+              filters, not a caption on them. */}
+          <span className="ml-auto rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
+            {selected ? `${focusCount} of ${total} highlighted` : `${total} candidates in scope`}
+          </span>
+        </div>
       </div>
 
       <ErrorMessage message={query.error ? getApiErrorMessage(query.error) : null} />
@@ -358,7 +371,7 @@ export function LeadAnalyticsPage() {
         // Dimmed rather than replaced while refetching, so the page doesn't
         // jump between a skeleton and content on every tab switch.
         <div className={query.isFetching ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
-          <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <StatTile
               label={selected ? 'Highlighted candidates' : 'Total candidates'}
               value={focusCount}
@@ -399,7 +412,7 @@ export function LeadAnalyticsPage() {
 
           {/* One panel wide now that the bar list is gone - the two-column
               grid it shared existed only to sit the two side by side. */}
-          <div className="mb-4">
+          <div className="mb-3">
             <Panel
               className="min-w-0"
               title={active.title}
@@ -422,7 +435,7 @@ export function LeadAnalyticsPage() {
                 selected={donutSelection}
                 onSelect={pick}
               />
-              <div className="mt-6">
+              <div className="mt-5">
                 {/* The three states every candidate is in, along the foot of
                     the panel whose total they divide. They are shares of the
                     same fourteen the ring above is about, so they belong to
