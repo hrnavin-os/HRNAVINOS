@@ -2,6 +2,7 @@
 import uuid
 from datetime import date, datetime, time, timedelta
 
+from app.database.base import utcnow
 from app.exceptions.base import BadRequestError, NotFoundError
 from app.models.enums import InductionStatus
 from app.models.lead import Lead
@@ -45,12 +46,46 @@ def batch_for(registration_date: date) -> str:
     return f"Batch-{BATCH_ANCHOR_NUMBER + months}"
 
 
+def stamp_terms_signature(
+    details: InductionOtherDetails, *, signed: bool | None, actor_id: uuid.UUID | None, actor_name: str | None
+) -> None:
+    """Records who set `terms_form_signed` to its current value, and when.
+
+    Shared by the two surfaces that can flip it - the induction update form's
+    fourth page and the Terms & Conditions register - so a signature recorded
+    from either place carries the same attribution. Without it the register
+    would print "signed" beside half its rows with nobody's name against it,
+    depending on where the tick happened to be made.
+
+    Unsigning clears the stamp rather than keeping the last marker: the fields
+    say who vouched for a signature that stands, and a withdrawn one has no
+    voucher.
+    """
+    if signed:
+        details.terms_signed_at = utcnow()
+        details.terms_signed_by = actor_id
+        details.terms_signed_by_name = actor_name
+    else:
+        details.terms_signed_at = None
+        details.terms_signed_by = None
+        details.terms_signed_by_name = None
+
+
 class InductionEntryService:
     def __init__(self) -> None:
         self.entries = InductionEntryRepository()
         self.roles = RoleRepository()
         self.users = UserRepository()
         self.audit = AuditService()
+
+    async def actor_name(self, actor_id: uuid.UUID | None) -> str | None:
+        """"First Last" for whoever is acting, or None for an unattributed
+        write. Used where a name is snapshotted onto a record rather than
+        looked up per read."""
+        if not actor_id:
+            return None
+        user = await self.users.get_by_id(actor_id)
+        return f"{user.first_name} {user.last_name}".strip() if user else None
 
     async def _section_admin_rota(self) -> list[tuple[User, str]]:
         """Every active Section Admin paired with their section, in a stable
@@ -451,6 +486,7 @@ class InductionEntryService:
         rather than blanking it - `exclude_unset` on each group means clearing
         a single answer still works, but skipping a page doesn't wipe it."""
         entry = await self.get(entry_id)
+        was_signed = entry.other_details.terms_form_signed
         groups = {
             "qualification": InductionQualification,
             "placement": InductionPlacement,
@@ -466,6 +502,17 @@ class InductionEntryService:
             merged.update(page.model_dump(exclude_unset=True))
             setattr(entry, name, model(**merged))
             changed.append(name)
+
+        # The terms tick on page four is the same fact the register keeps, so
+        # it earns the same attribution - stamped here rather than only in the
+        # register, or half the signatures would have no name against them.
+        if entry.other_details.terms_form_signed != was_signed:
+            stamp_terms_signature(
+                entry.other_details,
+                signed=entry.other_details.terms_form_signed,
+                actor_id=actor_id,
+                actor_name=await self.actor_name(actor_id),
+            )
 
         entry.updated_by = actor_id
         entry.touch(actor_id)

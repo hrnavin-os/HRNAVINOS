@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Settings,
   FileCheck2,
+  FileSignature,
 } from 'lucide-react'
 import { PERMISSIONS } from '@/constants/permissions'
 
@@ -78,6 +79,16 @@ export const NAV_ITEMS = [
     permission: PERMISSIONS.LEADS_VIEW,
     icon: FileCheck2,
     hiddenForRoles: ['Finance'],
+    hiddenForScopedUsers: true,
+  },
+  {
+    // Sits with the other Admin boards rather than under Administration: it is
+    // worked daily by whoever is chasing signed forms, not configured once.
+    label: 'Terms & Conditions',
+    shortLabel: 'Terms',
+    to: '/terms',
+    permission: PERMISSIONS.TERMS_VIEW,
+    icon: FileSignature,
     hiddenForScopedUsers: true,
   },
   {

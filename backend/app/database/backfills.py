@@ -14,6 +14,7 @@ from app.models.induction_entry import InductionEntry
 from app.models.lead import Lead
 from app.models.permission import Permission
 from app.models.role import Role
+from app.permissions.permission_codes import all_permission_definitions
 from app.permissions.role_definitions import DEFAULT_ROLE_PERMISSIONS
 from app.utils.phone import normalize_phone
 
@@ -50,6 +51,30 @@ async def backfill_phone_normalized(model: type[BaseDocument]) -> int:
         return 0
     result = await collection.bulk_write(operations, ordered=False)
     return result.modified_count
+
+
+async def sync_permission_catalog() -> int:
+    """Inserts a Permission row for any code the app has gained since the
+    database was seeded.
+
+    scripts/seed_db.py writes this catalogue, and it only ever runs by hand on
+    a fresh database - the deploy restarts the app and nothing else. So a new
+    permission code existed in Python and nowhere in Mongo, which made
+    backfill_role_permissions below a no-op for it (it can only grant rows that
+    exist) and left the feature behind it unreachable on the one database that
+    matters.
+
+    Insert-only. Codes are never removed here: a permission that has left the
+    enum may still be granted to a role somebody edited by hand, and deleting
+    the row would silently revoke it.
+    """
+    existing = {permission.code for permission in await Permission.find({}).to_list()}
+    missing = [definition for definition in all_permission_definitions() if definition["code"] not in existing]
+    if not missing:
+        return 0
+    await Permission.insert_many([Permission(**definition) for definition in missing])
+    logger.info("Added %d new permission(s) to the catalogue.", len(missing))
+    return len(missing)
 
 
 async def backfill_role_permissions() -> int:
@@ -91,4 +116,7 @@ async def run_startup_backfills() -> None:
         updated = await backfill_phone_normalized(model)
         if updated:
             logger.info("Backfilled phone_normalized on %d %s rows.", updated, model.Settings.name)
+    # Order matters: a role can only be granted a permission that exists, so
+    # the catalogue is topped up first.
+    await sync_permission_catalog()
     await backfill_role_permissions()

@@ -13,6 +13,7 @@ import { MarketingBoardPage } from '@/pages/marketing/MarketingBoardPage'
 import { AdmissionsPage } from '@/pages/admissions/AdmissionsPage'
 import { StudentsPage } from '@/pages/students/StudentsPage'
 import { ProgramsPage } from '@/pages/programs/ProgramsPage'
+import { TermsPage } from '@/pages/terms/TermsPage'
 import { CoursesPage } from '@/pages/courses/CoursesPage'
 import { BatchesPage } from '@/pages/batches/BatchesPage'
 import { HRCoordinatorPage } from '@/pages/hr/HRCoordinatorPage'
@@ -77,6 +78,12 @@ export function AppRoutes() {
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.PROGRAMS_VIEW} />}>
             <Route path="/programs" element={<ProgramsPage />} />
+          </Route>
+          {/* blockScoped like the other Admin boards: the register covers
+              every section's induction roll, which is not a Section Admin's
+              to see. */}
+          <Route element={<ProtectedRoute permission={PERMISSIONS.TERMS_VIEW} blockScoped />}>
+            <Route path="/terms" element={<TermsPage />} />
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.COURSES_VIEW} />}>
             <Route path="/courses" element={<CoursesPage />} />

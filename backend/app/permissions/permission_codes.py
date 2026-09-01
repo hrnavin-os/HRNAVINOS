@@ -120,6 +120,15 @@ class Permissions(StrEnum):
     # ---------- Form Collection ----------
     FORM_COLLECTION_CONFIGURE = "form_collection.configure"
 
+    # ---------- Terms & Conditions ----------
+    # Split three ways because they are three different jobs: reading who has
+    # signed, recording that somebody has, and rewriting the document they are
+    # signing. The last one changes what everybody else is agreeing to, so it
+    # is not something to hand out with the register.
+    TERMS_VIEW = "terms.view"
+    TERMS_SIGN = "terms.sign"
+    TERMS_CONFIGURE = "terms.configure"
+
 
 def all_permission_definitions() -> list[dict[str, str]]:
     """Returns [{code, module, action}, ...] for every permission, derived from the enum."""

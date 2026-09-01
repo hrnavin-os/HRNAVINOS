@@ -25,6 +25,7 @@ from app.models.report import Report
 from app.models.role import Role
 from app.models.settings import AppSettings
 from app.models.student import Student
+from app.models.terms_document import TermsDocument
 from app.models.ticket import Ticket
 from app.models.tutor import Tutor
 from app.models.user import User
@@ -55,6 +56,7 @@ ALL_DOCUMENTS = [
     Role,
     AppSettings,
     Student,
+    TermsDocument,
     Ticket,
     Tutor,
     User,
@@ -87,6 +89,7 @@ __all__ = [
     "Role",
     "AppSettings",
     "Student",
+    "TermsDocument",
     "Ticket",
     "Tutor",
     "User",

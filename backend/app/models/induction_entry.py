@@ -43,7 +43,21 @@ class InductionRemarks(BaseModel):
 class InductionOtherDetails(BaseModel):
     induction_call_date: date | None = None
     scheduled_time: str | None = Field(default=None, max_length=20)
+    # Whether this candidate has signed the Terms & Conditions. Asked on the
+    # fourth page of the update form since before the Terms register existed,
+    # and left here rather than moved onto a field of its own: two places
+    # storing "has signed" is two places to disagree, and the update form is
+    # where the caller who took the signature already is.
     terms_form_signed: bool | None = None
+    # Who recorded the signature and when. Beside the flag rather than in an
+    # audit log, because the register has to print them next to the name -
+    # "signed" with nobody attached is a claim, not a record. Both paths that
+    # can flip the flag stamp these (see InductionEntryService.stamp_terms).
+    terms_signed_at: datetime | None = None
+    terms_signed_by: uuid.UUID | None = None
+    # The marker's name snapshotted at write time, so the register renders a
+    # page of rows without a user lookup per row.
+    terms_signed_by_name: str | None = Field(default=None, max_length=150)
     whatsapp_group_added: bool | None = None
     # Path returned by the upload endpoint, not the file itself.
     call_recording_url: str | None = Field(default=None, max_length=500)

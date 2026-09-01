@@ -18,6 +18,10 @@ export const PERMISSIONS = {
 
   AUDIT_LOGS_VIEW: 'audit_logs.view',
 
+  TERMS_VIEW: 'terms.view',
+  TERMS_SIGN: 'terms.sign',
+  TERMS_CONFIGURE: 'terms.configure',
+
   LEADS_VIEW: 'leads.view',
   LEADS_CREATE: 'leads.create',
   LEADS_UPDATE: 'leads.update',
