@@ -2,12 +2,9 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Check,
-  ChevronDown,
-  ChevronUp,
   FileSignature,
   GraduationCap,
   ListChecks,
-  Pencil,
   Search,
   Sparkles,
   Undo2,
@@ -23,7 +20,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { DataTable } from '@/components/ui/DataTable'
 import { FilterDropdown } from '@/components/ui/FilterDropdown'
-import { Input, FIELD } from '@/components/ui/Input'
+import { Input } from '@/components/ui/Input'
 import { Pagination } from '@/components/ui/Pagination'
 import { TabStrip } from '@/components/ui/TabStrip'
 import { TableCard } from '@/components/ui/TableCard'
@@ -86,132 +83,6 @@ const STATES = [
   { key: 'no', label: 'Pending' },
 ]
 
-// The terms text itself, shown on the Terms tab - so whoever is chasing
-// signatures can read what is being agreed to without going and finding the
-// document. Collapsed by default: it is reference material, and the roll is
-// the working surface.
-function TermsDocumentPanel({ canEdit, onError }) {
-  const queryClient = useQueryClient()
-  const { data } = useQuery({
-    queryKey: ['terms-document'],
-    queryFn: attendanceBoardService.getTermsDocument,
-  })
-  const [isOpen, setIsOpen] = useState(false)
-  const [isEditing, setIsEditing] = useState(false)
-  const [title, setTitle] = useState('')
-  const [body, setBody] = useState('')
-
-  const save = useMutation({
-    mutationFn: () => attendanceBoardService.updateTermsDocument({ title: title.trim(), body }),
-    onSuccess: (updated) => {
-      queryClient.setQueryData(['terms-document'], updated)
-      setIsEditing(false)
-    },
-    onError: (error) => onError(`Couldn't save the terms: ${getApiErrorMessage(error)}`),
-  })
-
-  function startEditing() {
-    setTitle(data?.title ?? '')
-    setBody(data?.body ?? '')
-    setIsEditing(true)
-    setIsOpen(true)
-  }
-
-  const hasBody = Boolean(data?.body?.trim())
-
-  return (
-    <section className="mb-3 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5">
-        <button
-          type="button"
-          onClick={() => setIsOpen((open) => !open)}
-          aria-expanded={isOpen}
-          className="flex min-w-0 items-center gap-2.5 text-left"
-        >
-          <span className="h-8 w-1 shrink-0 rounded-full bg-brand-500" aria-hidden="true" />
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-bold text-slate-900">
-              {data?.title || 'Terms & Conditions'}
-            </span>
-            <span className="block truncate text-[11px] text-slate-500">
-              {hasBody
-                ? data?.updated_at
-                  ? `Last updated ${formatDate(data.updated_at)}${
-                      data.updated_by_name ? ` by ${data.updated_by_name}` : ''
-                    }`
-                  : 'The document students are signing'
-                : 'No terms written yet'}
-            </span>
-          </span>
-          {isOpen ? (
-            <ChevronUp className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden="true" />
-          ) : (
-            <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2} aria-hidden="true" />
-          )}
-        </button>
-        {canEdit && !isEditing && (
-          <Button variant="secondary" className="px-2.5! py-1.5! text-xs" onClick={startEditing}>
-            <Pencil className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-            {hasBody ? 'Edit terms' : 'Write terms'}
-          </Button>
-        )}
-      </div>
-
-      {isOpen && (
-        <div className="border-t border-slate-200 px-4 py-3">
-          {isEditing ? (
-            <>
-              <Input label="Title" value={title} onChange={(event) => setTitle(event.target.value)} />
-              <label className="mt-3 block">
-                <span className="mb-1 block text-xs font-medium text-slate-600">Terms</span>
-                <textarea
-                  rows={12}
-                  maxLength={20000}
-                  value={body}
-                  onChange={(event) => setBody(event.target.value)}
-                  placeholder="Type the terms students are agreeing to…"
-                  className={`${FIELD} resize-y py-2 leading-relaxed`}
-                />
-              </label>
-              <div className="mt-2 flex items-center justify-between">
-                <span className="text-[11px] text-slate-400">{body.length}/20000</span>
-                <div className="flex gap-2">
-                  <Button
-                    variant="secondary"
-                    className="px-3! py-1.5! text-xs"
-                    onClick={() => setIsEditing(false)}
-                    disabled={save.isPending}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    className="px-3! py-1.5! text-xs"
-                    onClick={() => save.mutate()}
-                    disabled={save.isPending || !title.trim()}
-                  >
-                    {save.isPending ? 'Saving…' : 'Save terms'}
-                  </Button>
-                </div>
-              </div>
-            </>
-          ) : hasBody ? (
-            // Pre-wrapped rather than rendered as markup: the document is
-            // stored as plain text, and the line breaks whoever wrote it put
-            // in are the only formatting it has.
-            <p className="max-h-80 overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
-              {data.body}
-            </p>
-          ) : (
-            <p className="py-4 text-center text-xs text-slate-400">
-              Nothing written yet.{canEdit ? ' Use Write terms to add the document students sign.' : ''}
-            </p>
-          )}
-        </div>
-      )}
-    </section>
-  )
-}
-
 // Admin > Attendance: the induction programme's four markers against the
 // induction roll.
 //
@@ -228,7 +99,6 @@ export function InductionAttendancePage() {
   const { hasPermission } = useAuth()
   const queryClient = useQueryClient()
   const canMark = hasPermission(PERMISSIONS.INDUCTION_ATTENDANCE_MARK)
-  const canEdit = hasPermission(PERMISSIONS.INDUCTION_ATTENDANCE_CONFIGURE)
 
   const [marker, setMarker] = useState('terms')
   const [state, setState] = useState('all')
@@ -481,10 +351,6 @@ export function InductionAttendancePage() {
           </p>
         )}
       </div>
-
-      {/* Only on the Terms tab: the other three have no document behind them,
-          and a panel that stayed put would look like it belonged to all four. */}
-      {marker === 'terms' && <TermsDocumentPanel canEdit={canEdit} onError={setError} />}
 
       <TableCard>
         <DataTable
