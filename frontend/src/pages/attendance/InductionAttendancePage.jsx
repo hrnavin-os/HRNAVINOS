@@ -81,11 +81,13 @@ const TAB_BY_KEY = Object.fromEntries(TABS.map((tab) => [tab.key, tab]))
 // Which side of the open marker the table is showing. All is first because it
 // is the roll; the other two are that same list split, and their counts add
 // back up to it.
-const STATES = [
-  { key: 'all', label: 'All students' },
-  { key: 'yes', label: 'Marked' },
-  { key: 'no', label: 'Pending' },
-]
+//
+// The two sides borrow the open marker's own words - "Signed"/"Not signed",
+// "Attended"/"Not attended" - rather than a generic Marked/Pending. The
+// segment says what it filters to, which is the thing a reader wants named.
+const STATES = ['all', 'yes', 'no']
+
+const stateLabel = (key, tab) => (key === 'all' ? 'All students' : key === 'yes' ? tab.yes : tab.no)
 
 // Admin > Attendance: the induction programme's four markers against the
 // induction roll.
@@ -310,41 +312,84 @@ export function InductionAttendancePage() {
           })}
         </div>
 
+        {/* The toolbar. One 36px control height across the segmented control,
+            both filters and the search box, so the row lines up on both edges
+            - the thing that separates a toolbar from a handful of controls
+            that happen to sit on the same line. */}
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 bg-white px-4 py-2.5">
           {/* The split of the open marker. A segmented control rather than a
               second card row, so the two levels don't read as equals. */}
-          <div role="group" aria-label="Filter by mark" className="inline-flex rounded-md border border-slate-200 bg-white p-0.5">
-            {STATES.map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                onClick={() => setState(option.key)}
-                aria-pressed={state === option.key}
-                className={`rounded px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide transition-colors ${
-                  state === option.key ? 'bg-brand-600 text-white' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                {option.label}
-                {activeStats && option.key !== 'all' && (
-                  <span className="ml-1 font-semibold">
-                    {option.key === 'yes' ? activeStats.yes : activeStats.no}
-                  </span>
-                )}
-              </button>
-            ))}
+          <div
+            role="group"
+            aria-label="Filter by mark"
+            className="inline-flex h-9 items-center rounded-md border border-slate-300 bg-white p-0.5 shadow-sm"
+          >
+            {STATES.map((key) => {
+              const isActive = state === key
+              const count = key === 'yes' ? activeStats?.yes : key === 'no' ? activeStats?.no : null
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setState(key)}
+                  aria-pressed={isActive}
+                  className={`flex h-8 items-center gap-1.5 rounded px-3 text-sm font-medium transition-colors ${
+                    isActive ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {stateLabel(key, active)}
+                  {/* The count as a subordinate chip rather than loose digits:
+                      it qualifies the segment's label, and at the same weight
+                      the two read as one long name. */}
+                  {count !== undefined && count !== null && (
+                    <span
+                      className={`rounded px-1 text-[11px] font-semibold tabular-nums ${
+                        isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
           </div>
+
+          {/* Divider: what the table is showing on the left of it, what
+              narrows the roll on the right. */}
+          {(sectionOptions.length > 1 || batchOptions.length > 1) && (
+            <span className="mx-0.5 hidden h-6 w-px bg-slate-200 sm:block" aria-hidden="true" />
+          )}
+
           {sectionOptions.length > 1 && (
-            <FilterDropdown
-              label="Section"
-              value={section}
-              options={sectionOptions}
-              onChange={setSection}
-            />
+            <FilterDropdown label="Section" value={section} options={sectionOptions} onChange={setSection} />
           )}
           {batchOptions.length > 1 && (
             <FilterDropdown label="Batch" value={batch} options={batchOptions} onChange={setBatch} />
           )}
-          <div className="w-full sm:w-56">
+
+          {/* Only once something is set, and it clears everything the row
+              holds - hunting three controls to get back to the whole roll is
+              the cost a filter row otherwise quietly charges. */}
+          {(section || batch || search) && (
+            <button
+              type="button"
+              onClick={() => {
+                setSection('')
+                setBatch('')
+                setSearch('')
+                setPage(1)
+              }}
+              className="flex h-9 items-center gap-1 rounded-md px-2 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            >
+              <X className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
+              Clear
+            </button>
+          )}
+
+          {/* Search sits at the far end, where every toolbar in the app puts
+              it, and keeps its width rather than growing into the gap. */}
+          <div className="w-full sm:ml-auto sm:w-64">
             <Input
               value={search}
               onChange={(event) => {
