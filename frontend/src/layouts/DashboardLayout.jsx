@@ -3,13 +3,23 @@ import { BottomNav } from '@/components/layout/BottomNav'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Topbar } from '@/components/layout/Topbar'
 import { useAuth } from '@/hooks/useAuth'
+import { getVisibleNavItems } from '@/constants/navigation'
 
 export function DashboardLayout() {
-  const { user } = useAuth()
-  // A Section Admin has exactly two destinations - their board, which is where
-  // they land, and Notifications, which the header bell opens - so a sidebar
-  // listing them spends 256px to say nothing. Everyone else keeps it.
-  const hideSidebar = Boolean(user?.scoped_section)
+  const { user, hasPermission } = useAuth()
+  // A sidebar is for choosing between destinations. A Section Admin has two -
+  // their board, which is where they land, and Notifications, which the header
+  // bell opens - and a role scoped to a single board has one. Either way the
+  // rail spends 256px to say nothing, so it isn't rendered.
+  //
+  // Counted from the same list the sidebar would render, rather than from a
+  // list of role names: a role that gains a second page gets its navigation
+  // back without anybody remembering to come here.
+  const destinations = getVisibleNavItems({ user, hasPermission }).reduce(
+    (count, item) => count + (item.children ? item.children.length : 1),
+    0,
+  )
+  const hideSidebar = Boolean(user?.scoped_section) || destinations <= 1
 
   return (
     <div className="flex h-screen bg-slate-50">

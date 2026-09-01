@@ -35,7 +35,10 @@ export const NAV_ITEMS = [
     permission: null,
     icon: LayoutDashboard,
     group: null,
-    hiddenForRoles: ['Admin', 'Finance', 'HR Coordinator'],
+    // The institute overview: revenue, students, tutors, placements. Roles
+    // that work one board of it have no use for the whole - and land on their
+    // own board instead, which HomeRoute derives from this same list.
+    hiddenForRoles: ['Admin', 'Finance', 'HR Coordinator', 'Admin-Coordinator'],
     hiddenForScopedUsers: true,
   },
 
