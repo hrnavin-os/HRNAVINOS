@@ -27,7 +27,7 @@ import { Pagination } from '@/components/ui/Pagination'
 import { TabStrip } from '@/components/ui/TabStrip'
 import { TableCard } from '@/components/ui/TableCard'
 import { Toast } from '@/components/ui/Toast'
-import { formatDate, formatDateTime, titleCase } from '@/utils/formatters'
+import { formatDate, formatDateTime } from '@/utils/formatters'
 
 // The four markers, in the order they happen to a student: they sign the
 // terms, they are picked in the poll, they come to the success meet, they come
@@ -84,15 +84,6 @@ const STATES = [
   { key: 'yes', label: 'Marked' },
   { key: 'no', label: 'Pending' },
 ]
-
-// How an induction entry's own status reads on this board. Shown because
-// chasing somebody who quit is wasted effort, and because a student who has
-// moved to Foundation is further along than a pending marker implies.
-const STATUS_TONES = {
-  pending_induction: 'blue',
-  moved_to_foundation: 'emerald',
-  quit: 'red',
-}
 
 // The terms text itself, shown on the Terms tab - so whoever is chasing
 // signatures can read what is being agreed to without going and finding the
@@ -327,20 +318,15 @@ export function InductionAttendancePage() {
       align: 'center',
       render: (row) => formatDate(row.registration_date),
     },
+    // One marker column: the open tab's. All four at once meant a table wider
+    // than the screen, so reading any single one - which is what a tab is for
+    // - cost a horizontal scroll past three columns nobody had asked about.
     {
-      key: 'status',
-      header: 'Induction',
+      key: active.key,
+      header: active.label,
       align: 'center',
-      render: (row) => <Badge tone={STATUS_TONES[row.status] ?? 'slate'}>{titleCase(row.status)}</Badge>,
+      render: (row) => markCell(row, active),
     },
-    // All four markers as columns, with the open tab's given its full label
-    // and the rest abbreviated - the board is read across as well as down.
-    ...TABS.map((tab) => ({
-      key: tab.key,
-      header: tab.label,
-      align: 'center',
-      render: (row) => markCell(row, tab),
-    })),
     {
       key: 'action',
       header: '',
