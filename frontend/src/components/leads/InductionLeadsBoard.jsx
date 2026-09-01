@@ -357,12 +357,15 @@ export function InductionLeadsBoard() {
         // Rendered inline beside the search box rather than as a band above
         // it - same job, and two stacked rows pushed the table off screen.
         renderFilters={() => (
-          // Eight filters and a sort don't fit one line at any realistic
-          // width, so they're laid out as a grid rather than left to wrap:
-          // every control is the same width, the second row's columns line up
-          // under the first row's, and a row that doesn't fill up leaves a gap
-          // instead of stretching whatever landed on it to the full width.
-          <div className="grid min-w-0 flex-1 grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          // One row of equal-width controls, beside the search box, for as many
+          // as the width allows - which on a full-width screen is all of them,
+          // and for a Section Admin (no Section, no Assignee) all of them at
+          // considerably less. auto-fit rather than a fixed column count
+          // because the number of controls isn't fixed either: empty tracks
+          // collapse, so the ones that are here stretch to fill the row
+          // instead of leaving a gap where a hidden filter would have been.
+          // Below ~136px each they wrap to a second row rather than squeezing.
+          <div className="grid min-w-0 flex-1 grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))] gap-2">
             {/* Section moved down here from the cards above. A Section Admin
                 is pinned to their own by their role, so offering them a
                 chooser would be a control that can only pick what they already
@@ -418,13 +421,18 @@ export function InductionLeadsBoard() {
               options={asOptions(options.category)}
               onChange={(value) => setFilter('category', value)}
             />
-            <FilterDropdown
-              grow
-              label="Assignee"
-              value={filters.assigned_to}
-              options={options.assigned_to ?? []}
-              onChange={(value) => setFilter('assigned_to', value)}
-            />
+            {/* Hidden for a Section Admin, for the same reason as Section:
+                their board is already one section's work, and the handful of
+                people it's shared with aren't how they look for a row. */}
+            {!scopedSection && (
+              <FilterDropdown
+                grow
+                label="Assignee"
+                value={filters.assigned_to}
+                options={options.assigned_to ?? []}
+                onChange={(value) => setFilter('assigned_to', value)}
+              />
+            )}
             {/* Orders by registration date. The same control the Foundation
                 board uses, so the two boards can't word their ordering
                 differently - and it always shows the order the list is in
