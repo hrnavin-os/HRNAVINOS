@@ -52,6 +52,32 @@ class LeadUpdate(BaseModel):
     lost_reason: str | None = Field(default=None, max_length=500)
 
 
+class LeadRemarkCreate(BaseModel):
+    # Optional so the common case - "what happened on the call I just made" -
+    # is one field to fill in; the service dates it today when it is left out.
+    remark_date: date | None = None
+    text: str = Field(min_length=1, max_length=2000)
+
+
+class LeadRemarkUpdate(BaseModel):
+    remark_date: date | None = None
+    text: str | None = Field(default=None, min_length=1, max_length=2000)
+
+
+class LeadRemarkResponse(BaseModel):
+    # None for the one synthetic entry the API surfaces for a lead whose only
+    # remark predates dated remarks (see LeadService._remark_responses). It has
+    # no stored entry to address, so the UI shows it read-only until the next
+    # remark is added and it is migrated into a real, editable one.
+    id: uuid.UUID | None = None
+    remark_date: date
+    text: str
+    created_at: datetime
+    created_by: uuid.UUID | None = None
+    created_by_name: str | None = None
+    updated_at: datetime | None = None
+
+
 class LeadAssign(BaseModel):
     assigned_to: uuid.UUID
 
@@ -109,6 +135,9 @@ class LeadResponse(BaseModel):
     program_interest: str | None = None
     section: str | None = None
     remarks: str | None = None
+    # Newest first. Carries the lead's whole remark history, so the board can
+    # render it without a request per row.
+    remark_entries: list[LeadRemarkResponse] = []
     payment_option: PaymentOption | None = None
     payment_call_remarks: PaymentCallRemark | None = None
     paying_amount: Decimal | None = None

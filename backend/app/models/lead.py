@@ -35,6 +35,35 @@ class FollowUpEntry(BaseModel):
     created_by: uuid.UUID | None = None
 
 
+class RemarkEntry(BaseModel):
+    """One dated staff note on a lead.
+
+    Remarks are a diary, not a field. The same lead is called on many days and
+    each call's outcome belongs to the day it happened - a single text box
+    meant every new note either overwrote the last one or grew into an undated
+    wall of text nobody could read a history out of.
+
+    `remark_date` is the day the note is *about*, which is not always the day
+    it was typed: notes get written up the morning after the call, and a plan
+    for next Tuesday is entered today. It is therefore free to be back- or
+    future-dated, exactly like a calendar entry, while `created_at` keeps the
+    record of when it was actually saved.
+    """
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    remark_date: date
+    text: str = Field(max_length=2000)
+    created_at: datetime = Field(default_factory=utcnow)
+    created_by: uuid.UUID | None = None
+    # The author's name snapshotted at write time rather than looked up per
+    # entry. The board renders a page of leads at once, each carrying its whole
+    # remark history - resolving authors on read would turn one list request
+    # into hundreds of user fetches. A staffer who is later renamed keeps the
+    # name they had when they wrote it, which is what a log should say anyway.
+    created_by_name: str | None = Field(default=None, max_length=150)
+    updated_at: datetime | None = None
+
+
 class PaymentInstallment(BaseModel):
     """One payment in a Foundation Form lead's plan (1 for single shot, 2 for
     two shot, 6 for EMI). Pre-populated with label/amount from the pricing
@@ -106,7 +135,19 @@ class Lead(BaseDocument):
     section: str | None = None
     # Free-form internal staff notes - distinct from `notes` (the student's
     # own submitted query/doubts text from the public form).
+    #
+    # Superseded by `remark_entries` as the thing staff write into, and kept as
+    # a mirror of the most recent entry's text: every remark mutation rewrites
+    # it. That keeps one-line consumers (the row tooltip, exports, anything
+    # reading a lead document directly) working unchanged, and it is still the
+    # only home for notes written before dated remarks existed - which is why
+    # nothing clears it.
     remarks: str | None = Field(default=None, max_length=2000)
+    # The dated notes themselves, newest first (see LeadService._sort_remarks).
+    # Embedded on the lead rather than given their own collection: they are
+    # only ever read with the lead they belong to, and the board needs a page
+    # of leads' histories from the one query it already makes.
+    remark_entries: list[RemarkEntry] = Field(default_factory=list)
     # Manually-tracked pricing tier + call disposition, set by whoever is
     # working the lead's payment on the phone - independent of payment_plan/
     # installments (the structured Foundation Form payment-collection flow).

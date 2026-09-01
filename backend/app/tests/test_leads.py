@@ -154,3 +154,99 @@ async def test_paying_amount_rejects_a_negative(client, auth_headers):
         f"/api/v1/leads/{lead['id']}", headers=auth_headers, json={"paying_amount": "-1"}
     )
     assert response.status_code == 422
+
+
+async def _lead_id(client, auth_headers, name: str = "Remark Lead", phone: str = "9000000001") -> str:
+    create = await client.post(
+        "/api/v1/leads",
+        headers=auth_headers,
+        json={"name": name, "phone": phone, "course_interest": "Data Science"},
+    )
+    return create.json()["id"]
+
+
+async def test_add_dated_remarks_returns_newest_day_first(client, auth_headers):
+    lead_id = await _lead_id(client, auth_headers)
+
+    await client.post(
+        f"/api/v1/leads/{lead_id}/remarks",
+        headers=auth_headers,
+        json={"remark_date": "2026-08-20", "text": "Called, asked to ring back"},
+    )
+    response = await client.post(
+        f"/api/v1/leads/{lead_id}/remarks",
+        headers=auth_headers,
+        json={"remark_date": "2026-08-22", "text": "Confirmed she will pay Friday"},
+    )
+
+    assert response.status_code == 201
+    entries = response.json()["remark_entries"]
+    assert [entry["remark_date"] for entry in entries] == ["2026-08-22", "2026-08-20"]
+    assert entries[0]["created_by_name"]
+    # The legacy single-text field mirrors the most recent remark, so anything
+    # still reading it sees the current note rather than a stale one.
+    assert response.json()["remarks"] == "Confirmed she will pay Friday"
+
+
+async def test_remark_defaults_to_today(client, auth_headers):
+    from app.database.base import utcnow
+
+    lead_id = await _lead_id(client, auth_headers, phone="9000000002")
+    response = await client.post(
+        f"/api/v1/leads/{lead_id}/remarks", headers=auth_headers, json={"text": "No date given"}
+    )
+    assert response.json()["remark_entries"][0]["remark_date"] == utcnow().date().isoformat()
+
+
+async def test_edit_and_delete_remark(client, auth_headers):
+    lead_id = await _lead_id(client, auth_headers, phone="9000000003")
+    created = await client.post(
+        f"/api/v1/leads/{lead_id}/remarks",
+        headers=auth_headers,
+        json={"remark_date": "2026-08-20", "text": "Typo"},
+    )
+    remark_id = created.json()["remark_entries"][0]["id"]
+
+    edited = await client.put(
+        f"/api/v1/leads/{lead_id}/remarks/{remark_id}",
+        headers=auth_headers,
+        json={"text": "Fixed", "remark_date": "2026-08-21"},
+    )
+    assert edited.status_code == 200
+    entry = edited.json()["remark_entries"][0]
+    assert (entry["text"], entry["remark_date"]) == ("Fixed", "2026-08-21")
+    assert entry["updated_at"]
+
+    deleted = await client.delete(f"/api/v1/leads/{lead_id}/remarks/{remark_id}", headers=auth_headers)
+    assert deleted.status_code == 200
+    # Deleting the last remark clears the mirror too - otherwise the row would
+    # keep showing a note that was just removed.
+    assert deleted.json()["remark_entries"] == []
+    assert deleted.json()["remarks"] is None
+
+
+async def test_legacy_remark_is_surfaced_then_migrated(client, auth_headers):
+    lead_id = await _lead_id(client, auth_headers, phone="9000000004")
+    await client.put(f"/api/v1/leads/{lead_id}", headers=auth_headers, json={"remarks": "Written before dates"})
+
+    # Shown as a read-only, id-less entry so pre-existing notes stay visible.
+    listed = (await client.get(f"/api/v1/leads/{lead_id}", headers=auth_headers)).json()
+    assert len(listed["remark_entries"]) == 1
+    assert listed["remark_entries"][0]["id"] is None
+
+    after = await client.post(
+        f"/api/v1/leads/{lead_id}/remarks",
+        headers=auth_headers,
+        json={"remark_date": "2026-08-25", "text": "New dated note"},
+    )
+    entries = after.json()["remark_entries"]
+    # The old note becomes a real entry rather than being dropped.
+    assert len(entries) == 2
+    assert all(entry["id"] for entry in entries)
+    assert {entry["text"] for entry in entries} == {"Written before dates", "New dated note"}
+
+
+async def test_blank_remark_is_rejected(client, auth_headers):
+    lead_id = await _lead_id(client, auth_headers, phone="9000000005")
+    response = await client.post(f"/api/v1/leads/{lead_id}/remarks", headers=auth_headers, json={"text": "   "})
+    assert response.status_code == 400

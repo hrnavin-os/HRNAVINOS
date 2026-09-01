@@ -16,6 +16,8 @@ from app.schemas.lead_schema import (
     LeadAssign,
     LeadCreate,
     LeadPlanAssign,
+    LeadRemarkCreate,
+    LeadRemarkUpdate,
     LeadResponse,
     LeadStatsResponse,
     LeadTimelineEntryResponse,
@@ -190,6 +192,48 @@ async def update_lead(
     service = LeadService()
     scope = await get_actor_scope(actor)
     return await service.to_response(await service.update(lead_id, payload, actor_id=actor.id, scope=scope))
+
+
+# Dated remarks are their own endpoints rather than a field on PUT /{lead_id}:
+# they are appended to a history, not overwritten, and two staffers adding a
+# note to the same lead minutes apart must not clobber each other the way a
+# whole-object update would. Permissioned as an ordinary lead edit.
+@router.post("/{lead_id}/remarks", response_model=LeadResponse, status_code=status.HTTP_201_CREATED)
+async def add_lead_remark(
+    lead_id: uuid.UUID,
+    payload: LeadRemarkCreate,
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
+) -> LeadResponse:
+    service = LeadService()
+    scope = await get_actor_scope(actor)
+    return await service.to_response(await service.add_remark(lead_id, payload, actor_id=actor.id, scope=scope))
+
+
+@router.put("/{lead_id}/remarks/{remark_id}", response_model=LeadResponse)
+async def update_lead_remark(
+    lead_id: uuid.UUID,
+    remark_id: uuid.UUID,
+    payload: LeadRemarkUpdate,
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
+) -> LeadResponse:
+    service = LeadService()
+    scope = await get_actor_scope(actor)
+    return await service.to_response(
+        await service.update_remark(lead_id, remark_id, payload, actor_id=actor.id, scope=scope)
+    )
+
+
+@router.delete("/{lead_id}/remarks/{remark_id}", response_model=LeadResponse)
+async def delete_lead_remark(
+    lead_id: uuid.UUID,
+    remark_id: uuid.UUID,
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
+) -> LeadResponse:
+    service = LeadService()
+    scope = await get_actor_scope(actor)
+    return await service.to_response(
+        await service.delete_remark(lead_id, remark_id, actor_id=actor.id, scope=scope)
+    )
 
 
 @router.post("/{lead_id}/payment-image", response_model=LeadResponse)

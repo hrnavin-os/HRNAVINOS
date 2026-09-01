@@ -16,7 +16,7 @@ from app.models.enums import (
     NotificationType,
     PaymentMethod,
 )
-from app.models.lead import FollowUpEntry, Lead
+from app.models.lead import FollowUpEntry, Lead, RemarkEntry
 from app.models.notification import Notification
 from app.permissions.permission_codes import Permissions
 from app.repositories.audit_log_repository import AuditLogRepository
@@ -33,6 +33,9 @@ from app.schemas.lead_schema import (
     LeadAssign,
     LeadCreate,
     LeadPlanAssign,
+    LeadRemarkCreate,
+    LeadRemarkResponse,
+    LeadRemarkUpdate,
     LeadResponse,
     LeadStatsResponse,
     LeadTimelineEntryResponse,
@@ -91,6 +94,7 @@ class LeadService:
             payment_plan=lead.payment_plan,
             section=lead.section,
             remarks=lead.remarks,
+            remark_entries=self._remark_responses(lead),
             payment_option=lead.payment_option,
             payment_call_remarks=lead.payment_call_remarks,
             paying_amount=lead.paying_amount,
@@ -339,6 +343,167 @@ class LeadService:
             user_id=actor_id, action="UPDATE", entity_type="Lead", entity_id=str(lead.id), changes=update_data
         )
         return lead
+
+    # ------------------------------------------------------------------
+    # Dated remarks
+    #
+    # Three mutations over one embedded list, all of which go through
+    # _save_remarks so the ordering, the `remarks` mirror and the audit entry
+    # can never be done by two of them and forgotten by the third.
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _sort_remarks(entries: List[RemarkEntry]) -> List[RemarkEntry]:
+        """Newest day first, and within a day the most recently written first.
+
+        created_at breaks the tie rather than insertion order because a
+        back-dated note is inserted long after the notes it sits beside, and
+        the list is what both the API and the UI read top-down.
+        """
+        return sorted(entries, key=lambda e: (e.remark_date, e.created_at), reverse=True)
+
+    @staticmethod
+    def _remark_responses(lead: Lead) -> List[LeadRemarkResponse]:
+        """The lead's dated remarks, newest first.
+
+        A lead whose only note predates dated remarks gets one synthetic,
+        id-less entry so that history is still visible rather than silently
+        dropped from the board. It is dated to the lead's last update - the
+        closest thing to a date the old field ever carried - and is turned into
+        a real, editable entry by _migrate_legacy_remark the moment anyone adds
+        their next remark.
+        """
+        if lead.remark_entries:
+            return [
+                LeadRemarkResponse(
+                    id=entry.id,
+                    remark_date=entry.remark_date,
+                    text=entry.text,
+                    created_at=entry.created_at,
+                    created_by=entry.created_by,
+                    created_by_name=entry.created_by_name,
+                    updated_at=entry.updated_at,
+                )
+                for entry in LeadService._sort_remarks(lead.remark_entries)
+            ]
+        if lead.remarks:
+            stamp = lead.updated_at or lead.created_at
+            return [
+                LeadRemarkResponse(
+                    id=None, remark_date=stamp.date(), text=lead.remarks, created_at=stamp
+                )
+            ]
+        return []
+
+    async def _actor_name(self, actor_id: uuid.UUID | None) -> str | None:
+        if not actor_id:
+            return None
+        user = await self.users.get_by_id(actor_id)
+        return f"{user.first_name} {user.last_name}".strip() if user else None
+
+    def _migrate_legacy_remark(self, lead: Lead) -> List[RemarkEntry]:
+        """The lead's entries, with any pre-dated-remarks note folded in first.
+
+        Runs on the first mutation after the feature shipped, so nobody's
+        existing note is stranded behind the new list. Dated to the lead's last
+        update for the same reason _remark_responses shows it there, and
+        attributed to whoever last touched the lead, which is the only author
+        the old field ever recorded.
+        """
+        if lead.remark_entries or not lead.remarks:
+            return list(lead.remark_entries)
+        stamp = lead.updated_at or lead.created_at
+        return [
+            RemarkEntry(
+                remark_date=stamp.date(),
+                text=lead.remarks,
+                created_at=stamp,
+                created_by=lead.updated_by,
+            )
+        ]
+
+    async def _save_remarks(
+        self, lead: Lead, entries: List[RemarkEntry], *, actor_id: uuid.UUID | None, action: str
+    ) -> Lead:
+        ordered = self._sort_remarks(entries)
+        await self.leads.update(
+            lead,
+            {
+                "remark_entries": ordered,
+                # The mirror described on Lead.remarks. Cleared along with the
+                # last entry rather than left behind: any legacy note has been
+                # migrated into the list by the time a delete runs, so a
+                # surviving mirror would be a copy of a remark somebody just
+                # deleted - and _remark_responses would show it straight back.
+                "remarks": ordered[0].text if ordered else None,
+                "updated_by": actor_id,
+            },
+        )
+        await self.audit.record(
+            user_id=actor_id,
+            action=action,
+            entity_type="Lead",
+            entity_id=str(lead.id),
+            changes={"remark_entries": len(ordered)},
+        )
+        return lead
+
+    async def add_remark(
+        self, lead_id: uuid.UUID, data: LeadRemarkCreate, *, actor_id: uuid.UUID | None, scope: str | None = None
+    ) -> Lead:
+        lead = await self.get(lead_id, scope=scope)
+        text = data.text.strip()
+        if not text:
+            raise BadRequestError("Write something before saving the remark.")
+        entry = RemarkEntry(
+            # Today in the server's clock when the client doesn't say - the
+            # overwhelmingly common case is a note about the call just made.
+            remark_date=data.remark_date or utcnow().date(),
+            text=text,
+            created_by=actor_id,
+            created_by_name=await self._actor_name(actor_id),
+        )
+        return await self._save_remarks(
+            lead, [*self._migrate_legacy_remark(lead), entry], actor_id=actor_id, action="ADD_REMARK"
+        )
+
+    @staticmethod
+    def _find_remark(entries: List[RemarkEntry], remark_id: uuid.UUID) -> RemarkEntry:
+        for entry in entries:
+            if entry.id == remark_id:
+                return entry
+        raise NotFoundError("That remark no longer exists.")
+
+    async def update_remark(
+        self,
+        lead_id: uuid.UUID,
+        remark_id: uuid.UUID,
+        data: LeadRemarkUpdate,
+        *,
+        actor_id: uuid.UUID | None,
+        scope: str | None = None,
+    ) -> Lead:
+        lead = await self.get(lead_id, scope=scope)
+        entries = self._migrate_legacy_remark(lead)
+        entry = self._find_remark(entries, remark_id)
+        if data.text is not None:
+            text = data.text.strip()
+            if not text:
+                raise BadRequestError("A remark can't be emptied - delete it instead.")
+            entry.text = text
+        if data.remark_date is not None:
+            entry.remark_date = data.remark_date
+        entry.updated_at = utcnow()
+        return await self._save_remarks(lead, entries, actor_id=actor_id, action="UPDATE_REMARK")
+
+    async def delete_remark(
+        self, lead_id: uuid.UUID, remark_id: uuid.UUID, *, actor_id: uuid.UUID | None, scope: str | None = None
+    ) -> Lead:
+        lead = await self.get(lead_id, scope=scope)
+        entries = self._migrate_legacy_remark(lead)
+        self._find_remark(entries, remark_id)
+        remaining = [entry for entry in entries if entry.id != remark_id]
+        return await self._save_remarks(lead, remaining, actor_id=actor_id, action="DELETE_REMARK")
 
     async def update_payment_info(
         self,

@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, Eye, Pencil, Search, X } from 'lucide-react'
+import { Check, ChevronDown, Search, X } from 'lucide-react'
 import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
 import { useAuth } from '@/hooks/useAuth'
 import { leadService } from '@/services/leadService'
@@ -23,6 +23,7 @@ import { LeadSectionStageStats, LeadSectionStats } from '@/components/leads/Lead
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { LeadCourseCell } from '@/components/leads/LeadCourseCell'
 import { LeadDetailModal } from '@/components/leads/LeadDetailModal'
+import { LeadRemarksCell } from '@/components/leads/LeadRemarksCell'
 import { InductionLeadsBoard } from '@/components/leads/InductionLeadsBoard'
 import { useLeadBoard } from '@/hooks/useLeadBoard'
 import {
@@ -81,10 +82,6 @@ const STAGE_CELL_STYLES = {
   lost: 'border-transparent bg-orange-700 text-white',
 }
 
-// Matches Lead.remarks' server-side cap, so an over-long paste is stopped at
-// the textarea instead of coming back as an opaque 422.
-const REMARKS_MAX_LENGTH = 2000
-
 // Shows just the first 6 characters + "…" so a long query doesn't blow out
 // the row height; hovering reveals the full text in a floating popup.
 // Portaled to <body> (positioned from the trigger's own bounding rect)
@@ -126,110 +123,6 @@ function TruncatedText({ text }) {
           document.body,
         )}
     </>
-  )
-}
-
-// Staff notes cell - distinct from the read-only Query column (the
-// student's own submitted text). Rather than a persistent text box, it's a
-// single icon that opens a small popover to type into, submitted with the
-// tick button.
-//
-// The icon states which of the two things the click will do: a pen on an
-// empty cell (nothing to read yet - write something), an eye once a remark
-// exists (there is something here - come look). Saving invalidates the leads
-// query, so the row refetches and the icon flips on its own.
-function RemarksCell({ lead, onError }) {
-  const queryClient = useQueryClient()
-  const buttonRef = useRef(null)
-  const [popupPosition, setPopupPosition] = useState(null)
-  const [value, setValue] = useState(lead.remarks ?? '')
-
-  // Closes only once the save lands, so a failed request leaves the popup
-  // open with the typed text intact to retry rather than silently losing it.
-  const mutation = useMutation({
-    mutationFn: (remarks) => leadService.update(lead.id, { remarks }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['leads'] })
-      setPopupPosition(null)
-    },
-    onError: (error) => onError(`Couldn't save remarks for ${lead.name}: ${getApiErrorMessage(error)}`),
-  })
-
-  function open(event) {
-    event.stopPropagation()
-    setValue(lead.remarks ?? '')
-    const rect = buttonRef.current.getBoundingClientRect()
-    setPopupPosition(popupPositionFor(rect, 288))
-  }
-
-  // React routes events from a portal up the *component* tree, not the DOM
-  // tree, so a click on this backdrop still reaches whatever the table row
-  // has bound unless it's stopped here. Dismissing should only dismiss.
-  function close(event) {
-    event?.stopPropagation()
-    setPopupPosition(null)
-  }
-
-  function submit(event) {
-    event.stopPropagation()
-    mutation.mutate(value)
-  }
-
-  return (
-    <div className="inline-block">
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={open}
-        title={lead.remarks || 'Add remarks'}
-        aria-label={lead.remarks ? `View remarks for ${lead.name}` : `Add remarks for ${lead.name}`}
-        className={`rounded-md p-1.5 transition-colors hover:bg-slate-100 ${
-          lead.remarks ? 'text-brand-600 hover:text-brand-700' : 'text-slate-400 hover:text-slate-600'
-        }`}
-      >
-        {lead.remarks ? (
-          <Eye className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-        ) : (
-          <Pencil className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-        )}
-      </button>
-      {popupPosition &&
-        createPortal(
-          <>
-            <div className="fixed inset-0 z-40" onClick={close} />
-            <div
-              style={{ top: popupPosition.top, left: popupPosition.left }}
-              className="fixed z-50 w-72 rounded-md border border-slate-200 bg-white p-3 shadow-lg"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <textarea
-                autoFocus
-                rows={3}
-                maxLength={REMARKS_MAX_LENGTH}
-                value={value}
-                onChange={(event) => setValue(event.target.value)}
-                placeholder="Add remarks…"
-                className="w-full resize-none rounded-md border border-slate-200 px-2 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              />
-              <div className="mt-2 flex items-center justify-between">
-                <span className="text-xs text-slate-400">
-                  {value.length}/{REMARKS_MAX_LENGTH}
-                </span>
-                <button
-                  type="button"
-                  onClick={submit}
-                  disabled={mutation.isPending}
-                  aria-label="Save remarks"
-                  className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50"
-                >
-                  <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-          </>,
-          document.body,
-        )}
-    </div>
   )
 }
 
@@ -365,7 +258,7 @@ function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, on
     setMenuPosition(popupPositionFor(rect, 256))
   }
 
-  // See RemarksCell.close - portal clicks bubble through the component tree,
+  // Portal clicks bubble through the component tree rather than the DOM one,
   // so the backdrop has to stop the event from reaching the row behind it.
   function close(event) {
     event?.stopPropagation()
@@ -711,7 +604,7 @@ function FoundationLeadsBoard() {
       key: 'remarks',
       header: 'Remarks',
       align: 'center',
-      render: (row) => <RemarksCell key={row.id} lead={row} onError={setEditError} />,
+      render: (row) => <LeadRemarksCell key={row.id} lead={row} onError={setEditError} />,
     },
   ]
 

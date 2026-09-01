@@ -76,6 +76,27 @@ export const leadService = {
     })
     return data
   },
+  // Dated remarks. Each returns the whole updated lead, so the caller can
+  // drop it straight back into the leads cache instead of refetching a page
+  // to learn what one row's note history now is.
+  addRemark: async (id, { remarkDate, text }) => {
+    const { data } = await apiClient.post(`/leads/${id}/remarks`, {
+      remark_date: remarkDate || null,
+      text,
+    })
+    return data
+  },
+  updateRemark: async (id, remarkId, { remarkDate, text }) => {
+    const { data } = await apiClient.put(`/leads/${id}/remarks/${remarkId}`, {
+      remark_date: remarkDate || null,
+      text,
+    })
+    return data
+  },
+  deleteRemark: async (id, remarkId) => {
+    const { data } = await apiClient.delete(`/leads/${id}/remarks/${remarkId}`)
+    return data
+  },
   markLost: async (id) => {
     const { data } = await apiClient.post(`/leads/${id}/mark-lost`)
     return data
