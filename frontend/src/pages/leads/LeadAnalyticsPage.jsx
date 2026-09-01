@@ -25,6 +25,7 @@ import { TabStrip } from '@/components/ui/TabStrip'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { DonutChart, foldToSlices } from '@/components/analytics/DonutChart'
+import { CategoryBars } from '@/components/analytics/CategoryBars'
 import { Panel, SegmentedToggle } from '@/components/analytics/Panel'
 import { MiniStatStrip, StatTile } from '@/components/analytics/StatTile'
 import { percent } from '@/constants/analyticsPalette'
@@ -100,6 +101,15 @@ const MEASURES = [
   { value: 'share', label: 'Percentage' },
 ]
 
+// Two ways of drawing the same breakdown. The ring is the shape of the whole;
+// the bars are the ranking, on a common baseline, which is the only encoding
+// small differences can be read off accurately. Neither is a better chart than
+// the other - they answer different questions about the same fourteen people.
+const VIEWS = [
+  { value: 'donut', label: 'Donut' },
+  { value: 'bars', label: 'Bars' },
+]
+
 // Rolls the individual remarks up into the six groups the board already
 // colours by. Nineteen slices is a list, not a chart - the useful shape is how
 // the calls landed across six kinds of outcome, and the individual wordings
@@ -164,6 +174,7 @@ export function LeadAnalyticsPage() {
   const [dateRange, setDateRange] = useState(null)
   const [section, setSection] = useState('')
   const [measure, setMeasure] = useState('count')
+  const [view, setView] = useState('donut')
   // The highlighted value, shared by every view on the canvas. One string
   // rather than a per-panel selection: the whole point of a dashboard is that
   // the panels are looking at the same thing.
@@ -419,22 +430,43 @@ export function LeadAnalyticsPage() {
               subtitle={active.subtitle}
               hint={active.hint}
               action={
-                <SegmentedToggle
-                  label="Show counts or percentages"
-                  options={MEASURES}
-                  value={measure}
-                  onChange={setMeasure}
-                />
+                // Two switches, not one control with four states: what is
+                // being drawn and which figure leads are independent choices,
+                // and either combination is a reading somebody wants.
+                <div className="flex flex-wrap items-center gap-2">
+                  <SegmentedToggle
+                    label="Show as a donut or as bars"
+                    options={VIEWS}
+                    value={view}
+                    onChange={setView}
+                  />
+                  <SegmentedToggle
+                    label="Show counts or percentages"
+                    options={MEASURES}
+                    value={measure}
+                    onChange={setMeasure}
+                  />
+                </div>
               }
             >
-              <DonutChart
-                items={chartRows}
-                centerLabel="Candidates"
-                emptyMessage={active.empty}
-                measure={measure}
-                selected={donutSelection}
-                onSelect={pick}
-              />
+              {view === 'donut' ? (
+                <DonutChart
+                  items={chartRows}
+                  centerLabel="Candidates"
+                  emptyMessage={active.empty}
+                  measure={measure}
+                  selected={donutSelection}
+                  onSelect={pick}
+                />
+              ) : (
+                <CategoryBars
+                  items={chartRows}
+                  emptyMessage={active.empty}
+                  measure={measure}
+                  selected={donutSelection}
+                  onSelect={pick}
+                />
+              )}
               <div className="mt-5">
                 {/* The three states every candidate is in, along the foot of
                     the panel whose total they divide. They are shares of the
