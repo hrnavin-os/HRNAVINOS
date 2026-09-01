@@ -1,17 +1,14 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CalendarDays, ChevronLeft, ChevronRight, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react'
 import { leadService } from '@/services/leadService'
 import { getApiErrorMessage } from '@/services/apiClient'
-import { anchorPopup } from '@/utils/anchorPopup'
+import { Modal } from '@/components/ui/Modal'
 
 // Matches Lead.remarks' server-side cap, so an over-long paste is stopped at
 // the textarea instead of coming back as an opaque 422.
 const REMARKS_MAX_LENGTH = 2000
-
-const POPUP_WIDTH = 320
-const POPUP_HEIGHT = 520
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
@@ -36,7 +33,7 @@ function monthGrid(year, month) {
   const cells = Array.from({ length: leading }, () => null)
   for (let day = 1; day <= days; day += 1) cells.push({ day, value: toValue(year, month, day) })
   // Trailing blanks so the last row is a full week and the grid keeps its
-  // shape instead of the popup resizing as you page through months.
+  // shape instead of the modal resizing as you page through months.
   while (cells.length % 7 !== 0) cells.push(null)
   return cells
 }
@@ -80,7 +77,7 @@ const FIELD_CLASS =
   'focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500'
 
 // One remark: its text, who wrote it and when, and - on hover - edit and
-// delete. Editing happens in place rather than in a second popup, and keeps a
+// delete. Editing happens in place rather than in a second dialog, and keeps a
 // date field so a note written against the wrong day can be moved to the right
 // one without being retyped.
 function RemarkRow({ entry, onSave, onDelete, busy }) {
@@ -176,13 +173,14 @@ function RemarkRow({ entry, onSave, onDelete, busy }) {
 // of the month is on screen, the ones carrying remarks are dotted, and picking
 // one shows that day's notes underneath and files anything new against it.
 //
-// The trigger stays a single icon so the column costs what one icon costs; the
-// calendar borrows space from the page, the same shape the schedule and
-// inline-select cells use.
+// The trigger stays a single icon so the column costs what one icon costs,
+// and the calendar opens as a centred modal rather than a popover hanging off
+// the cell: a month grid plus a day's notes is around 500px tall, and anchored
+// under a row in the lower half of the table that ran off the bottom of the
+// screen with the add box below the fold.
 export function LeadRemarksCell({ lead, onError }) {
   const queryClient = useQueryClient()
-  const buttonRef = useRef(null)
-  const [popup, setPopup] = useState(null)
+  const [isOpen, setIsOpen] = useState(false)
   const [selected, setSelected] = useState(todayValue())
   const [view, setView] = useState(() => {
     const now = new Date()
@@ -239,14 +237,10 @@ export function LeadRemarksCell({ lead, onError }) {
 
   function open(event) {
     event.stopPropagation()
-    if (popup) {
-      setPopup(null)
-      return
-    }
     // Always opens on today rather than on the last day anything was written.
     // Adding a note dated today is the common act, and starting anywhere else
-    // would quietly file it against an old day; the "Latest" shortcut below
-    // is how you get to the history instead.
+    // would quietly file it against an old day; the "Latest" shortcut below is
+    // how you get to the history instead.
     const now = new Date()
     setSelected(todayValue())
     setView({ year: now.getFullYear(), month: now.getMonth() })
@@ -254,7 +248,7 @@ export function LeadRemarksCell({ lead, onError }) {
     add.reset()
     edit.reset()
     remove.reset()
-    setPopup(anchorPopup(buttonRef.current.getBoundingClientRect(), POPUP_WIDTH, POPUP_HEIGHT))
+    setIsOpen(true)
   }
 
   function shiftMonth(step) {
@@ -279,7 +273,6 @@ export function LeadRemarksCell({ lead, onError }) {
   return (
     <div className="inline-block">
       <button
-        ref={buttonRef}
         type="button"
         onClick={open}
         title={entries[0]?.text || lead.remarks || 'Add remarks'}
@@ -292,114 +285,101 @@ export function LeadRemarksCell({ lead, onError }) {
         {entries.length > 1 && <span className="text-[11px] font-semibold">{entries.length}</span>}
       </button>
 
-      {popup &&
+      {isOpen &&
         createPortal(
-          <>
-            {/* Click-away as its own element rather than a document listener,
-                so dismissing can't also reach the row underneath and open the
-                lead detail modal. */}
-            <div
-              className="fixed inset-0 z-40"
-              onClick={(event) => {
-                event.stopPropagation()
-                setPopup(null)
-              }}
-              aria-hidden="true"
-            />
-            <div
-              style={{ top: popup.top, left: popup.left, width: POPUP_WIDTH }}
-              className="fixed z-50 flex max-h-[520px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl"
-              onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') setPopup(null)
-              }}
+          // Portaled out of the table, which scrolls horizontally and would
+          // otherwise clip it - and wrapped in a click-trap, because React
+          // routes events from a portal up the *component* tree: without this,
+          // every click inside the modal would also reach the row behind it and
+          // open the lead detail modal underneath.
+          <div onClick={(event) => event.stopPropagation()}>
+            <Modal
+              isOpen
+              onClose={() => setIsOpen(false)}
+              maxWidth="max-w-sm"
+              header={
+                <div className="min-w-0">
+                  <h2 className="text-base font-semibold text-slate-900">
+                    Remarks
+                    {entries.length > 0 && (
+                      <span className="ml-1.5 text-xs font-normal text-slate-400">{entries.length}</span>
+                    )}
+                  </h2>
+                  {/* The modal is detached from the row that opened it, so it
+                      has to say whose remarks these are. */}
+                  <p className="truncate text-xs text-slate-500">{lead.name}</p>
+                </div>
+              }
             >
-              <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
-                <p className="text-sm font-semibold text-slate-800">
-                  Remarks
-                  {entries.length > 0 && <span className="ml-1.5 text-xs text-slate-400">{entries.length}</span>}
-                </p>
+              <div className="flex items-center justify-between">
                 <button
                   type="button"
-                  onClick={() => setPopup(null)}
-                  aria-label="Close remarks"
-                  className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  onClick={() => shiftMonth(-1)}
+                  aria-label="Previous month"
+                  className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                 >
-                  <X className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                  <ChevronLeft className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                </button>
+                <span className="text-sm font-semibold text-slate-700">{formatMonth(view.year, view.month)}</span>
+                <button
+                  type="button"
+                  onClick={() => shiftMonth(1)}
+                  aria-label="Next month"
+                  className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <ChevronRight className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
                 </button>
               </div>
 
-              <div className="px-2.5 pb-2 pt-2">
-                <div className="flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={() => shiftMonth(-1)}
-                    aria-label="Previous month"
-                    className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                  >
-                    <ChevronLeft className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                  </button>
-                  <span className="text-xs font-semibold text-slate-700">{formatMonth(view.year, view.month)}</span>
-                  <button
-                    type="button"
-                    onClick={() => shiftMonth(1)}
-                    aria-label="Next month"
-                    className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                  >
-                    <ChevronRight className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                  </button>
-                </div>
-
-                <div className="mt-1.5 grid grid-cols-7 text-center text-[10px] font-semibold uppercase text-slate-400">
-                  {WEEKDAYS.map((label, index) => (
-                    <span key={index} className="py-0.5">
-                      {label}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-7 gap-y-0.5">
-                  {cells.map((cell, index) => {
-                    if (!cell) return <span key={`blank-${index}`} />
-                    const count = countByDate.get(cell.value) ?? 0
-                    const isSelected = cell.value === selected
-                    const isToday = cell.value === today
-                    return (
-                      <button
-                        key={cell.value}
-                        type="button"
-                        onClick={() => setSelected(cell.value)}
-                        // The count goes in the label rather than only in the
-                        // dot, so the marker isn't colour-only information.
-                        aria-label={`${formatDayLabel(cell.value)}${count ? `, ${count} remark${count > 1 ? 's' : ''}` : ''}`}
-                        aria-pressed={isSelected}
-                        className={`relative mx-auto flex h-8 w-8 flex-col items-center justify-center rounded-full text-xs transition-colors ${
-                          isSelected
-                            ? 'bg-brand-600 font-semibold text-white'
-                            : isToday
-                              ? 'font-semibold text-brand-700 ring-1 ring-brand-300 hover:bg-brand-50'
-                              : count
-                                ? 'font-semibold text-slate-800 hover:bg-slate-100'
-                                : 'text-slate-500 hover:bg-slate-100'
-                        }`}
-                      >
-                        <span className="leading-none">{cell.day}</span>
-                        {/* The marker: a day with remarks carries a dot, so
-                            which days were worked on reads off the grid
-                            without opening any of them. */}
-                        <span
-                          className={`mt-0.5 h-1 w-1 rounded-full ${
-                            count ? (isSelected ? 'bg-white' : 'bg-brand-500') : 'bg-transparent'
-                          }`}
-                          aria-hidden="true"
-                        />
-                      </button>
-                    )
-                  })}
-                </div>
+              <div className="mt-2 grid grid-cols-7 text-center text-[10px] font-semibold uppercase text-slate-400">
+                {WEEKDAYS.map((label, index) => (
+                  <span key={index} className="py-0.5">
+                    {label}
+                  </span>
+                ))}
               </div>
 
-              <div className="flex items-center justify-between border-t border-slate-100 px-3 py-1.5">
+              <div className="grid grid-cols-7 gap-y-0.5">
+                {cells.map((cell, index) => {
+                  if (!cell) return <span key={`blank-${index}`} />
+                  const count = countByDate.get(cell.value) ?? 0
+                  const isSelected = cell.value === selected
+                  const isToday = cell.value === today
+                  return (
+                    <button
+                      key={cell.value}
+                      type="button"
+                      onClick={() => setSelected(cell.value)}
+                      // The count goes in the label rather than only in the
+                      // dot, so the marker isn't colour-only information.
+                      aria-label={`${formatDayLabel(cell.value)}${count ? `, ${count} remark${count > 1 ? 's' : ''}` : ''}`}
+                      aria-pressed={isSelected}
+                      className={`mx-auto flex h-9 w-9 flex-col items-center justify-center rounded-full text-sm transition-colors ${
+                        isSelected
+                          ? 'bg-brand-600 font-semibold text-white'
+                          : isToday
+                            ? 'font-semibold text-brand-700 ring-1 ring-brand-300 hover:bg-brand-50'
+                            : count
+                              ? 'font-semibold text-slate-800 hover:bg-slate-100'
+                              : 'text-slate-500 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span className="leading-none">{cell.day}</span>
+                      {/* The marker: a day with remarks carries a dot, so which
+                          days were worked on reads off the grid without opening
+                          any of them. */}
+                      <span
+                        className={`mt-0.5 h-1 w-1 rounded-full ${
+                          count ? (isSelected ? 'bg-white' : 'bg-brand-500') : 'bg-transparent'
+                        }`}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2">
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                   {formatDayLabel(selected)}
                   {selectedEntries.length > 1 && (
@@ -409,7 +389,7 @@ export function LeadRemarksCell({ lead, onError }) {
                   )}
                 </span>
                 {/* The history can be months back, and nothing on a calendar
-                    that only shows one month says so. This jumps to it. */}
+                    showing one month at a time says so. This jumps to it. */}
                 {latestDate && latestDate !== selected && (
                   <button
                     type="button"
@@ -421,27 +401,25 @@ export function LeadRemarksCell({ lead, onError }) {
                 )}
               </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-1">
-                {selectedEntries.length === 0 ? (
-                  <p className="px-2 py-3 text-center text-xs text-slate-400">No remarks on this date.</p>
-                ) : (
-                  <ul className="space-y-1">
-                    {selectedEntries.map((entry, index) => (
-                      <RemarkRow
-                        key={entry.id ?? `legacy-${index}`}
-                        entry={entry}
-                        busy={busy}
-                        onSave={({ text, remarkDate }, done) =>
-                          edit.mutate({ id: entry.id, text, remarkDate }, { onSuccess: done })
-                        }
-                        onDelete={(id) => remove.mutate(id)}
-                      />
-                    ))}
-                  </ul>
-                )}
-              </div>
+              {selectedEntries.length === 0 ? (
+                <p className="py-3 text-center text-xs text-slate-400">No remarks on this date.</p>
+              ) : (
+                <ul className="mt-1 space-y-1">
+                  {selectedEntries.map((entry, index) => (
+                    <RemarkRow
+                      key={entry.id ?? `legacy-${index}`}
+                      entry={entry}
+                      busy={busy}
+                      onSave={({ text, remarkDate }, done) =>
+                        edit.mutate({ id: entry.id, text, remarkDate }, { onSuccess: done })
+                      }
+                      onDelete={(id) => remove.mutate(id)}
+                    />
+                  ))}
+                </ul>
+              )}
 
-              <div className="border-t border-slate-100 bg-slate-50/70 p-2.5">
+              <div className="mt-2 border-t border-slate-100 pt-2.5">
                 <textarea
                   rows={2}
                   maxLength={REMARKS_MAX_LENGTH}
@@ -453,7 +431,7 @@ export function LeadRemarksCell({ lead, onError }) {
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) submitDraft()
                   }}
-                  className={`resize-none bg-white ${FIELD_CLASS}`}
+                  className={`resize-none ${FIELD_CLASS}`}
                 />
                 <div className="mt-1.5 flex items-center justify-between">
                   <span className="text-[11px] text-slate-400">
@@ -476,8 +454,8 @@ export function LeadRemarksCell({ lead, onError }) {
                   </button>
                 </div>
               </div>
-            </div>
-          </>,
+            </Modal>
+          </div>,
           document.body,
         )}
     </div>
