@@ -26,14 +26,27 @@ class BaseDocument(Document):
     updated_by: uuid.UUID | None = None
     is_deleted: bool = Field(default=False)
     deleted_at: datetime | None = None
+    # Who deleted it and why. A soft-deleted record is one somebody chose to
+    # take out of circulation, and a list of them with no reasons against the
+    # rows is a list of decisions nobody can account for afterwards. Optional
+    # on the document because most collections delete without asking; the
+    # services that do ask (users, roles) require it before calling this.
+    deleted_by: uuid.UUID | None = None
+    deleted_reason: str | None = Field(default=None, max_length=500)
 
-    def soft_delete(self) -> None:
+    def soft_delete(self, *, actor_id: uuid.UUID | None = None, reason: str | None = None) -> None:
         self.is_deleted = True
         self.deleted_at = utcnow()
+        self.deleted_by = actor_id
+        self.deleted_reason = reason
 
     def restore(self) -> None:
         self.is_deleted = False
         self.deleted_at = None
+        # The reason belonged to a deletion that has been undone; keeping it
+        # would put a justification on a live record.
+        self.deleted_by = None
+        self.deleted_reason = None
 
     def touch(self, actor_id: uuid.UUID | None = None) -> None:
         """Bump updated_at (and updated_by, if given) before a save()."""

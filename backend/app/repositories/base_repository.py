@@ -93,9 +93,16 @@ class BaseRepository(Generic[ModelType]):
         await document.save()
         return document
 
-    async def delete(self, document: ModelType, *, hard: bool = False) -> None:
+    async def delete(
+        self,
+        document: ModelType,
+        *,
+        hard: bool = False,
+        actor_id: uuid.UUID | None = None,
+        reason: str | None = None,
+    ) -> None:
         if hard:
             await document.delete()
         else:
-            document.soft_delete()
+            document.soft_delete(actor_id=actor_id, reason=reason)
             await document.save()

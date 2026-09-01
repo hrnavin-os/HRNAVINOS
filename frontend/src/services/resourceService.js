@@ -19,8 +19,14 @@ export function createResourceService(basePath) {
       const { data } = await apiClient.put(`${basePath}/${id}`, payload)
       return data
     },
-    remove: async (id) => {
-      const { data } = await apiClient.delete(`${basePath}/${id}`)
+    // `reason` is sent as a DELETE body rather than a query param: it is
+    // free text somebody types, and typed prose does not belong in a URL that
+    // ends up in access logs and browser history. Endpoints that don't ask
+    // for one ignore it.
+    remove: async (id, reason) => {
+      const { data } = await apiClient.delete(`${basePath}/${id}`, {
+        data: reason ? { reason } : undefined,
+      })
       return data
     },
   }

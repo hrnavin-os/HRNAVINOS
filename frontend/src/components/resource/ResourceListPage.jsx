@@ -40,7 +40,10 @@ export function ResourceListPage({
   //   view:   { title?, fields: [{ label, value(record) }] }
   //   edit:   { title?, permission?, fields, defaults?, transform? }
   //           or { title?, permission?, render({ row, onClose, onSaved }) }
-  //   remove: { permission?, describe(row), lockedReason?(row) }
+  //   remove: { permission?, describe(row), lockedReason?(row),
+  //             requireReason?, consequence? }  - requireReason makes the
+  //             dialog ask why before it will delete, for records that are
+  //             kept and listed afterwards
   //   lockedReason?(row) -> string disables BOTH edit and delete with a tooltip
   rowActions,
   // Opt-in leading "S.No" column. Numbers run across the whole result set
@@ -84,7 +87,7 @@ export function ResourceListPage({
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => service.remove(id),
+    mutationFn: ({ id, reason }) => service.remove(id, reason),
     onSuccess: () => {
       invalidate()
       setDeletingRow(null)
@@ -282,7 +285,9 @@ export function ResourceListPage({
           describe={rowActions.remove.describe(deletingRow)}
           error={deleteMutation.error ? getApiErrorMessage(deleteMutation.error) : null}
           isPending={deleteMutation.isPending}
-          onConfirm={() => deleteMutation.mutate(deletingRow.id)}
+          requireReason={Boolean(rowActions.remove.requireReason)}
+          consequence={rowActions.remove.consequence}
+          onConfirm={(reason) => deleteMutation.mutate({ id: deletingRow.id, reason })}
           onClose={() => setDeletingRow(null)}
         />
       )}

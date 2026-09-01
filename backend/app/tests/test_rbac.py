@@ -116,3 +116,82 @@ async def test_a_hidden_grant_survives_editing_the_role(client, auth_headers):
     )
     assert updated.status_code == 200
     assert any(permission["code"] == "students.view" for permission in updated.json()["permissions"])
+
+
+# --------------------------------------------------------------------------
+# Deleting a user or a role
+# --------------------------------------------------------------------------
+
+
+async def _new_user(client, auth_headers, email: str = "leaver@hrnavinos.com") -> str:
+    return (await _create_user_with_role(client, auth_headers, "Tutor", email))["id"]
+
+
+async def test_deleting_a_user_requires_a_reason(client, auth_headers):
+    user_id = await _new_user(client, auth_headers)
+
+    assert (await client.request("DELETE", f"/api/v1/users/{user_id}", headers=auth_headers)).status_code == 422
+    blank = await client.request(
+        "DELETE", f"/api/v1/users/{user_id}", headers=auth_headers, json={"reason": "  "}
+    )
+    assert blank.status_code == 422
+
+
+async def test_a_deleted_user_moves_to_the_deleted_list_with_its_reason(client, auth_headers):
+    user_id = await _new_user(client, auth_headers)
+
+    deleted = await client.request(
+        "DELETE",
+        f"/api/v1/users/{user_id}",
+        headers=auth_headers,
+        json={"reason": "Left the company on 30 Aug"},
+    )
+    assert deleted.status_code == 200
+
+    live = await client.get("/api/v1/users", headers=auth_headers, params={"page_size": 100})
+    assert user_id not in {row["id"] for row in live.json()["items"]}
+
+    removed = await client.get(
+        "/api/v1/users", headers=auth_headers, params={"page_size": 100, "deleted": "true"}
+    )
+    row = next(item for item in removed.json()["items"] if item["id"] == user_id)
+    assert row["deleted_reason"] == "Left the company on 30 Aug"
+    assert row["deleted_at"]
+    # Attributed, not anonymous: a deletion nobody's name is against is a
+    # decision nobody can be asked about.
+    assert row["deleted_by_name"]
+
+
+async def test_deleting_a_role_requires_a_reason_and_keeps_it(client, auth_headers):
+    created = await client.post(
+        "/api/v1/roles",
+        headers=auth_headers,
+        json={"name": "Temp Role", "description": "For the test", "permission_ids": []},
+    )
+    role_id = created.json()["id"]
+
+    assert (await client.request("DELETE", f"/api/v1/roles/{role_id}", headers=auth_headers)).status_code == 422
+
+    deleted = await client.request(
+        "DELETE", f"/api/v1/roles/{role_id}", headers=auth_headers, json={"reason": "Replaced by Admin-Coordinator"}
+    )
+    assert deleted.status_code == 200
+
+    live = await client.get("/api/v1/roles", headers=auth_headers, params={"page_size": 100})
+    assert role_id not in {row["id"] for row in live.json()["items"]}
+
+    removed = await client.get(
+        "/api/v1/roles", headers=auth_headers, params={"page_size": 100, "deleted": "true"}
+    )
+    row = next(item for item in removed.json()["items"] if item["id"] == role_id)
+    assert row["deleted_reason"] == "Replaced by Admin-Coordinator"
+    assert row["deleted_by_name"]
+
+
+async def test_a_system_role_still_cannot_be_deleted_with_a_reason(client, auth_headers):
+    """The reason is a record of a decision, not permission to make one."""
+    role_id = await _get_role_id(client, auth_headers, "Super Admin")
+    response = await client.request(
+        "DELETE", f"/api/v1/roles/{role_id}", headers=auth_headers, json={"reason": "Tidying up"}
+    )
+    assert response.status_code == 403

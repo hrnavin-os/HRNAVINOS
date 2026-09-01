@@ -7,7 +7,7 @@ from app.core.dependencies import RequirePermissions
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.common import MessageResponse, PaginatedResponse, PaginationParams
-from app.schemas.user_schema import UserCreate, UserListResponse, UserResponse, UserUpdate
+from app.schemas.user_schema import UserCreate, UserDelete, UserListResponse, UserResponse, UserUpdate
 from app.services.user_service import UserService
 
 router = APIRouter(prefix="/users", tags=["User Management"])
@@ -31,11 +31,14 @@ async def list_users(
     sort_by: str = "created_at",
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     role_id: uuid.UUID | None = None,
+    # The Deleted tab. Deleted users are soft-deleted, so they are still here
+    # to be listed - and the reason they were removed is on the row.
+    deleted: bool = False,
     actor: User = Depends(RequirePermissions(Permissions.USERS_VIEW)),
 ) -> PaginatedResponse[UserListResponse]:
     params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)
     service = UserService()
-    result = await service.list(params, role_id=role_id)
+    result = await service.list(params, role_id=role_id, deleted=deleted)
     items = [await service.to_list_response(u) for u in result.items]
     return PaginatedResponse[UserListResponse].build(items, result.total, result.page, result.page_size)
 
@@ -73,7 +76,11 @@ async def deactivate_user(
 @router.delete("/{user_id}", response_model=MessageResponse)
 async def delete_user(
     user_id: uuid.UUID,
+    # A body on DELETE rather than a query string: the reason is free text
+    # somebody types, and typed prose does not belong in a URL that ends up in
+    # access logs and browser history.
+    payload: UserDelete,
     actor: User = Depends(RequirePermissions(Permissions.USERS_DELETE)),
 ) -> MessageResponse:
-    await UserService().delete(user_id, actor_id=actor.id)
+    await UserService().delete(user_id, reason=payload.reason, actor_id=actor.id)
     return MessageResponse(message="User deleted successfully.")

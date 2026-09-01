@@ -32,8 +32,20 @@ class RoleResponse(BaseModel):
     permissions: list[PermissionResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+    # Only set on the Deleted tab's rows. `deleted_by_name` is resolved for
+    # the page rather than left as an id, since a list of ids is not something
+    # anybody can read a decision out of.
+    deleted_at: datetime | None = None
+    deleted_by_name: str | None = None
+    deleted_reason: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class RoleDelete(BaseModel):
+    """Why a role is being removed. Required - see RoleService.delete."""
+
+    reason: str = Field(min_length=3, max_length=500)
 
 
 class RoleSummaryResponse(BaseModel):

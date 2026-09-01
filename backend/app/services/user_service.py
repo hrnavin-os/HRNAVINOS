@@ -2,7 +2,7 @@
 import uuid
 
 from app.core.security import hash_password
-from app.exceptions.base import AlreadyExistsError, NotFoundError
+from app.exceptions.base import AlreadyExistsError, BadRequestError, NotFoundError
 from app.models.user import User
 from app.repositories.role_repository import RoleRepository
 from app.repositories.user_repository import UserRepository
@@ -17,6 +17,18 @@ class UserService:
         self.users = UserRepository()
         self.roles = RoleRepository()
         self.audit = AuditService()
+
+    async def deleter_name(self, user) -> str | None:
+        """Who deleted this record, by name. None on a live one.
+
+        Resolved per row rather than snapshotted on the document: the Deleted
+        tab is short, and a name is the one thing here that should follow the
+        person if they are renamed.
+        """
+        if not user.is_deleted or not user.deleted_by:
+            return None
+        actor = await self.users.get_by_id(user.deleted_by)
+        return f"{actor.first_name} {actor.last_name}".strip() if actor else None
 
     async def _role_summary(self, role_id: uuid.UUID | None) -> RoleSummaryResponse | None:
         """MongoDB has no relationship loading: resolve `role_id` -> Role
@@ -39,6 +51,9 @@ class UserService:
             role=await self._role_summary(user.role_id),
             created_at=user.created_at,
             updated_at=user.updated_at,
+            deleted_at=user.deleted_at,
+            deleted_by_name=await self.deleter_name(user),
+            deleted_reason=user.deleted_reason,
         )
 
     async def to_list_response(self, user: User) -> UserListResponse:
@@ -49,6 +64,9 @@ class UserService:
             last_name=user.last_name,
             is_active=user.is_active,
             role=await self._role_summary(user.role_id),
+            deleted_at=user.deleted_at,
+            deleted_by_name=await self.deleter_name(user),
+            deleted_reason=user.deleted_reason,
         )
 
     async def create(self, data: UserCreate, *, actor_id: uuid.UUID | None) -> User:
@@ -78,7 +96,15 @@ class UserService:
             raise NotFoundError("User not found.")
         return user
 
-    async def list(self, params: PaginationParams, *, role_id: uuid.UUID | None = None) -> PaginatedResponse:
+    async def list(
+        self, params: PaginationParams, *, role_id: uuid.UUID | None = None, deleted: bool = False
+    ) -> PaginatedResponse:
+        # The Deleted tab is the same query with the flag flipped, rather than
+        # its own endpoint: one list, one shape, one place to change when a
+        # column is added to it.
+        filters: dict = {"is_deleted": deleted}
+        if role_id:
+            filters["role_id"] = role_id
         items, total = await self.users.list(
             page=params.page,
             page_size=params.page_size,
@@ -86,7 +112,8 @@ class UserService:
             search_fields=["email", "first_name", "last_name"],
             sort_by=params.sort_by,
             sort_order=params.sort_order,
-            filters={"role_id": role_id} if role_id else None,
+            include_deleted=deleted,
+            filters=filters,
         )
         return PaginatedResponse.build(items, total, params.page, params.page_size)
 
@@ -111,7 +138,23 @@ class UserService:
         await self.audit.record(user_id=actor_id, action="DEACTIVATE", entity_type="User", entity_id=str(user.id))
         return user
 
-    async def delete(self, user_id: uuid.UUID, *, actor_id: uuid.UUID | None) -> None:
+    async def delete(self, user_id: uuid.UUID, *, reason: str, actor_id: uuid.UUID | None) -> None:
+        """Soft-deletes a user, on the record.
+
+        The reason is required rather than optional: removing somebody's
+        access is a decision, and the Deleted tab exists so those decisions
+        can be read back months later. An optional field would be empty on
+        exactly the rows anyone eventually asks about.
+        """
         user = await self.get(user_id)
-        await self.users.delete(user)
-        await self.audit.record(user_id=actor_id, action="DELETE", entity_type="User", entity_id=str(user.id))
+        note = reason.strip()
+        if not note:
+            raise BadRequestError("Give a reason for deleting this user.")
+        await self.users.delete(user, actor_id=actor_id, reason=note)
+        await self.audit.record(
+            user_id=actor_id,
+            action="DELETE",
+            entity_type="User",
+            entity_id=str(user.id),
+            changes={"reason": note},
+        )
