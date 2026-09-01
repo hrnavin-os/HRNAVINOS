@@ -260,7 +260,9 @@ class AttendanceBoardService:
             marks={key: marker.read(entry) for key, marker in MARKERS.items()},
         )
 
-    def _query(self, *, marker_key: str, state: MarkerState, section: str | None) -> dict:
+    def _query(
+        self, *, marker_key: str, state: MarkerState, section: str | None, batch: str | None = None
+    ) -> dict:
         """The stored-field query for one tab, narrowed to a section if the
         caller is pinned to one.
 
@@ -279,6 +281,13 @@ class AttendanceBoardService:
             query["$and"] = [self.marker(marker_key).query(state == "yes")]
         if section:
             query["section"] = section
+        # Batch isn't stored - it's derived from registration_date (see
+        # InductionEntryService.batch_for) - so filtering by it is a range over
+        # the month it stands for. An unparseable batch narrows nothing rather
+        # than erroring: a junk query param should return the roll, not a 500.
+        window = InductionEntryService.batch_date_range(batch) if batch else None
+        if window:
+            query["registration_date"] = {"$gte": window[0], "$lte": window[1]}
         return query
 
     async def list_students(
@@ -288,6 +297,7 @@ class AttendanceBoardService:
         marker_key: str = "terms",
         state: MarkerState = "all",
         section: str | None = None,
+        batch: str | None = None,
     ) -> PaginatedResponse[AttendanceStudentResponse]:
         items, total = await self.entries.list(
             page=params.page,
@@ -296,23 +306,30 @@ class AttendanceBoardService:
             search_fields=SEARCH_FIELDS,
             sort_by=params.sort_by,
             sort_order=params.sort_order,
-            filters=self._query(marker_key=marker_key, state=state, section=section),
+            filters=self._query(marker_key=marker_key, state=state, section=section, batch=batch),
         )
         return PaginatedResponse[AttendanceStudentResponse].build(
             [self.to_response(entry) for entry in items], total, params.page, params.page_size
         )
 
-    async def stats(self, *, section: str | None = None) -> AttendanceStatsResponse:
+    async def stats(
+        self, *, section: str | None = None, batch: str | None = None
+    ) -> AttendanceStatsResponse:
         """Every tab's split, in one response.
 
         Counted rather than derived from the current page - a tab has to say
         how much is behind it without being opened - and `no` is subtracted
         from the total rather than counted separately, so the two can never
         fail to add up to it.
+
+        Counts the *filtered* roll, not the whole one: a section filter that
+        left the tab counts describing everybody would have the header
+        disagreeing with the table under it.
         """
-        base: dict = {"is_deleted": False}
-        if section:
-            base["section"] = section
+        base = {
+            "is_deleted": False,
+            **self._query(marker_key="terms", state="all", section=section, batch=batch),
+        }
         total = await InductionEntry.find(base).count()
 
         markers = {}
@@ -320,6 +337,28 @@ class AttendanceBoardService:
             yes = await InductionEntry.find({**base, "$and": [marker.query(True)]}).count()
             markers[key] = MarkerStatsResponse(total=total, yes=yes, no=total - yes)
         return AttendanceStatsResponse(total=total, markers=markers)
+
+    async def filter_options(self, *, section: str | None = None) -> dict:
+        """The sections and batches actually present on the roll.
+
+        Read from the entries rather than from the form config, for the same
+        reason the induction board's own options are: a filter offering a value
+        that matches nothing - or missing one that matches rows - is worse than
+        no filter at all. Batches are derived per entry, newest first.
+        """
+        query: dict = {"is_deleted": False}
+        if section:
+            query["section"] = section
+        entries = await InductionEntry.find(query).to_list()
+
+        sections = sorted({entry.section for entry in entries if entry.section})
+        batches = sorted(
+            {batch_for(entry.registration_date) for entry in entries},
+            # "Batch-9" before "Batch-10" needs a numeric sort, not a string one.
+            key=lambda value: int(value.split("-")[1]),
+            reverse=True,
+        )
+        return {"sections": sections, "batches": batches}
 
     async def set_mark(
         self, entry_id: uuid.UUID, marker_key: str, *, marked: bool | None, actor_id: uuid.UUID | None

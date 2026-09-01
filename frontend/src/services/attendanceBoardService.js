@@ -23,9 +23,16 @@ export const attendanceBoardService = {
     return data
   },
   // Every marker's split in one response, so each tab shows its own count
-  // without a request each.
-  getStats: async () => {
-    const { data } = await apiClient.get('/induction-attendance/stats')
+  // without a request each. Takes the same filters the list does, or the
+  // counts in the tabs would describe a different population to the rows.
+  getStats: async (params) => {
+    const { data } = await apiClient.get('/induction-attendance/stats', { params })
+    return data
+  },
+  // The sections and batches actually on the roll, so the filter row never
+  // offers a value that matches nothing.
+  getFilterOptions: async () => {
+    const { data } = await apiClient.get('/induction-attendance/filter-options')
     return data
   },
   // `marked` is true, false, or null to clear the tick - which on the

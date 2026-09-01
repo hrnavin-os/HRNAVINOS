@@ -57,6 +57,10 @@ async def list_students(
     # Which tab, and which side of it.
     marker: MarkerKey = "terms",
     state: MarkerState = "all",
+    # The filter row. Batch is derived from registration_date rather than
+    # stored, so the service turns it back into the month it stands for.
+    section: str | None = None,
+    batch: str | None = None,
     sort_by: str = "registration_date",
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     actor: User = Depends(RequirePermissions(Permissions.INDUCTION_ATTENDANCE_VIEW)),
@@ -66,16 +70,31 @@ async def list_students(
     scope = await get_actor_scope(actor)
     params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)
     return await AttendanceBoardService().list_students(
-        params, marker_key=marker, state=state, section=scope
+        params, marker_key=marker, state=state, section=scope or section, batch=batch
     )
 
 
 @router.get("/stats", response_model=AttendanceStatsResponse)
 async def stats(
+    # The same filters the list takes, so the tab counts describe the rows
+    # under them rather than the whole roll.
+    section: str | None = None,
+    batch: str | None = None,
     actor: User = Depends(RequirePermissions(Permissions.INDUCTION_ATTENDANCE_VIEW)),
 ) -> AttendanceStatsResponse:
     scope = await get_actor_scope(actor)
-    return await AttendanceBoardService().stats(section=scope)
+    return await AttendanceBoardService().stats(section=scope or section, batch=batch)
+
+
+@router.get("/filter-options")
+async def filter_options(
+    actor: User = Depends(RequirePermissions(Permissions.INDUCTION_ATTENDANCE_VIEW)),
+) -> dict:
+    """The sections and batches present on the roll, so the filter row only
+    offers values that actually match something. Scoped like the list is, or a
+    Section Admin's filter would offer sections only other people can see."""
+    scope = await get_actor_scope(actor)
+    return await AttendanceBoardService().filter_options(section=scope)
 
 
 @router.put("/students/{entry_id}/marks/{marker}", response_model=AttendanceStudentResponse)

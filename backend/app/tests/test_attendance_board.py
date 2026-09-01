@@ -222,3 +222,89 @@ async def test_document_is_created_empty_and_then_edited(client, auth_headers):
     # Singleton: a second read returns the edit rather than a fresh blank one.
     again = await client.get(DOCUMENT_URL, headers=auth_headers)
     assert again.json()["body"].startswith("1. Attend every session.")
+
+
+async def set_section(name: str, section: str) -> None:
+    """Sections are assigned by the round-robin over Section Admin users, and
+    the test database has none - so the value is written directly here rather
+    than through an endpoint that cannot set it."""
+    from app.models.induction_entry import InductionEntry
+
+    entry = await InductionEntry.find_one({"name": name})
+    entry.section = section
+    await entry.save()
+
+
+async def test_section_filter_narrows_the_roll_and_its_counts(client, auth_headers):
+    arun = await add_student(client, auth_headers, name="Arun", phone="9876543210")
+    await add_student(client, auth_headers, name="Divya", phone="9876500000")
+    await set_section("Arun", "a")
+    await set_section("Divya", "b")
+    await mark(client, auth_headers, arun, "terms", True)
+
+    listed = await client.get(STUDENTS_URL, headers=auth_headers, params={"section": "a"})
+    assert [row["name"] for row in listed.json()["items"]] == ["Arun"]
+
+    # The counts follow the filter, or the tabs would describe a population
+    # the rows underneath them don't.
+    stats = (await client.get(STATS_URL, headers=auth_headers, params={"section": "a"})).json()
+    assert stats["total"] == 1
+    assert stats["markers"]["terms"] == {"total": 1, "yes": 1, "no": 0}
+
+
+async def test_batch_filter_narrows_by_the_month_it_stands_for(client, auth_headers):
+    """Batch isn't stored - it's derived from registration_date - so filtering
+    by it is a range over the month it represents."""
+    await add_student(client, auth_headers, name="Arun", phone="9876543210")
+    september = await client.post(
+        INDUCTION_URL,
+        headers=auth_headers,
+        json={
+            "name": "Divya",
+            "phone": "9876500000",
+            "registration_date": "2026-09-10",
+            "sales_person": "Priya",
+            "lead_source": "Instagram",
+        },
+    )
+    assert september.status_code in (200, 201), september.text
+
+    august = await client.get(STUDENTS_URL, headers=auth_headers, params={"batch": "Batch-28"})
+    assert [row["name"] for row in august.json()["items"]] == ["Arun"]
+    assert august.json()["items"][0]["batch"] == "Batch-28"
+
+    later = await client.get(STUDENTS_URL, headers=auth_headers, params={"batch": "Batch-29"})
+    assert [row["name"] for row in later.json()["items"]] == ["Divya"]
+
+
+async def test_filters_combine_with_a_marker_and_with_each_other(client, auth_headers):
+    arun = await add_student(client, auth_headers, name="Arun", phone="9876543210")
+    await add_student(client, auth_headers, name="Bala", phone="9876511111")
+    await set_section("Arun", "a")
+    await set_section("Bala", "a")
+    await mark(client, auth_headers, arun, "polls", True)
+
+    pending = await client.get(
+        STUDENTS_URL,
+        headers=auth_headers,
+        params={"marker": "polls", "state": "no", "section": "a", "batch": "Batch-28"},
+    )
+    assert [row["name"] for row in pending.json()["items"]] == ["Bala"]
+
+
+async def test_filter_options_offer_only_what_is_on_the_roll(client, auth_headers):
+    await add_student(client, auth_headers, name="Arun", phone="9876543210")
+    await set_section("Arun", "a")
+
+    options = (await client.get("/api/v1/induction-attendance/filter-options", headers=auth_headers)).json()
+    assert options["sections"] == ["a"]
+    assert options["batches"] == ["Batch-28"]
+
+
+async def test_an_unparseable_batch_narrows_nothing(client, auth_headers):
+    await add_student(client, auth_headers, name="Arun", phone="9876543210")
+
+    response = await client.get(STUDENTS_URL, headers=auth_headers, params={"batch": "nonsense"})
+    # A junk query param returns the roll rather than a 500.
+    assert response.status_code == 200
+    assert response.json()["total"] == 1

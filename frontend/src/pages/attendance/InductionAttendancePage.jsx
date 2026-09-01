@@ -22,6 +22,7 @@ import { PERMISSIONS } from '@/constants/permissions'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { DataTable } from '@/components/ui/DataTable'
+import { FilterDropdown } from '@/components/ui/FilterDropdown'
 import { Input, FIELD } from '@/components/ui/Input'
 import { Pagination } from '@/components/ui/Pagination'
 import { TabStrip } from '@/components/ui/TabStrip'
@@ -231,22 +232,48 @@ export function InductionAttendancePage() {
 
   const [marker, setMarker] = useState('terms')
   const [state, setState] = useState('all')
+  const [section, setSection] = useState('')
+  const [batch, setBatch] = useState('')
   const [error, setError] = useState(null)
 
-  const query = usePaginatedQuery('induction-attendance', attendanceBoardService, { marker, state })
+  // undefined rather than '' for an unset filter: the API treats a missing
+  // param as "no filter", where an empty string would be a section nobody is
+  // in and return nothing.
+  const filters = { section: section || undefined, batch: batch || undefined }
+
+  const query = usePaginatedQuery('induction-attendance', attendanceBoardService, {
+    marker,
+    state,
+    ...filters,
+  })
   const { setPage, search, setSearch } = query
 
-  // A page number belongs to the tab it was set on: page 3 of the whole roll
-  // is not page 3 of the four people who are still pending.
+  // A page number belongs to the view it was set on: page 3 of the whole roll
+  // is not page 3 of the four people still pending in B Section.
   useEffect(() => {
     setPage(1)
-  }, [marker, state, setPage])
+  }, [marker, state, section, batch, setPage])
 
   const statsQuery = useQuery({
-    queryKey: ['induction-attendance-stats'],
-    queryFn: attendanceBoardService.getStats,
+    // The counts are filtered with the table, so they key off the filters too
+    // - otherwise the tabs would describe a population the rows don't.
+    queryKey: ['induction-attendance-stats', filters],
+    queryFn: () => attendanceBoardService.getStats(filters),
   })
   const stats = statsQuery.data
+
+  // Only the sections and batches actually on the roll. A Section Admin is
+  // pinned to their own section by their role, so the filter isn't offered to
+  // them rather than offered and then ignored.
+  const optionsQuery = useQuery({
+    queryKey: ['induction-attendance-filter-options'],
+    queryFn: attendanceBoardService.getFilterOptions,
+  })
+  const sectionOptions = (optionsQuery.data?.sections ?? []).map((code) => ({
+    value: code,
+    label: `${code.toUpperCase()} Section`,
+  }))
+  const batchOptions = (optionsQuery.data?.batches ?? []).map((value) => ({ value, label: value }))
   const active = TAB_BY_KEY[marker]
   const activeStats = stats?.markers?.[marker]
 
@@ -420,7 +447,18 @@ export function InductionAttendancePage() {
               </button>
             ))}
           </div>
-          <div className="w-full sm:w-64">
+          {sectionOptions.length > 1 && (
+            <FilterDropdown
+              label="Section"
+              value={section}
+              options={sectionOptions}
+              onChange={setSection}
+            />
+          )}
+          {batchOptions.length > 1 && (
+            <FilterDropdown label="Batch" value={batch} options={batchOptions} onChange={setBatch} />
+          )}
+          <div className="w-full sm:w-56">
             <Input
               value={search}
               onChange={(event) => {
