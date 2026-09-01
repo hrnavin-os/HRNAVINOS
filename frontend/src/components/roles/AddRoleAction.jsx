@@ -63,6 +63,17 @@ export function RoleFormModal({ role, onClose, onSaved }) {
   })
   const configQuery = useQuery({ queryKey: ['foundation-form-config'], queryFn: foundationFormConfigService.get })
 
+  // The editor offers the modules the app actually surfaces; the endpoint
+  // decides which those are (OFFERED_MODULES on the backend). Anything else a
+  // role already carries stays in `selected` and is saved back untouched -
+  // hiding a permission must never be a way of silently revoking it - so the
+  // count below says how many are riding along unseen.
+  const visibleIds = useMemo(
+    () => new Set((permissionsQuery.data?.items ?? []).map((permission) => permission.id)),
+    [permissionsQuery.data],
+  )
+  const hiddenCount = [...selected].filter((id) => !visibleIds.has(id)).length
+
   const groups = useMemo(() => {
     const items = permissionsQuery.data?.items ?? []
     const byModule = new Map()
@@ -144,6 +155,12 @@ export function RoleFormModal({ role, onClose, onSaved }) {
             <p className="mb-2 text-sm font-medium text-slate-700">
               Permissions <span className="font-normal text-slate-400">({selected.size} selected)</span>
             </p>
+            {hiddenCount > 0 && (
+              <p className="mb-2 text-xs text-slate-500">
+                {hiddenCount} further permission{hiddenCount === 1 ? '' : 's'} on this role belong to modules
+                the app doesn't currently link to. They are kept as they are.
+              </p>
+            )}
             <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
               {groups.map(([module, permissions]) => (
                 <PermissionGroup

@@ -134,6 +134,48 @@ class Permissions(StrEnum):
     INDUCTION_ATTENDANCE_CONFIGURE = "induction_attendance.configure"
 
 
+# The modules the role editor offers.
+#
+# Every code above still exists, is still enforced by its endpoints, and is
+# still honoured on any role that already carries it - this list is only about
+# what a person is asked to choose from. The ERP carries a dozen modules built
+# ahead of the product (admissions, students, courses, batches, tutors, the
+# classroom attendance register, placements, invoices, tickets, reports) whose
+# pages nothing in the navigation links to. Offering their permissions made the
+# picker four screens of choices, most of which grant access to a page the
+# grantee cannot reach, and buried the handful that decide what somebody can
+# actually do.
+#
+# Adding a menu means adding its module here. The list is deliberately of
+# modules rather than codes: a module that is in the product should offer all
+# of its actions, or the picker starts hiding capability rather than noise.
+OFFERED_MODULES: set[str] = {
+    "leads",
+    "form_collection",
+    "programs",
+    "induction_attendance",
+    "batch_confirmation",
+    "payments",
+    "users",
+    "roles",
+    # Not a menu of its own: the role editor's own permission list is read
+    # through it, so a role that can edit roles and cannot read permissions
+    # gets an empty picker.
+    "permissions",
+    "settings",
+}
+
+# Codes inside an offered module that nothing enforces. Granting one changes
+# nothing, so offering it is a promise the app does not keep.
+UNENFORCED_CODES: set[str] = {"payments.delete"}
+
+
+def is_offered(code: str) -> bool:
+    """Whether the role editor should offer this permission."""
+    module = code.split(".", 1)[0]
+    return module in OFFERED_MODULES and code not in UNENFORCED_CODES
+
+
 def all_permission_definitions() -> list[dict[str, str]]:
     """Returns [{code, module, action}, ...] for every permission, derived from the enum."""
     definitions = []

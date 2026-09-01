@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, status
 
 from app.core.dependencies import RequirePermissions
 from app.models.user import User
-from app.permissions.permission_codes import Permissions
+from app.permissions.permission_codes import Permissions, is_offered
 from app.schemas.common import MessageResponse, PaginatedResponse, PaginationParams
 from app.schemas.permission_schema import PermissionCreate, PermissionResponse, PermissionUpdate
 from app.services.permission_service import PermissionService
@@ -29,12 +29,22 @@ async def list_permissions(
     search: str | None = None,
     sort_by: str = "module",
     sort_order: str = Query("asc", pattern="^(asc|desc)$"),
+    # The role editor's list, and the default: only the modules the app
+    # actually surfaces (see OFFERED_MODULES). Pass false for the raw
+    # catalogue - every code the system enforces, including the modules whose
+    # pages nothing links to yet.
+    offered_only: bool = True,
     actor: User = Depends(RequirePermissions(Permissions.PERMISSIONS_VIEW)),
 ) -> PaginatedResponse[PermissionResponse]:
     params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)
     result = await PermissionService().list(params)
+    items = [p for p in result.items if not offered_only or is_offered(p.code)]
+    # The total is recounted rather than reused: filtering after the page was
+    # cut would otherwise report a total the pages don't add up to. The
+    # catalogue is ~70 rows and the editor asks for all of them in one page,
+    # so this is honest for the only caller that filters.
     return PaginatedResponse[PermissionResponse].build(
-        [PermissionResponse.model_validate(p) for p in result.items], result.total, result.page, result.page_size
+        [PermissionResponse.model_validate(p) for p in items], len(items), result.page, result.page_size
     )
 
 
