@@ -33,7 +33,7 @@ export function TabStrip({ tabs, value, onChange, equal = false, className = '' 
     // rather than one line that scrolls half the control out of sight.
     <div
       style={equal ? { '--tab-count': tabs.length } : undefined}
-      className={`gap-1 rounded-lg bg-slate-100 p-1 ${
+      className={`gap-1 rounded-md bg-slate-100 p-0.5 ${
         equal
           ? 'grid w-full grid-cols-2 sm:grid-cols-[repeat(var(--tab-count),minmax(0,1fr))]'
           : 'inline-flex max-w-full overflow-x-auto'
@@ -50,11 +50,11 @@ export function TabStrip({ tabs, value, onChange, equal = false, className = '' 
             // min-w-0 lets the button shrink to its track; without it the
             // button's own content floor would push past the 1fr the grid
             // gave it, which is the flex problem again one level down.
-            className={`inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+            className={`inline-flex h-8 items-center gap-1.5 rounded px-3 text-sm font-medium transition-colors ${
               equal ? 'min-w-0 justify-center' : 'shrink-0'
             } ${
               isActive
-                ? (tab.active ?? 'bg-white text-brand-700 shadow-sm')
+                ? (tab.active ?? 'bg-white text-brand-700 shadow-sm ring-1 ring-slate-900/5')
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >

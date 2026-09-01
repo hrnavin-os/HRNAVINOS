@@ -2,72 +2,78 @@
 // section and stage rows, and the HR Coordinator's student tabs. (The passive
 // Dashboard summary tile is components/dashboard/StatCard.)
 //
-// Each card is a soft wash of its own accent so a row of them scans as a
-// legend; the selected one inverts to a solid gradient with white text, so the
-// active choice is unmistakable against its pastel neighbours. An optional
-// icon means the choice isn't carried by colour alone.
+// Each card is a flat wash of its own accent so a row of them scans as a
+// legend; the selected one fills solid with white text, so the active choice
+// is unmistakable against its pale neighbours. An optional icon means the
+// choice isn't carried by colour alone.
+//
+// Flat, not gradient. Every tile used to be a two-stop gradient with a
+// gradient icon plate on top of it, which put four or five separate ramps in
+// one 200px band across the top of the board - the first thing the eye landed
+// on was the decoration rather than the figures. Solid fills at one step,
+// with the accent doing the identifying and the number doing the talking.
 const TONE_STYLES = {
   brand: {
-    active: 'border-brand-700 bg-linear-to-br from-brand-500 to-brand-700',
-    inactive: 'border-brand-100 bg-linear-to-br from-brand-50 to-white hover:from-brand-100',
-    plate: 'bg-linear-to-br from-brand-500 to-brand-700',
+    active: 'border-brand-600 bg-brand-600',
+    inactive: 'border-brand-100 bg-brand-50/70 hover:bg-brand-50',
+    plate: 'bg-brand-600',
     label: 'text-brand-700/80',
     value: 'text-brand-700',
   },
   blue: {
-    active: 'border-blue-700 bg-linear-to-br from-blue-500 to-blue-700',
-    inactive: 'border-blue-100 bg-linear-to-br from-blue-50 to-white hover:from-blue-100',
-    plate: 'bg-linear-to-br from-blue-500 to-blue-700',
+    active: 'border-blue-600 bg-blue-600',
+    inactive: 'border-blue-100 bg-blue-50/70 hover:bg-blue-50',
+    plate: 'bg-blue-600',
     label: 'text-blue-700/80',
     value: 'text-blue-700',
   },
   emerald: {
-    active: 'border-emerald-700 bg-linear-to-br from-emerald-500 to-emerald-700',
-    inactive: 'border-emerald-100 bg-linear-to-br from-emerald-50 to-white hover:from-emerald-100',
-    plate: 'bg-linear-to-br from-emerald-500 to-emerald-700',
+    active: 'border-emerald-600 bg-emerald-600',
+    inactive: 'border-emerald-100 bg-emerald-50/70 hover:bg-emerald-50',
+    plate: 'bg-emerald-600',
     label: 'text-emerald-700/80',
     value: 'text-emerald-700',
   },
   amber: {
-    active: 'border-amber-600 bg-linear-to-br from-amber-400 to-amber-600',
-    inactive: 'border-amber-100 bg-linear-to-br from-amber-50 to-white hover:from-amber-100',
-    plate: 'bg-linear-to-br from-amber-400 to-amber-600',
+    active: 'border-amber-500 bg-amber-500',
+    inactive: 'border-amber-100 bg-amber-50/70 hover:bg-amber-50',
+    plate: 'bg-amber-500',
     label: 'text-amber-700/80',
     value: 'text-amber-700',
   },
   violet: {
-    active: 'border-violet-700 bg-linear-to-br from-violet-500 to-violet-700',
-    inactive: 'border-violet-100 bg-linear-to-br from-violet-50 to-white hover:from-violet-100',
-    plate: 'bg-linear-to-br from-violet-500 to-violet-700',
+    active: 'border-violet-600 bg-violet-600',
+    inactive: 'border-violet-100 bg-violet-50/70 hover:bg-violet-50',
+    plate: 'bg-violet-600',
     label: 'text-violet-700/80',
     value: 'text-violet-700',
   },
   rose: {
-    active: 'border-rose-700 bg-linear-to-br from-rose-500 to-rose-700',
-    inactive: 'border-rose-100 bg-linear-to-br from-rose-50 to-white hover:from-rose-100',
-    plate: 'bg-linear-to-br from-rose-500 to-rose-700',
+    active: 'border-rose-600 bg-rose-600',
+    inactive: 'border-rose-100 bg-rose-50/70 hover:bg-rose-50',
+    plate: 'bg-rose-600',
     label: 'text-rose-700/80',
     value: 'text-rose-700',
   },
   cyan: {
-    active: 'border-cyan-700 bg-linear-to-br from-cyan-500 to-cyan-700',
-    inactive: 'border-cyan-100 bg-linear-to-br from-cyan-50 to-white hover:from-cyan-100',
-    plate: 'bg-linear-to-br from-cyan-500 to-cyan-700',
+    active: 'border-cyan-600 bg-cyan-600',
+    inactive: 'border-cyan-100 bg-cyan-50/70 hover:bg-cyan-50',
+    plate: 'bg-cyan-600',
     label: 'text-cyan-700/80',
     value: 'text-cyan-700',
   },
   red: {
-    active: 'border-red-700 bg-linear-to-br from-red-500 to-red-700',
-    inactive: 'border-red-100 bg-linear-to-br from-red-50 to-white hover:from-red-100',
-    plate: 'bg-linear-to-br from-red-500 to-red-700',
+    active: 'border-red-600 bg-red-600',
+    inactive: 'border-red-100 bg-red-50/70 hover:bg-red-50',
+    plate: 'bg-red-600',
     label: 'text-red-700/80',
     value: 'text-red-700',
   },
   slate: {
-    active: 'border-slate-700 bg-linear-to-br from-slate-500 to-slate-700',
-    inactive: 'border-slate-200 bg-linear-to-br from-slate-50 to-white hover:from-slate-100',
-    plate: 'bg-linear-to-br from-slate-500 to-slate-700',
-    label: 'text-slate-600',
+    active: 'border-slate-600 bg-slate-600',
+    inactive: 'border-slate-200 bg-white hover:bg-slate-50',
+    plate: 'bg-slate-500',
+    label: 'text-slate-500',
     value: 'text-slate-700',
   },
 }
@@ -76,7 +82,7 @@ const TONE_STYLES = {
 //
 // Without `onClick` the card renders as a plain div rather than a button: a
 // passive figure should not be focusable, should not announce a pressed state,
-// and should not lift under the pointer promising a click that does nothing.
+// and should not respond to the pointer promising a click that does nothing.
 // That is what lets the Payments summary use this card instead of keeping its
 // own near-copy of it.
 export function StatCard({ label, value, toneName, isActive, onClick, icon: Icon, hint }) {
@@ -94,32 +100,37 @@ export function StatCard({ label, value, toneName, isActive, onClick, icon: Icon
       {...(interactive
         ? { type: 'button', onClick, 'aria-pressed': isActive }
         : {})}
-      className={`group flex-1 basis-44 rounded-xl border px-3.5 py-3 text-left shadow-sm ${
+      // No hover lift. A row of tiles that rise under the pointer is a
+      // consumer-dashboard gesture; here the tiles are filter controls sitting
+      // directly above the table they filter, and nudging them shifts the one
+      // thing the eye is using as an anchor. Colour and the focus ring carry
+      // the interaction instead.
+      className={`group flex-1 basis-44 rounded-lg border px-3.5 py-2.5 text-left ${
         interactive
-          ? 'transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500'
+          ? 'transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500'
           : ''
-      } ${isActive ? `${tone.active} shadow-md` : tone.inactive}`}
+      } ${isActive ? `${tone.active} shadow-sm` : tone.inactive}`}
     >
       <div className="flex items-center gap-3">
         {Icon && (
           <span
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white shadow-sm transition-transform group-hover:scale-105 ${
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-white ${
               isActive ? 'bg-white/20' : tone.plate
             }`}
           >
-            <Icon className="h-4.5 w-4.5" strokeWidth={2} aria-hidden="true" />
+            <Icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
           </span>
         )}
         <div className="min-w-0 flex-1">
           <p
-            className={`truncate text-[11px] font-semibold uppercase tracking-wide leading-tight ${
-              isActive ? 'text-white/75' : tone.label
+            className={`truncate text-[11px] font-semibold uppercase leading-tight tracking-wide ${
+              isActive ? 'text-white/80' : tone.label
             }`}
           >
             {label}
           </p>
           <p
-            className={`mt-1 text-2xl font-bold leading-none tabular-nums ${isActive ? 'text-white' : tone.value}`}
+            className={`mt-1 text-xl font-semibold leading-none tabular-nums ${isActive ? 'text-white' : tone.value}`}
           >
             {value}
           </p>

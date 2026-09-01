@@ -59,7 +59,7 @@ export function FilterShell({ label, activeLabel, onClear, grow = false, menuWid
           onClick={toggle}
           aria-haspopup="listbox"
           aria-expanded={isOpen}
-          className={`flex min-w-0 flex-1 items-center gap-2 rounded-md py-2 pl-3.5 text-sm outline-none ${
+          className={`flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md pl-3 text-sm outline-none ${
             isActive ? 'pr-1.5 font-semibold text-brand-700' : 'pr-3 font-medium text-slate-600'
           } ${grow ? 'justify-between' : ''}`}
         >
@@ -92,7 +92,7 @@ export function FilterShell({ label, activeLabel, onClear, grow = false, menuWid
             <div className="fixed inset-0 z-40" onClick={close} />
             <div
               style={{ top: menuPosition.top, left: menuPosition.left, width: menuWidth }}
-              className="fixed z-50 max-h-96 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-xl"
+              className="fixed z-50 max-h-96 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
             >
               {/* Names the filter, which the trigger stops showing once a value
                   is picked - so an open menu always says what it filters. */}

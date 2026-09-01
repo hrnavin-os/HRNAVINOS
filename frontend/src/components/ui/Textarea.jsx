@@ -1,10 +1,13 @@
 import { forwardRef } from 'react'
+import { FIELD, FIELD_LABEL } from '@/components/ui/Input'
 
+// No fixed height, for obvious reasons - otherwise the same field shell as
+// Input and Select, so a form mixing all three reads as one set of controls.
 export const Textarea = forwardRef(function Textarea({ label, error, required, className = '', rows = 3, ...props }, ref) {
   return (
-    <label className="block text-sm">
+    <label className="block">
       {label && (
-        <span className="mb-1 block font-medium text-slate-700">
+        <span className={FIELD_LABEL}>
           {label}
           {required && <span className="text-red-500"> *</span>}
         </span>
@@ -12,9 +15,7 @@ export const Textarea = forwardRef(function Textarea({ label, error, required, c
       <textarea
         ref={ref}
         rows={rows}
-        className={`w-full rounded-md border px-3 py-2 text-sm text-slate-900 shadow-sm
-          focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500
-          ${error ? 'border-red-400' : 'border-slate-300'} ${className}`}
+        className={`${FIELD} py-2 ${error ? 'border-red-400' : ''} ${className}`}
         {...props}
       />
       {error && <span className="mt-1 block text-xs text-red-600">{error}</span>}

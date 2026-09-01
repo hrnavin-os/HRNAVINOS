@@ -4,8 +4,8 @@ import { ChevronDown, GraduationCap } from 'lucide-react'
 import { getVisibleNavItems } from '@/constants/navigation'
 import { useAuth } from '@/hooks/useAuth'
 
-const LINK_BASE = `group flex items-center gap-3 rounded-md border-l-2 py-2 text-sm font-medium transition-colors`
-const LINK_ACTIVE = 'border-blue-600 bg-blue-50 text-blue-700'
+const LINK_BASE = `group flex items-center gap-2.5 rounded-md border-l-2 py-1.5 text-sm font-medium transition-colors`
+const LINK_ACTIVE = 'border-brand-600 bg-brand-50 text-brand-700'
 const LINK_IDLE = 'border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900'
 
 function NavItemLink({ item, nested = false }) {
@@ -20,7 +20,7 @@ function NavItemLink({ item, nested = false }) {
       {({ isActive }) => (
         <>
           <item.icon
-            className={`h-[18px] w-[18px] shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-500'}`}
+            className={`h-[18px] w-[18px] shrink-0 ${isActive ? 'text-brand-600' : 'text-slate-400 group-hover:text-slate-500'}`}
             strokeWidth={2}
             aria-hidden="true"
           />
@@ -60,7 +60,7 @@ function NavGroup({ item }) {
         className={`${LINK_BASE} w-full px-2.5 ${showAsActive ? LINK_ACTIVE : LINK_IDLE}`}
       >
         <item.icon
-          className={`h-[18px] w-[18px] shrink-0 ${showAsActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-500'}`}
+          className={`h-[18px] w-[18px] shrink-0 ${showAsActive ? 'text-brand-600' : 'text-slate-400 group-hover:text-slate-500'}`}
           strokeWidth={2}
           aria-hidden="true"
         />
@@ -84,13 +84,13 @@ function NavGroup({ item }) {
 
 function Brand() {
   return (
-    <div className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-200 px-5">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white">
+    <div className="flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 px-4">
+      <span className="flex h-8 w-8 items-center justify-center rounded-md bg-brand-600 text-white">
         <GraduationCap className="h-5 w-5" strokeWidth={2} />
       </span>
       <span>
-        <span className="text-base font-bold leading-none text-slate-900">HRNAVINOS</span>
-        <span className="ml-1 text-base font-light leading-none text-slate-400">ERP</span>
+        <span className="text-[15px] font-semibold leading-none tracking-tight text-slate-900">HRNAVINOS</span>
+        <span className="ml-1 text-[15px] font-normal leading-none text-slate-400">ERP</span>
       </span>
     </div>
   )
@@ -103,11 +103,11 @@ function SidebarNav() {
   const items = getVisibleNavItems({ user, hasPermission })
 
   return (
-    <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
+    <nav className="flex-1 space-y-0.5 overflow-y-auto px-2.5 py-3">
       {items.map((item) => (
         <div key={item.to ?? item.label}>
           {item.group && (
-            <h3 className="mb-1.5 mt-4 px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 first:mt-0">
+            <h3 className="mb-1 mt-4 px-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 first:mt-0">
               {item.group}
             </h3>
           )}
@@ -120,7 +120,7 @@ function SidebarNav() {
 
 export function Sidebar() {
   return (
-    <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white md:flex md:flex-col">
+    <aside className="hidden w-60 shrink-0 border-r border-slate-200 bg-white md:flex md:flex-col">
       <Brand />
       <SidebarNav />
     </aside>

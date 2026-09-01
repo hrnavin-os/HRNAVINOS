@@ -35,23 +35,23 @@ export function Topbar({ showBrand = false }) {
 
   return (
     <>
-      <header className="relative flex h-16 items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 sm:px-6">
+      <header className="relative flex h-14 items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-2 sm:gap-4">
           {/* The logo normally lives at the top of the sidebar, so it moves here
               when there isn't one - otherwise the app loses its name entirely
               for a Section Admin. */}
           {showBrand && (
             <div className="flex items-center gap-2 sm:border-r sm:border-slate-200 sm:pr-4">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-600 text-white">
                 <GraduationCap className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
               </span>
               <span className="hidden sm:block">
-                <span className="text-base font-bold leading-none text-slate-900">HRNAVINOS</span>
-                <span className="ml-1 text-base font-light leading-none text-slate-400">ERP</span>
+                <span className="text-[15px] font-semibold leading-none tracking-tight text-slate-900">HRNAVINOS</span>
+                <span className="ml-1 text-[15px] font-normal leading-none text-slate-400">ERP</span>
               </span>
             </div>
           )}
-          <h1 className="truncate text-sm font-semibold text-slate-900 sm:text-base">{pageTitle}</h1>
+          <h1 className="truncate text-sm font-semibold text-slate-900">{pageTitle}</h1>
         </div>
 
         {/* Absolutely centred rather than a middle flex column: the title and
@@ -71,7 +71,7 @@ export function Topbar({ showBrand = false }) {
         <div className="flex shrink-0 items-center gap-2 sm:gap-4">
           <NotificationBell />
           <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-semibold text-brand-700 ring-1 ring-brand-100">
               {initials(user?.first_name, user?.last_name)}
             </span>
             {/* Name and role are the first thing to go on a narrow screen -

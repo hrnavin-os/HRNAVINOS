@@ -1,8 +1,53 @@
 @import "tailwindcss";
 
 @theme {
-  /* Opt-in only (`font-lexend`) - the app default stays the system stack. */
-  --font-lexend: 'Lexend', ui-sans-serif, system-ui, sans-serif;
+  /* The app face. Inter rather than the system stack: this is a dense data
+     UI, and the system fallback differs per OS in exactly the places that
+     matter here - digit width, x-height, and how a 13px uppercase label
+     holds together. One face means a column of figures lines up the same way
+     on every machine the ERP is opened on.
+     The fallbacks are the system stack it replaces, so nothing shifts
+     structurally if the webfont hasn't loaded yet. */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* ---------------------------------------------------------------------
+     Density.
+
+     13px is the working body size, not 14. Every table cell, button, input
+     and menu item in the app is `text-sm`, so this single value is what sets
+     how much of a board fits on screen - and an ERP is read in long sittings
+     at a desk, where a row you can scan five of at a glance beats a row that
+     is comfortable in isolation. The line-height stays 20px: dropping it
+     with the size would make multi-line cells (remarks, addresses) cramped.
+
+     xs stays 12px for hints and footnotes, and 11px (`text-[11px]`) remains
+     the uppercase label size used by column headers and stat tiles.
+     --------------------------------------------------------------------- */
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+
+  /* ---------------------------------------------------------------------
+     Radius. Two steps carry the whole UI: 6px on anything you operate
+     (buttons, inputs, menu items, chips) and 8px on anything that contains
+     (cards, modals, panels). md and lg already hold those values, so they
+     are left alone; xl is pulled in from 12px because it was reading as a
+     consumer-app curve on the stat tiles and side panels.
+     --------------------------------------------------------------------- */
+  --radius-xl: 0.625rem;
+  --radius-2xl: 0.75rem;
+
+  /* ---------------------------------------------------------------------
+     Elevation. Tinted with slate rather than pure black, and much tighter
+     than the defaults: on a page that is mostly white cards on a slate
+     ground, separation is the border's job and the shadow only has to keep a
+     card from looking painted onto the background. Anything that genuinely
+     floats over the page - a menu, a modal, a toast - uses lg/xl, which are
+     the only two allowed to be noticeable.
+     --------------------------------------------------------------------- */
+  --shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.05);
+  --shadow-md: 0 2px 4px -1px rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.05);
+  --shadow-lg: 0 8px 24px -8px rgb(15 23 42 / 0.14), 0 2px 6px -2px rgb(15 23 42 / 0.06);
+  --shadow-xl: 0 16px 40px -12px rgb(15 23 42 / 0.2), 0 4px 10px -4px rgb(15 23 42 / 0.08);
 
   /* The full blue ramp, not just the four shades first needed. Tailwind v4
      emits nothing at all for an undefined shade, so a `border-brand-300` that
@@ -26,8 +71,22 @@ body,
   height: 100%;
 }
 
+/* font-sans is applied rather than left to preflight's default: the whole
+   point of the token above is that one face is used everywhere, and this is
+   the one declaration that guarantees it regardless of what preflight
+   resolves --default-font-family to. */
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply bg-slate-50 font-sans text-slate-900 antialiased;
+}
+
+/* Figures line up down a column wherever they are compared. Inter's tabular
+   set is opt-in, and a board of dates, amounts and phone numbers in
+   proportional digits is one whose columns visibly wander. Applied to the
+   table rather than per column, since almost every column here is either a
+   figure or a code; the `tabular-nums` utility still marks the individual
+   cells outside a table that need it. */
+table {
+  font-variant-numeric: tabular-nums;
 }
 
 /* One scrollbar for the whole app. Left to the OS, a modal's scrollbar, the

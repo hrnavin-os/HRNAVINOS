@@ -11,6 +11,11 @@ const ALIGN = { left: 'text-left', center: 'text-center', right: 'text-right' }
 // against the card border.
 const EDGE_PADDING = 'first:pl-5 last:pr-5'
 
+// Row rhythm: px-4 py-2.5 on a 13px/20px cell is a 40px row. That is the
+// density an operations table is read at - a dozen rows in view without
+// scrolling, and still a comfortable click target. Header and body carry the
+// same padding so the columns line up cell for cell.
+
 // Placeholder rows while the query is in flight. A spinner here collapses the
 // table to a single row and the whole page jumps when the data lands; bars
 // keep the layout at roughly its final height instead.
@@ -18,7 +23,7 @@ function SkeletonRows({ columns, rows = 5 }) {
   return Array.from({ length: rows }, (_, rowIndex) => (
     <tr key={rowIndex}>
       {columns.map((column) => (
-        <td key={column.key} className={`px-4 py-3.5 ${EDGE_PADDING}`}>
+        <td key={column.key} className={`px-4 py-2.5 ${EDGE_PADDING}`}>
           <div
             className="h-3.5 animate-pulse rounded bg-slate-100"
             // Varied widths read as content loading; identical bars read as a
@@ -137,7 +142,7 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
                   // border-separate stays: it is what lets each cell paint its
                   // own border, which the collapsed default would hoist onto the
                   // table instead.
-                  className={`whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 ${EDGE_PADDING} ${
+                  className={`whitespace-nowrap border-b border-slate-200 bg-slate-50/80 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 ${EDGE_PADDING} ${
                     ALIGN[column.align] ?? ALIGN.left
                   }`}
                 >
@@ -177,8 +182,14 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
                   onKeyDown={onRowClick ? rowKeyDown(row) : undefined}
                   tabIndex={onRowClick ? 0 : undefined}
                   role={onRowClick ? 'button' : undefined}
-                  className={`group transition-colors hover:bg-brand-50/50 ${
-                    onRowClick ? 'cursor-pointer focus:bg-brand-50/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500' : ''
+                  // Neutral hover, not a brand tint. Rows here already carry
+                  // colour that means something - stage, payment remark,
+                  // section - and a blue wash under them competed with it;
+                  // "the row the pointer is on" is not a state that needs a
+                  // hue of its own. Keyboard focus keeps the brand ring,
+                  // which is a real state and has to be unmistakable.
+                  className={`group transition-colors hover:bg-slate-50 ${
+                    onRowClick ? 'cursor-pointer focus:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500' : ''
                   }`}
                 >
                   {columns.map((column) => (
@@ -189,7 +200,7 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
                       // tall, and the container already scrolls horizontally.
                       // Opt a column out with `wrap: true` when the content is
                       // genuinely long-form.
-                      className={`border-b border-slate-100 px-4 py-3 text-sm text-slate-700 group-last:border-b-0 ${EDGE_PADDING} ${
+                      className={`border-b border-slate-100 px-4 py-2.5 text-sm text-slate-700 group-last:border-b-0 ${EDGE_PADDING} ${
                         ALIGN[column.align] ?? ALIGN.left
                       } ${column.numeric ? 'tabular-nums' : ''} ${column.wrap ? '' : 'whitespace-nowrap'}`}
                     >

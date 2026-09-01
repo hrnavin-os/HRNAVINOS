@@ -33,7 +33,7 @@ export function SortOrderSelect({ value, onChange, grow = false }) {
         onClick={() => setIsOpen((open) => !open)}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        className={`flex items-center justify-between gap-2 rounded-md border px-3.5 py-2 text-sm
+        className={`flex h-9 items-center justify-between gap-2 rounded-md border px-3 text-sm
           font-medium text-slate-600 outline-none transition-colors ${grow ? 'w-full' : 'w-38'} ${
             isOpen
               ? 'border-brand-400 bg-white ring-1 ring-brand-400'

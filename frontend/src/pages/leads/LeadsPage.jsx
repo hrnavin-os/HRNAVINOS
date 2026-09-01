@@ -63,7 +63,7 @@ const EXCLUDED_COURSE_OPTIONS = ['HR Recruitment', 'Nothing']
 // specifically - independent of each stage's shared `tone` name, which the
 // stat cards and the Lead Detail modal's stage-picker buttons key their own
 // (different) color maps off of, so changing it here can't affect them.
-// Every stage is a solid gradient with white text, so the column reads as one
+// Every stage is a solid fill with white text, so the column reads as one
 // consistent set rather than one filled chip among pale ones.
 //
 // Solid fills, not gradients. Each one is the gradient's old `from` stop, which
@@ -78,12 +78,12 @@ const EXCLUDED_COURSE_OPTIONS = ['HR Recruitment', 'Nothing']
 // 5.18) - matched by perceived lightness, not by step number. Re-check the
 // contrast if you retune these.
 const STAGE_CELL_STYLES = {
-  new_lead: 'border-transparent bg-blue-600 text-white',
-  rnr: 'border-transparent bg-red-600 text-white',
-  pre_screening: 'border-transparent bg-yellow-700 text-white',
-  financial_approval: 'border-transparent bg-purple-600 text-white',
-  batch_confirmation: 'border-transparent bg-green-700 text-white',
-  lost: 'border-transparent bg-orange-700 text-white',
+  new_lead: 'bg-blue-600 text-white',
+  rnr: 'bg-red-600 text-white',
+  pre_screening: 'bg-yellow-700 text-white',
+  financial_approval: 'bg-purple-600 text-white',
+  batch_confirmation: 'bg-green-700 text-white',
+  lost: 'bg-orange-700 text-white',
 }
 
 // Shows just the first 6 characters + "…" so a long query doesn't blow out
@@ -748,9 +748,12 @@ function FoundationLeadsBoard() {
       align: 'center',
       render: (row) => {
         const stage = LEAD_STAGE_BY_VALUE[row.status]
-        const style = STAGE_CELL_STYLES[row.status] ?? 'border-transparent bg-slate-600 text-white'
+        const style = STAGE_CELL_STYLES[row.status] ?? 'bg-slate-600 text-white'
         return (
-          <span className={`inline-flex items-center whitespace-nowrap rounded-md border px-2.5 py-0.5 text-xs font-medium ${style}`}>
+          // Same geometry as Badge (which this can't use - it needs solid
+          // fills Badge's tone map doesn't carry), so the Stage chip and the
+          // Payment Remarks chip beside it are the same object in two colours.
+          <span className={`inline-flex items-center whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] font-medium ${style}`}>
             {stage?.label ?? titleCase(row.status)}
           </span>
         )

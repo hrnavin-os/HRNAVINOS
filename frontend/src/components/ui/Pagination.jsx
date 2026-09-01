@@ -11,14 +11,14 @@ export function Pagination({ page, totalPages, onPageChange, total, pageSize }) 
   const from = (page - 1) * pageSize + 1
   const to = Math.min(page * pageSize, total)
 
-  const button = `inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1.5
+  const button = `inline-flex h-8 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5
     text-sm font-medium text-slate-600 transition-colors
     hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900
     disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-200
     disabled:hover:bg-white disabled:hover:text-slate-600`
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-2.5">
       <p className="text-xs text-slate-500">
         {hasRange ? (
           <>
