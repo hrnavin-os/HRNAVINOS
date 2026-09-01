@@ -159,6 +159,8 @@ class LeadService:
         section: str | None = None,
         section_scope: str | None = None,
         course_interest: str | None = None,
+        payment_plan: str | None = None,
+        payment_call_remarks: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
         induction_matched: bool | None = None,
@@ -185,6 +187,14 @@ class LeadService:
             filters["section"] = section
         if course_interest:
             filters["course_interest"] = course_interest
+        # The two manual payment columns on the board. Both are stored on the
+        # lead as plain enum values, so filtering is an equality match - a lead
+        # with neither set simply never matches, which is what "show me the
+        # two-shot leads" means.
+        if payment_plan:
+            filters["payment_plan"] = payment_plan
+        if payment_call_remarks:
+            filters["payment_call_remarks"] = payment_call_remarks
         if date_from or date_to:
             created_range: dict[str, datetime] = {}
             if date_from:

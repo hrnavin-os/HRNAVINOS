@@ -7,7 +7,13 @@ from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 
 from app.core.dependencies import RequirePermissions, get_actor_scope
 from app.exceptions.base import BadRequestError
-from app.models.enums import InstallmentPaymentMode, LeadSource, PaymentMethod
+from app.models.enums import (
+    InstallmentPaymentMode,
+    LeadSource,
+    PaymentCallRemark,
+    PaymentMethod,
+    PaymentPlanOption,
+)
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.common import MessageResponse, PaginatedResponse, PaginationParams
@@ -56,6 +62,8 @@ async def list_leads(
     source: LeadSource | None = None,
     section: str | None = None,
     course_interest: str | None = None,
+    payment_plan: PaymentPlanOption | None = None,
+    payment_call_remarks: PaymentCallRemark | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
     induction_matched: bool | None = None,
@@ -72,6 +80,8 @@ async def list_leads(
         section=section,
         section_scope=scope,
         course_interest=course_interest,
+        payment_plan=payment_plan,
+        payment_call_remarks=payment_call_remarks,
         date_from=date_from,
         date_to=date_to,
         induction_matched=induction_matched,

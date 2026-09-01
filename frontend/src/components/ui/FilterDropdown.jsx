@@ -118,7 +118,14 @@ export function FilterDropdown({ label, value, options, onChange, grow = false }
     <FilterShell label={label} activeLabel={value ? selectedLabel : null} onClear={() => onChange('')} grow={grow}>
       {({ close }) => (
         <>
-          <MenuOption label={`All ${label}s`} isSelected={!value} onClick={() => { onChange(''); close() }} />
+          {/* Pluralised only when the label isn't already plural, or a filter
+              named after a column like "Payment Remarks" offers you "All
+              Payment Remarkss". */}
+          <MenuOption
+            label={`All ${label}${label.endsWith('s') ? '' : 's'}`}
+            isSelected={!value}
+            onClick={() => { onChange(''); close() }}
+          />
           {options.map((option) => (
             <MenuOption
               key={option.value}

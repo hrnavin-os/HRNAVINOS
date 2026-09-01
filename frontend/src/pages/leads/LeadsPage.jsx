@@ -570,6 +570,10 @@ function FoundationLeadsBoard() {
   const [sectionFilter, setSectionFilter] = useState('')
   const [courseFilter, setCourseFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  // The two payment columns, filterable because "who is on EMI" and "who said
+  // they'd pay and hasn't" are the two questions the board is worked from.
+  const [planFilter, setPlanFilter] = useState('')
+  const [callRemarkFilter, setCallRemarkFilter] = useState('')
   const [sortOrder, setSortOrder] = useState('desc')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -627,6 +631,8 @@ function FoundationLeadsBoard() {
     section: effectiveSectionFilter || undefined,
     course_interest: courseFilter || undefined,
     status: statusFilter || undefined,
+    payment_plan: planFilter || undefined,
+    payment_call_remarks: callRemarkFilter || undefined,
     sort_order: sortOrder,
     date_from: dateFrom || undefined,
     date_to: dateTo || undefined,
@@ -840,6 +846,30 @@ function FoundationLeadsBoard() {
             options={LEAD_STAGES.map((stage) => ({ value: stage.value, label: stage.label }))}
             onChange={(value) => {
               setStatusFilter(value)
+              setPage(1)
+            }}
+          />
+
+          {/* Both name their values exactly as the columns they filter do -
+              PAYMENT_PLAN_LABELS and CALL_REMARK_OPTIONS are the same two
+              lists the cells render from, so a filter can't offer a wording
+              the board never shows. */}
+          <FilterDropdown
+            label="Payment Method"
+            value={planFilter}
+            options={Object.entries(PAYMENT_PLAN_LABELS).map(([value, label]) => ({ value, label }))}
+            onChange={(value) => {
+              setPlanFilter(value)
+              setPage(1)
+            }}
+          />
+
+          <FilterDropdown
+            label="Payment Remarks"
+            value={callRemarkFilter}
+            options={CALL_REMARK_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+            onChange={(value) => {
+              setCallRemarkFilter(value)
               setPage(1)
             }}
           />
