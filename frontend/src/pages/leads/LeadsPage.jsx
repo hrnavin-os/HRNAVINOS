@@ -2,16 +2,18 @@ import { useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, Search, X } from 'lucide-react'
+import { Check, ChevronDown, Plus, Search, X } from 'lucide-react'
 import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
 import { useAuth } from '@/hooks/useAuth'
 import { leadService } from '@/services/leadService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
+import { PERMISSIONS } from '@/constants/permissions'
 import { formatCurrency, formatDate, titleCase } from '@/utils/formatters'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
+import { Button } from '@/components/ui/Button'
 import { Toast } from '@/components/ui/Toast'
 import { DataTable } from '@/components/ui/DataTable'
 import { TableCard } from '@/components/ui/TableCard'
@@ -23,6 +25,7 @@ import { LeadSectionStageStats, LeadSectionStats } from '@/components/leads/Lead
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { LeadCourseCell } from '@/components/leads/LeadCourseCell'
 import { LeadDetailModal } from '@/components/leads/LeadDetailModal'
+import { CreateLeadModal } from '@/components/leads/CreateLeadModal'
 import { LeadRemarksCell } from '@/components/leads/LeadRemarksCell'
 import { InductionLeadsBoard } from '@/components/leads/InductionLeadsBoard'
 import { useLeadBoard } from '@/hooks/useLeadBoard'
@@ -368,7 +371,8 @@ export function LeadsPage() {
 // lead table, all reading Lead records that arrive through the Foundation
 // form. Moved behind a tab with no changes to what it renders.
 function FoundationLeadsBoard() {
-  const { user } = useAuth()
+  const { user, hasPermission } = useAuth()
+  const canCreateLead = hasPermission(PERMISSIONS.LEADS_CREATE)
 
   // Section Admins are permanently locked to their own section - the role
   // itself carries this, not a UI selection, so it can never be navigated
@@ -377,6 +381,7 @@ function FoundationLeadsBoard() {
   const scopedSection = user?.scoped_section || null
 
   const [viewingLead, setViewingLead] = useState(null)
+  const [isCreating, setIsCreating] = useState(false)
   // ?lead=<id> opens that candidate straight away - how a due-date reminder in
   // the notification panel gets you to the person it's about. Fetched by id
   // rather than looked up in `items`, because the lead being chased is very
@@ -652,6 +657,15 @@ function FoundationLeadsBoard() {
           {/* Separates "find by text" from "narrow by value". */}
           <span className="hidden h-7 w-px shrink-0 bg-slate-200 lg:block" />
 
+          {/* Most leads still arrive through the Form Collection forms; this
+              is for the walk-in or phone enquiry with nobody to fill one in. */}
+          {canCreateLead && (
+            <Button className="shrink-0" onClick={() => setIsCreating(true)}>
+              <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+              Create Lead
+            </Button>
+          )}
+
           <FilterDropdown
             label="Course"
             value={courseFilter}
@@ -683,8 +697,6 @@ function FoundationLeadsBoard() {
             }}
           />
 
-          {/* No Create Lead here: leads arrive through the Form Collection
-              forms, not by being typed into the board. */}
           <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onChange={handleDateChange} />
         </div>
       </div>
@@ -714,6 +726,20 @@ function FoundationLeadsBoard() {
       </TableCard>
 
       {openLead && <LeadDetailModal lead={openLead} onClose={closeLead} />}
+
+      {isCreating && (
+        <CreateLeadModal
+          sections={sectionOptions}
+          // The Course cell's full catalog, not the filter's list: the point of
+          // creating a lead is often putting them on a course nobody is on yet.
+          courses={courseCatalogQuery.data ?? []}
+          // Prefilled with whichever section card is selected, so the row lands
+          // in the view you were already looking at.
+          defaultSection={effectiveSectionFilter}
+          lockSection={Boolean(scopedSection)}
+          onClose={() => setIsCreating(false)}
+        />
+      )}
 
       <Toast message={editError} onDismiss={() => setEditError(null)} />
     </div>
