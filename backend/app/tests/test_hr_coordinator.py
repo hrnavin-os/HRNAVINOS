@@ -1,5 +1,5 @@
 """Tests for the HR Coordinator's student tabs and WhatsApp group onboarding."""
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 import pytest_asyncio
@@ -402,3 +402,28 @@ async def test_opening_a_non_payment_notification_does_not_move_the_stage(seeded
     await NotificationService().acknowledge(notification.id, user_id=coordinator.id)
 
     assert (await Lead.get(lead.id)).status == LeadStatus.BATCH_CONFIRMATION
+
+
+async def test_the_hr_row_says_which_foundation_class_they_came_through(client, auth_headers):
+    """Batch and group are meant to be read together - "the second foundation
+    class of Batch-28" - so the row carries both. The group comes off the day
+    the Foundation Form landed, which is the day of the class itself."""
+    await make_lead(
+        name="Arun",
+        phone="9876543210",
+        status=LeadStatus.BATCH_CONFIRMATION,
+        created_at=datetime(2026, 8, 4, 10, 0, tzinfo=timezone.utc),
+    )
+    await make_lead(
+        name="Bala",
+        phone="9876511111",
+        status=LeadStatus.BATCH_CONFIRMATION,
+        created_at=datetime(2026, 8, 20, 10, 0, tzinfo=timezone.utc),
+    )
+
+    rows = (
+        await client.get(
+            "/api/v1/batch-confirmation/students", headers=auth_headers, params={"tab": "approved"}
+        )
+    ).json()
+    assert {row["name"]: row["foundation_group"] for row in rows} == {"Arun": 1, "Bala": 2}

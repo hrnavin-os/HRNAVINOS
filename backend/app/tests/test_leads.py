@@ -1,4 +1,7 @@
 """Tests for the Lead Management (CRM / Pre-Sales) module."""
+from datetime import datetime, timezone
+
+from app.models.lead import Lead
 
 
 async def test_create_lead(client, auth_headers):
@@ -250,3 +253,59 @@ async def test_blank_remark_is_rejected(client, auth_headers):
     lead_id = await _lead_id(client, auth_headers, phone="9000000005")
     response = await client.post(f"/api/v1/leads/{lead_id}/remarks", headers=auth_headers, json={"text": "   "})
     assert response.status_code == 400
+
+
+async def make_lead_dated(client, auth_headers, *, name: str, phone: str, day: int) -> str:
+    """A lead whose Foundation Form landed on a given day of the month.
+
+    Backdated on the document rather than through the API: created_at is set at
+    insert time, so every lead a test creates would otherwise fall in whichever
+    half of the month the suite happens to run in.
+    """
+    create = await client.post(
+        "/api/v1/leads",
+        headers=auth_headers,
+        json={"name": name, "phone": phone, "course_interest": "Data Science"},
+    )
+    assert create.status_code == 201, create.text
+    lead = await Lead.get(create.json()["id"])
+    lead.created_at = datetime(2026, 8, day, 10, 0, tzinfo=timezone.utc)
+    await lead.save()
+    return str(lead.id)
+
+
+async def test_a_lead_carries_the_foundation_class_it_came_through(client, auth_headers):
+    """The foundation class runs twice a month: the 1st-15th is Group 1, the
+    16th onward Group 2. Derived from the day the form landed, never stored."""
+    await make_lead_dated(client, auth_headers, name="Arun", phone="9876543210", day=4)
+    await make_lead_dated(client, auth_headers, name="Divya", phone="9876500000", day=15)
+    await make_lead_dated(client, auth_headers, name="Bala", phone="9876511111", day=16)
+
+    rows = (await client.get("/api/v1/leads", headers=auth_headers)).json()["items"]
+    assert {row["name"]: row["foundation_group"] for row in rows} == {"Arun": 1, "Divya": 1, "Bala": 2}
+
+
+async def test_foundation_group_filter_splits_the_board(client, auth_headers):
+    await make_lead_dated(client, auth_headers, name="Arun", phone="9876543210", day=4)
+    await make_lead_dated(client, auth_headers, name="Bala", phone="9876511111", day=20)
+
+    first = await client.get("/api/v1/leads", headers=auth_headers, params={"foundation_group": 1})
+    assert [row["name"] for row in first.json()["items"]] == ["Arun"]
+
+    second = await client.get("/api/v1/leads", headers=auth_headers, params={"foundation_group": 2})
+    assert [row["name"] for row in second.json()["items"]] == ["Bala"]
+
+
+async def test_foundation_group_and_date_range_both_apply(client, auth_headers):
+    """Both narrow created_at. Composed rather than merged, or the last one
+    written would quietly replace the other."""
+    await make_lead_dated(client, auth_headers, name="Arun", phone="9876543210", day=4)
+    await make_lead_dated(client, auth_headers, name="Bala", phone="9876511111", day=20)
+    await make_lead_dated(client, auth_headers, name="Chitra", phone="9876522222", day=25)
+
+    response = await client.get(
+        "/api/v1/leads",
+        headers=auth_headers,
+        params={"foundation_group": 2, "date_from": "2026-08-21", "date_to": "2026-08-31"},
+    )
+    assert [row["name"] for row in response.json()["items"]] == ["Chitra"]

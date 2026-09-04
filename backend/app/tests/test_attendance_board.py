@@ -308,3 +308,81 @@ async def test_an_unparseable_batch_narrows_nothing(client, auth_headers):
     # A junk query param returns the roll rather than a 500.
     assert response.status_code == 200
     assert response.json()["total"] == 1
+
+
+async def add_student_on(client, auth_headers, *, name: str, phone: str, registration_date: str) -> str:
+    response = await client.post(
+        INDUCTION_URL,
+        headers=auth_headers,
+        json={
+            "name": name,
+            "phone": phone,
+            "registration_date": registration_date,
+            "sales_person": "Priya",
+            "lead_source": "Instagram",
+        },
+    )
+    assert response.status_code in (200, 201), response.text
+    return response.json()["id"]
+
+
+async def test_the_month_splits_into_two_foundation_groups(client, auth_headers):
+    """Two foundation classes a month, a fortnight apart: the first sitting is
+    Group 1, the second Group 2 - both inside the same batch."""
+    await add_student_on(client, auth_headers, name="Arun", phone="9876543210", registration_date="2026-08-04")
+    await add_student_on(client, auth_headers, name="Divya", phone="9876500000", registration_date="2026-08-15")
+    await add_student_on(client, auth_headers, name="Bala", phone="9876511111", registration_date="2026-08-16")
+
+    rows = (await client.get(STUDENTS_URL, headers=auth_headers)).json()["items"]
+    groups = {row["name"]: row["foundation_group"] for row in rows}
+    assert groups == {"Arun": 1, "Divya": 1, "Bala": 2}
+    # The 15th belongs to the first sitting, the 16th to the second.
+    assert {row["batch"] for row in rows} == {"Batch-28"}
+
+
+async def test_group_filter_narrows_a_batch_rather_than_cutting_across_one(client, auth_headers):
+    await add_student_on(client, auth_headers, name="Arun", phone="9876543210", registration_date="2026-08-04")
+    await add_student_on(client, auth_headers, name="Bala", phone="9876511111", registration_date="2026-08-20")
+    # Same half of a different month: the group is a day-of-month rule, so this
+    # one matches the group filter but not the batch it is combined with.
+    await add_student_on(client, auth_headers, name="Divya", phone="9876500000", registration_date="2026-09-22")
+
+    second = await client.get(STUDENTS_URL, headers=auth_headers, params={"group": 2})
+    assert sorted(row["name"] for row in second.json()["items"]) == ["Bala", "Divya"]
+
+    within = await client.get(STUDENTS_URL, headers=auth_headers, params={"group": 2, "batch": "Batch-28"})
+    assert [row["name"] for row in within.json()["items"]] == ["Bala"]
+
+    first = await client.get(STUDENTS_URL, headers=auth_headers, params={"group": 1})
+    assert [row["name"] for row in first.json()["items"]] == ["Arun"]
+
+
+async def test_group_filter_also_narrows_the_marker_counts(client, auth_headers):
+    """The stat cards have to describe the rows under them - a group filter
+    that moved the table but not the counts would have the two disagreeing."""
+    arun = await add_student_on(
+        client, auth_headers, name="Arun", phone="9876543210", registration_date="2026-08-04"
+    )
+    await add_student_on(client, auth_headers, name="Bala", phone="9876511111", registration_date="2026-08-20")
+    await mark(client, auth_headers, arun, "polls", True)
+
+    stats = (await client.get(STATS_URL, headers=auth_headers, params={"group": 1})).json()
+    assert stats["total"] == 1
+    assert stats["markers"]["polls"] == {"total": 1, "yes": 1, "no": 0}
+
+    other = (await client.get(STATS_URL, headers=auth_headers, params={"group": 2})).json()
+    assert other["markers"]["polls"] == {"total": 1, "yes": 0, "no": 1}
+
+
+async def test_group_filter_combines_with_a_marker_split(client, auth_headers):
+    arun = await add_student_on(
+        client, auth_headers, name="Arun", phone="9876543210", registration_date="2026-08-04"
+    )
+    await add_student_on(client, auth_headers, name="Chitra", phone="9876522222", registration_date="2026-08-06")
+    await add_student_on(client, auth_headers, name="Bala", phone="9876511111", registration_date="2026-08-20")
+    await mark(client, auth_headers, arun, "polls", True)
+
+    pending = await client.get(
+        STUDENTS_URL, headers=auth_headers, params={"marker": "polls", "state": "no", "group": 1}
+    )
+    assert [row["name"] for row in pending.json()["items"]] == ["Chitra"]
