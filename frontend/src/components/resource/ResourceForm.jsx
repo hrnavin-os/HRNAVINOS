@@ -1,5 +1,6 @@
 import { useForm } from 'react-hook-form'
 import { Input } from '@/components/ui/Input'
+import { PasswordInput } from '@/components/ui/PasswordInput'
 import { Select } from '@/components/ui/Select'
 import { Textarea } from '@/components/ui/Textarea'
 import { Button } from '@/components/ui/Button'
@@ -7,7 +8,7 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage'
 
 // Declarative form renderer shared by every module's "create" modal.
 // fields: [{ name, label, type, required, options }]
-// type: 'text'|'number'|'date'|'select'|'textarea'|'combobox'
+// type: 'text'|'number'|'date'|'select'|'textarea'|'combobox'|'password'
 //
 // 'combobox' is a select that still accepts a typed value - a native input
 // backed by a <datalist>, so the browser offers the options while leaving the
@@ -74,6 +75,23 @@ export function ResourceForm({ fields, defaultValues = {}, onSubmit, onCancel, s
                 ))}
               </datalist>
             </div>
+          )
+        }
+
+        if (field.type === 'password') {
+          return (
+            <PasswordInput
+              key={field.name}
+              label={field.label}
+              placeholder={field.placeholder}
+              required={Boolean(field.required)}
+              error={errors[field.name]?.message}
+              // Every password in a resource form is one being set, not one
+              // being recalled: without this the browser offers the signed-in
+              // admin's own saved password for the new user's field.
+              autoComplete="new-password"
+              {...register(field.name, validation)}
+            />
           )
         }
 

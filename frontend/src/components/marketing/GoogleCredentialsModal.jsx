@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Settings } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
+import { PasswordInput } from '@/components/ui/PasswordInput'
 import { Button } from '@/components/ui/Button'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -58,9 +59,8 @@ export function GoogleCredentialsModal({ onClose }) {
 
           <Input label="Client ID" value={clientId} onChange={(event) => setClientId(event.target.value)} />
 
-          <Input
+          <PasswordInput
             label="Client Secret"
-            type="password"
             placeholder="leave blank to keep the saved one"
             value={clientSecret}
             onChange={(event) => setClientSecret(event.target.value)}
