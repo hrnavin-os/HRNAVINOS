@@ -61,6 +61,11 @@ class AttendanceStudentResponse(BaseModel):
     email: str | None = None
     section: str | None = None
     batch: str
+    # Which of the batch's two foundation classes this candidate belongs to -
+    # 1 for the first sitting of the month, 2 for the second. Derived from the
+    # same registration_date the batch is, so the pair always describes one
+    # month: see app/utils/foundation_groups.py.
+    foundation_group: int
     registration_date: date
     # Where this candidate is on the induction board (still in induction, moved
     # to Foundation, quit). Shown so the board reads without opening the other

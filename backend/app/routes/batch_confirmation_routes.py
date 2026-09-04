@@ -33,6 +33,7 @@ from app.schemas.batch_schema import BatchCreate, BatchResponse
 from app.schemas.common import MessageResponse
 from app.schemas.foundation_form_schema import WhatsAppGroupLinkResponse, WhatsAppGroupLinkUpdate
 from app.services.batch_confirmation_service import BatchConfirmationService
+from app.utils.foundation_groups import foundation_group_for
 from app.services.foundation_form_config_service import FoundationFormConfigService
 from app.services.whatsapp_service import WhatsAppService
 
@@ -175,6 +176,7 @@ def _to_hr_student(lead, batch: str | None = None, handled_by: str | None = None
         # typed by hand, so leads that never came through Induction still show
         # a batch.
         batch=batch or lead.batch_number,
+        foundation_group=foundation_group_for(lead.created_at),
         group_assigned_at=lead.group_assigned_at,
         joined_at=lead.group_assigned_at,
         whatsapp_status=lead.whatsapp_status,

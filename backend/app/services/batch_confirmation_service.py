@@ -55,6 +55,7 @@ from app.services.audit_service import AuditService
 from app.services.batch_service import BatchService
 from app.services.foundation_form_config_service import FoundationFormConfigService
 from app.services.induction_entry_service import batch_for
+from app.utils.foundation_groups import foundation_group_for
 from app.services.whatsapp_service import WhatsAppService
 
 # Smallest roster the institute will run a batch with. Deliberately a single
@@ -132,6 +133,7 @@ class BatchConfirmationService:
                     paid_installments=paid,
                     total_installments=total,
                     hr_marked=lead.hr_marked,
+                    foundation_group=foundation_group_for(lead.created_at),
                     created_at=lead.created_at,
                 )
             )

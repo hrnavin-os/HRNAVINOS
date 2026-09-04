@@ -67,6 +67,9 @@ async def list_leads(
     date_from: date | None = None,
     date_to: date | None = None,
     induction_matched: bool | None = None,
+    # Which of the month's two foundation classes the lead came through, read
+    # off the day their Foundation Form landed.
+    foundation_group: int | None = Query(default=None, ge=1, le=2),
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> PaginatedResponse[LeadResponse]:
     params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)
@@ -85,6 +88,7 @@ async def list_leads(
         date_from=date_from,
         date_to=date_to,
         induction_matched=induction_matched,
+        foundation_group=foundation_group,
     )
     items = [await service.to_response(lead) for lead in result.items]
     return PaginatedResponse[LeadResponse].build(items, result.total, result.page, result.page_size)

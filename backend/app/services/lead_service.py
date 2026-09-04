@@ -46,6 +46,7 @@ from app.services.audit_service import AuditService
 from app.services.foundation_form_pricing import build_installments, build_payment_expected_summary
 from app.services.reminder_service import ReminderService
 from app.services.storage_service import StorageService
+from app.utils.foundation_groups import FOUNDATION_GROUPS, foundation_group_for, foundation_group_query
 from app.utils.phone import normalize_phone
 
 
@@ -100,6 +101,7 @@ class LeadService:
             paying_amount=lead.paying_amount,
             qr_code=lead.qr_code,
             batch_number=lead.batch_number,
+            foundation_group=foundation_group_for(lead.created_at),
             group_assigned_at=lead.group_assigned_at,
             lost_reason=lead.lost_reason,
             lost_at=lead.lost_at,
@@ -164,6 +166,7 @@ class LeadService:
         date_from: date | None = None,
         date_to: date | None = None,
         induction_matched: bool | None = None,
+        foundation_group: int | None = None,
     ) -> PaginatedResponse:
         # See LeadRepository.count_total for why this isn't a plain "reviewed": True.
         filters = {"reviewed": {"$ne": False}}
@@ -202,6 +205,15 @@ class LeadService:
             if date_to:
                 created_range["$lte"] = datetime.combine(date_to, time.max)
             filters["created_at"] = created_range
+        # Which of the month's two foundation classes the lead came through.
+        # Composed under `$and` rather than merged in at the top level: it names
+        # created_at, which the date range above has already claimed, so one
+        # would otherwise quietly overwrite the other.
+        if foundation_group in FOUNDATION_GROUPS:
+            filters["$and"] = [
+                *filters.get("$and", []),
+                foundation_group_query(foundation_group, field="created_at"),
+            ]
         # Second place the reminder sweep is driven from, besides the
         # notification poll. That poll only happens while the bell is on
         # screen, which is a Section Admin on the Foundation board - so a

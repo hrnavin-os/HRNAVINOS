@@ -25,6 +25,8 @@ import { Pagination } from '@/components/ui/Pagination'
 import { StatCard } from '@/components/ui/StatCard'
 import { TableCard } from '@/components/ui/TableCard'
 import { Toast } from '@/components/ui/Toast'
+import { FoundationGroupBadge } from '@/components/leads/FoundationGroupBadge'
+import { FOUNDATION_GROUP_OPTIONS } from '@/constants/foundationGroups'
 import { formatDate, formatDateTime } from '@/utils/formatters'
 
 // The four markers, in the order they happen to a student: they sign the
@@ -110,12 +112,16 @@ export function InductionAttendancePage() {
   const [state, setState] = useState('all')
   const [section, setSection] = useState('')
   const [batch, setBatch] = useState('')
+  // Which of the month's two foundation classes. Narrows a batch rather than
+  // cutting across one - both groups are the same batch - so it sits beside
+  // the Batch filter and is read from the same registration date.
+  const [group, setGroup] = useState('')
   const [error, setError] = useState(null)
 
   // undefined rather than '' for an unset filter: the API treats a missing
   // param as "no filter", where an empty string would be a section nobody is
   // in and return nothing.
-  const filters = { section: section || undefined, batch: batch || undefined }
+  const filters = { section: section || undefined, batch: batch || undefined, group: group || undefined }
 
   const query = usePaginatedQuery('induction-attendance', attendanceBoardService, {
     marker,
@@ -128,7 +134,7 @@ export function InductionAttendancePage() {
   // is not page 3 of the four people still pending in B Section.
   useEffect(() => {
     setPage(1)
-  }, [marker, state, section, batch, setPage])
+  }, [marker, state, section, batch, group, setPage])
 
   const statsQuery = useQuery({
     // The counts are filtered with the table, so they key off the filters too
@@ -215,6 +221,15 @@ export function InductionAttendancePage() {
         ),
     },
     { key: 'batch', header: 'Batch', align: 'center' },
+    // Beside Batch, not beside the Foundation Class marker: the group is which
+    // sitting of that batch somebody belongs to, and the two only read as a
+    // pair next to each other.
+    {
+      key: 'foundation_group',
+      header: 'Group',
+      align: 'center',
+      render: (row) => <FoundationGroupBadge group={row.foundation_group} />,
+    },
     {
       key: 'registration_date',
       header: 'Registered',
@@ -357,9 +372,7 @@ export function InductionAttendancePage() {
 
           {/* Divider: what the table is showing on the left of it, what
               narrows the roll on the right. */}
-          {(sectionOptions.length > 1 || batchOptions.length > 1) && (
-            <span className="mx-0.5 hidden h-6 w-px bg-slate-200 sm:block" aria-hidden="true" />
-          )}
+          <span className="mx-0.5 hidden h-6 w-px bg-slate-200 sm:block" aria-hidden="true" />
 
           {sectionOptions.length > 1 && (
             <FilterDropdown label="Section" value={section} options={sectionOptions} onChange={setSection} />
@@ -367,16 +380,27 @@ export function InductionAttendancePage() {
           {batchOptions.length > 1 && (
             <FilterDropdown label="Batch" value={batch} options={batchOptions} onChange={setBatch} />
           )}
+          {/* Always offered, unlike the two above: there are exactly two groups
+              in every batch by definition, so the options can't be read off the
+              roll the way sections and batches are - and a month with nobody in
+              its second half is a fact worth being able to ask for. */}
+          <FilterDropdown
+            label="Group"
+            value={group}
+            options={FOUNDATION_GROUP_OPTIONS}
+            onChange={setGroup}
+          />
 
           {/* Only once something is set, and it clears everything the row
               holds - hunting three controls to get back to the whole roll is
               the cost a filter row otherwise quietly charges. */}
-          {(section || batch || search) && (
+          {(section || batch || group || search) && (
             <button
               type="button"
               onClick={() => {
                 setSection('')
                 setBatch('')
+                setGroup('')
                 setSearch('')
                 setPage(1)
               }}

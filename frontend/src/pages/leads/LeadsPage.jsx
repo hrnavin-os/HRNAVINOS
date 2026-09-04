@@ -28,6 +28,7 @@ import { LeadCourseCell } from '@/components/leads/LeadCourseCell'
 import { LeadDetailModal } from '@/components/leads/LeadDetailModal'
 import { CreateLeadModal } from '@/components/leads/CreateLeadModal'
 import { LeadRemarksCell } from '@/components/leads/LeadRemarksCell'
+import { FoundationGroupBadge } from '@/components/leads/FoundationGroupBadge'
 import { InductionLeadsBoard } from '@/components/leads/InductionLeadsBoard'
 import { useLeadBoard } from '@/hooks/useLeadBoard'
 import {
@@ -37,6 +38,7 @@ import {
   QR_CODE_OPTIONS,
 } from '@/constants/paymentOptions'
 import { PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
+import { FOUNDATION_GROUP_OPTIONS } from '@/constants/foundationGroups'
 
 // Anchors a portaled popup under its trigger, clamped so it never runs off
 // the right edge of the viewport (a trigger in the table's rightmost column,
@@ -574,6 +576,9 @@ function FoundationLeadsBoard() {
   // they'd pay and hasn't" are the two questions the board is worked from.
   const [planFilter, setPlanFilter] = useState('')
   const [callRemarkFilter, setCallRemarkFilter] = useState('')
+  // Which of the month's two foundation classes a lead came through - read off
+  // the day their Foundation Form landed, which is the Date column beside it.
+  const [groupFilter, setGroupFilter] = useState('')
   const [sortOrder, setSortOrder] = useState('desc')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -633,6 +638,7 @@ function FoundationLeadsBoard() {
     status: statusFilter || undefined,
     payment_plan: planFilter || undefined,
     payment_call_remarks: callRemarkFilter || undefined,
+    foundation_group: groupFilter || undefined,
     sort_order: sortOrder,
     date_from: dateFrom || undefined,
     date_to: dateTo || undefined,
@@ -698,6 +704,15 @@ function FoundationLeadsBoard() {
           },
         ]),
     { key: 'date', header: 'Date', align: 'center', render: (row) => formatDate(row.created_at) },
+    // Straight after Date, because it is that date read a second way: the
+    // foundation class runs twice a month, so the 1st-15th is Group 1 and the
+    // 16th onward Group 2, both within the same batch.
+    {
+      key: 'foundation_group',
+      header: 'Group',
+      align: 'center',
+      render: (row) => <FoundationGroupBadge group={row.foundation_group} />,
+    },
     {
       key: 'payment_plan',
       header: 'Payment Method',
@@ -870,6 +885,20 @@ function FoundationLeadsBoard() {
             options={CALL_REMARK_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
             onChange={(value) => {
               setCallRemarkFilter(value)
+              setPage(1)
+            }}
+          />
+
+          {/* A fixed pair rather than options read off the data: every batch
+              has exactly two foundation classes, so "nobody came to the second
+              one this month" is an answer the filter should be able to give
+              rather than an option it quietly drops. */}
+          <FilterDropdown
+            label="Group"
+            value={groupFilter}
+            options={FOUNDATION_GROUP_OPTIONS}
+            onChange={(value) => {
+              setGroupFilter(value)
               setPage(1)
             }}
           />

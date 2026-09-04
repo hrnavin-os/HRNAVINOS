@@ -15,6 +15,7 @@ import { WhatsAppStudentModal } from '@/components/hr/WhatsAppStudentModal'
 import { WHATSAPP_STATUS, WHATSAPP_STATUS_ORDER } from '@/constants/whatsappStatus'
 import { formatDateTime } from '@/utils/formatters'
 import { TableCard } from '@/components/ui/TableCard'
+import { foundationGroupLabel } from '@/constants/foundationGroups'
 
 const QUERY_KEY = 'whatsapp-onboarding'
 
@@ -197,7 +198,18 @@ export function WhatsAppOnboardingBoard() {
       render: (row) => (
         <div className="min-w-0">
           <p className="truncate text-sm text-slate-700">{row.course_interest ?? '—'}</p>
-          {row.batch && <p className="text-xs text-slate-500">{row.batch}</p>}
+          {/* The foundation group sits on the batch's own line rather than in
+              a column of its own: it is which of that batch's two classes the
+              candidate came through, so the two only mean anything together -
+              and this board is already ten columns wide. "Group" alone would
+              also have read as the WhatsApp one three columns along, which is
+              a different group entirely. */}
+          {row.batch && (
+            <p className="text-xs text-slate-500">
+              {row.batch}
+              {row.foundation_group ? ` · ${foundationGroupLabel(row.foundation_group)}` : ''}
+            </p>
+          )}
         </div>
       ),
     },

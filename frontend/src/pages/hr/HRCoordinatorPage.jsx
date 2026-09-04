@@ -9,6 +9,7 @@ import { DataTable } from '@/components/ui/DataTable'
 import { TableCard } from '@/components/ui/TableCard'
 import { TabStrip } from '@/components/ui/TabStrip'
 import { HRStudentDetailModal } from '@/components/hr/HRStudentDetailModal'
+import { FoundationGroupBadge } from '@/components/leads/FoundationGroupBadge'
 import { WhatsAppOnboardingBoard } from '@/pages/hr/WhatsAppOnboardingBoard'
 import { formatDate } from '@/utils/formatters'
 
@@ -61,6 +62,15 @@ function LostStudents() {
       header: 'Batch',
       align: 'center',
       render: (row) => (row.batch ? <Badge tone="blue">{row.batch}</Badge> : dash(null)),
+    },
+    // Beside the batch, since it is which of that batch's two foundation
+    // classes they came through. Named in full because this page's other
+    // "Group" - the onboarding tab's - is the WhatsApp one.
+    {
+      key: 'foundation_group',
+      header: 'Foundation Group',
+      align: 'center',
+      render: (row) => <FoundationGroupBadge group={row.foundation_group} />,
     },
     { key: 'lost_reason', header: 'Lost Reason', render: (row) => dash(row.lost_reason) },
     { key: 'lost_at', header: 'Lost Date', align: 'center', render: (row) => formatDate(row.lost_at) },

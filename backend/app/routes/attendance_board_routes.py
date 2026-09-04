@@ -61,6 +61,10 @@ async def list_students(
     # stored, so the service turns it back into the month it stands for.
     section: str | None = None,
     batch: str | None = None,
+    # Which of the month's two foundation classes. Derived from the same
+    # registration_date the batch is, so it narrows a batch rather than
+    # cutting across one.
+    group: int | None = Query(default=None, ge=1, le=2),
     sort_by: str = "registration_date",
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     actor: User = Depends(RequirePermissions(Permissions.INDUCTION_ATTENDANCE_VIEW)),
@@ -70,7 +74,7 @@ async def list_students(
     scope = await get_actor_scope(actor)
     params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)
     return await AttendanceBoardService().list_students(
-        params, marker_key=marker, state=state, section=scope or section, batch=batch
+        params, marker_key=marker, state=state, section=scope or section, batch=batch, group=group
     )
 
 
@@ -80,10 +84,11 @@ async def stats(
     # under them rather than the whole roll.
     section: str | None = None,
     batch: str | None = None,
+    group: int | None = Query(default=None, ge=1, le=2),
     actor: User = Depends(RequirePermissions(Permissions.INDUCTION_ATTENDANCE_VIEW)),
 ) -> AttendanceStatsResponse:
     scope = await get_actor_scope(actor)
-    return await AttendanceBoardService().stats(section=scope or section, batch=batch)
+    return await AttendanceBoardService().stats(section=scope or section, batch=batch, group=group)
 
 
 @router.get("/filter-options")

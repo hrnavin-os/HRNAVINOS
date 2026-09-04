@@ -33,6 +33,7 @@ from app.schemas.attendance_board_schema import (
 )
 from app.services.audit_service import AuditService
 from app.services.induction_entry_service import InductionEntryService, batch_for, stamp_terms_signature
+from app.utils.foundation_groups import FOUNDATION_GROUPS, foundation_group_for, foundation_group_query
 
 
 @dataclass(frozen=True)
@@ -255,13 +256,20 @@ class AttendanceBoardService:
             email=entry.email,
             section=entry.section,
             batch=batch_for(entry.registration_date),
+            foundation_group=foundation_group_for(entry.registration_date),
             registration_date=entry.registration_date,
             status=entry.status.value,
             marks={key: marker.read(entry) for key, marker in MARKERS.items()},
         )
 
     def _query(
-        self, *, marker_key: str, state: MarkerState, section: str | None, batch: str | None = None
+        self,
+        *,
+        marker_key: str,
+        state: MarkerState,
+        section: str | None,
+        batch: str | None = None,
+        group: int | None = None,
     ) -> dict:
         """The stored-field query for one tab, narrowed to a section if the
         caller is pinned to one.
@@ -277,8 +285,17 @@ class AttendanceBoardService:
         on the query - one would silently replace the other.
         """
         query: dict = {}
+        conditions: list[dict] = []
         if state != "all":
-            query["$and"] = [self.marker(marker_key).query(state == "yes")]
+            conditions.append(self.marker(marker_key).query(state == "yes"))
+        # Which of the month's two foundation classes - `$and`-composed for the
+        # same reason, and because its filter names registration_date, which the
+        # batch narrowing below claims too: merged in at the top level one would
+        # silently replace the other.
+        if group in FOUNDATION_GROUPS:
+            conditions.append(foundation_group_query(group, field="registration_date"))
+        if conditions:
+            query["$and"] = conditions
         if section:
             query["section"] = section
         # Batch isn't stored - it's derived from registration_date (see
@@ -298,6 +315,7 @@ class AttendanceBoardService:
         state: MarkerState = "all",
         section: str | None = None,
         batch: str | None = None,
+        group: int | None = None,
     ) -> PaginatedResponse[AttendanceStudentResponse]:
         items, total = await self.entries.list(
             page=params.page,
@@ -306,14 +324,16 @@ class AttendanceBoardService:
             search_fields=SEARCH_FIELDS,
             sort_by=params.sort_by,
             sort_order=params.sort_order,
-            filters=self._query(marker_key=marker_key, state=state, section=section, batch=batch),
+            filters=self._query(
+                marker_key=marker_key, state=state, section=section, batch=batch, group=group
+            ),
         )
         return PaginatedResponse[AttendanceStudentResponse].build(
             [self.to_response(entry) for entry in items], total, params.page, params.page_size
         )
 
     async def stats(
-        self, *, section: str | None = None, batch: str | None = None
+        self, *, section: str | None = None, batch: str | None = None, group: int | None = None
     ) -> AttendanceStatsResponse:
         """Every tab's split, in one response.
 
@@ -328,13 +348,16 @@ class AttendanceBoardService:
         """
         base = {
             "is_deleted": False,
-            **self._query(marker_key="terms", state="all", section=section, batch=batch),
+            **self._query(marker_key="terms", state="all", section=section, batch=batch, group=group),
         }
         total = await InductionEntry.find(base).count()
 
         markers = {}
         for key, marker in MARKERS.items():
-            yes = await InductionEntry.find({**base, "$and": [marker.query(True)]}).count()
+            # Appended to whatever the filters already put in `$and` (a group
+            # narrowing lives there) rather than assigned over it.
+            narrowed = {**base, "$and": [*base.get("$and", []), marker.query(True)]}
+            yes = await InductionEntry.find(narrowed).count()
             markers[key] = MarkerStatsResponse(total=total, yes=yes, no=total - yes)
         return AttendanceStatsResponse(total=total, markers=markers)
 

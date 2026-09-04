@@ -34,6 +34,8 @@ class PendingLeadResponse(BaseModel):
     paid_installments: int
     total_installments: int
     hr_marked: bool
+    # Which of the month's two foundation classes they came through.
+    foundation_group: int | None = None
     created_at: datetime
 
 
@@ -212,6 +214,11 @@ class HRStudentResponse(BaseModel):
     # knew, and any typo silently disagreed with the Induction board. Falls
     # back to batch_number when there's no induction record to read.
     batch: str | None = None
+    # Which of the batch's two foundation classes they came through - 1 for the
+    # first sitting of the month, 2 for the second. Read off the day their
+    # Foundation Form landed; see app/utils/foundation_groups.py. Nothing to do
+    # with `group_assigned_at` below, which is the WhatsApp group.
+    foundation_group: int | None = None
     # Stored as group_assigned_at; renamed here because "when they joined" is
     # what it means and what the board shows.
     group_assigned_at: datetime | None
