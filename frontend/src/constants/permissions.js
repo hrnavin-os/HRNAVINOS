@@ -1,5 +1,9 @@
 // Mirrors backend/app/permissions/permission_codes.py — keep in sync.
 export const PERMISSIONS = {
+  // The institute overview at "/". Granted like any other board rather than
+  // assumed of everyone who can log in - see navigation.js.
+  DASHBOARD_VIEW: 'dashboard.view',
+
   USERS_VIEW: 'users.view',
   USERS_CREATE: 'users.create',
   USERS_UPDATE: 'users.update',

@@ -78,6 +78,9 @@ async def test_permission_list_offers_only_the_modules_the_app_surfaces(client, 
     assert modules <= OFFERED_MODULES
     # The board's own module is one of them; the classroom register isn't.
     assert "induction_attendance" in modules
+    # The institute overview is a page somebody decides a role should read, so
+    # it is on the list of things they can decide.
+    assert "dashboard" in modules
     assert "attendance" not in modules
     # A code inside an offered module that nothing enforces isn't offered.
     assert "payments.delete" not in {row["code"] for row in offered["items"]}
@@ -116,6 +119,27 @@ async def test_a_hidden_grant_survives_editing_the_role(client, auth_headers):
     )
     assert updated.status_code == 200
     assert any(permission["code"] == "students.view" for permission in updated.json()["permissions"])
+
+
+# --------------------------------------------------------------------------
+# The institute overview
+# --------------------------------------------------------------------------
+
+
+async def test_the_overview_is_a_grant_rather_than_something_every_login_gets(client, auth_headers):
+    """Revenue, students, tutors and placements across the institute is not
+    figures for whoever happens to be logged in. Finance works its own board
+    and isn't granted the overview; a Tutor is, so the same endpoint answers
+    them differently."""
+    await _create_user_with_role(client, auth_headers, "Finance", "finance-overview@hrnavinos.com")
+    finance_headers = await _login(client, "finance-overview@hrnavinos.com", "TutorPass123")
+    refused = await client.get("/api/v1/dashboard/overview", headers=finance_headers)
+    assert refused.status_code == 403
+    assert refused.json()["error_code"] == "FORBIDDEN"
+
+    await _create_user_with_role(client, auth_headers, "Tutor", "tutor-overview@hrnavinos.com")
+    tutor_headers = await _login(client, "tutor-overview@hrnavinos.com", "TutorPass123")
+    assert (await client.get("/api/v1/dashboard/overview", headers=tutor_headers)).status_code == 200
 
 
 # --------------------------------------------------------------------------

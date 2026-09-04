@@ -7,7 +7,12 @@ from app.permissions.permission_codes import Permissions as P
 
 DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     "Super Admin": [p.value for p in P],
+    # The institute overview is the landing page for every role that isn't
+    # scoped to a single board of its own. Admin, Finance, the HR Coordinator
+    # and the Section Admins work one board each and land there instead, so
+    # they aren't granted it.
     "Sales Head": [
+        P.DASHBOARD_VIEW,
         P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.LEADS_DELETE, P.LEADS_ASSIGN,
         P.ADMISSIONS_VIEW, P.USERS_VIEW, P.REPORTS_VIEW,
     ],
@@ -39,9 +44,11 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         P.STUDENTS_VIEW, P.ADMISSIONS_VIEW, P.REPORTS_VIEW,
     ],
     "Post Sales Executive": [
+        P.DASHBOARD_VIEW,
         P.STUDENTS_VIEW, P.STUDENTS_UPDATE, P.TICKETS_VIEW, P.TICKETS_UPDATE, P.NOTIFICATIONS_VIEW,
     ],
     "Admin Head": [
+        P.DASHBOARD_VIEW,
         P.ADMISSIONS_VIEW, P.ADMISSIONS_CREATE, P.ADMISSIONS_UPDATE, P.ADMISSIONS_DELETE,
         P.STUDENTS_VIEW, P.STUDENTS_CREATE, P.STUDENTS_UPDATE, P.STUDENTS_DELETE,
         P.COURSES_VIEW, P.COURSES_CREATE, P.COURSES_UPDATE, P.COURSES_DELETE,
@@ -50,15 +57,18 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         P.USERS_VIEW, P.REPORTS_VIEW, P.SETTINGS_VIEW, P.SETTINGS_UPDATE,
     ],
     "Admin Executive": [
+        P.DASHBOARD_VIEW,
         P.ADMISSIONS_VIEW, P.ADMISSIONS_CREATE, P.ADMISSIONS_UPDATE,
         P.STUDENTS_VIEW, P.STUDENTS_CREATE, P.STUDENTS_UPDATE,
         P.ATTENDANCE_VIEW,
     ],
     "Placement Head": [
+        P.DASHBOARD_VIEW,
         P.PLACEMENTS_VIEW, P.PLACEMENTS_CREATE, P.PLACEMENTS_UPDATE, P.PLACEMENTS_DELETE,
         P.STUDENTS_VIEW, P.REPORTS_VIEW,
     ],
     "Placement Executive": [
+        P.DASHBOARD_VIEW,
         P.PLACEMENTS_VIEW, P.PLACEMENTS_CREATE, P.PLACEMENTS_UPDATE, P.STUDENTS_VIEW,
     ],
     "Finance": [
@@ -68,10 +78,12 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         P.LEADS_VIEW, P.LEADS_UPDATE,
     ],
     "Tutor": [
+        P.DASHBOARD_VIEW,
         P.ATTENDANCE_VIEW, P.ATTENDANCE_MARK, P.ATTENDANCE_UPDATE,
         P.BATCHES_VIEW, P.STUDENTS_VIEW,
     ],
     "Student": [
+        P.DASHBOARD_VIEW,
         P.NOTIFICATIONS_VIEW, P.TICKETS_VIEW, P.TICKETS_CREATE,
     ],
 }

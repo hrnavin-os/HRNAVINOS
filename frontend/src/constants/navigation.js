@@ -30,15 +30,21 @@ import { PERMISSIONS } from '@/constants/permissions'
 // children. Children are filtered by their own `permission` as usual.
 export const NAV_ITEMS = [
   {
-    label: 'Dashboard',
-    to: '/',
-    permission: null,
-    icon: LayoutDashboard,
-    group: null,
     // The institute overview: revenue, students, tutors, placements. Roles
     // that work one board of it have no use for the whole - and land on their
     // own board instead, which HomeRoute derives from this same list.
-    hiddenForRoles: ['Admin', 'Finance', 'HR Coordinator', 'Admin-Coordinator'],
+    //
+    // Which roles those are is a grant rather than a list of names here: the
+    // overview is a page like any other, so somebody deciding a role should
+    // read it ticks Dashboard in the role editor and it appears, instead of
+    // needing this file edited and the app redeployed.
+    label: 'Dashboard',
+    to: '/',
+    permission: PERMISSIONS.DASHBOARD_VIEW,
+    icon: LayoutDashboard,
+    group: null,
+    // Section Admins see one section's leads, so the institute-wide figures
+    // aren't theirs to read even if their role is granted the page.
     hiddenForScopedUsers: true,
   },
 

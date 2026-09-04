@@ -8,6 +8,12 @@ from enum import StrEnum
 
 
 class Permissions(StrEnum):
+    # ---------- Dashboard ----------
+    # The institute overview - revenue, students, tutors, placements. A whole
+    # page rather than a widget on somebody else's, so it is granted like any
+    # other board instead of being assumed of everyone who can log in.
+    DASHBOARD_VIEW = "dashboard.view"
+
     # ---------- Users ----------
     USERS_VIEW = "users.view"
     USERS_CREATE = "users.create"
@@ -150,6 +156,7 @@ class Permissions(StrEnum):
 # modules rather than codes: a module that is in the product should offer all
 # of its actions, or the picker starts hiding capability rather than noise.
 OFFERED_MODULES: set[str] = {
+    "dashboard",
     "leads",
     "form_collection",
     "programs",
