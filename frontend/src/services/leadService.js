@@ -11,6 +11,18 @@ export const leadService = {
     const { data } = await apiClient.get('/leads/stats', { params: section ? { section } : undefined })
     return data
   },
+  // Counts per distinct course, batch, payment method or payment remark, for
+  // the Foundation half of the Statistics board. The Induction half is
+  // inductionEntryService.getAnalytics, and the two answer in the same shape
+  // so one set of panels can draw either.
+  //
+  // `filters` is the board's filter rail - a date window and a section -
+  // applied inside the aggregation so every view on the canvas is counting the
+  // same population.
+  getAnalytics: async (dimension, filters = {}) => {
+    const { data } = await apiClient.get('/leads/analytics', { params: { dimension, ...filters } })
+    return data
+  },
   getCourseOptions: async () => {
     const { data } = await apiClient.get('/leads/course-options')
     return data

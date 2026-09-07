@@ -1,5 +1,6 @@
 """Tests for the Lead Management (CRM / Pre-Sales) module."""
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from app.models.lead import Lead
 
@@ -309,3 +310,188 @@ async def test_foundation_group_and_date_range_both_apply(client, auth_headers):
         params={"foundation_group": 2, "date_from": "2026-08-21", "date_to": "2026-08-31"},
     )
     assert [row["name"] for row in response.json()["items"]] == ["Chitra"]
+# --------------------------------------------------------------------------
+# Statistics board - the Foundation half
+# --------------------------------------------------------------------------
+ANALYTICS_URL = "/api/v1/leads/analytics"
+
+
+async def make_lead(client, auth_headers, *, name: str, phone: str, when: datetime | None = None, **fields):
+    """A Foundation lead with whatever state a breakdown needs to be counted.
+
+    Written onto the document rather than through the API: the stages this
+    board counts (Batch Confirmation, Lost) are pipeline gates that can only be
+    entered in order and only once money is behind them, and created_at is
+    stamped at insert time - so a test that had to go through the front door
+    could only ever produce new leads created today.
+    """
+    create = await client.post(
+        "/api/v1/leads",
+        headers=auth_headers,
+        json={
+            "name": name,
+            "phone": phone,
+            "course_interest": fields.pop("course_interest", "Data Science"),
+        },
+    )
+    assert create.status_code == 201, create.text
+    lead = await Lead.get(create.json()["id"])
+    if when is not None:
+        lead.created_at = when
+    for key, value in fields.items():
+        setattr(lead, key, value)
+    await lead.save()
+    return lead
+
+
+async def analytics(client, auth_headers, dimension: str, **params) -> dict:
+    response = await client.get(
+        ANALYTICS_URL, headers=auth_headers, params={"dimension": dimension, **params}
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+async def test_foundation_analytics_counts_confirmations_and_losses(client, auth_headers):
+    """A bare count per course answers nothing useful - how many of them
+    reached Batch Confirmation and how many were lost is the question the
+    board exists for."""
+    await make_lead(client, auth_headers, name="Arun", phone="9000000101", status="batch_confirmation")
+    await make_lead(client, auth_headers, name="Bala", phone="9000000102", status="lost")
+    await make_lead(
+        client, auth_headers, name="Chitra", phone="9000000103", course_interest="Full Stack"
+    )
+
+    data = await analytics(client, auth_headers, "course")
+
+    assert data["total"] == 3
+    by_value = {item["value"]: item for item in data["items"]}
+    assert by_value["Data Science"]["count"] == 2
+    assert by_value["Data Science"]["confirmed"] == 1
+    assert by_value["Data Science"]["lost"] == 1
+    assert by_value["Full Stack"]["count"] == 1
+
+
+async def test_foundation_analytics_sums_what_was_collected(client, auth_headers):
+    """The Foundation board's own measure: money actually typed against the
+    leads under a value, not just how many of them there are."""
+    await make_lead(
+        client, auth_headers, name="Arun", phone="9000000101", paying_amount=Decimal("10000")
+    )
+    await make_lead(
+        client, auth_headers, name="Bala", phone="9000000102", paying_amount=Decimal("5500.50")
+    )
+    # No amount typed against this one - it contributes nothing rather than
+    # breaking the sum.
+    await make_lead(client, auth_headers, name="Chitra", phone="9000000103")
+
+    data = await analytics(client, auth_headers, "course")
+
+    assert data["items"][0]["collected"] == 15500.5
+
+
+async def test_foundation_analytics_names_the_leads_with_no_value(client, auth_headers):
+    """How much of the data is missing is itself a finding, so those leads are
+    a named row rather than quietly dropped."""
+    await make_lead(client, auth_headers, name="Arun", phone="9000000101")
+
+    data = await analytics(client, auth_headers, "payment_plan")
+
+    assert [item["value"] for item in data["items"]] == ["Not set"]
+    assert data["items"][0]["count"] == 1
+
+
+async def test_foundation_analytics_leaves_out_leads_still_in_form_check(client, auth_headers):
+    """An imported row waiting to be checked isn't a lead yet, and the board
+    doesn't count it - or the summary would disagree with the board it
+    summarises."""
+    await make_lead(client, auth_headers, name="Arun", phone="9000000101")
+    await make_lead(client, auth_headers, name="Unchecked", phone="9000000102", reviewed=False)
+
+    assert (await analytics(client, auth_headers, "course"))["total"] == 1
+
+
+async def test_foundation_analytics_groups_by_batch_and_names_the_month(client, auth_headers):
+    """The batch IS the month the form landed in, so the rows are named for the
+    batch and carry the month that says which one it was."""
+    august = datetime(2026, 8, 4, 10, 0, tzinfo=timezone.utc)
+    await make_lead(client, auth_headers, name="Arun", phone="9000000101", when=august)
+    await make_lead(client, auth_headers, name="Bala", phone="9000000102", when=august)
+    await make_lead(
+        client,
+        auth_headers,
+        name="Chitra",
+        phone="9000000103",
+        when=datetime(2026, 10, 2, 10, 0, tzinfo=timezone.utc),
+    )
+
+    data = await analytics(client, auth_headers, "batch")
+
+    by_value = {item["value"]: item for item in data["items"]}
+    assert by_value["Batch-28"]["count"] == 2
+    assert by_value["Batch-28"]["period"] == "Aug 2026"
+    assert by_value["Batch-28"]["start"] == "2026-08-01"
+    assert by_value["Batch-30"]["count"] == 1
+    # Biggest first, like every other dimension - the chronological views sort
+    # on `start` themselves.
+    assert data["items"][0]["value"] == "Batch-28"
+
+
+async def test_foundation_analytics_fills_in_a_month_nobody_came_through(client, auth_headers):
+    """A gap in the intake is a finding. Left out, a chart draws a straight
+    line across the missing month and says the opposite."""
+    await make_lead(
+        client,
+        auth_headers,
+        name="Arun",
+        phone="9000000101",
+        when=datetime(2026, 8, 4, 10, 0, tzinfo=timezone.utc),
+    )
+    await make_lead(
+        client,
+        auth_headers,
+        name="Chitra",
+        phone="9000000103",
+        when=datetime(2026, 10, 2, 10, 0, tzinfo=timezone.utc),
+    )
+
+    data = await analytics(client, auth_headers, "batch")
+
+    by_value = {item["value"]: item for item in data["items"]}
+    assert set(by_value) == {"Batch-28", "Batch-29", "Batch-30"}
+    assert by_value["Batch-29"]["count"] == 0
+    # The empty month is still a month, so it still says which one.
+    assert by_value["Batch-29"]["period"] == "Sep 2026"
+
+
+async def test_foundation_analytics_window_narrows_the_population(client, auth_headers):
+    """Both ends inclusive, and the far end takes in its whole day - leads carry
+    a timestamp, so a midnight bound would drop everything that arrived after
+    00:00 on the last day of the window."""
+    await make_lead(
+        client,
+        auth_headers,
+        name="Arun",
+        phone="9000000101",
+        when=datetime(2026, 8, 31, 18, 30, tzinfo=timezone.utc),
+    )
+    await make_lead(
+        client,
+        auth_headers,
+        name="Chitra",
+        phone="9000000103",
+        when=datetime(2026, 10, 2, 10, 0, tzinfo=timezone.utc),
+    )
+
+    data = await analytics(
+        client, auth_headers, "course", date_from="2026-08-01", date_to="2026-08-31"
+    )
+
+    assert data["total"] == 1
+
+
+async def test_foundation_analytics_refuses_an_unknown_dimension(client, auth_headers):
+    """The field is looked up in a closed map, so no caller can group the
+    collection by an arbitrary field."""
+    response = await client.get(ANALYTICS_URL, headers=auth_headers, params={"dimension": "phone"})
+    assert response.status_code == 422

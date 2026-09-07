@@ -169,6 +169,52 @@ class LeadStatsResponse(BaseModel):
     by_induction_match: dict[str, int] = {}
 
 
+class LeadAnalyticsItem(BaseModel):
+    """One row of the Foundation board's breakdown: a course, a batch, a
+    payment method or a payment remark, and what became of the leads under it.
+
+    Carries the outcomes as well as the count for the same reason the Induction
+    board's rows do - how many leads a course pulled in says nothing on its own,
+    and how many of them reached Batch Confirmation and how many were lost is
+    the question the board exists to answer. `collected` is the money actually
+    typed against those leads, which is the Foundation board's own measure and
+    has no equivalent on the Induction side.
+    """
+
+    value: str
+    count: int
+    # Reached Batch Confirmation - the last stage of the pipeline.
+    confirmed: int
+    lost: int
+    collected: float
+    # Only the batch dimension carries these: the month a batch is, and the
+    # first of that month, which is what a chronological view sorts on. A
+    # ranked breakdown has no period, so both stay None there.
+    period: str | None = None
+    start: date | None = None
+
+
+class LeadAnalyticsComparison(BaseModel):
+    """The same headline figures for the period before this one, so the board
+    can say whether things are moving rather than only where they stand."""
+
+    label: str
+    total: int
+    confirmed: int
+    lost: int
+
+
+class LeadAnalyticsResponse(BaseModel):
+    dimension: str
+    total: int
+    items: list[LeadAnalyticsItem]
+    comparison: LeadAnalyticsComparison | None = None
+    # The current figures the comparison is against - not always the headline
+    # totals, for the same reason as on the Induction board: with no window set
+    # the board totals everything, and there is no period before all time.
+    current: LeadAnalyticsComparison | None = None
+
+
 class LeadTimelineEntryResponse(BaseModel):
     id: uuid.UUID
     action: str

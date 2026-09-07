@@ -1,6 +1,6 @@
 """Business logic for the Lead Management (CRM / Pre-Sales) module."""
 import uuid
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import List
 
@@ -44,6 +44,7 @@ from app.schemas.lead_schema import (
 )
 from app.services.audit_service import AuditService
 from app.services.foundation_form_pricing import build_installments, build_payment_expected_summary
+from app.services.induction_entry_service import batch_for
 from app.services.reminder_service import ReminderService
 from app.services.storage_service import StorageService
 from app.utils.foundation_groups import FOUNDATION_GROUPS, foundation_group_for, foundation_group_query
@@ -270,6 +271,247 @@ class LeadService:
             by_section=by_section,
             by_induction_match=await self.leads.count_by_induction_match(),
         )
+
+    # The four dimensions the Foundation half of the Statistics board breaks
+    # leads down by. A closed map rather than a field name taken from the query
+    # string: the value is interpolated straight into a $group _id, so anything
+    # reachable from the caller would be a way to read fields this endpoint
+    # never meant to expose. Adding a dimension means adding it here on purpose.
+    #
+    # "batch" is absent because it isn't a stored field - it is the month the
+    # lead's form landed in, computed in _batch_analytics below.
+    _ANALYTICS_FIELDS = {
+        "course": "$course_interest",
+        # The board's "Payment Method" column is payment_plan, so the dimension
+        # is named for the field and labelled for the column.
+        "payment_plan": "$payment_plan",
+        "payment_call_remarks": "$payment_call_remarks",
+    }
+
+    def _analytics_match(self, section: str | None, date_from: date | None, date_to: date | None) -> dict:
+        """The one population every Foundation view on the canvas is drawn from.
+
+        Unreviewed imports are held out, exactly as they are on the board: a row
+        still waiting in Form Check isn't a lead yet, and counting it here would
+        make the board disagree with the board.
+        """
+        match: dict = {"is_deleted": False, "reviewed": {"$ne": False}}
+        if section:
+            match["section"] = section
+        window: dict = {}
+        if date_from:
+            window["$gte"] = datetime.combine(date_from, time.min)
+        if date_to:
+            # Leads carry a full timestamp rather than a midnight date, so the
+            # upper bound is the end of the day - at midnight the filter would
+            # drop everything that arrived after 00:00 on its own last day.
+            window["$lte"] = datetime.combine(date_to, time.max)
+        if window:
+            match["created_at"] = window
+        return match
+
+    # Counted per row beside the total, because a bare count of leads answers
+    # nothing on its own. Batch Confirmation is the end of the pipeline and Lost
+    # is the exit from it; `collected` is what was actually typed against those
+    # leads as paid. Written once here rather than inline at each use, so the
+    # breakdown and the headline figures cannot drift apart.
+    _ANALYTICS_MEASURES = {
+        "count": {"$sum": 1},
+        "confirmed": {"$sum": {"$cond": [{"$eq": ["$status", LeadStatus.BATCH_CONFIRMATION.value]}, 1, 0]}},
+        "lost": {"$sum": {"$cond": [{"$eq": ["$status", LeadStatus.LOST.value]}, 1, 0]}},
+        # Decimal128 out of Mongo doesn't add to an int, and this figure feeds a
+        # chart rather than an invoice, so it is summed as a double. A lead with
+        # no amount typed against it contributes nothing rather than breaking
+        # the sum.
+        "collected": {"$sum": {"$toDouble": {"$ifNull": ["$paying_amount", 0]}}},
+    }
+
+    async def analytics(
+        self,
+        dimension: str,
+        *,
+        section: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> dict:
+        """Counts per distinct value of one Foundation field, with how many of
+        each reached Batch Confirmation, how many were lost, and how much has
+        been collected against them.
+
+        The Foundation half of what InductionEntryService.analytics does for the
+        Induction half, and deliberately the same shape: the Statistics board
+        draws both halves with one set of panels, so a row here has to answer
+        the same questions a row there does.
+
+        Aggregated in the database rather than by loading every lead - the
+        counts are the whole payload, and the board has to keep working at a few
+        thousand rows.
+        """
+        if dimension == "batch":
+            return await self._batch_analytics(section=section, date_from=date_from, date_to=date_to)
+
+        field = self._ANALYTICS_FIELDS.get(dimension)
+        if field is None:
+            raise BadRequestError(f"Unknown analytics dimension '{dimension}'.")
+
+        rows = await Lead.aggregate(
+            [
+                {"$match": self._analytics_match(section, date_from, date_to)},
+                {"$group": {"_id": field, **self._ANALYTICS_MEASURES}},
+                {"$sort": {"count": -1}},
+            ]
+        ).to_list()
+
+        return await self._analytics_response(
+            dimension,
+            [
+                {
+                    # Leads nobody has set a value on are a named row rather
+                    # than a dropped one: how much of the data is missing is the
+                    # first thing an analytics view should be honest about.
+                    "value": row["_id"] or "Not set",
+                    **{key: row[key] for key in self._ANALYTICS_MEASURES},
+                }
+                for row in rows
+            ],
+            section=section,
+            date_from=date_from,
+            date_to=date_to,
+        )
+
+    async def _batch_analytics(
+        self, *, section: str | None, date_from: date | None, date_to: date | None
+    ) -> dict:
+        """Leads per batch, which is to say per month.
+
+        The batch IS the month a lead's Foundation Form landed in - the same
+        rule the Induction board's batch column uses, so the two boards can't
+        name the same month differently - which is why this groups on the year
+        and month of created_at and names each group with `batch_for`. Read in
+        UTC, like every other rule that works off a stored timestamp (see
+        app/utils/foundation_groups.py).
+
+        Months nobody came through are filled in at zero rather than left out. A
+        gap in the intake is a finding, and a chart that simply skips the month
+        draws a straight line across it and says the opposite.
+        """
+        rows = await Lead.aggregate(
+            [
+                {"$match": self._analytics_match(section, date_from, date_to)},
+                {
+                    "$group": {
+                        "_id": {"year": {"$year": "$created_at"}, "month": {"$month": "$created_at"}},
+                        **self._ANALYTICS_MEASURES,
+                    }
+                },
+            ]
+        ).to_list()
+
+        by_month = {(row["_id"]["year"], row["_id"]["month"]): row for row in rows if row["_id"]["year"]}
+        items = []
+        for year, month in self._months_between(min(by_month, default=None), max(by_month, default=None)):
+            row = by_month.get((year, month))
+            start = date(year, month, 1)
+            items.append(
+                {
+                    "value": batch_for(start),
+                    # The batch number is the label everybody uses, but only the
+                    # month says which one that is to somebody who wasn't there.
+                    "period": start.strftime("%b %Y"),
+                    "start": start,
+                    **{key: (row[key] if row else 0) for key in self._ANALYTICS_MEASURES},
+                }
+            )
+
+        # Sorted biggest-first like every other dimension, so the board's
+        # "largest" tile and its ranking read the same way whichever tab is
+        # open. The chronological views sort on `start` themselves.
+        items.sort(key=lambda item: item["count"], reverse=True)
+        return await self._analytics_response(
+            "batch", items, section=section, date_from=date_from, date_to=date_to
+        )
+
+    @staticmethod
+    def _months_between(first: tuple[int, int] | None, last: tuple[int, int] | None):
+        """Every (year, month) from `first` to `last` inclusive, gaps included."""
+        if first is None or last is None:
+            return
+        year, month = first
+        while (year, month) <= last:
+            yield year, month
+            year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+
+    async def _analytics_response(
+        self,
+        dimension: str,
+        # typing.List, not list: the class already has a `list` method, which
+        # shadows the builtin while the class body is being evaluated.
+        items: List[dict],
+        *,
+        section: str | None,
+        date_from: date | None,
+        date_to: date | None,
+    ) -> dict:
+        current, comparison = await self._period_comparison(section, date_from, date_to)
+        return {
+            "dimension": dimension,
+            "total": sum(item["count"] for item in items),
+            "current": current,
+            "comparison": comparison,
+            "items": items,
+        }
+
+    async def _period_comparison(
+        self, section: str | None, date_from: date | None, date_to: date | None
+    ) -> tuple[dict, dict] | tuple[None, None]:
+        """This period's headline figures and the previous period's.
+
+        "Previous" means the window of the same length ending the day before
+        this one starts, so a fortnight is compared against the fortnight before
+        it rather than against a fixed month.
+
+        With no window set the board totals everything, and there is no period
+        before all time - so the trend is measured over the last thirty days
+        against the thirty before, and the label says so rather than letting a
+        reader take the arrow for a movement in the headline number.
+        """
+        today = date.today()
+        if date_from and date_to:
+            span = (date_to - date_from).days + 1
+            current = (date_from, date_to)
+            label = f"vs previous {span} days"
+        elif date_from or date_to:
+            # One open end has no length, so there is nothing to step back by.
+            return None, None
+        else:
+            span = 30
+            current = (today - timedelta(days=29), today)
+            label = "last 30 days vs the 30 before"
+        earlier = (current[0] - timedelta(days=span), current[0] - timedelta(days=1))
+
+        return (
+            {"label": label, **await self._headline(section, *current)},
+            {"label": label, **await self._headline(section, *earlier)},
+        )
+
+    async def _headline(self, section: str | None, start: date, end: date) -> dict:
+        """Total, confirmed and lost over one window - the figures the period
+        arrows compare, counted the same way the breakdown counts them."""
+        rows = await Lead.aggregate(
+            [
+                {"$match": self._analytics_match(section, start, end)},
+                {
+                    "$group": {
+                        "_id": None,
+                        "total": {"$sum": 1},
+                        "confirmed": self._ANALYTICS_MEASURES["confirmed"],
+                        "lost": self._ANALYTICS_MEASURES["lost"],
+                    }
+                },
+            ]
+        ).to_list()
+        row = rows[0] if rows else {}
+        return {key: row.get(key, 0) for key in ("total", "confirmed", "lost")}
 
     async def course_options(self) -> List[str]:
         return await self.leads.distinct_course_interests()

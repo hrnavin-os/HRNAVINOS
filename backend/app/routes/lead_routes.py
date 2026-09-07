@@ -2,6 +2,7 @@
 import uuid
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 
@@ -19,6 +20,7 @@ from app.permissions.permission_codes import Permissions
 from app.schemas.common import MessageResponse, PaginatedResponse, PaginationParams
 from app.schemas.induction_entry_schema import InductionEntryResponse
 from app.schemas.lead_schema import (
+    LeadAnalyticsResponse,
     LeadAssign,
     LeadCreate,
     LeadPlanAssign,
@@ -101,6 +103,35 @@ async def lead_stats(
 ) -> LeadStatsResponse:
     scope = await get_actor_scope(actor)
     return await LeadService().stats(section=scope or section)
+
+
+@router.get("/analytics", response_model=LeadAnalyticsResponse)
+async def analytics(
+    dimension: Literal["course", "batch", "payment_plan", "payment_call_remarks"] = "course",
+    # The Statistics board's filter rail, applied inside the aggregation so
+    # every view on the canvas counts the same population.
+    date_from: date | None = None,
+    date_to: date | None = None,
+    section: str | None = None,
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
+) -> LeadAnalyticsResponse:
+    """Counts per distinct value of one Foundation field, for the Foundation
+    half of the Statistics board.
+
+    The Literal is the outer half of the guard on which fields are groupable -
+    it turns an unknown dimension into a 422 at the edge rather than letting it
+    reach the service. The service keeps its own closed map regardless, since it
+    is callable from elsewhere.
+
+    Declared before /{lead_id}, like the other fixed segments, or the dynamic
+    route swallows "analytics" and tries to parse it as a UUID. Scoped from the
+    actor's role for the same reason the list is.
+    """
+    scope = await get_actor_scope(actor)
+    data = await LeadService().analytics(
+        dimension, section=scope or section, date_from=date_from, date_to=date_to
+    )
+    return LeadAnalyticsResponse(**data)
 
 
 @router.get("/course-options", response_model=list[str])
