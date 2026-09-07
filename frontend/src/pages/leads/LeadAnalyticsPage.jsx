@@ -315,8 +315,8 @@ export function LeadAnalyticsPage() {
           rows floating on the page. Everything that answers "what am I looking
           at" is then one block at the top, and the panels below start where
           the reading starts.
-          (The Topbar already says "Dashboard"; this says which dashboard,
-          which the header cannot because it reads the nav label.) */}
+          (The Topbar reads the nav label, so it only says "Statistics";
+          this names the board itself, which that header cannot.) */}
       <div className="mb-3 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 px-4 py-3">
           <div className="flex min-w-0 items-center gap-2.5">
