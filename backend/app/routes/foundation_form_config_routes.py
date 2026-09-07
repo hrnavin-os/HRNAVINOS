@@ -1,13 +1,12 @@
 """Admin HTTP routes for editing the Form Collection form's fields, offer
-text, and program/pricing config. GET is gated by the same Leads permission
-the admin page already requires (harmless to read); PUT requires the
-dedicated FORM_COLLECTION_CONFIGURE permission, deliberately separate from
-LEADS_UPDATE - Section Admins need LEADS_UPDATE to manage their own
-section's leads, but must not be able to edit the shared form every section
-uses."""
+text, and program/pricing config. GET is readable by any board that draws the
+section list (harmless to read); PUT requires the dedicated
+FORM_COLLECTION_CONFIGURE permission, deliberately separate from LEADS_UPDATE
+- Section Admins need LEADS_UPDATE to manage their own section's leads, but
+must not be able to edit the shared form every section uses."""
 from fastapi import APIRouter, Depends, status
 
-from app.core.dependencies import RequirePermissions
+from app.core.dependencies import RequireAnyPermission, RequirePermissions
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.foundation_form_schema import FoundationFormConfigResponse, FoundationFormConfigUpdate
@@ -37,7 +36,21 @@ def _to_response(config) -> FoundationFormConfigResponse:
 
 @router.get("", response_model=FoundationFormConfigResponse)
 async def get_foundation_form_config(
-    actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
+    # The section list behind this config is drawn by five different menus -
+    # Form Collection, Lead Dashboard, Statistics, Programs, and the role
+    # editor's "Restrict to section" dropdown - each of which has a permission
+    # of its own now. Any one of them is enough to read it, so granting a role
+    # a single board doesn't also require handing it leads.view to fill in a
+    # dropdown. Writing still needs FORM_COLLECTION_CONFIGURE below.
+    actor: User = Depends(
+        RequireAnyPermission(
+            Permissions.LEADS_VIEW,
+            Permissions.LEAD_ANALYTICS_VIEW,
+            Permissions.FORM_COLLECTION_VIEW,
+            Permissions.PROGRAMS_VIEW,
+            Permissions.ROLES_VIEW,
+        )
+    ),
 ) -> FoundationFormConfigResponse:
     config = await FoundationFormConfigService().get_config()
     return _to_response(config)

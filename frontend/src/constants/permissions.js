@@ -13,6 +13,10 @@ export const PERMISSIONS = {
   BATCH_CONFIRMATION_ALLOCATE: 'batch_confirmation.allocate',
   BATCH_CONFIRMATION_CONFIRM: 'batch_confirmation.confirm',
 
+  // The WhatsApp Links board. Its own code rather than the Batch Confirmation
+  // one it used to share, so the two menus are granted separately.
+  WHATSAPP_LINKS_VIEW: 'whatsapp_links.view',
+
   ROLES_VIEW: 'roles.view',
   ROLES_CREATE: 'roles.create',
   ROLES_UPDATE: 'roles.update',
@@ -32,6 +36,10 @@ export const PERMISSIONS = {
   LEADS_CREATE: 'leads.create',
   LEADS_UPDATE: 'leads.update',
   LEADS_ASSIGN: 'leads.assign',
+
+  // The Statistics board. Its own code rather than LEADS_VIEW, so the summary
+  // and the rows it summarises can be granted apart.
+  LEAD_ANALYTICS_VIEW: 'lead_analytics.view',
 
   ADMISSIONS_VIEW: 'admissions.view',
   ADMISSIONS_CREATE: 'admissions.create',
@@ -78,5 +86,7 @@ export const PERMISSIONS = {
   SETTINGS_VIEW: 'settings.view',
   SETTINGS_UPDATE: 'settings.update',
 
+  // Reading the Form Collection board, and rewriting the form behind it.
+  FORM_COLLECTION_VIEW: 'form_collection.view',
   FORM_COLLECTION_CONFIGURE: 'form_collection.configure',
 }

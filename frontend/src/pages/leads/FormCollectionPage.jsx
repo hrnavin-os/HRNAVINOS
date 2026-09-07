@@ -17,12 +17,22 @@ import { CARD_PLATE_CLASSES, CARD_TONE_CLASSES, sectionToneAt } from '@/constant
 
 function SectionCard({ section, tone, canConfigure, onEdit, onDelete, isDeleting }) {
   const navigate = useNavigate()
+  const { hasPermission } = useAuth()
   const [copied, setCopied] = useState(false)
   const formUrl = `${window.location.origin}/foundation-form/${section.code}`
+
+  // This board and the Lead Dashboard are separate grants, so a role can hold
+  // Form Collection - the section cards, their public links, the form behind
+  // them - without the lead rows themselves. The submission count and the
+  // click-through are the two things on this card that are lead rows, so both
+  // wait on that permission rather than reporting a confident "0 submissions"
+  // that only means nobody was allowed to count.
+  const canReadLeads = hasPermission(PERMISSIONS.LEADS_VIEW)
 
   const countQuery = useQuery({
     queryKey: ['form-collection-count', section.code],
     queryFn: () => leadService.list({ section: section.code, page_size: 1 }),
+    enabled: canReadLeads,
   })
 
   async function copyLink(event) {
@@ -34,15 +44,15 @@ function SectionCard({ section, tone, canConfigure, onEdit, onDelete, isDeleting
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={() => navigate(`/leads?section=${section.code}`)}
+      role={canReadLeads ? 'button' : undefined}
+      tabIndex={canReadLeads ? 0 : undefined}
+      onClick={canReadLeads ? () => navigate(`/leads?section=${section.code}`) : undefined}
       onKeyDown={(event) => {
-        if (event.key === 'Enter') navigate(`/leads?section=${section.code}`)
+        if (canReadLeads && event.key === 'Enter') navigate(`/leads?section=${section.code}`)
       }}
-      className={`flex h-full cursor-pointer flex-col justify-between gap-4 rounded-lg border p-4 shadow-sm transition-colors hover:border-slate-300 ${
-        CARD_TONE_CLASSES[tone] ?? CARD_TONE_CLASSES.blue
-      }`}
+      className={`flex h-full flex-col justify-between gap-4 rounded-lg border p-4 shadow-sm transition-colors ${
+        canReadLeads ? 'cursor-pointer hover:border-slate-300' : ''
+      } ${CARD_TONE_CLASSES[tone] ?? CARD_TONE_CLASSES.blue}`}
     >
       <div className="flex min-w-0 items-center gap-4">
         <span
@@ -54,10 +64,12 @@ function SectionCard({ section, tone, canConfigure, onEdit, onDelete, isDeleting
         </span>
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-slate-900">{section.label}</h3>
-          <p className="mt-0.5 flex items-center gap-1.5 text-sm text-slate-600">
-            <Users className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-            {countQuery.isLoading ? 'Loading…' : `${countQuery.data?.total ?? 0} submissions`}
-          </p>
+          {canReadLeads && (
+            <p className="mt-0.5 flex items-center gap-1.5 text-sm text-slate-600">
+              <Users className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+              {countQuery.isLoading ? 'Loading…' : `${countQuery.data?.total ?? 0} submissions`}
+            </p>
+          )}
         </div>
       </div>
 

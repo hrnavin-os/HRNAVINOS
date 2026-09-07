@@ -55,7 +55,7 @@ export function AppRoutes() {
           {/* Section Admins only - they're who Finance's payment reminders
               are addressed to. Gated on the route as well as the sidebar so
               it isn't reachable by typing the URL. */}
-          <Route element={<ProtectedRoute scopedOnly />}>
+          <Route element={<ProtectedRoute permission={PERMISSIONS.NOTIFICATIONS_VIEW} scopedOnly />}>
             <Route path="/notifications" element={<NotificationsPage />} />
           </Route>
 
@@ -63,10 +63,15 @@ export function AppRoutes() {
             <Route path="/leads" element={<LeadsPage />} />
             <Route path="/marketing-board" element={<MarketingBoardPage />} />
           </Route>
-          <Route element={<ProtectedRoute permission={PERMISSIONS.LEADS_VIEW} blockScoped />}>
-            {/* blockScoped, matching its nav entry: the board summarises every
-                section, which is not a Section Admin's to see. */}
+          {/* blockScoped on both, matching their nav entries: each board covers
+              every section, which is not a Section Admin's to see. Each has its
+              own permission rather than sharing LEADS_VIEW, so a role can be
+              given the lead rows without the summary of them, or the Form
+              Collection board without either. */}
+          <Route element={<ProtectedRoute permission={PERMISSIONS.LEAD_ANALYTICS_VIEW} blockScoped />}>
             <Route path="/lead-analytics" element={<LeadAnalyticsPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={PERMISSIONS.FORM_COLLECTION_VIEW} blockScoped />}>
             <Route path="/leads/form-collection" element={<FormCollectionPage />} />
             <Route path="/leads/foundation-form" element={<Navigate to="/leads/form-collection" replace />} />
           </Route>
@@ -94,6 +99,8 @@ export function AppRoutes() {
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.BATCH_CONFIRMATION_VIEW} />}>
             <Route path="/batch-confirmation" element={<HRCoordinatorPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={PERMISSIONS.WHATSAPP_LINKS_VIEW} />}>
             <Route path="/whatsapp-links" element={<WhatsAppLinksPage />} />
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.TUTORS_VIEW} />}>

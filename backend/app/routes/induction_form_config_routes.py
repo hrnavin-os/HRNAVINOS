@@ -1,7 +1,7 @@
 """Admin routes for editing the Induction Call Form's questions and dropdowns."""
 from fastapi import APIRouter, Depends
 
-from app.core.dependencies import RequirePermissions
+from app.core.dependencies import RequireAnyPermission, RequirePermissions
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.induction_form_config_schema import (
@@ -25,7 +25,12 @@ def _to_response(config) -> InductionFormConfigResponse:
 
 @router.get("", response_model=InductionFormConfigResponse)
 async def get_induction_form_config(
-    actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
+    # Read by the Lead Dashboard's induction board and by Statistics, whose
+    # dropdowns are built from these fields' option lists. Either menu's own
+    # permission is enough; writing still needs FORM_COLLECTION_CONFIGURE.
+    actor: User = Depends(
+        RequireAnyPermission(Permissions.LEADS_VIEW, Permissions.LEAD_ANALYTICS_VIEW)
+    ),
 ) -> InductionFormConfigResponse:
     return _to_response(await InductionFormConfigService().get_config())
 

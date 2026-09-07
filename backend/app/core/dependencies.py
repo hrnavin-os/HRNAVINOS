@@ -92,6 +92,38 @@ class RequirePermissions:
         return user
 
 
+class RequireAnyPermission:
+    """Dependency factory enforcing that the current user's role grants AT LEAST
+    ONE of the given permission codes.
+
+    For a read that more than one board legitimately makes. The Foundation Form
+    config, for instance, is drawn by the Statistics board, Form Collection,
+    Lead Dashboard, Programs and the role editor's section dropdown - five
+    menus with five permissions of their own. Requiring one shared code there
+    would mean a role granted only Statistics still needed leads.view to fill
+    in its section filter, which is exactly the coupling that giving each menu
+    its own permission is meant to undo.
+
+    Usage: `Depends(RequireAnyPermission("leads.view", "lead_analytics.view"))`
+    Super Admins bypass all permission checks.
+    """
+
+    def __init__(self, *permission_codes: str) -> None:
+        self.permission_codes = set(permission_codes)
+
+    async def __call__(self, user: User = Depends(get_current_user)) -> User:
+        role = await get_user_role(user)
+        if role and role.name == "Super Admin":
+            return user
+
+        granted = await get_role_permission_codes(role)
+        if not self.permission_codes & granted:
+            raise ForbiddenError(
+                f"Requires one of the following permission(s): {', '.join(sorted(self.permission_codes))}"
+            )
+        return user
+
+
 class RequireRoles:
     """Dependency factory enforcing that the current user has one of the given role names."""
 

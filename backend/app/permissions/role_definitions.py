@@ -14,10 +14,14 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     "Sales Head": [
         P.DASHBOARD_VIEW,
         P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.LEADS_DELETE, P.LEADS_ASSIGN,
+        # The two lead menus that used to ride along on LEADS_VIEW and now have
+        # codes of their own.
+        P.LEAD_ANALYTICS_VIEW, P.FORM_COLLECTION_VIEW,
         P.ADMISSIONS_VIEW, P.USERS_VIEW, P.REPORTS_VIEW,
     ],
     "Admin": [
-        P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.FORM_COLLECTION_CONFIGURE,
+        P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE,
+        P.LEAD_ANALYTICS_VIEW, P.FORM_COLLECTION_VIEW, P.FORM_COLLECTION_CONFIGURE,
         # The induction Attendance board: this role is the one that chases
         # signed terms and marks who turned up, so it also owns the wording
         # being signed.
@@ -29,14 +33,22 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     # Form Collection Section Admins: manage leads within their own section
     # only (enforced via Role.scoped_section below), no rights to edit the
     # shared form/pricing structure itself - that's Admin/Super Admin only.
-    "A-Section Admin": [P.LEADS_VIEW, P.LEADS_UPDATE],
-    "B-Section Admin": [P.LEADS_VIEW, P.LEADS_UPDATE],
-    "C-Section Admin": [P.LEADS_VIEW, P.LEADS_UPDATE],
+    # NOTIFICATIONS_VIEW is the Notifications menu, which is theirs alone -
+    # Finance's payment reminders are addressed to a lead's own section admins.
+    # It was previously shown to any scoped user with no permission behind it;
+    # now it is a grant like every other menu.
+    "A-Section Admin": [P.LEADS_VIEW, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW],
+    "B-Section Admin": [P.LEADS_VIEW, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW],
+    "C-Section Admin": [P.LEADS_VIEW, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW],
     # Owns the hand-off from CRM to classroom: allocates leads that reached the
     # Batch Confirmation stage into batches, then confirms the roster (which
     # creates the Student and Admission records) once the batch is ready.
     "HR Coordinator": [
         P.BATCH_CONFIRMATION_VIEW, P.BATCH_CONFIRMATION_ALLOCATE, P.BATCH_CONFIRMATION_CONFIRM,
+        # The WhatsApp Links menu, which used to ride along on
+        # BATCH_CONFIRMATION_VIEW: setting the group link every incoming
+        # student is sent is this role's job too.
+        P.WHATSAPP_LINKS_VIEW,
         # Forming the batch groups is the coordinator's own job, so they create
         # and adjust batches rather than waiting on Admin Head to make one.
         P.BATCHES_VIEW, P.BATCHES_CREATE, P.BATCHES_UPDATE,

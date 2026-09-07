@@ -42,6 +42,13 @@ class Permissions(StrEnum):
     LEADS_DELETE = "leads.delete"
     LEADS_ASSIGN = "leads.assign"
 
+    # ---------- Lead Analytics ----------
+    # The Statistics board. Its own code rather than LEADS_VIEW, which used to
+    # gate it: it is a menu of its own, and a menu having a permission is only
+    # worth anything if somebody can be given the rows without the summary of
+    # them, or the summary without the rows.
+    LEAD_ANALYTICS_VIEW = "lead_analytics.view"
+
     # ---------- Admissions ----------
     ADMISSIONS_VIEW = "admissions.view"
     ADMISSIONS_CREATE = "admissions.create"
@@ -77,6 +84,13 @@ class Permissions(StrEnum):
     BATCH_CONFIRMATION_VIEW = "batch_confirmation.view"
     BATCH_CONFIRMATION_ALLOCATE = "batch_confirmation.allocate"
     BATCH_CONFIRMATION_CONFIRM = "batch_confirmation.confirm"
+
+    # ---------- WhatsApp Links ----------
+    # The board where each section's group invite link is set. A menu beside
+    # Batch Confirmation rather than a tab inside it, so it is granted beside
+    # it too: handing somebody the allocation board is not the same as handing
+    # them the link every incoming student is about to be sent to.
+    WHATSAPP_LINKS_VIEW = "whatsapp_links.view"
 
     # ---------- Tutors ----------
     TUTORS_VIEW = "tutors.view"
@@ -124,6 +138,11 @@ class Permissions(StrEnum):
     SETTINGS_UPDATE = "settings.update"
 
     # ---------- Form Collection ----------
+    # Two jobs, so two codes: reading the section cards with their public links
+    # and submission counts, and rewriting the form those submissions come in
+    # on. The second changes what the public is asked, so it isn't handed out
+    # with the first.
+    FORM_COLLECTION_VIEW = "form_collection.view"
     FORM_COLLECTION_CONFIGURE = "form_collection.configure"
 
     # ---------- Induction Attendance ----------
@@ -155,13 +174,23 @@ class Permissions(StrEnum):
 # Adding a menu means adding its module here. The list is deliberately of
 # modules rather than codes: a module that is in the product should offer all
 # of its actions, or the picker starts hiding capability rather than noise.
+#
+# Every entry in the sidebar is represented, so each menu can be granted or
+# withheld on its own - test_rbac.py holds the two lists to each other. Where
+# a menu had been sharing another's permission (Statistics and Form Collection
+# on leads.view, WhatsApp Links on batch_confirmation.view, Notifications on
+# nothing at all) it now has a code of its own, and the boot backfill hands
+# that code to whoever could already reach the page.
 OFFERED_MODULES: set[str] = {
     "dashboard",
     "leads",
+    "lead_analytics",
     "form_collection",
     "programs",
     "induction_attendance",
     "batch_confirmation",
+    "whatsapp_links",
+    "notifications",
     "payments",
     "users",
     "roles",

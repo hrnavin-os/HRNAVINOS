@@ -19,7 +19,13 @@ import { PERMISSIONS } from '@/constants/permissions'
 // shortLabel: what the mobile bottom bar shows. A tab is about 70px wide, so
 // anything longer than one word truncates to nothing useful there ("Batch
 // Confirmation" -> "Batch C…"). Omit it and the full label is used.
-// permission: null means "visible to any authenticated user"
+// permission: the code that opens this entry. Every entry carries one of its
+// own, so each menu can be granted or withheld individually in the role
+// editor - no entry rides on a neighbour's code, and none is visible to
+// everybody. Adding a menu here means adding its module to OFFERED_MODULES in
+// backend/app/permissions/permission_codes.py, or the role editor will have no
+// checkbox to grant it with. (null is still honoured, and means "visible to
+// any authenticated user" - nothing uses it.)
 // hiddenForRoles: role names that should never see this item, regardless of permission
 // hiddenForScopedUsers: hide this item for any user whose role carries a scoped_section
 // (Section Admins) - section names/roles are open-ended, so this can't be a hiddenForRoles list.
@@ -56,7 +62,7 @@ export const NAV_ITEMS = [
     // fits the mobile bottom bar whole, so it needs no shortLabel.
     label: 'Statistics',
     to: '/lead-analytics',
-    permission: PERMISSIONS.LEADS_VIEW,
+    permission: PERMISSIONS.LEAD_ANALYTICS_VIEW,
     icon: ChartColumn,
     group: 'Admin',
     hiddenForRoles: ['Finance'],
@@ -78,7 +84,7 @@ export const NAV_ITEMS = [
   {
     label: 'Notifications',
     to: '/notifications',
-    permission: null,
+    permission: PERMISSIONS.NOTIFICATIONS_VIEW,
     icon: Bell,
     scopedUsersOnly: true,
   },
@@ -86,7 +92,7 @@ export const NAV_ITEMS = [
     label: 'Form Collection',
     shortLabel: 'Forms',
     to: '/leads/form-collection',
-    permission: PERMISSIONS.LEADS_VIEW,
+    permission: PERMISSIONS.FORM_COLLECTION_VIEW,
     icon: FileCheck2,
     hiddenForRoles: ['Finance'],
     hiddenForScopedUsers: true,
@@ -121,7 +127,7 @@ export const NAV_ITEMS = [
     label: 'WhatsApp Links',
     shortLabel: 'WhatsApp',
     to: '/whatsapp-links',
-    permission: PERMISSIONS.BATCH_CONFIRMATION_VIEW,
+    permission: PERMISSIONS.WHATSAPP_LINKS_VIEW,
     icon: MessageCircle,
   },
 

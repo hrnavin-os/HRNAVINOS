@@ -153,7 +153,10 @@ async def analytics(
     date_from: date | None = None,
     date_to: date | None = None,
     section: str | None = None,
-    actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
+    # The Statistics board's own permission, not leads.view: it is a menu of
+    # its own, so withholding it in the role editor has to actually withhold
+    # the numbers rather than only hide the link to them.
+    actor: User = Depends(RequirePermissions(Permissions.LEAD_ANALYTICS_VIEW)),
 ) -> InductionAnalyticsResponse:
     """Counts per distinct value of one induction-form field, for the analytics
     board.

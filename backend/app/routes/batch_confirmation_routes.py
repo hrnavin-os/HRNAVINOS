@@ -3,7 +3,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, Query, status
 
-from app.core.dependencies import RequirePermissions
+from app.core.dependencies import RequireAnyPermission, RequirePermissions
 from app.models.enums import AllocationStatus, WhatsAppGroupStatus
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
@@ -133,13 +133,19 @@ async def confirm_batch(
     return await BatchConfirmationService().confirm_batch(batch_id, actor_id=actor.id)
 
 
-# WhatsApp group links live on the HR Coordinator's router (and behind its
-# permissions) because they're part of that role's day-to-day work. Note the
-# coordinator has no leads.view, so these can't be folded into the Form
-# Collection config endpoints that otherwise own section settings.
+# WhatsApp group links live on the HR Coordinator's router because they're part
+# of that role's day-to-day work. Note the coordinator has no leads.view, so
+# these can't be folded into the Form Collection config endpoints that
+# otherwise own section settings.
 @router.get("/whatsapp-links", response_model=list[WhatsAppGroupLinkResponse])
 async def list_whatsapp_links(
-    actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
+    # Read by two boards - the WhatsApp Links page that owns the links, and the
+    # Batch Confirmation board that shows which group a student was sent to -
+    # so either menu's permission is enough to read them. Setting one is the
+    # WhatsApp Links page's own job; see the PUT below.
+    actor: User = Depends(
+        RequireAnyPermission(Permissions.WHATSAPP_LINKS_VIEW, Permissions.BATCH_CONFIRMATION_VIEW)
+    ),
 ) -> list[WhatsAppGroupLinkResponse]:
     sections = await FoundationFormConfigService().list_whatsapp_links()
     return [
@@ -152,7 +158,7 @@ async def list_whatsapp_links(
 async def update_whatsapp_link(
     code: str,
     payload: WhatsAppGroupLinkUpdate,
-    actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
+    actor: User = Depends(RequirePermissions(Permissions.WHATSAPP_LINKS_VIEW)),
 ) -> WhatsAppGroupLinkResponse:
     section = await FoundationFormConfigService().set_whatsapp_link(
         code, payload.whatsapp_group_url, actor_id=actor.id

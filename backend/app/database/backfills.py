@@ -53,7 +53,7 @@ async def backfill_phone_normalized(model: type[BaseDocument]) -> int:
     return result.modified_count
 
 
-async def sync_permission_catalog() -> int:
+async def sync_permission_catalog() -> set[str]:
     """Inserts a Permission row for any code the app has gained since the
     database was seeded.
 
@@ -67,14 +67,82 @@ async def sync_permission_catalog() -> int:
     Insert-only. Codes are never removed here: a permission that has left the
     enum may still be granted to a role somebody edited by hand, and deleting
     the row would silently revoke it.
+
+    Returns the codes inserted on *this* boot. Every later boot returns an
+    empty set for them, which is what makes it safe to hang a one-shot
+    migration off the result - see backfill_navigation_permissions below.
     """
     existing = {permission.code for permission in await Permission.find({}).to_list()}
     missing = [definition for definition in all_permission_definitions() if definition["code"] not in existing]
     if not missing:
-        return 0
+        return set()
     await Permission.insert_many([Permission(**definition) for definition in missing])
     logger.info("Added %d new permission(s) to the catalogue.", len(missing))
-    return len(missing)
+    return {definition["code"] for definition in missing}
+
+
+# A menu that used to be reachable on somebody else's permission, mapped to the
+# permission that used to open it. When the new code appears in the catalogue
+# for the first time, whoever could already reach the menu is granted it, so
+# splitting the permission apart doesn't quietly take the page away from them.
+GRANDFATHERED_NAV_PERMISSIONS: dict[str, str] = {
+    # Statistics and Form Collection both rode on leads.view.
+    "lead_analytics.view": "leads.view",
+    "form_collection.view": "leads.view",
+    # WhatsApp Links rode on the Batch Confirmation board's.
+    "whatsapp_links.view": "batch_confirmation.view",
+}
+
+# Notifications had no permission at all: it was shown to any user whose role
+# is scoped to a section, since Finance's payment reminders are addressed to
+# them. So the thing to grandfather on is the scope, not another code.
+SCOPED_ONLY_NAV_PERMISSION = "notifications.view"
+
+
+async def backfill_navigation_permissions(new_codes: set[str]) -> int:
+    """Grants each newly split-out menu permission to the roles that could
+    already open that menu.
+
+    Every sidebar entry now carries a permission of its own, so a role can be
+    given or refused each page individually. Four of them previously had none:
+    they were gated on a neighbour's code, or on nothing but the user being a
+    Section Admin. Introducing their codes would therefore have hidden four
+    working pages from every role in the database the moment this deployed.
+
+    Runs once, on the boot where the code first enters the catalogue. That
+    matters: this is a migration, not a default. Re-running it every boot would
+    re-grant Statistics to anyone holding leads.view, which would make the new
+    permission impossible to take away - the opposite of the point of it.
+    """
+    wanted = {code: source for code, source in GRANDFATHERED_NAV_PERMISSIONS.items() if code in new_codes}
+    scoped_wanted = SCOPED_ONLY_NAV_PERMISSION in new_codes
+    if not wanted and not scoped_wanted:
+        return 0
+
+    permissions = {permission.code: permission.id for permission in await Permission.find({}).to_list()}
+    granted = 0
+    for role in await Role.find({"is_deleted": False}).to_list():
+        held = set(role.permission_ids)
+        additions = [
+            permissions[code]
+            for code, source in wanted.items()
+            if code in permissions and permissions.get(source) in held and permissions[code] not in held
+        ]
+        if (
+            scoped_wanted
+            and role.scoped_section
+            and SCOPED_ONLY_NAV_PERMISSION in permissions
+            and permissions[SCOPED_ONLY_NAV_PERMISSION] not in held
+        ):
+            additions.append(permissions[SCOPED_ONLY_NAV_PERMISSION])
+        if not additions:
+            continue
+        role.permission_ids = [*role.permission_ids, *additions]
+        role.touch()
+        await role.save()
+        granted += len(additions)
+        logger.info("Kept %d menu(s) open on the %s role after splitting their permissions out.", len(additions), role.name)
+    return granted
 
 
 async def backfill_role_permissions() -> int:
@@ -118,5 +186,8 @@ async def run_startup_backfills() -> None:
             logger.info("Backfilled phone_normalized on %d %s rows.", updated, model.Settings.name)
     # Order matters: a role can only be granted a permission that exists, so
     # the catalogue is topped up first.
-    await sync_permission_catalog()
+    new_codes = await sync_permission_catalog()
+    # Then the roles that could already reach a newly split-out menu keep it,
+    # before the seeded defaults are topped up on top.
+    await backfill_navigation_permissions(new_codes)
     await backfill_role_permissions()
