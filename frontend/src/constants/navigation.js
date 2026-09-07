@@ -55,13 +55,14 @@ export const NAV_ITEMS = [
   },
 
   {
-    // The lead analytics board. Sits above Lead Dashboard because it is the
-    // summary of what that board holds - you read the shape here and go there
-    // for the rows. Named Statistics rather than Dashboard so it reads as its
-    // own thing beside the institute overview above it - and being one word, it
-    // fits the mobile bottom bar whole, so it needs no shortLabel.
+    // The statistics board: the intake read two ways, Induction and
+    // Foundation. Sits above Lead Dashboard because it is the summary of what
+    // those boards hold - you read the shape here and go there for the rows.
+    // Named Statistics rather than Dashboard so it reads as its own thing
+    // beside the institute overview above it - and being one word, it fits the
+    // mobile bottom bar whole, so it needs no shortLabel.
     label: 'Statistics',
-    to: '/lead-analytics',
+    to: '/statistics',
     permission: PERMISSIONS.LEAD_ANALYTICS_VIEW,
     icon: ChartColumn,
     group: 'Admin',

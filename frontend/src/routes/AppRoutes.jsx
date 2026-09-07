@@ -5,7 +5,7 @@ import { ProtectedRoute } from '@/routes/ProtectedRoute'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { HomeRoute } from '@/routes/HomeRoute'
 import { LeadsPage } from '@/pages/leads/LeadsPage'
-import { LeadAnalyticsPage } from '@/pages/leads/LeadAnalyticsPage'
+import { StatisticsPage } from '@/pages/statistics/StatisticsPage'
 import { FormCollectionPage } from '@/pages/leads/FormCollectionPage'
 import { FoundationFormPage } from '@/pages/public/FoundationFormPage'
 import { InductionFormPage } from '@/pages/public/InductionFormPage'
@@ -69,7 +69,12 @@ export function AppRoutes() {
               given the lead rows without the summary of them, or the Form
               Collection board without either. */}
           <Route element={<ProtectedRoute permission={PERMISSIONS.LEAD_ANALYTICS_VIEW} blockScoped />}>
-            <Route path="/lead-analytics" element={<LeadAnalyticsPage />} />
+            <Route path="/statistics" element={<StatisticsPage />} />
+            {/* The board covers both halves of the intake now, not only the
+                lead analytics it started as, so it lives at its own name.
+                The old path is kept as a redirect - it is what anybody who
+                bookmarked the board still has. */}
+            <Route path="/lead-analytics" element={<Navigate to="/statistics" replace />} />
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.FORM_COLLECTION_VIEW} blockScoped />}>
             <Route path="/leads/form-collection" element={<FormCollectionPage />} />

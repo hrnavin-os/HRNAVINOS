@@ -53,21 +53,31 @@ export function ColumnChart({
     // would be a barcode. The plot keeps a floor of 3rem a column and scrolls
     // past that.
     <div className="w-full overflow-x-auto" onMouseLeave={() => setHovered(null)}>
-      <div className="flex min-w-full items-end gap-2 px-1" style={{ height: '15rem' }}>
+      {/* items-stretch, not items-end: every column has to be as tall as the
+          plot for its bar to be a percentage of anything. Sized to content,
+          the track collapses and every bar comes out at zero height. */}
+      <div className="flex min-w-full items-stretch justify-center gap-2 px-1" style={{ height: '16rem' }}>
         {rows.map((row, index) => {
           const value = row[valueKey]
           const isEmpty = value <= 0
           const isActive = active === index
           const dimmed = active >= 0 && !isActive
+          // The tallest bar stops at 88%, leaving the top of the track for the
+          // figures to sit in - at 100% the label on the tallest column would
+          // have nowhere to go but outside the plot.
+          //
           // A hairline stub rather than nothing at all for an empty value: the
           // month still has to read as a month that nobody came through, not
           // as a place where the chart failed to draw.
-          const height = isEmpty ? 2 : Math.max((value / tallest) * 100, 2)
+          const height = isEmpty ? 1.5 : Math.max((value / tallest) * 88, 1.5)
 
           return (
             <div
               key={row.value}
-              className={`flex min-w-12 flex-1 flex-col items-center gap-1 rounded-md pt-1 transition-opacity ${
+              // Capped as well as shared out: five values across a full-width
+              // panel would otherwise be five slabs, which reads as a diagram
+              // rather than as a chart of anything.
+              className={`flex h-full min-w-12 max-w-32 flex-1 flex-col items-center rounded-md transition-opacity ${
                 dimmed ? 'opacity-40' : ''
               } ${isEmpty ? '' : 'cursor-pointer'}`}
               {...(isEmpty
@@ -89,28 +99,34 @@ export function ColumnChart({
                     },
                   })}
             >
-              {/* The figure rides above its own column rather than in a
-                  tooltip: on a board somebody is reading numbers off, a value
-                  you have to hover to see is a value nobody quotes. */}
-              <span
-                className={`text-[11px] font-bold tabular-nums ${isEmpty ? 'text-slate-300' : 'text-slate-700'}`}
-              >
-                {measure === 'share' ? `${share(value)}%` : value}
-              </span>
-              {/* The track fills the leftover height so every column sits on
-                  the same baseline and the tops are comparable by eye. */}
-              <div className="flex w-full flex-1 items-end">
+              {/* The track: every column's bar is a percentage of this, so all
+                  of them sit on one baseline and their tops are comparable by
+                  eye. Positioned rather than laid out - a percentage height
+                  resolves against a positioned ancestor's used height, which
+                  is the one thing a flex track cannot promise. */}
+              <div className="relative w-full flex-1">
                 <div
-                  className="w-full rounded-t transition-all duration-200"
+                  className="absolute inset-x-0 bottom-0 rounded-t transition-all duration-200"
                   style={{
                     height: `${height}%`,
                     backgroundColor: isEmpty ? MUTED : row.color ?? BAR,
                     opacity: isEmpty ? 0.35 : 1,
                   }}
                 />
+                {/* The figure rides just above its own bar rather than in a
+                    tooltip: on a board somebody is reading numbers off, a
+                    value you have to hover to see is a value nobody quotes. */}
+                <span
+                  className={`absolute inset-x-0 text-center text-[11px] font-bold tabular-nums ${
+                    isEmpty ? 'text-slate-300' : 'text-slate-700'
+                  }`}
+                  style={{ bottom: `calc(${height}% + 3px)` }}
+                >
+                  {measure === 'share' ? `${share(value)}%` : value}
+                </span>
               </div>
               <span
-                className="w-full truncate pt-1 text-center text-[10px] font-medium text-slate-500"
+                className="w-full truncate pt-1.5 text-center text-[10px] font-medium text-slate-500"
                 title={row.period ? `${row.value} · ${row.period}` : row.value}
               >
                 {row.value}

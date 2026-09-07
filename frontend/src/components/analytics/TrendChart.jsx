@@ -18,10 +18,13 @@ import { BAR } from '@/constants/analyticsPalette'
  * height of the line, and a solid block underneath reads as a second, larger
  * quantity of its own.
  */
-const WIDTH = 720
-const HEIGHT = 220
+// Proportioned to the panel it sits in rather than to a square: the canvas
+// keeps its aspect ratio when it scales, so a 3:1 viewBox on a full-width
+// panel would render a chart with a hand's width of empty card either side.
+const WIDTH = 1000
+const HEIGHT = 250
 // Room for the value axis on the left and the month labels underneath.
-const PAD = { top: 16, right: 16, bottom: 34, left: 36 }
+const PAD = { top: 16, right: 16, bottom: 36, left: 36 }
 
 export function TrendChart({
   items,
@@ -71,7 +74,7 @@ export function TrendChart({
     <div className="w-full overflow-x-auto">
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className="h-56 w-full min-w-160"
+        className="h-64 w-full min-w-160"
         role="img"
         aria-label={`Trend across ${rows.length} periods`}
         onMouseLeave={() => setHovered(null)}

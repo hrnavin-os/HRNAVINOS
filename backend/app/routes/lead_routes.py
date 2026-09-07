@@ -113,7 +113,10 @@ async def analytics(
     date_from: date | None = None,
     date_to: date | None = None,
     section: str | None = None,
-    actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
+    # The Statistics board's own permission, matching the Induction half's
+    # endpoint: one board, one grant, or a role given the page would get half
+    # its tabs and a 403 on the rest.
+    actor: User = Depends(RequirePermissions(Permissions.LEAD_ANALYTICS_VIEW)),
 ) -> LeadAnalyticsResponse:
     """Counts per distinct value of one Foundation field, for the Foundation
     half of the Statistics board.

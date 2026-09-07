@@ -57,6 +57,10 @@ export const BOARDS = [
     key: 'induction',
     label: 'Induction',
     icon: PhoneCall,
+    // The raised pill's classes in TabStrip. Same pair the Lead Dashboard's
+    // own Induction/Foundation switch wears, so the two switches read as one
+    // control in two places rather than two controls that happen to agree.
+    active: 'bg-white text-brand-700 shadow-sm',
     title: 'Induction Analytics',
     caption: 'Induction call insights & candidate categorization',
     load: (dimension, filters) => inductionEntryService.getAnalytics(dimension, filters),
@@ -152,6 +156,7 @@ export const BOARDS = [
     key: 'foundation',
     label: 'Foundation',
     icon: GraduationCap,
+    active: 'bg-white text-violet-700 shadow-sm',
     title: 'Foundation Analytics',
     caption: 'Course intake, batch strength & how the money came in',
     load: (dimension, filters) => leadService.getAnalytics(dimension, filters),
