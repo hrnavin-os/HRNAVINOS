@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/Button'
 import { Toast } from '@/components/ui/Toast'
 import { DataTable } from '@/components/ui/DataTable'
 import { TableCard } from '@/components/ui/TableCard'
-import { DateRangeFilter } from '@/components/ui/DateRangeFilter'
+import { DatePresetFilter } from '@/components/ui/DatePresetFilter'
 import { FilterDropdown } from '@/components/ui/FilterDropdown'
 import { Pagination } from '@/components/ui/Pagination'
 import { SortOrderSelect } from '@/components/ui/SortOrderSelect'
@@ -580,8 +580,8 @@ function FoundationLeadsBoard() {
   // the day their Foundation Form landed, which is the Date column beside it.
   const [groupFilter, setGroupFilter] = useState('')
   const [sortOrder, setSortOrder] = useState('desc')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  // `{ from, to, preset }` or null - the same shape the Induction board uses.
+  const [dateRange, setDateRange] = useState(null)
 
   // A Section Admin's section always wins over (and preempts) any tab
   // selection - for Admin/Super Admin this is just whichever tab is active.
@@ -640,8 +640,8 @@ function FoundationLeadsBoard() {
     payment_call_remarks: callRemarkFilter || undefined,
     foundation_group: groupFilter || undefined,
     sort_order: sortOrder,
-    date_from: dateFrom || undefined,
-    date_to: dateTo || undefined,
+    date_from: dateRange?.from || undefined,
+    date_to: dateRange?.to || undefined,
   })
 
   function selectSection(code) {
@@ -649,9 +649,8 @@ function FoundationLeadsBoard() {
     setPage(1)
   }
 
-  function handleDateChange({ dateFrom: nextFrom, dateTo: nextTo }) {
-    setDateFrom(nextFrom)
-    setDateTo(nextTo)
+  function handleDateChange(nextRange) {
+    setDateRange(nextRange)
     setPage(1)
   }
 
@@ -834,7 +833,10 @@ function FoundationLeadsBoard() {
             />
           </div>
 
-          <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onChange={handleDateChange} />
+          {/* shrink-0: the search box gives way instead of the segments. */}
+          <div className="shrink-0">
+            <DatePresetFilter value={dateRange} onChange={handleDateChange} />
+          </div>
 
           <SortOrderSelect
             value={sortOrder}
