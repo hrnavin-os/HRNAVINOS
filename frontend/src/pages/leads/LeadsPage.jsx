@@ -830,18 +830,19 @@ function FoundationLeadsBoard() {
             />
           </div>
 
-          {/* Separates "find by text" from "narrow by value". */}
-          <span className="hidden h-7 w-px shrink-0 bg-slate-200 lg:block" />
+          <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onChange={handleDateChange} />
 
-          {/* Most leads still arrive through the Form Collection forms; this
-              is for the walk-in or phone enquiry with nobody to fill one in. */}
-          {canCreateLead && (
-            <Button className="shrink-0" onClick={() => setIsCreating(true)}>
-              <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-              Create Lead
-            </Button>
-          )}
+          <SortOrderSelect
+            value={sortOrder}
+            onChange={(nextOrder) => {
+              setSortOrder(nextOrder)
+              setPage(1)
+            }}
+          />
+        </div>
 
+        {/* Second row: narrow by value, then create. */}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <FilterDropdown
             label="Course"
             value={courseFilter}
@@ -903,15 +904,14 @@ function FoundationLeadsBoard() {
             }}
           />
 
-          <SortOrderSelect
-            value={sortOrder}
-            onChange={(nextOrder) => {
-              setSortOrder(nextOrder)
-              setPage(1)
-            }}
-          />
-
-          <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onChange={handleDateChange} />
+          {/* Most leads still arrive through the Form Collection forms; this
+              is for the walk-in or phone enquiry with nobody to fill one in. */}
+          {canCreateLead && (
+            <Button className="shrink-0" onClick={() => setIsCreating(true)}>
+              <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+              Create Lead
+            </Button>
+          )}
         </div>
       </div>
 
