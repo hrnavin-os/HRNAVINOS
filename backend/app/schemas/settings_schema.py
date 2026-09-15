@@ -45,12 +45,10 @@ class ResetLeadsRequest(BaseModel):
 class ResetLeadsResponse(BaseModel):
     """What the reset actually touched, counted rather than assumed.
 
-    Reported per collection because the three are not the same kind of change:
-    leads and their allocations are removed, while induction entries are only
-    unlinked - the induction record survives, which is the whole point of it
-    being a separate document.
+    Reported per collection so the Super Admin can see both boards were cleared:
+    Foundation leads, their batch allocations, and Induction entries.
     """
 
     leads_deleted: int
     allocations_deleted: int
-    induction_entries_unlinked: int
+    induction_entries_deleted: int

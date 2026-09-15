@@ -46,28 +46,31 @@ async def test_reset_clears_every_lead(client, auth_headers):
     assert (await client.get("/api/v1/leads", headers=auth_headers)).json()["total"] == 0
 
 
-async def test_reset_returns_moved_entries_to_the_induction_board(client, auth_headers):
-    """An induction entry's status is derived from foundation_lead_id, so an
-    entry still pointing at a deleted lead would sit in "Moved to Foundation"
-    forever with nothing on the other end."""
+async def test_reset_clears_the_induction_board_too(client, auth_headers):
+    """Both pending entries and ones already moved to Foundation go."""
     await seed_programs(client)
     await client.post(INDUCTION_URL, json=induction_payload())
     await client.post(FOUNDATION_URL, json=foundation_payload())
-
-    moved = await client.get("/api/v1/induction-entries?status=moved_to_foundation", headers=auth_headers)
-    assert moved.json()["total"] == 1
+    await client.post(INDUCTION_URL, json=induction_payload(name="Pending", phone="9123456789"))
 
     body = (await client.post(RESET_URL, json=CONFIRM, headers=auth_headers)).json()
-    assert body["induction_entries_unlinked"] == 1
+    assert body["induction_entries_deleted"] == 2
+    assert body["leads_deleted"] == 1
 
-    # The entry survives the reset and is workable again, rather than being
-    # deleted along with the lead it had been linked to.
+    for status in ("pending_induction", "moved_to_foundation"):
+        after = await client.get(f"/api/v1/induction-entries?status={status}", headers=auth_headers)
+        assert after.json()["total"] == 0, status
+
+
+async def test_the_same_number_can_submit_induction_again_after_a_reset(client, auth_headers):
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())
+    await client.post(RESET_URL, json=CONFIRM, headers=auth_headers)
+
+    assert (await client.post(INDUCTION_URL, json=induction_payload())).status_code in (200, 201)
+
     pending = await client.get("/api/v1/induction-entries?status=pending_induction", headers=auth_headers)
     assert pending.json()["total"] == 1
-    assert pending.json()["items"][0]["name"] == "Arun"
-
-    moved_after = await client.get("/api/v1/induction-entries?status=moved_to_foundation", headers=auth_headers)
-    assert moved_after.json()["total"] == 0
 
 
 async def test_the_same_number_can_submit_again_after_a_reset(client, auth_headers):

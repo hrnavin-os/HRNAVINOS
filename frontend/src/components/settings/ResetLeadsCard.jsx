@@ -14,7 +14,7 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage'
 // reading.
 const CONFIRMATION = 'DELETE ALL LEADS'
 
-// Clears the Foundation lead pipeline. Its own bordered card, apart from the
+// Clears both lead pipelines, Induction and Foundation. Its own bordered card, apart from the
 // settings form, because it is not a setting: the form saves values, this
 // destroys records, and a destructive control sitting at the end of a row of
 // text inputs is one somebody eventually presses by accident.
@@ -55,8 +55,8 @@ export function ResetLeadsCard() {
           <div>
             <h3 className="text-sm font-semibold text-slate-900">Reset leads</h3>
             <p className="mt-1 text-sm leading-relaxed text-slate-600">
-              Removes every lead from the Foundation board, along with their batch allocations. Induction
-              entries are kept and returned to the Induction board, so no call record is lost.
+              Removes every lead from both the Induction board and the Foundation board, along with their
+              batch allocations.
             </p>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
               Students, admissions and invoices are <span className="font-medium">not</span> touched — people
@@ -66,10 +66,10 @@ export function ResetLeadsCard() {
 
           {result && (
             <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-              Reset complete: {result.leads_deleted} lead{result.leads_deleted === 1 ? '' : 's'} removed,{' '}
-              {result.allocations_deleted} allocation{result.allocations_deleted === 1 ? '' : 's'} removed,{' '}
-              {result.induction_entries_unlinked} induction entr
-              {result.induction_entries_unlinked === 1 ? 'y' : 'ies'} returned to the board.
+              Reset complete: {result.induction_entries_deleted} induction entr
+              {result.induction_entries_deleted === 1 ? 'y' : 'ies'},{' '}
+              {result.leads_deleted} foundation lead{result.leads_deleted === 1 ? '' : 's'} and{' '}
+              {result.allocations_deleted} allocation{result.allocations_deleted === 1 ? '' : 's'} removed.
             </p>
           )}
 
@@ -83,7 +83,7 @@ export function ResetLeadsCard() {
       <Modal title="Reset all leads" isOpen={isOpen} onClose={close}>
         <div className="space-y-4">
           <p className="text-sm leading-relaxed text-slate-600">
-            This clears the Foundation board for everyone. It cannot be undone from the app.
+            This clears the Induction and Foundation boards for everyone. It cannot be undone from the app.
           </p>
 
           <ErrorMessage message={mutation.error ? getApiErrorMessage(mutation.error) : null} />
