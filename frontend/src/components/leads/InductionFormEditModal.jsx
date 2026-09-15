@@ -79,7 +79,9 @@ function FieldRow({ field, index, total, onChange, onMove }) {
             onChange={(event) => onChange({ ...field, options: event.target.value.split('\n') })}
           />
           <p className="mt-1 text-[11px] text-slate-400">
-            Suggestions only — the form still accepts a typed value that isn&rsquo;t listed.
+            {field.key === 'section'
+              ? 'Each option must name a Form Collection section (e.g. "A Section") — the entry is filed under that section and assigned to its admins.'
+              : 'Suggestions only — the form still accepts a typed value that isn’t listed.'}
           </p>
         </div>
       ) : null}

@@ -1,4 +1,5 @@
 """Business logic for the Induction Call Form."""
+import re
 import uuid
 from datetime import date, datetime, time, timedelta
 
@@ -14,6 +15,7 @@ from app.models.induction_entry import (
     InductionRemarks,
 )
 from app.models.user import User
+from app.repositories.foundation_form_config_repository import FoundationFormConfigRepository
 from app.repositories.induction_entry_repository import InductionEntryRepository, status_query
 from app.repositories.role_repository import RoleRepository
 from app.repositories.user_repository import UserRepository
@@ -107,20 +109,57 @@ class InductionEntryService:
                 rota.append((user, role.scoped_section))
         return rota
 
-    async def _next_assignee(self) -> tuple[User, str] | tuple[None, None]:
+    async def _next_assignee(self, section: str | None = None) -> tuple[User | None, str | None]:
         """Picks the next Section Admin in the rotation.
 
-        The cursor is the total number of induction entries ever created,
-        including soft-deleted ones. Counting only live rows would make the
-        index go backwards when one is deleted and hand the same person two
-        in a row; soft deletes never leave the collection, so this only ever
-        climbs.
+        With a section chosen, the rotation is only that section's admins and
+        the entry is filed under that section even if it has no admin yet - it
+        still shows on that section's card, waiting for one.
+
+        The cursor is the number of induction entries ever created in the same
+        pool, including soft-deleted ones. Counting only live rows would make
+        the index go backwards when one is deleted and hand the same person
+        two in a row; soft deletes never leave the collection, so this only
+        ever climbs.
         """
         rota = await self._section_admin_rota()
+        if section is not None:
+            rota = [pair for pair in rota if pair[1] == section]
+            if not rota:
+                return None, section
+            created_so_far = await InductionEntry.find({"section": section}).count()
+            return rota[created_so_far % len(rota)]
         if not rota:
             return None, None
         created_so_far = await InductionEntry.find({}).count()
         return rota[created_so_far % len(rota)]
+
+    async def resolve_section(self, value: str | None) -> str | None:
+        """Turns what the form sent into a section code.
+
+        Accepts the code itself ("a") or a label naming it ("A Section",
+        "a-section", "Section A"), matched against the Form Collection
+        sections and the sections Section Admin roles are pinned to. Anything
+        else is refused: filing an entry under a section nobody works would
+        hide it from every Section Admin.
+        """
+        if value is None or not value.strip():
+            return None
+        config = await FoundationFormConfigRepository().get_or_create()
+        labels = {section.code: section.label for section in config.sections}
+        for role in await self.roles.list_scoped():
+            labels.setdefault(role.scoped_section, role.scoped_section)
+
+        def squash(text: str) -> str:
+            text = re.sub(r"[^a-z0-9]", "", text.lower())
+            return text.removeprefix("section").removesuffix("section") or text
+
+        wanted = squash(value)
+        for code, label in labels.items():
+            if wanted in {squash(code), squash(label)}:
+                return code
+        known = ", ".join(labels.values())
+        raise BadRequestError(f'Unknown section "{value.strip()}". Choose one of: {known}.')
 
     async def to_response(
         self, entry: InductionEntry, *, foundation_status: str | None = None
@@ -159,9 +198,12 @@ class InductionEntryService:
         # Assignment happens here rather than being a field on the form: the
         # team keying these in from WhatsApp shouldn't have to remember whose
         # turn it is, and shouldn't be able to skew the rota by choosing.
-        assignee, section = await self._next_assignee()
+        # The section, when the form asks for one, narrows the rota to that
+        # section's admins; whose turn it is inside it is still not a choice.
+        chosen = await self.resolve_section(data.section)
+        assignee, section = await self._next_assignee(chosen)
         entry = InductionEntry(
-            **data.model_dump(),
+            **data.model_dump(exclude={"section"}),
             # The key the Foundation Form will match this person on later,
             # computed on write so the match is an indexed lookup.
             phone_normalized=normalize_phone(data.phone),

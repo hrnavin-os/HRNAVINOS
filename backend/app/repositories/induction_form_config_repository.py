@@ -54,6 +54,16 @@ _SEED_FIELDS = [
             "Not Worked", "Experienced i HR + Career Gap",
         ],
     },
+    # Routes the entry: whichever section is picked is the section it is filed
+    # under and whose admins it is assigned to. Resolved against the Form
+    # Collection sections by InductionEntryService, so a listed option that
+    # names no section is refused on submit rather than filed nowhere.
+    {
+        "key": "section",
+        "label": "Section",
+        "required": True,
+        "options": ["A Section", "B Section", "C Section"],
+    },
 ]
 
 
@@ -78,6 +88,25 @@ class InductionFormConfigRepository:
         if config is None:
             config = _seed_config()
             await config.insert()
+            return config
+        # A config saved before a field existed doesn't carry it - append the
+        # missing seed fields at the end, once, so the form starts asking and
+        # the editor's all-fields-present check keeps passing.
+        present = {field.key for field in config.fields}
+        missing = [item for item in _SEED_FIELDS if item["key"] not in present]
+        if missing:
+            start = max((field.order for field in config.fields), default=-1) + 1
+            config.fields.extend(
+                InductionFormField(
+                    key=item["key"],
+                    label=item["label"],
+                    required=item["required"],
+                    order=start + offset,
+                    options=item["options"],
+                )
+                for offset, item in enumerate(missing)
+            )
+            await self.save(config)
         return config
 
     async def save(self, config: InductionFormConfig) -> InductionFormConfig:

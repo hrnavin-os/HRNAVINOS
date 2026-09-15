@@ -17,6 +17,9 @@ class InductionEntryCreate(BaseModel):
     lead_source: str | None = Field(default=None, max_length=150)
     payment_mode: str | None = Field(default=None, max_length=100)
     category: str | None = Field(default=None, max_length=150)
+    # The section to file this entry under - a section code ("a") or its label
+    # ("A Section"). Absent means the round-robin across every section picks.
+    section: str | None = Field(default=None, max_length=100)
 
 
 class InductionFormSubmitResponse(BaseModel):

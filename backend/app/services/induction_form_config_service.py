@@ -12,7 +12,7 @@ from app.services.audit_service import AuditService
 # dropped, and a missing one would remove a question the API still needs.
 _ALLOWED_KEYS = {
     "name", "email", "phone", "registration_date", "paid_date",
-    "sales_person", "lead_source", "payment_mode", "category",
+    "sales_person", "lead_source", "payment_mode", "category", "section",
 }
 
 # Non-nullable on InductionEntry, so the form can't stop asking for them.
