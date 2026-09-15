@@ -360,16 +360,17 @@ export function InductionLeadsBoard() {
           <div className="space-y-2">
             {/* Every control grows, so the row spans the full width the way the
                 grid below it does; they wrap rather than squeeze when narrow. */}
-            <div className="flex flex-wrap items-start gap-2">
-              <div className="min-w-48 flex-[1.4]">{searchInput}</div>
-              {/* Filters the registration date. */}
-              <div className="min-w-72 flex-[2.6]">
-                <DatePresetFilter grow value={dateRange} onChange={setDateRange} />
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="min-w-56 flex-[1.5]">{searchInput}</div>
+              {/* Filters the registration date. Sized to its segments and never
+                  shrunk, so a label can't spill into the control beside it. */}
+              <div className="shrink-0">
+                <DatePresetFilter value={dateRange} onChange={setDateRange} />
               </div>
               {/* Orders by registration date. The same control the Foundation
                   board uses, so the two boards can't word their ordering
                   differently. */}
-              <div className="min-w-38 flex-1">
+              <div className="min-w-36 flex-1">
                 <SortOrderSelect grow value={sortOrder} onChange={setSortOrder} />
               </div>
               {/* A Section Admin is pinned to their own section by their role,
@@ -377,7 +378,7 @@ export function InductionLeadsBoard() {
                   pick what they already have. Assignee is hidden for the same
                   reason. */}
               {!scopedSection && (
-                <div className="min-w-32 flex-1">
+                <div className="min-w-36 flex-1">
                   <FilterDropdown
                     grow
                     label="Section"
@@ -391,7 +392,7 @@ export function InductionLeadsBoard() {
                 </div>
               )}
               {!scopedSection && (
-                <div className="min-w-32 flex-1">
+                <div className="min-w-36 flex-1">
                   <FilterDropdown
                     grow
                     label="Assignee"
@@ -407,7 +408,7 @@ export function InductionLeadsBoard() {
                 <button
                   type="button"
                   onClick={clearFilters}
-                  className="inline-flex h-9.5 shrink-0 items-center justify-center gap-1.5 rounded-md border border-dashed border-slate-300 px-3 text-sm font-medium text-slate-500 transition-colors hover:border-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-dashed border-slate-300 px-3 text-sm font-medium text-slate-500 transition-colors hover:border-slate-400 hover:bg-slate-100 hover:text-slate-700"
                 >
                   <X className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
                   Clear ({filterCount})

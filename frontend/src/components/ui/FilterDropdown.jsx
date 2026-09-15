@@ -59,7 +59,7 @@ export function FilterShell({ label, activeLabel, onClear, grow = false, menuWid
           onClick={toggle}
           aria-haspopup="listbox"
           aria-expanded={isOpen}
-          className={`flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md pl-3 text-sm outline-none ${
+          className={`flex h-8.5 min-w-0 flex-1 items-center gap-2 rounded-md pl-3 text-sm outline-none ${
             isActive ? 'pr-1.5 font-semibold text-brand-700' : 'pr-3 font-medium text-slate-600'
           } ${grow ? 'justify-between' : ''}`}
         >

@@ -161,11 +161,16 @@ export function DatePresetFilter({ value, onChange, grow = false }) {
     apply({ from, to, preset: null })
   }
 
+  // Segments of one control rather than five bordered buttons: a single
+  // outline the same 36px tall as every input beside it, with the selected
+  // range raised inside the track.
   const buttonClass = (active) =>
-    `inline-flex h-9.5 items-center justify-center gap-1.5 ${grow ? 'flex-1' : ''} whitespace-nowrap rounded-md border px-3 text-sm font-medium transition-colors ${
+    `inline-flex h-full min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[5px] px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+      grow ? 'flex-1' : ''
+    } ${
       active
-        ? 'border-brand-600 bg-brand-600 text-white'
-        : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+        ? 'bg-white text-brand-700 shadow-sm ring-1 ring-slate-200'
+        : 'text-slate-600 hover:bg-white/60 hover:text-slate-900'
     }`
 
   const calendarFrom = pendingStart ?? value?.from
@@ -178,8 +183,12 @@ export function DatePresetFilter({ value, onChange, grow = false }) {
 
   return (
     <>
-      {/* `grow` stretches the buttons to fill the cell the filter sits in. */}
-      <div className={`flex items-center gap-1.5 ${grow ? 'w-full' : 'flex-wrap'}`} role="group" aria-label="Date">
+      {/* `grow` stretches the segments to fill the cell the filter sits in. */}
+      <div
+        className={`${grow ? 'flex w-full' : 'inline-flex'} h-9 items-center gap-0.5 rounded-md border border-slate-300 bg-slate-100 p-0.5`}
+        role="group"
+        aria-label="Date"
+      >
         <button type="button" className={buttonClass(!value)} onClick={() => onChange(null)}>
           All
         </button>
@@ -199,8 +208,10 @@ export function DatePresetFilter({ value, onChange, grow = false }) {
           onClick={() => setIsOpen(true)}
           title={isCustom ? customLabel(value) : undefined}
         >
-          <CalendarDays className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-          {isCustom ? (value.preset ? RANGES[value.preset].label : customLabel(value)) : 'Custom'}
+          <CalendarDays className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+          <span className="max-w-44 truncate">
+            {isCustom ? (value.preset ? RANGES[value.preset].label : customLabel(value)) : 'Custom'}
+          </span>
         </button>
       </div>
 
