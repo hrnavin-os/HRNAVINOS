@@ -358,36 +358,48 @@ export function InductionLeadsBoard() {
         // sort, section); the second is the per-field dropdowns.
         renderToolbar={({ searchInput }) => (
           <div className="space-y-2">
+            {/* Every control grows, so the row spans the full width the way the
+                grid below it does; they wrap rather than squeeze when narrow. */}
             <div className="flex flex-wrap items-start gap-2">
-              <div className="w-full sm:w-56 sm:shrink-0">{searchInput}</div>
+              <div className="min-w-48 flex-[1.4]">{searchInput}</div>
               {/* Filters the registration date. */}
-              <DatePresetFilter value={dateRange} onChange={setDateRange} />
+              <div className="min-w-72 flex-[2.6]">
+                <DatePresetFilter grow value={dateRange} onChange={setDateRange} />
+              </div>
               {/* Orders by registration date. The same control the Foundation
                   board uses, so the two boards can't word their ordering
                   differently. */}
-              <SortOrderSelect value={sortOrder} onChange={setSortOrder} />
+              <div className="min-w-38 flex-1">
+                <SortOrderSelect grow value={sortOrder} onChange={setSortOrder} />
+              </div>
               {/* A Section Admin is pinned to their own section by their role,
                   so offering them a chooser would be a control that can only
                   pick what they already have. Assignee is hidden for the same
                   reason. */}
               {!scopedSection && (
-                <FilterDropdown
-                  label="Section"
-                  value={sectionFilter}
-                  options={sections.map((section) => ({
-                    value: section.code,
-                    label: section.label,
-                  }))}
-                  onChange={setSectionFilter}
-                />
+                <div className="min-w-32 flex-1">
+                  <FilterDropdown
+                    grow
+                    label="Section"
+                    value={sectionFilter}
+                    options={sections.map((section) => ({
+                      value: section.code,
+                      label: section.label,
+                    }))}
+                    onChange={setSectionFilter}
+                  />
+                </div>
               )}
               {!scopedSection && (
-                <FilterDropdown
-                  label="Assignee"
-                  value={filters.assigned_to}
-                  options={options.assigned_to ?? []}
-                  onChange={(value) => setFilter('assigned_to', value)}
-                />
+                <div className="min-w-32 flex-1">
+                  <FilterDropdown
+                    grow
+                    label="Assignee"
+                    value={filters.assigned_to}
+                    options={options.assigned_to ?? []}
+                    onChange={(value) => setFilter('assigned_to', value)}
+                  />
+                </div>
               )}
               {filterCount > 0 && (
                 // Dashed and unfilled: it undoes the row rather than adding to
@@ -395,7 +407,7 @@ export function InductionLeadsBoard() {
                 <button
                   type="button"
                   onClick={clearFilters}
-                  className="inline-flex h-9.5 items-center justify-center gap-1.5 rounded-md border border-dashed border-slate-300 px-3 text-sm font-medium text-slate-500 transition-colors hover:border-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  className="inline-flex h-9.5 shrink-0 items-center justify-center gap-1.5 rounded-md border border-dashed border-slate-300 px-3 text-sm font-medium text-slate-500 transition-colors hover:border-slate-400 hover:bg-slate-100 hover:text-slate-700"
                 >
                   <X className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
                   Clear ({filterCount})

@@ -134,7 +134,7 @@ function Calendar({ from, to, onPick }) {
  * single day or range. `value` is `{ from, to, preset }` or null, the same
  * shape DateFilter uses, so the boards send the same two params either way.
  */
-export function DatePresetFilter({ value, onChange }) {
+export function DatePresetFilter({ value, onChange, grow = false }) {
   const [isOpen, setIsOpen] = useState(false)
   // A range being picked in the calendar: the first click sets the start and
   // waits here; the second sets the end and applies.
@@ -162,7 +162,7 @@ export function DatePresetFilter({ value, onChange }) {
   }
 
   const buttonClass = (active) =>
-    `inline-flex h-9.5 items-center gap-1.5 whitespace-nowrap rounded-md border px-3 text-sm font-medium transition-colors ${
+    `inline-flex h-9.5 items-center justify-center gap-1.5 ${grow ? 'flex-1' : ''} whitespace-nowrap rounded-md border px-3 text-sm font-medium transition-colors ${
       active
         ? 'border-brand-600 bg-brand-600 text-white'
         : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-800'
@@ -178,7 +178,8 @@ export function DatePresetFilter({ value, onChange }) {
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Date">
+      {/* `grow` stretches the buttons to fill the cell the filter sits in. */}
+      <div className={`flex items-center gap-1.5 ${grow ? 'w-full' : 'flex-wrap'}`} role="group" aria-label="Date">
         <button type="button" className={buttonClass(!value)} onClick={() => onChange(null)}>
           All
         </button>
