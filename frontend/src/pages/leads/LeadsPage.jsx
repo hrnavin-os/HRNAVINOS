@@ -815,10 +815,14 @@ function FoundationLeadsBoard() {
       {/* One toolbar card, matching the Induction board: search and the filters
           are the same job, so they sit on one surface instead of floating
           loose above the table. */}
-      <div className="mb-4 rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="mb-4 rounded-lg border border-slate-200 bg-white shadow-sm">
+        {/* Row 1 finds (text, date, order); row 2 narrows by value and holds
+            the page's one primary action, anchored right. */}
+        <div className="flex flex-wrap items-center gap-2 p-3">
           <div className="relative min-w-55 flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+            {/* z-10: Input wraps its field in a positioned span, which would
+                otherwise paint over this icon. */}
+            <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
             <Input
               className="pl-9"
               placeholder="Search by name, course…"
@@ -841,8 +845,8 @@ function FoundationLeadsBoard() {
           />
         </div>
 
-        {/* Second row: narrow by value, then create. */}
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 rounded-b-lg border-t border-slate-100 bg-slate-50/60 px-3 py-2.5">
+          <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Filters</span>
           <FilterDropdown
             label="Course"
             value={courseFilter}
@@ -907,7 +911,7 @@ function FoundationLeadsBoard() {
           {/* Most leads still arrive through the Form Collection forms; this
               is for the walk-in or phone enquiry with nobody to fill one in. */}
           {canCreateLead && (
-            <Button className="shrink-0" onClick={() => setIsCreating(true)}>
+            <Button className="ml-auto shrink-0" onClick={() => setIsCreating(true)}>
               <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
               Create Lead
             </Button>
