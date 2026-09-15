@@ -7,7 +7,7 @@ import { inductionFormConfigService } from '@/services/inductionFormConfigServic
 import { ArrowRightLeft, ClipboardList, Target, UserX, X } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { DateFilter } from '@/components/ui/DateFilter'
+import { DatePresetFilter } from '@/components/ui/DatePresetFilter'
 import { FilterDropdown } from '@/components/ui/FilterDropdown'
 import { SortOrderSelect } from '@/components/ui/SortOrderSelect'
 import { Toast } from '@/components/ui/Toast'
@@ -354,104 +354,91 @@ export function InductionLeadsBoard() {
         ))}
       </div>
       <ResourceListPage
-        // Rendered inline beside the search box rather than as a band above
-        // it - same job, and two stacked rows pushed the table off screen.
-        renderFilters={() => (
-          // One row of equal-width controls, beside the search box, for as many
-          // as the width allows - which on a full-width screen is all of them,
-          // and for a Section Admin (no Section, no Assignee) all of them at
-          // considerably less. auto-fit rather than a fixed column count
-          // because the number of controls isn't fixed either: empty tracks
-          // collapse, so the ones that are here stretch to fill the row
-          // instead of leaving a gap where a hidden filter would have been.
-          // Below ~136px each they wrap to a second row rather than squeezing.
-          <div className="grid min-w-0 flex-1 grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))] gap-2">
-            {/* Section moved down here from the cards above. A Section Admin
-                is pinned to their own by their role, so offering them a
-                chooser would be a control that can only pick what they already
-                have. */}
-            {!scopedSection && (
+        // Two rows: the first is how you find and order the list (search, date,
+        // sort, section); the second is the per-field dropdowns.
+        renderToolbar={({ searchInput }) => (
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-start gap-2">
+              <div className="w-full sm:w-56 sm:shrink-0">{searchInput}</div>
+              {/* Filters the registration date. */}
+              <DatePresetFilter value={dateRange} onChange={setDateRange} />
+              {/* Orders by registration date. The same control the Foundation
+                  board uses, so the two boards can't word their ordering
+                  differently. */}
+              <SortOrderSelect value={sortOrder} onChange={setSortOrder} />
+              {/* A Section Admin is pinned to their own section by their role,
+                  so offering them a chooser would be a control that can only
+                  pick what they already have. Assignee is hidden for the same
+                  reason. */}
+              {!scopedSection && (
+                <FilterDropdown
+                  label="Section"
+                  value={sectionFilter}
+                  options={sections.map((section) => ({
+                    value: section.code,
+                    label: section.label,
+                  }))}
+                  onChange={setSectionFilter}
+                />
+              )}
+              {!scopedSection && (
+                <FilterDropdown
+                  label="Assignee"
+                  value={filters.assigned_to}
+                  options={options.assigned_to ?? []}
+                  onChange={(value) => setFilter('assigned_to', value)}
+                />
+              )}
+              {filterCount > 0 && (
+                // Dashed and unfilled: it undoes the row rather than adding to
+                // it. Counts what it will clear.
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="inline-flex h-9.5 items-center justify-center gap-1.5 rounded-md border border-dashed border-slate-300 px-3 text-sm font-medium text-slate-500 transition-colors hover:border-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <X className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                  Clear ({filterCount})
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
               <FilterDropdown
                 grow
-                label="Section"
-                value={sectionFilter}
-                options={sections.map((section) => ({
-                  value: section.code,
-                  label: section.label,
-                }))}
-                onChange={setSectionFilter}
+                label="Batch"
+                value={filters.batch}
+                options={asOptions(options.batch)}
+                onChange={(value) => setFilter('batch', value)}
               />
-            )}
-            <FilterDropdown
-              grow
-              label="Batch"
-              value={filters.batch}
-              options={asOptions(options.batch)}
-              onChange={(value) => setFilter('batch', value)}
-            />
-            {/* Sits beside Batch because they narrow the same field: Batch is
-                a whole month of registrations, this is any window inside or
-                across them. */}
-            <DateFilter grow value={dateRange} onChange={setDateRange} />
-            <FilterDropdown
-              grow
-              label="Sales Person"
-              value={filters.sales_person}
-              options={asOptions(options.sales_person)}
-              onChange={(value) => setFilter('sales_person', value)}
-            />
-            <FilterDropdown
-              grow
-              label="Lead Source"
-              value={filters.lead_source}
-              options={asOptions(options.lead_source)}
-              onChange={(value) => setFilter('lead_source', value)}
-            />
-            <FilterDropdown
-              grow
-              label="Payment Mode"
-              value={filters.payment_mode}
-              options={asOptions(options.payment_mode)}
-              onChange={(value) => setFilter('payment_mode', value)}
-            />
-            <FilterDropdown
-              grow
-              label="Category"
-              value={filters.category}
-              options={asOptions(options.category)}
-              onChange={(value) => setFilter('category', value)}
-            />
-            {/* Hidden for a Section Admin, for the same reason as Section:
-                their board is already one section's work, and the handful of
-                people it's shared with aren't how they look for a row. */}
-            {!scopedSection && (
               <FilterDropdown
                 grow
-                label="Assignee"
-                value={filters.assigned_to}
-                options={options.assigned_to ?? []}
-                onChange={(value) => setFilter('assigned_to', value)}
+                label="Sales Person"
+                value={filters.sales_person}
+                options={asOptions(options.sales_person)}
+                onChange={(value) => setFilter('sales_person', value)}
               />
-            )}
-            {/* Orders by registration date. The same control the Foundation
-                board uses, so the two boards can't word their ordering
-                differently - and it always shows the order the list is in
-                rather than the one it would switch to. */}
-            <SortOrderSelect grow value={sortOrder} onChange={setSortOrder} />
-            {filterCount > 0 && (
-              // Takes a cell like everything else so the grid keeps its
-              // rhythm, but dashed and unfilled: it undoes the row rather than
-              // adding to it. Counts what it will clear, so you can see at a
-              // glance how narrowed the list is.
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-slate-300 px-2.5 py-2 text-sm font-medium text-slate-500 transition-colors hover:border-slate-400 hover:bg-slate-100 hover:text-slate-700"
-              >
-                <X className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                Clear ({filterCount})
-              </button>
-            )}
+              <FilterDropdown
+                grow
+                label="Lead Source"
+                value={filters.lead_source}
+                options={asOptions(options.lead_source)}
+                onChange={(value) => setFilter('lead_source', value)}
+              />
+              <FilterDropdown
+                grow
+                label="Payment Mode"
+                value={filters.payment_mode}
+                options={asOptions(options.payment_mode)}
+                onChange={(value) => setFilter('payment_mode', value)}
+              />
+              <FilterDropdown
+                grow
+                label="Category"
+                value={filters.category}
+                options={asOptions(options.category)}
+                onChange={(value) => setFilter('category', value)}
+              />
+            </div>
           </div>
         )}
         title="Induction Entry"

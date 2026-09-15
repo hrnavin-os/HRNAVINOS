@@ -57,6 +57,9 @@ export function ResourceListPage({
   renderCard,
   // Extra filter controls rendered inline beside the search box.
   renderFilters,
+  // Replaces the search-plus-filters row with a layout of the page's own;
+  // receives the search box so it can be placed anywhere in it.
+  renderToolbar,
 }) {
   const { hasPermission } = useAuth()
   const queryClient = useQueryClient()
@@ -147,6 +150,15 @@ export function ResourceListPage({
     ...(hasRowActions ? [actionsColumn] : []),
   ]
 
+  const searchInput = (
+    <Input
+      placeholder="Search..."
+      value={search}
+      onChange={(event) => { setSearch(event.target.value); setPage(1) }}
+      rightElement={<Search className="h-4 w-4 text-slate-400" strokeWidth={2} aria-hidden="true" />}
+    />
+  )
+
   return (
     <div>
       {/* No page heading here: the Topbar already renders the current page's
@@ -157,19 +169,19 @@ export function ResourceListPage({
           things floating on the page background. */}
       <div className="mb-4 rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
         <div className="flex flex-wrap items-start gap-2">
-          <div className="w-full max-w-56 shrink-0">
-            <Input
-              placeholder="Search..."
-              value={search}
-              onChange={(event) => { setSearch(event.target.value); setPage(1) }}
-              rightElement={<Search className="h-4 w-4 text-slate-400" strokeWidth={2} aria-hidden="true" />}
-            />
-          </div>
-          {/* Filters sit on the same row as search rather than a band above it -
-              they're the same job, and two stacked rows pushed the table down.
-              The rule separates "find by text" from "narrow by value". */}
-          {renderFilters && <span className="hidden h-7 w-px shrink-0 bg-slate-200 lg:block" />}
-          {renderFilters?.()}
+          {renderToolbar ? (
+            // The page lays out its own toolbar and places the search box in it.
+            <div className="min-w-0 flex-1">{renderToolbar({ searchInput })}</div>
+          ) : (
+            <>
+              <div className="w-full max-w-56 shrink-0">{searchInput}</div>
+              {/* Filters sit on the same row as search rather than a band above it -
+                  they're the same job, and two stacked rows pushed the table down.
+                  The rule separates "find by text" from "narrow by value". */}
+              {renderFilters && <span className="hidden h-7 w-px shrink-0 bg-slate-200 lg:block" />}
+              {renderFilters?.()}
+            </>
+          )}
           <div className="ml-auto">
             {renderCreateAction
               ? renderCreateAction({ onCreated: () => queryClient.invalidateQueries({ queryKey: [queryKey] }) })
