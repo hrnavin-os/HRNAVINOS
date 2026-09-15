@@ -14,6 +14,7 @@ from app.models.induction_entry import InductionEntry
 from app.models.induction_form_config import InductionFormConfig
 from app.models.invoice import Invoice
 from app.models.lead import Lead
+from app.models.lead_sheet_sync import LeadSheetSyncRow, LeadSheetSyncState
 from app.models.login_history import LoginHistory
 from app.models.notification import Notification
 from app.models.payment import Payment
@@ -45,6 +46,8 @@ ALL_DOCUMENTS = [
     InductionFormConfig,
     Invoice,
     Lead,
+    LeadSheetSyncRow,
+    LeadSheetSyncState,
     LoginHistory,
     Notification,
     Payment,
@@ -78,6 +81,8 @@ __all__ = [
     "InductionFormConfig",
     "Invoice",
     "Lead",
+    "LeadSheetSyncRow",
+    "LeadSheetSyncState",
     "LoginHistory",
     "Notification",
     "Payment",

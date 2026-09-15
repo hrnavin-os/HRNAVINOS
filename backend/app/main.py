@@ -1,5 +1,6 @@
 """FastAPI application entrypoint."""
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -17,6 +18,7 @@ from app.exceptions.handlers import register_exception_handlers
 from app.middleware.rate_limiter import limiter
 from app.middleware.request_context import RequestContextMiddleware
 from app.routes.api_router import api_router
+from app.services.lead_sheet_sync_service import run_forever as run_lead_sheet_sync
 
 
 @asynccontextmanager
@@ -24,7 +26,13 @@ async def lifespan(app: FastAPI):
     configure_logging()
     await connect_to_mongo()
     await run_startup_backfills()
+    # Every worker starts one; a lease lets only one of them sync at a time.
+    sheet_sync = asyncio.create_task(run_lead_sheet_sync()) if settings.lead_sheet_sync_enabled else None
     yield
+    if sheet_sync is not None:
+        sheet_sync.cancel()
+        with suppress(asyncio.CancelledError):
+            await sheet_sync
     await close_mongo_connection()
 
 

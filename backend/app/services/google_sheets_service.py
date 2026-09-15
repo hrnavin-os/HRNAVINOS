@@ -29,7 +29,10 @@ from app.schemas.google_sheets_schema import (
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 SHEETS_API_BASE = "https://sheets.googleapis.com/v4/spreadsheets"
-SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly"
+# Read and write: the same connected account is the fallback credential for the
+# Lead Dashboard sheet sync, which writes. An account connected while this was
+# read-only has to be reconnected before the sync can use it.
+SCOPE = "https://www.googleapis.com/auth/spreadsheets"
 
 SPREADSHEET_ID_PATTERN = re.compile(r"/spreadsheets/d/([a-zA-Z0-9-_]+)")
 

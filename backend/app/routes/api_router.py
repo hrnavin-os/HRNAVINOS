@@ -20,6 +20,7 @@ from app.routes import (
     induction_form_routes,
     invoice_routes,
     lead_routes,
+    lead_sheet_sync_routes,
     notification_routes,
     payment_routes,
     permission_routes,
@@ -46,6 +47,7 @@ api_router.include_router(lead_routes.router)
 api_router.include_router(foundation_form_routes.router)
 api_router.include_router(foundation_form_config_routes.router)
 api_router.include_router(google_sheets_routes.router)
+api_router.include_router(lead_sheet_sync_routes.router)
 api_router.include_router(induction_entry_routes.router)
 api_router.include_router(induction_form_routes.router)
 api_router.include_router(induction_form_config_routes.router)

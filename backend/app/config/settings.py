@@ -46,6 +46,33 @@ class Settings(BaseSettings):
     GOOGLE_OAUTH_CLIENT_SECRET: str | None = None
     GOOGLE_OAUTH_REDIRECT_URI: str = "http://localhost:8000/api/v1/integrations/google-sheets/callback"
 
+    # ---------- Lead sheet sync (Admin Portal Backup spreadsheet) ----------
+    # Two-way sync between the Lead Dashboard and one spreadsheet: every
+    # induction entry on the INDUCTION tab, every Foundation lead on the
+    # FOUNDATION tab. See app/services/lead_sheet_sync_service.py.
+    #
+    # Off unless APP_ENV is production, or LEAD_SHEET_SYNC_ENABLED says
+    # otherwise. The sync treats the sheet as a mirror of *this* database, so a
+    # laptop's dev data pointed at the live sheet would be written straight
+    # into it.
+    LEAD_SHEET_SYNC_ENABLED: bool | None = None
+    LEAD_SHEET_SPREADSHEET_ID: str | None = "1GuW1RzWnA1SsKIwmzRFXdIa7ERSb3EELnrWABkPSHnk"
+    LEAD_SHEET_INDUCTION_TAB: str = "Induction"
+    LEAD_SHEET_FOUNDATION_TAB: str = "Foundation"
+    LEAD_SHEET_SYNC_INTERVAL_SECONDS: int = Field(default=30, ge=10)
+    # A Google service account is the credential the sync prefers: it never
+    # expires and belongs to no staff member. Give either the path to its JSON
+    # key file or the JSON itself, then share the spreadsheet with the
+    # account's client_email as an Editor. Without one, the sync falls back to
+    # the Google account connected on the Marketing Board.
+    GOOGLE_SERVICE_ACCOUNT_FILE: str | None = None
+    GOOGLE_SERVICE_ACCOUNT_JSON: str | None = None
+
+    @property
+    def lead_sheet_sync_enabled(self) -> bool:
+        enabled = self.is_production if self.LEAD_SHEET_SYNC_ENABLED is None else self.LEAD_SHEET_SYNC_ENABLED
+        return bool(enabled and self.LEAD_SHEET_SPREADSHEET_ID)
+
     # ---------- WhatsApp Cloud API (group invites) ----------
     # Unset by default, and the app runs perfectly well that way: the HR board
     # falls back to opening a pre-written wa.me message for the coordinator to
