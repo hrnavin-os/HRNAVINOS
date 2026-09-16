@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { BottomNav } from '@/components/layout/BottomNav'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -5,8 +6,32 @@ import { Topbar } from '@/components/layout/Topbar'
 import { useAuth } from '@/hooks/useAuth'
 import { getVisibleNavItems } from '@/constants/navigation'
 
+const SIDEBAR_COLLAPSED_KEY = 'sidebar_collapsed'
+
+// Whether the rail is collapsed is a preference about the workspace, not about
+// the page, so it outlives a reload rather than resetting on every navigation.
+// Read lazily so the first paint is already in the right state - initialising
+// to false and correcting in an effect would flash the wide sidebar.
+function readCollapsed() {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
 export function DashboardLayout() {
   const { user, hasPermission } = useAuth()
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readCollapsed)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(sidebarCollapsed))
+    } catch {
+      // Private browsing or a full quota - the preference just won't persist.
+    }
+  }, [sidebarCollapsed])
+
   // A sidebar is for choosing between destinations. A Section Admin has two -
   // their board, which is where they land, and Notifications, which the header
   // bell opens - and a role scoped to a single board has one. Either way the
@@ -21,11 +46,20 @@ export function DashboardLayout() {
   )
   const hideSidebar = Boolean(user?.scoped_section) || destinations <= 1
 
+  function toggleSidebar() {
+    setSidebarCollapsed((collapsed) => !collapsed)
+  }
+
   return (
     <div className="flex h-screen bg-slate-50">
-      {!hideSidebar && <Sidebar />}
+      {!hideSidebar && <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <Topbar showBrand={hideSidebar} />
+        {/* Reopening is the header's job only while the sidebar is collapsed -
+            expanded, its own brand row carries the close button. */}
+        <Topbar
+          showBrand={hideSidebar}
+          onOpenSidebar={!hideSidebar && sidebarCollapsed ? toggleSidebar : undefined}
+        />
         {/* Tighter padding on a phone: 24px on each side of a 360px screen is
             13% of the width spent on margin. The extra bottom padding is the
             height of the fixed tab bar, which would otherwise sit on top of
