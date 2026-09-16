@@ -614,3 +614,28 @@ async def test_a_section_admin_can_create_a_lead_onto_their_own_section(client, 
     )
     assert created.status_code == 201, created.text
     assert created.json()["section"] == "a"
+
+
+async def test_a_renamed_section_admin_role_still_gets_new_permissions(client, auth_headers):
+    """The backfill matches a seeded role by name, and the section admins'
+    roles get renamed - the seed calls it "A-Section Admin" and the database
+    in use calls it "Admin A-Section". A name lookup then matches nothing and
+    the role silently stops receiving anything its definition gains, which is
+    how Create Lead stayed missing from their board. The section is the stable
+    identity, so that is what it falls back to."""
+    from app.database.backfills import backfill_role_permissions
+    from app.models.permission import Permission
+    from app.models.role import Role
+
+    role = await Role.find_one({"name": "A-Section Admin", "is_deleted": False})
+    leads_create = await Permission.find_one({"code": "leads.create"})
+    # Put it back to a renamed role that never received the permission.
+    role.name = "Admin A-Section"
+    role.permission_ids = [pid for pid in role.permission_ids if pid != leads_create.id]
+    await role.save()
+
+    await backfill_role_permissions()
+
+    restored = await Role.find_one({"name": "Admin A-Section", "is_deleted": False})
+    assert restored.scoped_section == "a"
+    assert leads_create.id in restored.permission_ids

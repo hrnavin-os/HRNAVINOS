@@ -15,7 +15,7 @@ from app.models.lead import Lead
 from app.models.permission import Permission
 from app.models.role import Role
 from app.permissions.permission_codes import all_permission_definitions
-from app.permissions.role_definitions import DEFAULT_ROLE_PERMISSIONS
+from app.permissions.role_definitions import DEFAULT_ROLE_PERMISSIONS, ROLE_SCOPED_SECTION
 from app.utils.phone import normalize_phone
 
 logger = logging.getLogger(__name__)
@@ -145,6 +145,27 @@ async def backfill_navigation_permissions(new_codes: set[str]) -> int:
     return granted
 
 
+async def _roles_for_definition(name: str) -> list[Role]:
+    """Which live roles a DEFAULT_ROLE_PERMISSIONS entry describes.
+
+    Normally the one with that name. But a section admin's role gets renamed -
+    the seed calls it "A-Section Admin" and the database in use calls it
+    "Admin A-Section" - and a name lookup then silently matches nothing, so
+    the role quietly stops receiving anything the definition gains. For the
+    three section-scoped definitions the section is the stable identity, not
+    the name: a role scoped to "a" *is* the A-Section Admin whatever it has
+    been called since. All of them, not the first found, since an installation
+    is free to have more than one role working a section.
+    """
+    named = await Role.find({"name": name, "is_deleted": False}).to_list()
+    if named:
+        return named
+    section = ROLE_SCOPED_SECTION.get(name)
+    if section is None:
+        return []
+    return await Role.find({"scoped_section": section, "is_deleted": False}).to_list()
+
+
 async def backfill_role_permissions() -> int:
     """Grants a seeded role any permission its definition has gained since the
     database was seeded.
@@ -162,10 +183,12 @@ async def backfill_role_permissions() -> int:
     """
     permissions = {permission.code: permission.id for permission in await Permission.find({}).to_list()}
     granted = 0
-    for name, codes in DEFAULT_ROLE_PERMISSIONS.items():
-        role = await Role.find_one({"name": name, "is_deleted": False})
-        if not role:
-            continue
+    roles_and_codes = [
+        (role, codes)
+        for name, codes in DEFAULT_ROLE_PERMISSIONS.items()
+        for role in await _roles_for_definition(name)
+    ]
+    for role, codes in roles_and_codes:
         missing = [
             permissions[code] for code in codes if code in permissions and permissions[code] not in role.permission_ids
         ]
@@ -175,7 +198,7 @@ async def backfill_role_permissions() -> int:
         role.touch()
         await role.save()
         granted += len(missing)
-        logger.info("Granted %d new permission(s) to the %s role.", len(missing), name)
+        logger.info("Granted %d new permission(s) to the %s role.", len(missing), role.name)
     return granted
 
 
