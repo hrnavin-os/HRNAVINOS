@@ -18,6 +18,7 @@ import {
   Phone,
   PhoneCall,
   Plus,
+  RotateCcw,
   Trash2,
   UserPlus,
   Wallet,
@@ -82,12 +83,15 @@ const STAGE_ACTIVE_TONES = {
 const STAGE_IDLE = 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
 const STAGE_IDLE_LOST = 'border-slate-200 bg-white text-slate-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700'
 
-const ACTION_ICONS = { CREATE: Plus, UPDATE: Pencil, ASSIGN: UserPlus, DELETE: Trash2 }
+const ACTION_ICONS = { CREATE: Plus, UPDATE: Pencil, ASSIGN: UserPlus, DELETE: Trash2, REJOIN: RotateCcw }
 const ACTION_TONES = {
   CREATE: 'bg-emerald-100 text-emerald-600',
   UPDATE: 'bg-blue-100 text-blue-600',
   ASSIGN: 'bg-violet-100 text-violet-600',
   DELETE: 'bg-red-100 text-red-600',
+  // Its own entry rather than an UPDATE, because "this student came back" is
+  // the one thing you scan a lost-and-returned lead's history for.
+  REJOIN: 'bg-teal-100 text-teal-600',
 }
 
 // Induction is conditional - only leads matched to an induction entry have one,
@@ -624,10 +628,81 @@ function PaymentCollectionSection({
   )
 }
 
+// Shown only on a lost lead: the one action that brings a student back.
+//
+// The course is asked for rather than assumed, and defaults to the one they
+// left on - somebody returning months later often comes back to a different
+// course, and it is the fact everything after this is worked from. Their
+// payment history is untouched, which is why the panel says so: whoever is
+// about to rejoin a part-paid student needs to know it isn't being wiped.
+function RejoinPanel({ lead, onRejoin, isRejoining, error }) {
+  const [course, setCourse] = useState(lead.course_interest ?? '')
+
+  // Same catalog the board's Course cell offers (and the same query key, so
+  // it's already in cache): every live course, plus anything already in the
+  // data that is no longer offered - including the course this lead left on.
+  const coursesQuery = useQuery({ queryKey: ['lead-course-catalog'], queryFn: leadService.getCourseCatalog })
+  const courses = coursesQuery.data ?? []
+  const options = course && !courses.includes(course) ? [course, ...courses] : courses
+
+  return (
+    <DetailPanel
+      title="Rejoin"
+      icon={RotateCcw}
+      tone="emerald"
+      action={
+        lead.lost_at ? (
+          <span className="text-[11px] font-medium text-slate-400">Lost on {formatDate(lead.lost_at)}</span>
+        ) : null
+      }
+    >
+      {lead.lost_reason && (
+        <p className="mb-3 break-words text-sm text-slate-600">
+          <span className="font-medium text-slate-500">Reason recorded:</span> {lead.lost_reason}
+        </p>
+      )}
+      <ErrorMessage message={error} />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+        <div className="min-w-0 flex-1">
+          <Select
+            label="Rejoining course"
+            value={course}
+            disabled={isRejoining}
+            onChange={(event) => setCourse(event.target.value)}
+          >
+            <option value="">Select a course…</option>
+            {options.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <Button
+          variant="success"
+          className="shrink-0"
+          disabled={!course || isRejoining}
+          onClick={() => onRejoin(course)}
+        >
+          <RotateCcw className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+          {isRejoining ? 'Rejoining…' : 'Rejoin'}
+        </Button>
+      </div>
+      <p className="mt-2 text-xs text-slate-500">
+        Puts this student back on the board at New Lead, on the course chosen above. Payments already
+        recorded against them are kept.
+      </p>
+    </DetailPanel>
+  )
+}
+
 function OverviewTab({
   lead,
   onSelectStage,
   isSaving,
+  onRejoin,
+  isRejoining,
+  rejoinError,
   onAssignPlan,
   isAssigningPlan,
   assignPlanError,
@@ -649,6 +724,10 @@ function OverviewTab({
         <DetailPanel title="Notes" icon={MessageSquare} tone="violet">
           <p className="break-words text-sm leading-relaxed text-slate-700">{lead.notes}</p>
         </DetailPanel>
+      )}
+
+      {lead.status === 'lost' && (
+        <RejoinPanel lead={lead} onRejoin={onRejoin} isRejoining={isRejoining} error={rejoinError} />
       )}
 
       {lead.status === 'pre_screening' && (
@@ -869,6 +948,17 @@ export function LeadDetailModal({ lead, onClose }) {
     stageMutation.mutate({ status: newStatus })
   }
 
+  // Stays open on success, unlike a stage change: the lead is back on the
+  // board and the popup redraws as the active lead it now is - which is the
+  // confirmation that it worked.
+  const rejoinMutation = useMutation({
+    mutationFn: (courseInterest) => leadService.rejoin(lead.id, courseInterest),
+    onSuccess: (updatedLead) => {
+      setLiveLead(updatedLead)
+      invalidateLeadQueries()
+    },
+  })
+
   const followUpMutation = useMutation({
     mutationFn: () =>
       leadService.update(lead.id, { follow_up_at: followUpAt ? new Date(followUpAt).toISOString() : null }),
@@ -971,6 +1061,9 @@ export function LeadDetailModal({ lead, onClose }) {
             lead={liveLead}
             onSelectStage={selectStage}
             isSaving={stageMutation.isPending}
+            onRejoin={(courseInterest) => rejoinMutation.mutate(courseInterest)}
+            isRejoining={rejoinMutation.isPending}
+            rejoinError={rejoinMutation.error ? getApiErrorMessage(rejoinMutation.error) : null}
             onAssignPlan={(values) => planMutation.mutate(values)}
             isAssigningPlan={planMutation.isPending}
             assignPlanError={planMutation.error ? getApiErrorMessage(planMutation.error) : null}

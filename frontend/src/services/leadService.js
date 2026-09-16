@@ -113,4 +113,12 @@ export const leadService = {
     const { data } = await apiClient.post(`/leads/${id}/mark-lost`)
     return data
   },
+  // Brings a lost student back onto the board, on the course they are
+  // returning to. One call rather than a stage change plus a course edit, so
+  // a lead can never end up active while still carrying the reason it was
+  // written off.
+  rejoin: async (id, courseInterest) => {
+    const { data } = await apiClient.post(`/leads/${id}/rejoin`, { course_interest: courseInterest })
+    return data
+  },
 }

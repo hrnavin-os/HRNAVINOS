@@ -24,6 +24,7 @@ from app.schemas.lead_schema import (
     LeadAssign,
     LeadCreate,
     LeadPlanAssign,
+    LeadRejoin,
     LeadRemarkCreate,
     LeadRemarkUpdate,
     LeadResponse,
@@ -363,6 +364,20 @@ async def mark_lead_lost(
     service = LeadService()
     scope = await get_actor_scope(actor)
     lead = await service.mark_lost_nonpayment(lead_id, actor_id=actor.id, scope=scope)
+    return await service.to_response(lead)
+
+
+@router.post("/{lead_id}/rejoin", response_model=LeadResponse)
+async def rejoin_lead(
+    lead_id: uuid.UUID,
+    payload: LeadRejoin,
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
+) -> LeadResponse:
+    """Puts a lost student back in the pipeline, on the course they are
+    returning to, at New Lead."""
+    service = LeadService()
+    scope = await get_actor_scope(actor)
+    lead = await service.rejoin(lead_id, payload, actor_id=actor.id, scope=scope)
     return await service.to_response(lead)
 
 

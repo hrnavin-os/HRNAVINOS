@@ -512,3 +512,62 @@ async def test_delete_lead_takes_it_off_the_board(client, auth_headers):
     assert [row["id"] for row in listing.json()["items"]] == []
     # Soft delete: the record is kept, it has just left the board.
     assert (await client.get(f"/api/v1/leads/{lead_id}", headers=auth_headers)).status_code == 404
+
+
+async def _lost_lead(client, auth_headers) -> str:
+    create = await client.post(
+        "/api/v1/leads",
+        headers=auth_headers,
+        json={"name": "Ravi Kumar", "phone": "9876543210", "course_interest": "Data Science"},
+    )
+    lead_id = create.json()["id"]
+    lost = await client.put(
+        f"/api/v1/leads/{lead_id}",
+        headers=auth_headers,
+        json={"status": "lost", "lost_reason": "Joined elsewhere"},
+    )
+    assert lost.status_code == 200
+    return lead_id
+
+
+async def test_rejoin_returns_a_lost_lead_on_the_chosen_course(client, auth_headers):
+    lead_id = await _lost_lead(client, auth_headers)
+
+    response = await client.post(
+        f"/api/v1/leads/{lead_id}/rejoin", headers=auth_headers, json={"course_interest": "Recruitment"}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "new_lead"
+    assert body["course_interest"] == "Recruitment"
+    # The loss no longer stands, so nothing is left saying it does.
+    assert body["lost_reason"] is None
+    assert body["lost_at"] is None
+
+    timeline = await client.get(f"/api/v1/leads/{lead_id}/timeline", headers=auth_headers)
+    assert "REJOIN" in {entry["action"] for entry in timeline.json()}
+
+
+async def test_rejoin_keeps_what_the_student_already_paid(client, auth_headers):
+    lead_id = await _lost_lead(client, auth_headers)
+    await client.put(f"/api/v1/leads/{lead_id}", headers=auth_headers, json={"paying_amount": 5000})
+
+    response = await client.post(
+        f"/api/v1/leads/{lead_id}/rejoin", headers=auth_headers, json={"course_interest": "Data Science"}
+    )
+    assert response.json()["paying_amount"] == "5000"
+
+
+async def test_only_a_lost_lead_can_rejoin(client, auth_headers):
+    create = await client.post(
+        "/api/v1/leads",
+        headers=auth_headers,
+        json={"name": "Active Lead", "phone": "9000044444", "course_interest": "Data Science"},
+    )
+
+    response = await client.post(
+        f"/api/v1/leads/{create.json()['id']}/rejoin",
+        headers=auth_headers,
+        json={"course_interest": "Recruitment"},
+    )
+    assert response.status_code == 400

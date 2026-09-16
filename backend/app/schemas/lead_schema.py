@@ -52,6 +52,15 @@ class LeadUpdate(BaseModel):
     lost_reason: str | None = Field(default=None, max_length=500)
 
 
+class LeadRejoin(BaseModel):
+    """A lost student coming back. The course is asked for rather than assumed:
+    somebody who left and returned months later is often returning to a
+    different one, and it is the single thing that has to be right for them to
+    be worked correctly from here."""
+
+    course_interest: str = Field(min_length=1, max_length=150)
+
+
 class LeadRemarkCreate(BaseModel):
     # Optional so the common case - "what happened on the call I just made" -
     # is one field to fill in; the service dates it today when it is left out.

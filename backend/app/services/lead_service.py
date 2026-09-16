@@ -14,6 +14,7 @@ from app.models.enums import (
     LeadStatus,
     NotificationCategory,
     NotificationType,
+    PaymentCallRemark,
     PaymentMethod,
 )
 from app.models.lead import FollowUpEntry, Lead, RemarkEntry
@@ -33,6 +34,7 @@ from app.schemas.lead_schema import (
     LeadAssign,
     LeadCreate,
     LeadPlanAssign,
+    LeadRejoin,
     LeadRemarkCreate,
     LeadRemarkResponse,
     LeadRemarkUpdate,
@@ -1071,6 +1073,48 @@ class LeadService:
             changes={"amount": str(amount) if amount is not None else None, "notified": len(recipients)},
         )
         return len({user.id for user in recipients})
+
+    async def rejoin(
+        self, lead_id: uuid.UUID, data: LeadRejoin, *, actor_id: uuid.UUID | None, scope: str | None = None
+    ) -> Lead:
+        """Brings a lost student back into the pipeline on a chosen course.
+
+        Its own operation rather than a plain stage change back to New Lead,
+        because rejoining is three facts at once - the stage, the course they
+        are returning to, and the fact that the loss no longer stands - and
+        leaving any of them to be remembered separately is how a lead ends up
+        active while still carrying the reason it was written off.
+
+        What it deliberately does not touch is money: installments and amounts
+        already collected stay exactly as they are, so a student who part-paid
+        before leaving comes back with that on record.
+        """
+        lead = await self.get(lead_id, scope=scope)
+        if lead.status != LeadStatus.LOST:
+            raise BadRequestError("Only a lead at the Lost stage can rejoin.")
+        update_data: dict = {
+            "status": LeadStatus.NEW_LEAD,
+            "course_interest": data.course_interest.strip(),
+            # The loss is over, so the reason for it goes with it - it stays
+            # readable in the timeline, which is where a past decision belongs.
+            "lost_reason": None,
+            "lost_at": None,
+            "updated_by": actor_id,
+        }
+        # The call disposition outlives the stage it was set beside, and "Quit"
+        # against an active lead reads as a contradiction on the board.
+        if lead.payment_call_remarks == PaymentCallRemark.QUIT:
+            update_data["payment_call_remarks"] = None
+        previous_reason = lead.lost_reason
+        await self.leads.update(lead, update_data)
+        await self.audit.record(
+            user_id=actor_id,
+            action="REJOIN",
+            entity_type="Lead",
+            entity_id=str(lead.id),
+            changes={"course_interest": lead.course_interest, "was_lost_because": previous_reason},
+        )
+        return lead
 
     async def move_to_follow_up(self, lead_id: uuid.UUID, *, actor_id: uuid.UUID | None) -> Lead:
         """Reached when a section admin opens a payment reminder. PRE_SCREENING
