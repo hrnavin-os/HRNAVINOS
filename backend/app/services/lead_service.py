@@ -45,6 +45,7 @@ from app.schemas.lead_schema import (
     PaymentInstallmentResponse,
 )
 from app.services.audit_service import AuditService
+from app.services.foundation_form_answers import derive_answers
 from app.services.foundation_form_pricing import build_installments, build_payment_expected_summary
 from app.services.induction_entry_service import batch_for
 from app.services.reminder_service import ReminderService
@@ -129,8 +130,44 @@ class LeadService:
     async def create(self, data: LeadCreate, *, actor_id: uuid.UUID | None, scope: str | None = None) -> Lead:
         if data.assigned_to and not await self.users.get_by_id(data.assigned_to):
             raise NotFoundError("Specified assignee does not exist.")
+
+        # The Create Lead form asks the Foundation Form's questions, so a lead
+        # keyed in by hand has to end up carrying what a submitted one does:
+        # the course name behind the chosen program, the installment schedule
+        # its plan generates, and the answer snapshot Form Check reads back.
+        # Derived by the same code the public form uses, not a second copy of
+        # it - see app/services/foundation_form_answers.py.
+        config = await self.foundation_form_config.get_or_create()
+        derived = await derive_answers(
+            config=config,
+            programs=self.programs,
+            name=data.name,
+            mobile_number=data.phone,
+            email=data.email,
+            program_interest=data.program_interest,
+            payment_plan=data.payment_plan,
+            payment_timeline=data.payment_timeline,
+            queries=data.notes,
+            custom_fields=data.custom_fields,
+        )
+        # The snapshot always contains the name and number it was keyed from,
+        # so it is only worth storing once something else was actually asked -
+        # otherwise every minimally-created lead carries a Form Check panel
+        # that says nothing the row doesn't already show.
+        answered_form = any(
+            (data.email, data.program_interest, data.payment_timeline, data.notes, data.custom_fields)
+        )
+
         lead = Lead(
-            **data.model_dump(),
+            **data.model_dump(
+                exclude={"course_interest", "payment_expected", "payment_timeline", "custom_fields"}
+            ),
+            # The program is the authority on the course whenever one was
+            # picked; a bare course_interest is only used when it wasn't.
+            course_interest=derived.course_interest or data.course_interest,
+            payment_expected=derived.payment_expected or data.payment_expected,
+            installments=derived.installments,
+            raw_form_data=derived.raw_form_data if answered_form else None,
             # Set here too, not just on the public form, so a hand-keyed lead
             # still participates in mobile-number matching - otherwise a later
             # Foundation Form submission would create a duplicate beside it.

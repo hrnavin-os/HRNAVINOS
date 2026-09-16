@@ -3,7 +3,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 from app.models.enums import (
     InstallmentPaymentMode,
@@ -13,6 +13,7 @@ from app.models.enums import (
     PaymentMethod,
     PaymentOption,
     PaymentPlanOption,
+    PaymentTimeline,
 )
 
 
@@ -21,13 +22,35 @@ class LeadCreate(BaseModel):
     email: EmailStr | None = None
     phone: str = Field(min_length=6, max_length=20)
     source: LeadSource = LeadSource.OTHER
-    course_interest: str = Field(min_length=1, max_length=150)
+    # Optional because the Create Lead form asks for the *program* instead, and
+    # the service derives the course name from it (LeadService.create) - the
+    # same way a Foundation Form submission does. Still accepted on its own for
+    # a lead keyed against a bare course name with no program behind it.
+    course_interest: str | None = Field(default=None, min_length=1, max_length=150)
     batch_preference: str | None = Field(default=None, max_length=150)
     payment_expected: str | None = Field(default=None, max_length=150)
     notes: str | None = None
     assigned_to: uuid.UUID | None = None
     section: str | None = None
     remarks: str | None = Field(default=None, max_length=2000)
+    # The rest of the Foundation Form's questions, so a lead hand-keyed during
+    # a call carries everything one submitted through the form does. Validated
+    # against the live programs/pricing config in the service.
+    program_interest: str | None = Field(default=None, max_length=50)
+    payment_plan: PaymentPlanOption | None = None
+    payment_timeline: PaymentTimeline | None = None
+    # Answers to questions an admin added to the form beyond the built-in ones;
+    # stored on the lead's raw_form_data, which is what Form Check reads back.
+    custom_fields: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def check_plan_has_program(self) -> "LeadCreate":
+        # A plan's amounts come from the chosen program's pricing category, so
+        # a plan without one has nothing to price it - it would be stored as a
+        # label with no installments behind it.
+        if self.payment_plan is not None and self.program_interest is None:
+            raise ValueError("A payment plan needs a program to price it.")
+        return self
 
 
 class LeadUpdate(BaseModel):

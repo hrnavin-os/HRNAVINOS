@@ -1000,9 +1000,9 @@ function FoundationLeadsBoard() {
       {isCreating && (
         <CreateLeadModal
           sections={sectionOptions}
-          // The Course cell's full catalog, not the filter's list: the point of
-          // creating a lead is often putting them on a course nobody is on yet.
-          courses={courseCatalogQuery.data ?? []}
+          // No course list passed: the modal asks the Foundation Form's
+          // program question instead, and the backend derives the course from
+          // whichever program was picked.
           // Prefilled with whichever section card is selected, so the row lands
           // in the view you were already looking at.
           defaultSection={effectiveSectionFilter}

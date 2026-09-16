@@ -15,14 +15,12 @@ mobile number is what identifies them across the two.
 See app/utils/phone.py for why the number is normalized before any of that.
 """
 import uuid
-from dataclasses import dataclass, field
-from datetime import date, timedelta
 
 from app.database.base import utcnow
 from app.exceptions.base import BadRequestError
-from app.models.enums import LeadSource, PaymentTimeline
+from app.models.enums import LeadSource
 from app.models.induction_entry import InductionEntry
-from app.models.lead import Lead, PaymentInstallment
+from app.models.lead import Lead
 from app.repositories.foundation_form_config_repository import FoundationFormConfigRepository
 from app.repositories.induction_entry_repository import InductionEntryRepository
 from app.repositories.lead_repository import LeadRepository
@@ -35,26 +33,8 @@ from app.schemas.foundation_form_schema import (
     FoundationFormProgramOption,
     FoundationFormSubmit,
 )
-from app.services.foundation_form_pricing import build_installments, build_payment_expected_summary, get_plan_details
+from app.services.foundation_form_answers import DerivedAnswers, derive_answers
 from app.utils.phone import normalize_phone
-
-_TIMELINE_OFFSET_DAYS = {
-    PaymentTimeline.IMMEDIATE: 0,
-    PaymentTimeline.TOMORROW: 1,
-    PaymentTimeline.DAY_AFTER_TOMORROW: 2,
-}
-
-
-@dataclass
-class _Derived:
-    """Everything the submission implies, worked out before we know whether it
-    will become a new lead or update an existing one - the derivation is the
-    same either way, only the write differs."""
-
-    course_interest: str | None = None
-    payment_expected: str | None = None
-    installments: list[PaymentInstallment] = field(default_factory=list)
-    raw_form_data: dict[str, str] = field(default_factory=dict)
 
 
 class FoundationFormService:
@@ -98,9 +78,6 @@ class FoundationFormService:
             offer_info=config.offer_info, fields=fields, programs=programs, categories=categories
         )
 
-    def _resolve_payment_date(self, timeline: PaymentTimeline) -> date:
-        return date.today() + timedelta(days=_TIMELINE_OFFSET_DAYS[timeline])
-
     def _validate(self, data: FoundationFormSubmit, config) -> None:
         field_by_key = {f.key: f for f in config.fields}
 
@@ -120,41 +97,21 @@ class FoundationFormService:
             if not field_cfg.is_system and field_cfg.required and not data.custom_fields.get(key):
                 raise BadRequestError(f"{field_cfg.label} is required.")
 
-    async def _derive(self, data: FoundationFormSubmit, config) -> _Derived:
-        derived = _Derived(raw_form_data={"name": data.name, "mobile_number": data.mobile_number})
-
-        if data.program_interest is not None:
-            program = await self.programs.get_by_value(data.program_interest)
-            if program is None or not program.is_active:
-                raise BadRequestError("Selected program is not valid.")
-            derived.course_interest = program.name
-            derived.raw_form_data["program_interest"] = program.name
-
-            if data.payment_plan is not None:
-                plan = get_plan_details(config, program.category, data.payment_plan)
-                derived.installments = build_installments(config, program.category, data.payment_plan)
-                derived.payment_expected = build_payment_expected_summary(
-                    config, program.category, data.payment_plan
-                )
-                derived.raw_form_data["payment_plan"] = f"{plan.label} - {plan.summary}"
-                derived.raw_form_data["after_placement_fee"] = plan.after_placement
-
-        if data.payment_timeline is not None:
-            payment_date = self._resolve_payment_date(data.payment_timeline)
-            weekday_name = payment_date.strftime("%A")
-            derived.raw_form_data["payment_timeline"] = weekday_name
-            derived.raw_form_data["payment_date"] = payment_date.isoformat()
-            timeline_suffix = f"Pays on: {weekday_name} ({payment_date.isoformat()})"
-            derived.payment_expected = (
-                f"{derived.payment_expected} | {timeline_suffix}" if derived.payment_expected else timeline_suffix
-            )
-
-        if data.email is not None:
-            derived.raw_form_data["email"] = data.email
-        if data.queries is not None:
-            derived.raw_form_data["queries"] = data.queries
-        derived.raw_form_data.update(data.custom_fields)
-        return derived
+    async def _derive(self, data: FoundationFormSubmit, config) -> DerivedAnswers:
+        # Shared with the staff Create Lead modal, which asks the same
+        # questions - see app/services/foundation_form_answers.py.
+        return await derive_answers(
+            config=config,
+            programs=self.programs,
+            name=data.name,
+            mobile_number=data.mobile_number,
+            email=data.email,
+            program_interest=data.program_interest,
+            payment_plan=data.payment_plan,
+            payment_timeline=data.payment_timeline,
+            queries=data.queries,
+            custom_fields=data.custom_fields,
+        )
 
     @staticmethod
     def _ownership(entry: InductionEntry, form_section: str | None) -> tuple[str | None, uuid.UUID | None]:
@@ -215,7 +172,7 @@ class FoundationFormService:
         )
 
     async def _merge_resubmission(
-        self, lead: Lead, data: FoundationFormSubmit, derived: _Derived, phone_normalized: str | None
+        self, lead: Lead, data: FoundationFormSubmit, derived: DerivedAnswers, phone_normalized: str | None
     ) -> Lead:
         """Folds a repeat submission into the lead that already exists for this
         number, instead of creating a second one.
