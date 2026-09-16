@@ -495,3 +495,20 @@ async def test_foundation_analytics_refuses_an_unknown_dimension(client, auth_he
     collection by an arbitrary field."""
     response = await client.get(ANALYTICS_URL, headers=auth_headers, params={"dimension": "phone"})
     assert response.status_code == 422
+
+
+async def test_delete_lead_takes_it_off_the_board(client, auth_headers):
+    create = await client.post(
+        "/api/v1/leads",
+        headers=auth_headers,
+        json={"name": "Ravi Kumar", "phone": "9876543210", "course_interest": "Data Science"},
+    )
+    lead_id = create.json()["id"]
+
+    deleted = await client.delete(f"/api/v1/leads/{lead_id}", headers=auth_headers)
+    assert deleted.status_code == 200
+
+    listing = await client.get("/api/v1/leads", headers=auth_headers)
+    assert [row["id"] for row in listing.json()["items"]] == []
+    # Soft delete: the record is kept, it has just left the board.
+    assert (await client.get(f"/api/v1/leads/{lead_id}", headers=auth_headers)).status_code == 404

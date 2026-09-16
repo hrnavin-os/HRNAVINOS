@@ -30,6 +30,8 @@ import { CreateLeadModal } from '@/components/leads/CreateLeadModal'
 import { LeadRemarksCell } from '@/components/leads/LeadRemarksCell'
 import { FoundationGroupBadge } from '@/components/leads/FoundationGroupBadge'
 import { InductionLeadsBoard } from '@/components/leads/InductionLeadsBoard'
+import { RowActions } from '@/components/resource/RowActions'
+import { ConfirmDeleteModal } from '@/components/resource/ConfirmDeleteModal'
 import { useLeadBoard } from '@/hooks/useLeadBoard'
 import {
   PAYMENT_PLAN_TONES,
@@ -530,6 +532,23 @@ export function LeadsPage() {
 function FoundationLeadsBoard() {
   const { user, hasPermission } = useAuth()
   const canCreateLead = hasPermission(PERMISSIONS.LEADS_CREATE)
+  const canDeleteLead = hasPermission(PERMISSIONS.LEADS_DELETE)
+  const queryClient = useQueryClient()
+
+  // Which lead the confirmation step is open for. Deleting is behind it for
+  // the same reason it is everywhere else in the ERP: the trash icon sits in a
+  // row you can also click to open, and one stray click must not remove
+  // somebody's record.
+  const [deletingLead, setDeletingLead] = useState(null)
+  const deleteMutation = useMutation({
+    mutationFn: (id) => leadService.remove(id),
+    onSuccess: () => {
+      // The stat cards count the same leads, so they go stale with the table.
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
+      setDeletingLead(null)
+    },
+  })
 
   // Section Admins are permanently locked to their own section - the role
   // itself carries this, not a UI selection, so it can never be navigated
@@ -786,6 +805,26 @@ function FoundationLeadsBoard() {
       align: 'center',
       render: (row) => <LeadRemarksCell key={row.id} lead={row} onError={setEditError} />,
     },
+    // Delete only: viewing is the row click, and every other field on a lead
+    // is edited in its own cell rather than through an edit form.
+    ...(canDeleteLead
+      ? [
+          {
+            key: 'actions',
+            header: 'Actions',
+            align: 'center',
+            render: (row) => (
+              <RowActions
+                onDelete={() => {
+                  // Clear a previous row's failure so it doesn't greet you here.
+                  deleteMutation.reset()
+                  setDeletingLead(row)
+                }}
+              />
+            ),
+          },
+        ]
+      : []),
   ]
 
   return (
@@ -946,6 +985,17 @@ function FoundationLeadsBoard() {
       </TableCard>
 
       {openLead && <LeadDetailModal lead={openLead} onClose={closeLead} />}
+
+      {deletingLead && (
+        <ConfirmDeleteModal
+          describe={`${deletingLead.name} (${deletingLead.phone})`}
+          consequence="The lead is removed from the board, along with its remarks and payment history."
+          error={deleteMutation.error ? getApiErrorMessage(deleteMutation.error) : null}
+          isPending={deleteMutation.isPending}
+          onConfirm={() => deleteMutation.mutate(deletingLead.id)}
+          onClose={() => setDeletingLead(null)}
+        />
+      )}
 
       {isCreating && (
         <CreateLeadModal

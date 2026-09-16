@@ -35,6 +35,7 @@ export const PERMISSIONS = {
   LEADS_VIEW: 'leads.view',
   LEADS_CREATE: 'leads.create',
   LEADS_UPDATE: 'leads.update',
+  LEADS_DELETE: 'leads.delete',
   LEADS_ASSIGN: 'leads.assign',
 
   // The Statistics board. Its own code rather than LEADS_VIEW, so the summary
