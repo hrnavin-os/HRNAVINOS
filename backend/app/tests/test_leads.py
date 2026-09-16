@@ -571,3 +571,46 @@ async def test_only_a_lost_lead_can_rejoin(client, auth_headers):
         json={"course_interest": "Recruitment"},
     )
     assert response.status_code == 400
+
+
+async def test_a_section_admin_can_create_a_lead_onto_their_own_section(client, auth_headers):
+    """The walk-in and the phone enquiry are a Section Admin's case more than
+    anybody's - they are the one on the call - so the role is granted
+    leads.create. It doesn't widen their reach: whatever section the client
+    sends, the lead lands on the board they are already scoped to."""
+    from app.core.security import hash_password
+    from app.models.permission import Permission
+    from app.models.role import Role
+    from app.models.user import User
+
+    role = await Role.find_one({"name": "A-Section Admin", "is_deleted": False})
+    leads_create = await Permission.find_one({"code": "leads.create"})
+    assert leads_create.id in role.permission_ids, "a Section Admin can no longer create a lead"
+
+    await User(
+        email="a.section@example.com",
+        first_name="Rubika",
+        last_name="A",
+        password_hash=hash_password("Sect!on123"),
+        role_id=role.id,
+        is_active=True,
+    ).insert()
+    login = await client.post(
+        "/api/v1/auth/login", json={"email": "a.section@example.com", "password": "Sect!on123"}
+    )
+    assert login.status_code == 200, login.text
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    created = await client.post(
+        "/api/v1/leads",
+        headers=headers,
+        json={
+            "name": "Walk In",
+            "phone": "9000000001",
+            "course_interest": "Recruitment + Internship",
+            # A section they are not scoped to, to prove it is ignored.
+            "section": "c",
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["section"] == "a"

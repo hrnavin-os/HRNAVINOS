@@ -37,9 +37,14 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     # Finance's payment reminders are addressed to a lead's own section admins.
     # It was previously shown to any scoped user with no permission behind it;
     # now it is a grant like every other menu.
-    "A-Section Admin": [P.LEADS_VIEW, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW],
-    "B-Section Admin": [P.LEADS_VIEW, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW],
-    "C-Section Admin": [P.LEADS_VIEW, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW],
+    # LEADS_CREATE is the walk-in and phone-enquiry case, which is theirs more
+    # than anybody's: they are the ones on the call. It doesn't widen their
+    # reach - LeadService.create forces the new lead into their own section
+    # from Role.scoped_section, whatever the client sends, so a Section Admin
+    # can only ever create onto the board they can already see.
+    "A-Section Admin": [P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW],
+    "B-Section Admin": [P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW],
+    "C-Section Admin": [P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW],
     # Owns the hand-off from CRM to classroom: allocates leads that reached the
     # Batch Confirmation stage into batches, then confirms the roster (which
     # creates the Student and Admission records) once the batch is ready.
