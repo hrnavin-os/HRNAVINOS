@@ -42,10 +42,28 @@ def _quote_tab(tab: str) -> str:
 def _service_account_info() -> dict | None:
     raw = settings.GOOGLE_SERVICE_ACCOUNT_JSON
     if not raw and settings.GOOGLE_SERVICE_ACCOUNT_FILE:
-        raw = Path(settings.GOOGLE_SERVICE_ACCOUNT_FILE).read_text(encoding="utf-8")
+        # Named but not there is the likely case while somebody is setting this
+        # up: the env var goes in first and the key file is copied to the
+        # server afterwards. Worth its own sentence - the bare OSError reaches
+        # the status panel as "Unexpected error: [Errno 2]", which tells an
+        # admin nothing about which path was wrong.
+        path = Path(settings.GOOGLE_SERVICE_ACCOUNT_FILE)
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise SheetsError(
+                f"GOOGLE_SERVICE_ACCOUNT_FILE points at {path}, which can't be read ({exc.strerror}). "
+                "Copy the service-account JSON key there, or correct the path."
+            ) from exc
     if not raw:
         return None
-    info = json.loads(raw)
+    try:
+        info = json.loads(raw)
+    except ValueError as exc:
+        raise SheetsError(
+            "The Google service account credential isn't valid JSON. Use the key file exactly as Google "
+            "downloaded it, without reformatting it."
+        ) from exc
     if not info.get("client_email") or not info.get("private_key"):
         raise SheetsError("The Google service account JSON has no client_email/private_key.")
     return info

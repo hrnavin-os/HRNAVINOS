@@ -347,3 +347,53 @@ async def test_the_page_is_closed_to_a_role_without_the_permission(client, auth_
     response = await client.get("/api/v1/integrations/sheet-export", headers=tutor_headers)
 
     assert response.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# The credential
+# ---------------------------------------------------------------------------
+
+
+def test_a_named_but_missing_key_file_says_which_path_was_wrong(monkeypatch, tmp_path):
+    """The env var is set before the key is copied across, so this is the state
+    a half-finished setup sits in - and "[Errno 2]" names no path."""
+    from app.config.settings import settings as env
+    from app.services import google_sheets_client as client
+
+    monkeypatch.setattr(env, "GOOGLE_SERVICE_ACCOUNT_JSON", None)
+    monkeypatch.setattr(env, "GOOGLE_SERVICE_ACCOUNT_FILE", str(tmp_path / "absent.json"))
+
+    with pytest.raises(client.SheetsError, match="absent.json"):
+        client._service_account_info()
+    # The status panel asks for the address separately and must not blow up.
+    assert client.service_account_email() is None
+
+
+def test_a_mangled_key_file_is_named_as_such(monkeypatch, tmp_path):
+    from app.config.settings import settings as env
+    from app.services import google_sheets_client as client
+
+    key = tmp_path / "key.json"
+    key.write_text("not json at all", encoding="utf-8")
+    monkeypatch.setattr(env, "GOOGLE_SERVICE_ACCOUNT_JSON", None)
+    monkeypatch.setattr(env, "GOOGLE_SERVICE_ACCOUNT_FILE", str(key))
+
+    with pytest.raises(client.SheetsError, match="valid JSON"):
+        client._service_account_info()
+
+
+def test_a_good_key_file_is_read(monkeypatch, tmp_path):
+    import json as jsonlib
+
+    from app.config.settings import settings as env
+    from app.services import google_sheets_client as client
+
+    key = tmp_path / "key.json"
+    key.write_text(
+        jsonlib.dumps({"client_email": "export@proj.iam.gserviceaccount.com", "private_key": "x"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(env, "GOOGLE_SERVICE_ACCOUNT_JSON", None)
+    monkeypatch.setattr(env, "GOOGLE_SERVICE_ACCOUNT_FILE", str(key))
+
+    assert client.service_account_email() == "export@proj.iam.gserviceaccount.com"
