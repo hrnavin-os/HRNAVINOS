@@ -40,13 +40,15 @@ async def reset_leads(
     # anyway, so a code would not have restricted it any further.
     actor: User = Depends(RequireRoles("Super Admin")),
 ) -> ResetLeadsResponse:
-    """Clears every Foundation lead, its batch allocations, and the induction
-    links that pointed at them.
+    """Clears the Induction board, the Foundation board, or both.
 
     Soft delete: recoverable in the database, and gone everywhere in the app.
-    Requires an exact confirmation phrase in the body, so this cannot fire from
-    a stray or replayed POST with nothing in it.
+    Requires the confirmation phrase for the chosen scope in the body, so this
+    cannot fire from a stray or replayed POST with nothing in it - nor from a
+    request that names one board while carrying the phrase for another.
     """
     return ResetLeadsResponse(
-        **await SettingsService().reset_leads(payload.confirm, actor_id=actor.id)
+        **await SettingsService().reset_leads(
+            payload.confirm, scope=payload.scope, actor_id=actor.id
+        )
     )

@@ -1,6 +1,7 @@
 """Request/response DTOs for the app Settings module."""
 import uuid
 from datetime import datetime
+from enum import StrEnum
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -31,24 +32,63 @@ class SettingsResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# The exact phrase the caller must send to reset leads. A confirmation the
+class ResetScope(StrEnum):
+    """Which board a reset clears.
+
+    The two boards are separate populations with separate lives - a bad import
+    into Induction is not a reason to wipe the Foundation pipeline, and vice
+    versa - so each can be cleared on its own. ALL is both, which is what this
+    endpoint did when it was the only option.
+    """
+
+    INDUCTION = "induction"
+    FOUNDATION = "foundation"
+    ALL = "all"
+
+
+# The exact phrase the caller must send, one per scope. A confirmation the
 # client types is the only guard an API can offer against a request that was
 # never meant to be sent - the destructive part of this endpoint is not
 # reachable by a stray POST with an empty body.
-RESET_LEADS_CONFIRMATION = "DELETE ALL LEADS"
+#
+# A phrase of its own per scope, rather than one phrase for all three. These
+# are three buttons a few pixels apart that destroy three different things, and
+# a shared phrase would make "I clicked the wrong one and typed the words I was
+# told to type" a mistake the server happily carries out. Naming the board in
+# the phrase means the wrong button cannot be confirmed.
+RESET_LEADS_CONFIRMATIONS = {
+    ResetScope.INDUCTION: "DELETE INDUCTION LEADS",
+    ResetScope.FOUNDATION: "DELETE FOUNDATION LEADS",
+    ResetScope.ALL: "DELETE ALL LEADS",
+}
+
+# The phrase for the everything-scope, named on its own because it is the
+# default and older clients send it with no scope at all.
+RESET_LEADS_CONFIRMATION = RESET_LEADS_CONFIRMATIONS[ResetScope.ALL]
 
 
 class ResetLeadsRequest(BaseModel):
-    confirm: str = Field(description=f'Must be exactly "{RESET_LEADS_CONFIRMATION}".')
+    confirm: str = Field(description="Must match the phrase for the chosen scope exactly.")
+    # Defaulted, so a client that predates the split still means what it used
+    # to mean and still has to type the phrase it always typed.
+    scope: ResetScope = Field(
+        default=ResetScope.ALL,
+        description="Which board to clear: induction, foundation, or all.",
+    )
 
 
 class ResetLeadsResponse(BaseModel):
     """What the reset actually touched, counted rather than assumed.
 
-    Reported per collection so the Super Admin can see both boards were cleared:
-    Foundation leads, their batch allocations, and Induction entries.
+    Reported per collection rather than as one total: on a scoped reset the
+    counts are how the caller sees which board was cleared and that the other
+    one was left alone.
     """
 
     leads_deleted: int
     allocations_deleted: int
     induction_entries_deleted: int
+    # Induction entries handed back to the Induction board because the
+    # Foundation lead they had moved to no longer exists. Only ever non-zero on
+    # a foundation-scoped reset - see SettingsService.reset_leads.
+    induction_links_cleared: int = 0

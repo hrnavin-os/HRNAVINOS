@@ -5,5 +5,9 @@ export const settingsService = {
   update: async (payload) => (await apiClient.put('/settings', payload)).data,
   // Super Admin only, and the server checks the phrase again - this is a
   // convenience for the UI, not the guard.
-  resetLeads: async (confirm) => (await apiClient.post('/settings/reset-leads', { confirm })).data,
+  // scope is 'induction', 'foundation' or 'all', and the phrase the server
+  // expects differs per scope - sending one board's phrase with another's
+  // scope is refused.
+  resetLeads: async (confirm, scope = 'all') =>
+    (await apiClient.post('/settings/reset-leads', { confirm, scope })).data,
 }

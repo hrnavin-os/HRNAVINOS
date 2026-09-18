@@ -124,3 +124,94 @@ async def test_reset_requires_super_admin(client, seeded, auth_headers):
     other = {"Authorization": f"Bearer {login.json()['access_token']}"}
 
     assert (await client.post(RESET_URL, json=CONFIRM, headers=other)).status_code == 403
+
+
+# --------------------------------------------------------------------------
+# Scoped resets: one board at a time.
+#
+# The whole point of the scopes is what they leave alone, so every test here
+# asserts the other board is still standing.
+# --------------------------------------------------------------------------
+INDUCTION_ONLY = {"confirm": "DELETE INDUCTION LEADS", "scope": "induction"}
+FOUNDATION_ONLY = {"confirm": "DELETE FOUNDATION LEADS", "scope": "foundation"}
+
+
+async def test_induction_scope_leaves_the_foundation_board_alone(client, auth_headers):
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload(name="Pending", phone="9123456789"))
+    await client.post(FOUNDATION_URL, json=foundation_payload())
+
+    body = (await client.post(RESET_URL, json=INDUCTION_ONLY, headers=auth_headers)).json()
+    assert body["leads_deleted"] == 0
+    assert body["induction_entries_deleted"] == 1
+
+    assert (await client.get("/api/v1/leads", headers=auth_headers)).json()["total"] == 1
+    pending = await client.get("/api/v1/induction-entries?status=pending_induction", headers=auth_headers)
+    assert pending.json()["total"] == 0
+
+
+async def test_foundation_scope_leaves_the_induction_board_alone(client, auth_headers):
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload(name="Pending", phone="9123456789"))
+    await client.post(FOUNDATION_URL, json=foundation_payload())
+
+    body = (await client.post(RESET_URL, json=FOUNDATION_ONLY, headers=auth_headers)).json()
+    assert body["leads_deleted"] == 1
+    assert body["induction_entries_deleted"] == 0
+
+    assert (await client.get("/api/v1/leads", headers=auth_headers)).json()["total"] == 0
+    pending = await client.get("/api/v1/induction-entries?status=pending_induction", headers=auth_headers)
+    assert pending.json()["total"] == 1
+
+
+async def test_foundation_scope_hands_converted_entries_back_to_induction(client, auth_headers):
+    """The entry's status is derived from foundation_lead_id, so an entry whose
+    lead was just deleted would otherwise read as "moved to Foundation" while
+    the lead it moved to is gone - and sit on neither board."""
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())
+    await client.post(FOUNDATION_URL, json=foundation_payload())
+
+    moved = await client.get("/api/v1/induction-entries?status=moved_to_foundation", headers=auth_headers)
+    assert moved.json()["total"] == 1
+
+    body = (await client.post(RESET_URL, json=FOUNDATION_ONLY, headers=auth_headers)).json()
+    assert body["induction_links_cleared"] == 1
+
+    moved = await client.get("/api/v1/induction-entries?status=moved_to_foundation", headers=auth_headers)
+    assert moved.json()["total"] == 0
+    pending = await client.get("/api/v1/induction-entries?status=pending_induction", headers=auth_headers)
+    assert pending.json()["total"] == 1
+
+
+async def test_a_scope_refuses_another_scopes_phrase(client, auth_headers):
+    """The guard against clicking the wrong one of three buttons and then
+    typing the words the dialog asked for."""
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())
+    await client.post(FOUNDATION_URL, json=foundation_payload())
+
+    crossed = (
+        {"confirm": "DELETE ALL LEADS", "scope": "induction"},
+        {"confirm": "DELETE ALL LEADS", "scope": "foundation"},
+        {"confirm": "DELETE INDUCTION LEADS", "scope": "foundation"},
+        {"confirm": "DELETE FOUNDATION LEADS", "scope": "all"},
+    )
+    for bad in crossed:
+        assert (await client.post(RESET_URL, json=bad, headers=auth_headers)).status_code == 400, bad
+
+    assert (await client.get("/api/v1/leads", headers=auth_headers)).json()["total"] == 1
+    moved = await client.get("/api/v1/induction-entries?status=moved_to_foundation", headers=auth_headers)
+    assert moved.json()["total"] == 1
+
+
+async def test_a_reset_with_no_scope_still_clears_both(client, auth_headers):
+    """The scope is defaulted, so a client that predates the split means what
+    it always meant."""
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())
+    await client.post(FOUNDATION_URL, json=foundation_payload())
+
+    body = (await client.post(RESET_URL, json=CONFIRM, headers=auth_headers)).json()
+    assert body["leads_deleted"] == 1
+    assert body["induction_entries_deleted"] == 1
