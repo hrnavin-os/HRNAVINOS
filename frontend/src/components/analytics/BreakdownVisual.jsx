@@ -59,6 +59,22 @@ export const VISUALS = [
   },
 ]
 
+// The visuals are drawn at four fifths of their natural size - the charts
+// only, never the cell's own header or the note underneath.
+//
+// Four charts on one canvas is a lot of board to cover, and each of them was
+// sized for a panel that ran the full width of the page. At 1300px or so the
+// ring plus its legend table came out wider than half of that and the legend's
+// last column was clipped off the edge of the card. Zoom rather than a
+// transform, because zoom is laid out rather than painted: the chart is given
+// the 25% of extra width it wants, drawn at 80%, and the cell around it is the
+// height of what was actually drawn - no scrollbars, no gap underneath, and
+// the hit areas land where the marks appear.
+//
+// Firefox before 126 doesn't implement it and simply draws at full size, which
+// is where this started: a busier canvas, not a broken one.
+const CHART_ZOOM = 0.8
+
 export function visualsFor(dimension) {
   return VISUALS.filter((visual) => !visual.orderedOnly || dimension.ordered)
 }
@@ -123,7 +139,12 @@ export function BreakdownGrid({ visuals, items, unit, ordered, ...shared }) {
                 and each chart sits in the middle of its own card instead of
                 hanging from the top of it. */}
             <div className="flex min-w-0 flex-1 items-center justify-center px-3 py-4">
-              <BreakdownVisual view={visual.value} items={drawn} unit={unit} ordered={ordered} {...shared} />
+              {/* The zoom rides on a wrapper of its own rather than on the
+                  padded flex cell above, so the card's own padding stays the
+                  same as every other card's on the page. */}
+              <div className="w-full min-w-0" style={{ zoom: CHART_ZOOM }}>
+                <BreakdownVisual view={visual.value} items={drawn} unit={unit} ordered={ordered} {...shared} />
+              </div>
             </div>
           </figure>
         ))}
