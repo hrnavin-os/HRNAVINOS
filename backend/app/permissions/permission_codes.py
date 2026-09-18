@@ -137,6 +137,15 @@ class Permissions(StrEnum):
     SETTINGS_VIEW = "settings.view"
     SETTINGS_UPDATE = "settings.update"
 
+    # ---------- Google Sheets export (Settings menu) ----------
+    # Its own module rather than a settings.* code: the institute details under
+    # Administration > Settings and the spreadsheet the boards are mirrored
+    # into are two different jobs for two different people, and a role that
+    # should manage the export is not automatically one that should be able to
+    # rename the institute.
+    SHEET_EXPORT_VIEW = "sheet_export.view"
+    SHEET_EXPORT_UPDATE = "sheet_export.update"
+
     # ---------- Form Collection ----------
     # Two jobs, so two codes: reading the section cards with their public links
     # and submission counts, and rewriting the form those submissions come in
@@ -199,6 +208,7 @@ OFFERED_MODULES: set[str] = {
     # gets an empty picker.
     "permissions",
     "settings",
+    "sheet_export",
 }
 
 # Codes inside an offered module that nothing enforces. Granting one changes

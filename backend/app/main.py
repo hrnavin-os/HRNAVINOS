@@ -19,6 +19,7 @@ from app.middleware.rate_limiter import limiter
 from app.middleware.request_context import RequestContextMiddleware
 from app.routes.api_router import api_router
 from app.services.lead_sheet_sync_service import run_forever as run_lead_sheet_sync
+from app.services.sheet_export_service import run_forever as run_sheet_export
 
 
 @asynccontextmanager
@@ -27,12 +28,20 @@ async def lifespan(app: FastAPI):
     await connect_to_mongo()
     await run_startup_backfills()
     # Every worker starts one; a lease lets only one of them sync at a time.
-    sheet_sync = asyncio.create_task(run_lead_sheet_sync()) if settings.lead_sheet_sync_enabled else None
+    background = [
+        asyncio.create_task(run_lead_sheet_sync()) if settings.lead_sheet_sync_enabled else None,
+        # No env gate: the Settings page's export is off until an admin links a
+        # spreadsheet, and that link lives in this database - so the loop can
+        # start anywhere and simply find nothing to do.
+        asyncio.create_task(run_sheet_export()),
+    ]
     yield
-    if sheet_sync is not None:
-        sheet_sync.cancel()
+    for task in background:
+        if task is None:
+            continue
+        task.cancel()
         with suppress(asyncio.CancelledError):
-            await sheet_sync
+            await task
     await close_mongo_connection()
 
 

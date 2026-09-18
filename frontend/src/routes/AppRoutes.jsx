@@ -29,6 +29,7 @@ import { ReportsPage } from '@/pages/reports/ReportsPage'
 import { UsersPage } from '@/pages/users/UsersPage'
 import { RolesPage } from '@/pages/roles/RolesPage'
 import { SettingsPage } from '@/pages/settings/SettingsPage'
+import { SheetExportPage } from '@/pages/settings/SheetExportPage'
 import { NotFoundPage } from '@/pages/errors/NotFoundPage'
 import { UnauthorizedPage } from '@/pages/errors/UnauthorizedPage'
 import { PERMISSIONS } from '@/constants/permissions'
@@ -135,6 +136,12 @@ export function AppRoutes() {
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.SETTINGS_VIEW} />}>
             <Route path="/settings" element={<SettingsPage />} />
+          </Route>
+          {/* Its own gate, not SETTINGS_VIEW: the Google Sheets export is the
+              Admin group's menu under Programs, and the roles that manage it
+              are not the ones that edit the institute's own details. */}
+          <Route element={<ProtectedRoute permission={PERMISSIONS.SHEET_EXPORT_VIEW} />}>
+            <Route path="/settings/google-sheets" element={<SheetExportPage />} />
           </Route>
         </Route>
       </Route>

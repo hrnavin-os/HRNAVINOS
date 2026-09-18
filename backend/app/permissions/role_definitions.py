@@ -29,6 +29,10 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         # Programs drive the public form's program dropdown, which is the same
         # surface FORM_COLLECTION_CONFIGURE already lets this role shape.
         P.PROGRAMS_VIEW, P.PROGRAMS_CREATE, P.PROGRAMS_UPDATE, P.PROGRAMS_DELETE,
+        # The Settings menu under Programs: the spreadsheet the Induction and
+        # Foundation boards are mirrored into. This role owns both boards, so
+        # it owns the copy of them that leaves the app.
+        P.SHEET_EXPORT_VIEW, P.SHEET_EXPORT_UPDATE,
     ],
     # Form Collection Section Admins: manage leads within their own section
     # only (enforced via Role.scoped_section below), no rights to edit the

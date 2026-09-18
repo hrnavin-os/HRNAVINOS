@@ -29,6 +29,7 @@ from app.routes import (
     report_routes,
     role_routes,
     settings_routes,
+    sheet_export_routes,
     student_routes,
     ticket_routes,
     tutor_routes,
@@ -68,3 +69,4 @@ api_router.include_router(notification_routes.router)
 api_router.include_router(ticket_routes.router)
 api_router.include_router(report_routes.router)
 api_router.include_router(settings_routes.router)
+api_router.include_router(sheet_export_routes.router)

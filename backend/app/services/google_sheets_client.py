@@ -123,13 +123,47 @@ class SheetsClient:
                 f"edit access. ({detail})"
             )
         if response.status_code == 404:
-            raise SheetsError("The spreadsheet was not found. Check LEAD_SHEET_SPREADSHEET_ID.")
+            raise SheetsError(
+                "The spreadsheet was not found. Check the spreadsheet link (and that the syncing account "
+                "can open it)."
+            )
         if response.status_code == 400 and "Unable to parse range" in detail:
             raise SheetsError(
                 f"A tab is missing. The spreadsheet needs tabs named '{settings.LEAD_SHEET_INDUCTION_TAB}' "
                 f"and '{settings.LEAD_SHEET_FOUNDATION_TAB}'."
             )
         raise SheetsError(f"Google Sheets failed to {action} (HTTP {response.status_code}): {detail}")
+
+    async def _sheet_properties(self) -> list[dict]:
+        meta = self._check(
+            await self.http.get(
+                self.url, params={"fields": "sheets.properties(sheetId,title,gridProperties)"}, headers=self.headers
+            ),
+            "read the sheet layout",
+        )
+        return [sheet["properties"] for sheet in meta.get("sheets", [])]
+
+    async def ensure_tabs(self, tabs: list[str]) -> list[str]:
+        """Creates any of `tabs` the spreadsheet does not have yet.
+
+        A brand-new spreadsheet has one tab called "Sheet1", so without this
+        the first export against a freshly pasted link would fail on a missing
+        tab and leave the admin to create them by hand - having already told
+        the app which names it wanted. Returns the ones it created.
+        """
+        existing = {properties["title"] for properties in await self._sheet_properties()}
+        missing = [tab for tab in tabs if tab not in existing]
+        if not missing:
+            return []
+        self._check(
+            await self.http.post(
+                f"{self.url}:batchUpdate",
+                json={"requests": [{"addSheet": {"properties": {"title": tab}}} for tab in missing]},
+                headers=self.headers,
+            ),
+            "add the missing tabs",
+        )
+        return missing
 
     async def read_tabs(self, tabs: list[str]) -> dict[str, list[list[str]]]:
         # FORMATTED_VALUE: what the cell shows. The sync writes plain text, so
@@ -146,13 +180,7 @@ class SheetsClient:
 
     async def write_tab(self, tab: str, grid: list[list[str]], previous_rows: int) -> None:
         width = max((len(row) for row in grid), default=1)
-        meta = self._check(
-            await self.http.get(
-                self.url, params={"fields": "sheets.properties(sheetId,title,gridProperties)"}, headers=self.headers
-            ),
-            "read the sheet layout",
-        )
-        sheet = next((s["properties"] for s in meta.get("sheets", []) if s["properties"]["title"] == tab), None)
+        sheet = next((props for props in await self._sheet_properties() if props["title"] == tab), None)
         if sheet is None:
             raise SheetsError(f"The spreadsheet has no tab named '{tab}'.")
         grid_props = sheet.get("gridProperties", {})

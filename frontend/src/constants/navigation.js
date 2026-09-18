@@ -117,6 +117,19 @@ export const NAV_ITEMS = [
     hiddenForScopedUsers: true,
   },
   {
+    // Sits directly under Programs, at the foot of the Admin group, because
+    // what it configures is those boards leaving the app: the spreadsheet the
+    // Induction and Foundation rows are mirrored into. Named Settings and
+    // kept apart from Administration > Settings, which is the institute's own
+    // details and a different job for a different person.
+    label: 'Settings',
+    to: '/settings/google-sheets',
+    permission: PERMISSIONS.SHEET_EXPORT_VIEW,
+    icon: Settings,
+    hiddenForRoles: ['Finance'],
+    hiddenForScopedUsers: true,
+  },
+  {
     label: 'Batch Confirmation',
     shortLabel: 'Batches',
     to: '/batch-confirmation',

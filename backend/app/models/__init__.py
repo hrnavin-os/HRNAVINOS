@@ -25,6 +25,7 @@ from app.models.refresh_token import RefreshToken
 from app.models.report import Report
 from app.models.role import Role
 from app.models.settings import AppSettings
+from app.models.sheet_export import SheetExport
 from app.models.student import Student
 from app.models.terms_document import TermsDocument
 from app.models.ticket import Ticket
@@ -58,6 +59,7 @@ ALL_DOCUMENTS = [
     Report,
     Role,
     AppSettings,
+    SheetExport,
     Student,
     TermsDocument,
     Ticket,
@@ -92,6 +94,7 @@ __all__ = [
     "RefreshToken",
     "Report",
     "Role",
+    "SheetExport",
     "AppSettings",
     "Student",
     "TermsDocument",

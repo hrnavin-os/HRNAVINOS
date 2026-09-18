@@ -87,6 +87,12 @@ export const PERMISSIONS = {
   SETTINGS_VIEW: 'settings.view',
   SETTINGS_UPDATE: 'settings.update',
 
+  // The Settings menu under Programs: the Google spreadsheet the Induction and
+  // Foundation boards are mirrored into. Its own module rather than a
+  // settings.* code - see permission_codes.py for why.
+  SHEET_EXPORT_VIEW: 'sheet_export.view',
+  SHEET_EXPORT_UPDATE: 'sheet_export.update',
+
   // Reading the Form Collection board, and rewriting the form behind it.
   FORM_COLLECTION_VIEW: 'form_collection.view',
   FORM_COLLECTION_CONFIGURE: 'form_collection.configure',
