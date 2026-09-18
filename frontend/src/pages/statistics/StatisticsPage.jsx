@@ -14,7 +14,7 @@ import { TabStrip } from '@/components/ui/TabStrip'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { foldToSlices } from '@/components/analytics/DonutChart'
-import { BreakdownVisual, VisualPicker, visualsFor } from '@/components/analytics/BreakdownVisual'
+import { BreakdownGrid, visualsFor } from '@/components/analytics/BreakdownVisual'
 import { Panel, SegmentedToggle } from '@/components/analytics/Panel'
 import { MiniStatStrip, StatTile } from '@/components/analytics/StatTile'
 import { percent } from '@/constants/analyticsPalette'
@@ -111,7 +111,6 @@ export function StatisticsPage() {
   const [dateRange, setDateRange] = useState(null)
   const [section, setSection] = useState('')
   const [measure, setMeasure] = useState('count')
-  const [view, setView] = useState('donut')
   // The highlighted value, shared by every view on the canvas. One string
   // rather than a per-panel selection: the whole point of a dashboard is that
   // the panels are looking at the same thing.
@@ -227,11 +226,11 @@ export function StatisticsPage() {
   const focus = selected ? rows.filter((row) => isRowSelected(row)) : rows
   const focusCount = sum(focus, 'count')
 
-  // Which chart types this dimension can honestly be drawn as, and the one
-  // showing. Falls back rather than resetting state: leaving the trend on the
-  // batch tab and switching to courses must not draw a line across categories.
+  // Which chart types this dimension can honestly be drawn as. Every one of
+  // them is drawn, so this is a filter rather than a picker: a trend belongs on
+  // the batch tab and nowhere else, so on the other dimensions it isn't here at
+  // all rather than being drawn across categories.
   const visuals = visualsFor(dimension)
-  const activeView = visuals.some((visual) => visual.value === view) ? view : 'donut'
 
   const columns = [
     {
@@ -425,22 +424,19 @@ export function StatisticsPage() {
               subtitle={dimension.subtitle}
               hint={dimension.hint}
               action={
-                // Two switches, not one control with seven states: what is
-                // being drawn and which figure leads are independent choices,
-                // and every combination is a reading somebody wants.
-                <div className="flex flex-wrap items-center gap-2">
-                  <VisualPicker visuals={visuals} value={activeView} onChange={setView} />
-                  <SegmentedToggle
-                    label="Show counts or percentages"
-                    options={MEASURES}
-                    value={measure}
-                    onChange={setMeasure}
-                  />
-                </div>
+                // One switch now, and it sets every chart on the canvas at
+                // once: which figure leads is a reading of the board, not a
+                // property of one of the four cells below.
+                <SegmentedToggle
+                  label="Show counts or percentages"
+                  options={MEASURES}
+                  value={measure}
+                  onChange={setMeasure}
+                />
               }
             >
-              <BreakdownVisual
-                view={activeView}
+              <BreakdownGrid
+                visuals={visuals}
                 items={chartRows}
                 unit={board.unit}
                 empty={dimension.empty}
@@ -452,8 +448,9 @@ export function StatisticsPage() {
               <div className="mt-5">
                 {/* The states every row is in, along the foot of the panel
                     whose total they divide. They are shares of the same
-                    population the chart above is about, so they belong to it
-                    rather than to a row of tiles of their own. */}
+                    population all four charts above are drawn from, so they
+                    belong to the canvas rather than to a row of tiles of their
+                    own. */}
                 <MiniStatStrip
                   items={board
                     .foot({
