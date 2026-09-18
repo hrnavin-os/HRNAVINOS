@@ -51,6 +51,20 @@ export function ColumnChart({
   // nothing exceeds a third of the whole is two-thirds empty air.
   const tallest = Math.max(...rows.map((row) => row[valueKey]))
   const colors = colorByEntity(items, valueKey)
+  // The name band, sized once for the whole chart rather than per column.
+  //
+  // Load-bearing, not tidiness: the label sits inside the column's own box, so
+  // a name that wraps to two lines takes its second line out of that column's
+  // plot and out of nobody else's. The bar then stands on a baseline 12px
+  // above its neighbours' and is measured against a shorter track - which is
+  // the one thing this chart exists not to do. One height for every column and
+  // they are all percentages of the same plot again.
+  //
+  // Two lines of the name, plus a third for the month where the values carry
+  // one. Anything longer clamps, with the full name on the title.
+  // Heights include the band's own top padding: 6px of gap over two 12.5px
+  // lines of the name, and another 11.25px where a month rides underneath.
+  const nameBand = rows.some((row) => row.period) ? 'h-[44px]' : 'h-[32px]'
   const share = (value) => Math.round((value / total) * 1000) / 10
   const active = hovered ?? (selected ? rows.findIndex((row) => row.value === selected) : -1)
 
@@ -132,22 +146,26 @@ export function ColumnChart({
                   {measure === 'share' ? `${share(value)}%` : value}
                 </span>
               </div>
-              {/* Wrapped to two lines rather than truncated. A column is
+              {/* Wrapped to two lines rather than truncated: a column is
                   identified by the name under it, and "Currently Working in
-                  oth..." identifies nothing - two lines of 10px costs a few
-                  pixels of plot and keeps the label a label. Anything past two
-                  lines still clamps, with the full name on the title. */}
-              <span
-                className="line-clamp-2 w-full pt-1.5 text-center text-[10px] font-medium leading-tight text-slate-500"
-                title={row.period ? `${row.value} · ${row.period}` : row.value}
-              >
-                {row.value}
-              </span>
-              {/* Batches are named by number, which says nothing to anyone who
-                  wasn't there - so the month rides underneath. */}
-              {row.period && (
-                <span className="w-full truncate text-center text-[9px] text-slate-400">{row.period}</span>
-              )}
+                  oth..." identifies nothing. Top-aligned in the band, so a
+                  one-line name and a two-line one start on the same line as
+                  each other instead of hanging from the bottom. */}
+              <div className={`${nameBand} w-full shrink-0 overflow-hidden pt-1.5`}>
+                <span
+                  className="line-clamp-2 block w-full text-center text-[10px] font-medium leading-tight text-slate-500"
+                  title={row.period ? `${row.value} · ${row.period}` : row.value}
+                >
+                  {row.value}
+                </span>
+                {/* Batches are named by number, which says nothing to anyone
+                    who wasn't there - so the month rides underneath. */}
+                {row.period && (
+                  <span className="block w-full truncate text-center text-[9px] leading-tight text-slate-400">
+                    {row.period}
+                  </span>
+                )}
+              </div>
             </div>
           )
         })}
