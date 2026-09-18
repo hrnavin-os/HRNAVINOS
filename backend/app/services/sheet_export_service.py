@@ -125,10 +125,8 @@ class SheetExportService:
         return await self.repo.get_or_create()
 
     @staticmethod
-    def _refuse_collision_with_the_two_way_sync(
-        spreadsheet_id: str | None, induction: str, foundation: str
-    ) -> None:
-        """Stops the export being aimed at the tabs the two-way sync owns.
+    def _collision(spreadsheet_id: str | None, induction: str, foundation: str) -> str | None:
+        """Why this target would fight the two-way sync, if it would.
 
         Both write whole tabs from the database, but not the same ones: the
         two-way sync's carry an ERP ID and a Sync Note column that a mirror
@@ -136,19 +134,29 @@ class SheetExportService:
         conclude the tab had been changed, and rewrite it - forever, a write
         every cycle, with the sheet flickering between two layouts and the row
         snapshots the two-way sync needs to spot a *human* edit being
-        invalidated every time. Cheap to refuse, and impossible to diagnose
-        from the spreadsheet.
+        invalidated every time. Impossible to diagnose from the spreadsheet.
+
+        Answered fresh every time rather than decided once when the link was
+        saved, because whether the two-way sync runs at all is an env-var
+        decision (LEAD_SHEET_SYNC_ENABLED, defaulting to on in production).
+        A target saved on a laptop, where the sync is off and nothing clashes,
+        is the same target in production, where it does - so the save is not
+        the only place this has to hold.
         """
         if not settings.lead_sheet_sync_enabled or spreadsheet_id != settings.LEAD_SHEET_SPREADSHEET_ID:
-            return
+            return None
         owned = {settings.LEAD_SHEET_INDUCTION_TAB, settings.LEAD_SHEET_FOUNDATION_TAB}
         clashing = sorted(owned & {induction, foundation})
-        if clashing:
-            raise BadRequestError(
-                f"This server already runs its two-way sync on the {', '.join(clashing)} "
-                f"tab{'s' if len(clashing) > 1 else ''} of that spreadsheet, and the two would overwrite each "
-                "other. Use a different spreadsheet, or name these tabs something else."
-            )
+        if not clashing:
+            return None
+        return (
+            f"This server already runs its two-way sync on the {', '.join(clashing)} "
+            f"tab{'s' if len(clashing) > 1 else ''} of that spreadsheet, and the two would overwrite each "
+            "other. Use a different spreadsheet, or name these tabs something else."
+        )
+
+    def _collision_for(self, config: SheetExport) -> str | None:
+        return self._collision(config.spreadsheet_id, config.induction_tab, config.foundation_tab)
 
     async def update(self, data: SheetExportUpdate, *, actor_id: uuid.UUID | None) -> SheetExport:
         config = await self.repo.get_or_create()
@@ -180,9 +188,9 @@ class SheetExportService:
         if induction == foundation:
             raise BadRequestError("The Induction and Foundation tabs must be two different tabs.")
 
-        self._refuse_collision_with_the_two_way_sync(
-            update.get("spreadsheet_id", config.spreadsheet_id), induction, foundation
-        )
+        collision = self._collision(update.get("spreadsheet_id", config.spreadsheet_id), induction, foundation)
+        if collision:
+            raise BadRequestError(collision)
 
         # A changed target is a fresh start: what the old tabs held says
         # nothing about the new ones, and the next run is due immediately so
@@ -214,7 +222,8 @@ class SheetExportService:
             return "No spreadsheet linked yet. Paste the Google Sheets link above."
         if not config.enabled:
             return "The export is turned off. Turn it on to keep the spreadsheet up to date."
-        return None
+        # Saved when nothing clashed, but this server runs the two-way sync.
+        return self._collision_for(config)
 
     async def status(self) -> SheetExportResponse:
         config = await self.repo.get_or_create()
@@ -308,6 +317,9 @@ class SheetExportService:
         config = await self.repo.get_or_create()
         update: dict = {}
         try:
+            collision = self._collision_for(config)
+            if collision:
+                raise SheetsError(collision)
             async with httpx.AsyncClient(timeout=30) as http:
                 token, credential = await access_token(http)
                 stats = await self.export_once(SheetsClient(http, token, config.spreadsheet_id), config)

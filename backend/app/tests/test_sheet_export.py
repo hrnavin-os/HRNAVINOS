@@ -126,6 +126,26 @@ async def test_the_export_cannot_be_aimed_at_the_two_way_syncs_own_tabs(client, 
     assert config.enabled is True
 
 
+async def test_a_target_that_only_clashes_later_is_caught_at_run_time(client, monkeypatch):
+    """Saved on a laptop with the two-way sync off, the same target clashes in
+    production where it is on - so the save is not the only place to check."""
+    from app.config.settings import settings as env
+
+    # Sync off: the default tab names against the sync's own spreadsheet save
+    # without complaint.
+    monkeypatch.setattr(env, "LEAD_SHEET_SYNC_ENABLED", False)
+    await _configure()
+
+    # Same config, a server where the sync runs.
+    monkeypatch.setattr(env, "LEAD_SHEET_SYNC_ENABLED", True)
+    monkeypatch.setattr(env, "LEAD_SHEET_SPREADSHEET_ID", "1GuW1RzWnA1SsKIwmzRFXdIa7ERSb3EELnrWABkPSHnk")
+
+    service = SheetExportService()
+    assert "two-way sync" in (await service.status()).blocked_reason
+    assert await service.run(force=True) is True
+    assert "two-way sync" in (await service.get()).last_error
+
+
 # ---------------------------------------------------------------------------
 # The run
 # ---------------------------------------------------------------------------

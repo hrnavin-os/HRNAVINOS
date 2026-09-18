@@ -54,6 +54,14 @@ pnpm-debug.log*
 *.pem
 *.key
 !nginx/*.key.example
+# Google service-account private keys - what GOOGLE_SERVICE_ACCOUNT_FILE
+# points at for the Sheets export. A key arrives as an ordinary .json, which
+# none of the rules above catch, and this repo auto-commits and auto-pushes:
+# an unignored key dropped in the tree would be on GitHub within seconds.
+*service-account*.json
+*service_account*.json
+*-credentials.json
+gcp-*.json
 
 # ==================== Editors / OS ====================
 .vscode/
