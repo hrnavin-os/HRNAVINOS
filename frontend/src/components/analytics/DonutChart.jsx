@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Pin } from 'lucide-react'
+import { CATEGORY_COLORS, EMPTY_COLOR, OTHER_COLOR } from '@/constants/analyticsPalette'
 
 // Part-to-whole for one breakdown: how the candidates divide across categories
 // or call outcomes.
@@ -12,19 +13,13 @@ import { Pin } from 'lucide-react'
 // hues start to blur, so the tail folds into one "Other" slice rather than the
 // palette being extended - a seventh generated hue is indistinguishable from an
 // existing one under colour-blindness.
-const MAX_SLICES = 6
-
-// Fixed slot order, assigned by position and never cycled. Validated as a
-// categorical palette against a white surface: worst adjacent CVD deltaE 11.3
-// (target >= 8), worst normal-vision 20.9, every slot at least 3:1 against the
-// surface. Re-run the validator before reordering - the order IS the
-// colour-blind-safety mechanism, not decoration.
-const SLICE_COLORS = ['#2563eb', '#ea580c', '#0d9488', '#7c3aed', '#db2777', '#65a30d']
-const OTHER_COLOR = '#94a3b8'
-// Entries with a count of zero. Deliberately not a palette hue: there is no arc
-// on the ring for the dot to point at, and giving it one would promise a slice
-// that isn't there.
-const EMPTY_COLOR = '#cbd5e1'
+//
+// The slots, the tail's grey and the empty grey all live in
+// constants/analyticsPalette now: the three charts beside this one on the
+// canvas assign from the same list, so the ring cannot own the colour of a
+// category it shares with them.
+const SLICE_COLORS = CATEGORY_COLORS
+const MAX_SLICES = SLICE_COLORS.length
 
 const SIZE = 200
 const STROKE = 26
@@ -156,7 +151,7 @@ export function DonutChart({
       // auto, so the ring's fixed 200px plus a legend sized to its longest
       // label would push this whole panel wider than the column it sits in and
       // spill the card's own header off the right edge.
-      className="flex w-full min-w-0 flex-col items-center justify-center gap-8 sm:flex-row sm:items-center lg:gap-10"
+      className="flex w-full min-w-0 flex-col items-center justify-center gap-6 sm:flex-row sm:items-center"
       onMouseLeave={() => setHovered(null)}
     >
       <div className="relative shrink-0">
@@ -281,8 +276,13 @@ export function DonutChart({
           column and back up the other, and the second column was usually the
           all-grey empty ones, which read as something having gone wrong. A
           taller list is simply a taller list. */}
-      <div className="flex min-w-0 justify-center">
-        <table className="w-auto max-w-full border-separate border-spacing-0 text-sm">
+      <div className="min-w-0 flex-1">
+        {/* Full width rather than sized to its own content. In a half-width
+            cell of the canvas a content-sized table runs past the edge of the
+            card and the share column gets clipped clean off; at full width,
+            with the name column truncating, every cell's figures land on the
+            same right margin. */}
+        <table className="w-full border-separate border-spacing-0 text-sm">
           {/* Headed, because two columns of bare numbers beside a list of
               names is a table asking to be misread - the count and the share
               are not obviously which from the figures alone. */}

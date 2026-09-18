@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BAR, MUTED } from '@/constants/analyticsPalette'
+import { colorByEntity, MUTED } from '@/constants/analyticsPalette'
 
 /**
  * The breakdown as vertical columns on a common baseline.
@@ -11,11 +11,17 @@ import { BAR, MUTED } from '@/constants/analyticsPalette'
  * batches or eleven courses is exactly what this is for, and nothing is folded
  * away here.
  *
- * One hue for every column, not a palette. Colour would encode identity, which
- * every column already carries as its own label underneath - and re-colouring
- * on every filter change (the order moves, so the colours would too) makes a
- * board look like it changed its mind. Height carries the number; colour
- * carries the highlight, and nothing else.
+ * Coloured per entity, from the assignment every view on the canvas shares.
+ * Alone, this chart wore one hue and that was right: a single measure across
+ * many labels has nothing for colour to encode. Beside the ring and the
+ * treemap it is wrong - "Career Gap" is teal a hand's width to the left, and
+ * the same category in two colours two charts apart costs the reader the link
+ * between them. Colour here is redundant with the label underneath, which
+ * costs nothing.
+ *
+ * Nothing is folded away, so the values past the palette's six validated slots
+ * wear the same grey the ring's "Other" arc does rather than a seventh
+ * generated hue.
  *
  * `ordered` keeps the values in the order they were handed over - which for a
  * batch is chronological - rather than sorting them by size. A month is a
@@ -44,6 +50,7 @@ export function ColumnChart({
   // comparing values with each other, and against the total a board where
   // nothing exceeds a third of the whole is two-thirds empty air.
   const tallest = Math.max(...rows.map((row) => row[valueKey]))
+  const colors = colorByEntity(items, valueKey)
   const share = (value) => Math.round((value / total) * 1000) / 10
   const active = hovered ?? (selected ? rows.findIndex((row) => row.value === selected) : -1)
 
@@ -74,10 +81,10 @@ export function ColumnChart({
           return (
             <div
               key={row.value}
-              // Capped as well as shared out: five values across a full-width
-              // panel would otherwise be five slabs, which reads as a diagram
+              // Capped as well as shared out: four values across a cell of the
+              // canvas would otherwise be four slabs, which reads as a diagram
               // rather than as a chart of anything.
-              className={`flex h-full min-w-12 max-w-32 flex-1 flex-col items-center rounded-md transition-opacity ${
+              className={`flex h-full min-w-12 max-w-24 flex-1 flex-col items-center rounded-md transition-opacity ${
                 dimmed ? 'opacity-40' : ''
               } ${isEmpty ? '' : 'cursor-pointer'}`}
               {...(isEmpty
@@ -109,7 +116,7 @@ export function ColumnChart({
                   className="absolute inset-x-0 bottom-0 rounded-t transition-all duration-200"
                   style={{
                     height: `${height}%`,
-                    backgroundColor: isEmpty ? MUTED : row.color ?? BAR,
+                    backgroundColor: isEmpty ? MUTED : colors.get(row.value),
                     opacity: isEmpty ? 0.35 : 1,
                   }}
                 />
@@ -125,8 +132,13 @@ export function ColumnChart({
                   {measure === 'share' ? `${share(value)}%` : value}
                 </span>
               </div>
+              {/* Wrapped to two lines rather than truncated. A column is
+                  identified by the name under it, and "Currently Working in
+                  oth..." identifies nothing - two lines of 10px costs a few
+                  pixels of plot and keeps the label a label. Anything past two
+                  lines still clamps, with the full name on the title. */}
               <span
-                className="w-full truncate pt-1.5 text-center text-[10px] font-medium text-slate-500"
+                className="line-clamp-2 w-full pt-1.5 text-center text-[10px] font-medium leading-tight text-slate-500"
                 title={row.period ? `${row.value} · ${row.period}` : row.value}
               >
                 {row.value}

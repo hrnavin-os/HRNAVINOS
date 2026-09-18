@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BAR } from '@/constants/analyticsPalette'
+import { colorByEntity, labelledFill } from '@/constants/analyticsPalette'
 
 /**
  * The breakdown as nested rectangles, each one's area its share of the whole.
@@ -16,31 +16,23 @@ import { BAR } from '@/constants/analyticsPalette'
  * they are different readings, not because one is a prettier version of the
  * other.
  *
- * Shaded by rank down one hue rather than coloured by identity: every tile
- * already carries its own name, and a fourteen-colour categorical palette is
- * indistinguishable under colour blindness whatever the hues are.
+ * Coloured per entity, from the assignment every view on the canvas shares,
+ * so a category is the same colour here as it is in the ring beside it. It used
+ * to shade down one hue by rank, which read well alone and badly in company:
+ * rank is not identity, a filter that reordered the values repainted all of
+ * them, and one category came out blue here and teal in the ring.
+ *
+ * The palette is not extended past its six validated slots - the tail wears one
+ * grey, and identity there is carried by the label on the tile.
+ *
+ * Tiles take the deepened step of their hue, because this is the one view whose
+ * labels have nowhere to sit but on top of the mark and white text needs the
+ * contrast. See labelledFill for the measurements.
  *
  * Laid out by the squarified algorithm (Bruls, Huizing & van Wijk 2000), which
  * keeps tiles close to square. Laid out naively they come out as long thin
  * slivers, which is as unreadable as the ring this is meant to replace.
  */
-
-// How much white is mixed into the hue at each rank. The largest tile is
-// nearly the full brand colour; the ramp stops well short of white so the
-// smallest tile is still a tile rather than a gap in the map.
-const LIGHTEST = 0.72
-
-function blend(hex, fraction) {
-  const channel = (offset) => {
-    const value = parseInt(hex.slice(offset, offset + 2), 16)
-    return Math.round(value + (255 - value) * fraction)
-  }
-  return `rgb(${channel(1)}, ${channel(3)}, ${channel(5)})`
-}
-
-function tint(rank, count) {
-  return (count <= 1 ? 0 : rank / (count - 1)) * LIGHTEST
-}
 
 // The worst aspect ratio in a row of tiles laid along `side`. The layout adds
 // tiles to a row while this keeps improving and closes the row when it stops.
@@ -123,19 +115,20 @@ export function TreemapChart({
   // Laid out in a 100x100 square and rendered as percentages, so the map fills
   // whatever width the panel gives it without anything measuring the DOM.
   const tiles = squarify(
-    filled.map((item, index) => ({ ...item, weight: item[valueKey], rank: index })),
+    filled.map((item) => ({ ...item, weight: item[valueKey] })),
     { x: 0, y: 0, width: 100, height: 100 },
   )
   const share = (value) => Math.round((value / total) * 1000) / 10
+  const colors = colorByEntity(items, valueKey)
 
   return (
-    <div>
+    <div className="w-full">
       <div className="relative h-72 w-full overflow-hidden rounded-lg bg-slate-50">
         {tiles.map((tile) => {
           const isSelected = tile.value === selected
           const isHovered = hovered === tile.value
           const dimmed = (selected || hovered) && !isSelected && !isHovered
-          const light = tint(tile.rank, tiles.length)
+          const fill = labelledFill(colors.get(tile.value))
           // Below roughly this size the label doesn't fit, and printing it
           // anyway leaves a tile of broken text - the hover title and the
           // table underneath carry those.
@@ -159,7 +152,7 @@ export function TreemapChart({
                 top: `${tile.y}%`,
                 width: `${tile.width}%`,
                 height: `${tile.height}%`,
-                backgroundColor: blend(BAR, light),
+                backgroundColor: fill,
                 // A hairline of the page's own surface between tiles rather
                 // than a border on each: a border reads as part of the mark.
                 outline: '2px solid #f8fafc',
@@ -167,26 +160,14 @@ export function TreemapChart({
             >
               {roomy && (
                 <>
-                  <span
-                    className={`block truncate text-[11px] font-semibold ${
-                      light < 0.45 ? 'text-white' : 'text-slate-700'
-                    }`}
-                  >
+                  <span className="block truncate text-[11px] font-semibold text-white">
                     {tile.value}
                   </span>
-                  <span
-                    className={`block text-[11px] font-bold tabular-nums ${
-                      light < 0.45 ? 'text-white/90' : 'text-slate-600'
-                    }`}
-                  >
+                  <span className="block text-[11px] font-bold tabular-nums text-white">
                     {measure === 'share' ? `${share(tile[valueKey])}%` : tile[valueKey]}
                   </span>
                   {tile.period && tile.height > 22 && (
-                    <span
-                      className={`block truncate text-[10px] ${light < 0.45 ? 'text-white/70' : 'text-slate-500'}`}
-                    >
-                      {tile.period}
-                    </span>
+                    <span className="block truncate text-[10px] text-white/80">{tile.period}</span>
                   )}
                 </>
               )}
