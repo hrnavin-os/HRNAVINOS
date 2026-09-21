@@ -112,7 +112,12 @@ export function FilterShell({ label, activeLabel, onClear, grow = false, menuWid
 // "All <Label>s" clears it. Lives next to the search bar rather than in a
 // column header. Shared by the Foundation and Induction boards.
 export function FilterDropdown({ label, value, options, onChange, grow = false }) {
-  const selectedLabel = options.find((option) => option.value === value)?.label
+  // Falls back to the raw value for a selection the option list doesn't cover.
+  // The lists are built from the data behind the open tab, so a filter that
+  // survives a tab switch can hold a value the new tab has never seen - and
+  // without this the control would render as empty and unset while still
+  // narrowing the board, with no "x" to undo it.
+  const selectedLabel = options.find((option) => option.value === value)?.label ?? value
 
   return (
     <FilterShell label={label} activeLabel={value ? selectedLabel : null} onClear={() => onChange('')} grow={grow}>

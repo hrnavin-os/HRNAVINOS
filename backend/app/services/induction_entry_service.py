@@ -354,26 +354,30 @@ class InductionEntryService:
         }
 
     async def stats(
-        self, *, section: str | None = None, status: InductionStatus = InductionStatus.PENDING_INDUCTION
+        self,
+        *,
+        status: InductionStatus = InductionStatus.PENDING_INDUCTION,
+        search: str | None = None,
+        filters: dict | None = None,
     ) -> dict:
-        """Totals behind the board's stat cards - one per section, plus the
-        overall count.
+        """The numbers on the board's three cards, for the board as filtered.
 
-        Scoped when the caller is pinned to a section, so a Section Admin's
-        "All Entries" card counts their own section rather than every entry in
-        the system. Unscoped, `total` is every entry rather than the sum of the
-        sections, so anything that arrived while no Section Admin existed (and
-        is therefore unassigned) is still counted somewhere.
+        Every count here runs the table's own query (see
+        InductionEntryRepository.board_query), so the cards are a summary of
+        the rows underneath them and not of some larger population. That is not
+        a refinement - a card reading 30 above a table showing 2 is telling the
+        person looking at it something untrue, and the filter row is exactly
+        where somebody goes to ask "how many of these are mine".
+
+        The section a Section Admin is pinned to arrives inside `filters`,
+        already forced on by the route, so it narrows these counts the same way
+        it narrows the list. `total` is the open tab; `by_status` is all three,
+        which is what the cards read.
         """
-        by_section = await self.entries.count_by_section_all(status)
-        by_status = await self.entries.count_by_status()
-        if section:
-            scoped = by_section.get(section, 0)
-            return {"total": scoped, "by_section": {section: scoped}, "by_status": by_status}
         return {
-            "total": await self.entries.count_all(status),
-            "by_section": by_section,
-            "by_status": by_status,
+            "total": await self.entries.count_all(status, search=search, filters=filters),
+            "by_section": await self.entries.count_by_section_all(status, search=search, filters=filters),
+            "by_status": await self.entries.count_by_status(search=search, filters=filters),
         }
 
     # The two dimensions the analytics dashboard breaks entries down by. A

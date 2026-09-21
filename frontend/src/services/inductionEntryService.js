@@ -3,12 +3,20 @@ import { createResourceService } from '@/services/resourceService'
 
 export const inductionEntryService = {
   ...createResourceService('/induction-entries'),
-  // Counts behind the board's stat cards. Separate from list() so the cards
-  // show every section's total regardless of which one is filtered to.
-  // Scoped to the open tab, so the cards count the same population as the
-  // table beneath them.
-  getStats: async (status) => {
-    const { data } = await apiClient.get('/induction-entries/stats', { params: status ? { status } : {} })
+  // Counts behind the board's stat cards.
+  //
+  // Takes the same filter row list() does, because the cards are a summary of
+  // the rows under them: filter to one assignee and the cards have to say how
+  // many of *their* students are pending, moved and quit. They used to count
+  // the whole board, which read as a contradiction the moment any filter was
+  // on - 30 above a table showing 2.
+  //
+  // `status` is deliberately not part of `filters`: it picks which card is
+  // highlighted, while the response counts all three tabs at once.
+  getStats: async (status, filters = {}) => {
+    const { data } = await apiClient.get('/induction-entries/stats', {
+      params: { ...(status ? { status } : {}), ...filters },
+    })
     return data
   },
   // Distinct values present in the data, so a filter never offers an option

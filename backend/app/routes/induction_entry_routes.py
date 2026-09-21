@@ -49,6 +49,81 @@ def _date_window(*ranges: tuple[date, date] | tuple[date | None, date | None] | 
     return query
 
 
+class BoardFilters:
+    """The Induction board's filter row, as one object.
+
+    A dependency rather than the same nine query parameters written out on both
+    the list and the stats route, and the same dict built twice from them. The
+    cards sit directly above the table and are meant to count exactly the rows
+    underneath them; two copies of this would be two chances for them to stop
+    agreeing, which is the bug it was written to fix.
+
+    Holds what was asked for; `query` turns it into what Mongo is asked. The
+    tab is not part of it - the table shows one status and the cards count all
+    three, so it is applied by each caller rather than baked in here.
+    """
+
+    def __init__(
+        self,
+        search: str | None = None,
+        section: str | None = None,
+        sales_person: str | None = None,
+        lead_source: str | None = None,
+        payment_mode: str | None = None,
+        category: str | None = None,
+        assigned_to: uuid.UUID | None = None,
+        batch: str | None = None,
+        # Which foundation class group. A stored field now rather than a rule
+        # read off the registration date, so this is a plain equality match.
+        foundation_group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
+        # Registration-date window behind the board's Date filter, either end
+        # optional: "everything since March" is as real a question as a range.
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> None:
+        self.search = search
+        self.section = section
+        self.sales_person = sales_person
+        self.lead_source = lead_source
+        self.payment_mode = payment_mode
+        self.category = category
+        self.assigned_to = assigned_to
+        self.batch = batch
+        self.foundation_group = foundation_group
+        self.date_from = date_from
+        self.date_to = date_to
+
+    def query(self, *, scope: str | None) -> dict:
+        """The stored-field filters, with a Section Admin's scope forced on.
+
+        `scope` overrides whatever section the client sent, so dropping the
+        query param can't widen what somebody pinned to a section can see -
+        on the counts as much as on the rows.
+        """
+        filters = {
+            key: value
+            for key, value in {
+                "section": scope or self.section,
+                "sales_person": self.sales_person,
+                "lead_source": self.lead_source,
+                "payment_mode": self.payment_mode,
+                "category": self.category,
+                "assigned_to": self.assigned_to,
+                "foundation_group": self.foundation_group,
+            }.items()
+            if value
+        }
+        # Batch is derived from registration_date rather than stored, so
+        # filtering by it becomes a range query over the month it represents -
+        # the same field the Date filter narrows, which is why the two
+        # intersect below rather than one overwriting the other.
+        batch_window = InductionEntryService.batch_date_range(self.batch) if self.batch else None
+        window = _date_window((self.date_from, self.date_to), batch_window)
+        if window:
+            filters["registration_date"] = window
+        return filters
+
+
 @router.post("", response_model=InductionEntryResponse, status_code=status.HTTP_201_CREATED)
 async def create_entry(
     payload: InductionEntryCreate,
@@ -62,21 +137,7 @@ async def create_entry(
 async def list_entries(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    search: str | None = None,
-    section: str | None = None,
-    sales_person: str | None = None,
-    lead_source: str | None = None,
-    payment_mode: str | None = None,
-    category: str | None = None,
-    assigned_to: uuid.UUID | None = None,
-    batch: str | None = None,
-    # Which foundation class group. A stored field now rather than a rule read
-    # off the registration date, so this is a plain equality match.
-    foundation_group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
-    # Registration-date window behind the board's Date filter, either end
-    # optional: "everything since March" is as real a question as a range.
-    date_from: date | None = None,
-    date_to: date | None = None,
+    filters: BoardFilters = Depends(),
     # Which tab. Defaults to the pending one, so any caller that predates the
     # tabs still gets the active queue rather than everything.
     status: InductionStatus = InductionStatus.PENDING_INDUCTION,
@@ -88,30 +149,10 @@ async def list_entries(
     # A Section Admin's scope comes from their role and overrides whatever the
     # client sent, so dropping the query param can't widen what they see.
     scope = await get_actor_scope(actor)
-    filters = {
-        key: value
-        for key, value in {
-            "section": scope or section,
-            "sales_person": sales_person,
-            "lead_source": lead_source,
-            "payment_mode": payment_mode,
-            "category": category,
-            "assigned_to": assigned_to,
-            "foundation_group": foundation_group,
-        }.items()
-        if value
-    }
-    # Batch is derived from registration_date rather than stored, so filtering
-    # by it becomes a range query over the month it represents - the same field
-    # the Date filter narrows, which is why the two intersect below rather than
-    # one overwriting the other.
-    batch_window = service.batch_date_range(batch) if batch else None
-    window = _date_window((date_from, date_to), batch_window)
-    if window:
-        filters["registration_date"] = window
-
-    params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)
-    result = await service.list(params, filters=filters, status=status)
+    params = PaginationParams(
+        page=page, page_size=page_size, search=filters.search, sort_by=sort_by, sort_order=sort_order
+    )
+    result = await service.list(params, filters=filters.query(scope=scope), status=status)
     # Resolved for the whole page in one query; empty on the pending tab, where
     # no row has a lead to read a stage from.
     foundation = await service.foundation_statuses(result.items)
@@ -128,12 +169,20 @@ async def list_entries(
 @router.get("/stats", response_model=InductionEntryStatsResponse)
 async def entry_stats(
     status: InductionStatus = InductionStatus.PENDING_INDUCTION,
+    # The same filter row the table reads, so the cards count the rows
+    # underneath them rather than the whole board. A card saying 30 above a
+    # table showing 2 is not a summary, it's a contradiction.
+    filters: BoardFilters = Depends(),
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> InductionEntryStatsResponse:
     # Scope comes from the actor's role, not a query param, so a Section Admin
     # can't widen it - same rule the lead stats endpoint follows.
     scope = await get_actor_scope(actor)
-    return InductionEntryStatsResponse(**await InductionEntryService().stats(section=scope, status=status))
+    return InductionEntryStatsResponse(
+        **await InductionEntryService().stats(
+            status=status, search=filters.search, filters=filters.query(scope=scope)
+        )
+    )
 
 
 @router.get("/filter-options")

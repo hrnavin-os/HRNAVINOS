@@ -60,6 +60,12 @@ export function ResourceListPage({
   // Replaces the search-plus-filters row with a layout of the page's own;
   // receives the search box so it can be placed anywhere in it.
   renderToolbar,
+  // Told what was typed, for a page that has to run a second query over the
+  // same rows - the Induction board's stat cards summarise the list, so they
+  // need the search term the list is already using. Reported from the input's
+  // own handler rather than through an effect: it is the same event that
+  // updates the search, so there is nothing to keep in step afterwards.
+  onSearchChange,
 }) {
   const { hasPermission } = useAuth()
   const queryClient = useQueryClient()
@@ -154,7 +160,11 @@ export function ResourceListPage({
     <Input
       placeholder="Search..."
       value={search}
-      onChange={(event) => { setSearch(event.target.value); setPage(1) }}
+      onChange={(event) => {
+        setSearch(event.target.value)
+        setPage(1)
+        onSearchChange?.(event.target.value)
+      }}
       rightElement={<Search className="h-4 w-4 text-slate-400" strokeWidth={2} aria-hidden="true" />}
     />
   )

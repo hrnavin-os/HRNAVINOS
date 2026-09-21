@@ -45,19 +45,49 @@ class InductionEntryRepository(BaseRepository[InductionEntry]):
     def __init__(self) -> None:
         super().__init__(InductionEntry)
 
-    async def count_by_section_all(self, status: InductionStatus) -> dict[str, int]:
+    # The fields the board's search box looks in. Held here rather than passed
+    # in, because the counts and the listing have to search the same places -
+    # a card counting rows the table wouldn't show is the whole bug.
+    SEARCH_FIELDS = ["name", "phone", "email", "sales_person", "lead_source", "category"]
+
+    def board_query(
+        self, status: InductionStatus, *, search: str | None = None, filters: dict | None = None
+    ) -> dict:
+        """Exactly the query the board's table runs, for one tab.
+
+        One method because the table and the three cards above it have to be
+        looking at the same population - the cards are a summary of the rows,
+        and a summary built from a second, separately-written query is only a
+        summary until the two drift.
+        """
+        return self._build_query(
+            search=search,
+            search_fields=self.SEARCH_FIELDS,
+            include_deleted=False,
+            filters={**(filters or {}), **status_query(status)},
+        )
+
+    async def count_by_section_all(
+        self, status: InductionStatus, *, search: str | None = None, filters: dict | None = None
+    ) -> dict[str, int]:
         """{section code: count} for the stat cards, within one tab.
 
         Scoped by status so the cards count the same population as the table
         beneath them - cards that keep counting the pending entries while the
-        Moved tab is open are just wrong.
+        Moved tab is open are just wrong - and by the filter row for the same
+        reason.
 
         Aggregated rather than counted per section in a loop, so adding a
         section doesn't add a round trip.
         """
         rows = await InductionEntry.aggregate(
             [
-                {"$match": {"is_deleted": False, "section": {"$ne": None}, **status_query(status)}},
+                {
+                    "$match": {
+                        **self.board_query(status, search=search, filters=filters),
+                        "section": {"$ne": None},
+                    }
+                },
                 {"$group": {"_id": "$section", "count": {"$sum": 1}}},
             ]
         ).to_list()
@@ -73,16 +103,24 @@ class InductionEntryRepository(BaseRepository[InductionEntry]):
             query["section"] = section
         return await InductionEntry.find(query).to_list()
 
-    async def count_all(self, status: InductionStatus) -> int:
-        return await InductionEntry.find({"is_deleted": False, **status_query(status)}).count()
+    async def count_all(
+        self, status: InductionStatus, *, search: str | None = None, filters: dict | None = None
+    ) -> int:
+        return await InductionEntry.find(self.board_query(status, search=search, filters=filters)).count()
 
-    async def count_by_status(self) -> dict[str, int]:
+    async def count_by_status(
+        self, *, search: str | None = None, filters: dict | None = None
+    ) -> dict[str, int]:
         """One count per tab, so each tab can show how much is behind it
-        without opening it."""
+        without opening it.
+
+        Every tab is counted under the same filters, which is what makes the
+        cards a breakdown of the filtered board rather than of the whole of it:
+        filter to one assignee and each card says how many of *their* students
+        are pending, moved and quit.
+        """
         return {
-            status.value: await InductionEntry.find(
-                {"is_deleted": False, **status_query(status)}
-            ).count()
+            status.value: await self.count_all(status, search=search, filters=filters)
             for status in InductionStatus
         }
 

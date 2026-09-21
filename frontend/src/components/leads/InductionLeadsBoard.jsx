@@ -4,7 +4,7 @@ import { ResourceListPage } from '@/components/resource/ResourceListPage'
 import { inductionEntryService } from '@/services/inductionEntryService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
 import { inductionFormConfigService } from '@/services/inductionFormConfigService'
-import { ArrowRightLeft, ClipboardList, Target, UserX, X } from 'lucide-react'
+import { ArrowRightLeft, ClipboardList, Target, UserX } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { DatePresetFilter } from '@/components/ui/DatePresetFilter'
@@ -215,35 +215,46 @@ export function InductionLeadsBoard() {
   // Inline cell edits have no form to attach a failure to, so they surface
   // here rather than reverting as if nothing happened.
   const [error, setError] = useState(null)
+  // What was typed in the search box. ResourceListPage owns the box and runs
+  // the list query from it; this copy exists only so the stat cards can count
+  // the same rows - they are a summary of the table, and a summary that
+  // ignored the search would be counting rows that aren't on screen.
+  const [search, setSearch] = useState('')
 
   const setFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }))
+
+  // A Section Admin is pinned to their own section, exactly as on the
+  // Foundation board - the role carries it, so it can't be changed by clicking.
+  // The server forces it on regardless; sending it keeps the query key honest.
+  const effectiveSection = scopedSection || sectionFilter
+
+  // Everything narrowing the board, as the API takes it. One object because
+  // the table and the cards above it have to be asking the same question -
+  // the cards are a summary of the rows, and they were reading the whole
+  // board, so a Section Admin with two students saw a card saying thirty.
+  //
   // Empty strings would be sent as `?batch=` and match nothing, so only the
   // set ones reach the query. The date range adds its own two, either of which
   // may be missing - an open-ended "since March" is a real question.
   const activeFilters = {
     ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value)),
+    ...(effectiveSection ? { section: effectiveSection } : {}),
     ...(dateRange?.from ? { date_from: dateRange.from } : {}),
     ...(dateRange?.to ? { date_to: dateRange.to } : {}),
+    ...(search ? { search } : {}),
   }
-  // Counted as one, however many params it sends.
-  const filterCount = Object.values(filters).filter(Boolean).length + (dateRange ? 1 : 0)
-
-  function clearFilters() {
-    setFilters(EMPTY_FILTERS)
-    setDateRange(null)
-  }
-
-  // A Section Admin is pinned to their own section, exactly as on the
-  // Foundation board - the role carries it, so it can't be changed by clicking.
-  const effectiveSection = scopedSection || sectionFilter
 
   // Keyed under the list's own key so ResourceListPage's invalidation after an
   // edit or delete refreshes the cards too - React Query matches by prefix.
-  // The status is part of the key, or switching tabs would show the previous
-  // tab's counts until the refetch landed.
+  // The filters are part of the key, or the cards would keep showing the last
+  // filter's counts until the refetch landed - which is the same wrong number
+  // this was meant to stop showing, just briefly.
+  //
+  // The status is NOT sent as a filter: the response counts all three tabs
+  // under these filters, which is what the three cards read.
   const statsQuery = useQuery({
-    queryKey: ['induction-entries', 'stats', status],
-    queryFn: () => inductionEntryService.getStats(status),
+    queryKey: ['induction-entries', 'stats', activeFilters],
+    queryFn: () => inductionEntryService.getStats(undefined, activeFilters),
   })
 
   // Sections are admin-managed and open-ended, so the cards read live from the
@@ -390,16 +401,19 @@ export function InductionLeadsBoard() {
             toneName={view.tone}
             icon={view.icon}
             isActive={status === view.value}
-            onClick={() => {
-              setStatus(view.value)
-              clearFilters()
-            }}
+            // The filters stay on. They used to be cleared here, back when the
+            // cards counted the whole board and the number on them had nothing
+            // to do with the filter row. Now the card says how many rows match
+            // what you have asked for - so clearing on the way in would hand
+            // you a different set from the one you just clicked on.
+            onClick={() => setStatus(view.value)}
           />
         ))}
       </div>
       <ResourceListPage
         // Two rows: the first is how you find and order the list (search, date,
         // sort, section); the second is the per-field dropdowns.
+        onSearchChange={setSearch}
         renderToolbar={({ searchInput }) => (
           <div className="space-y-2">
             {/* Every control grows, so the row spans the full width the way the
@@ -446,18 +460,11 @@ export function InductionLeadsBoard() {
                   />
                 </div>
               )}
-              {filterCount > 0 && (
-                // Dashed and unfilled: it undoes the row rather than adding to
-                // it. Counts what it will clear.
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-dashed border-slate-300 px-3 text-sm font-medium text-slate-500 transition-colors hover:border-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                >
-                  <X className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                  Clear ({filterCount})
-                </button>
-              )}
+              {/* No "Clear all" button. It appeared as a second row the
+                  moment anything was selected, pushing the table down, and
+                  every control it would have reset already clears itself -
+                  each dropdown shows an X once it holds a value, and the date
+                  filter's own "All" is the whole-range option. */}
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
               <FilterDropdown
