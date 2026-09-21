@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/Textarea'
 import { Badge } from '@/components/ui/Badge'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { PricingCategoryFields } from '@/components/foundation/PricingCategoryFields'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
 import { getApiErrorMessage } from '@/services/apiClient'
 
@@ -78,62 +79,6 @@ function FieldRow({ item, index, register, remove }) {
       >
         <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
       </button>
-    </div>
-  )
-}
-
-function CategoryEditor({ category, categoryIndex, register }) {
-  return (
-    <div className="rounded-md border border-slate-200 p-4">
-      <input type="hidden" {...register(`categories.${categoryIndex}.code`)} />
-      <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Input label="Category Label" {...register(`categories.${categoryIndex}.label`, { required: true })} />
-        <Input label="Training Fee" {...register(`categories.${categoryIndex}.training_fee`, { required: true })} />
-        <Input
-          label="After Placement Fee"
-          {...register(`categories.${categoryIndex}.after_placement_fee`, { required: true })}
-        />
-      </div>
-      <div className="space-y-3">
-        {category.plans.map((plan, planIndex) => (
-          <div key={plan.value} className="rounded-md bg-slate-50 p-3">
-            <input type="hidden" {...register(`categories.${categoryIndex}.plans.${planIndex}.value`)} />
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              {plan.value.replace(/_/g, ' ')}
-            </p>
-            <div className="mb-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Input
-                label="Plan Label"
-                {...register(`categories.${categoryIndex}.plans.${planIndex}.label`, { required: true })}
-              />
-              <Input
-                label="Summary"
-                {...register(`categories.${categoryIndex}.plans.${planIndex}.summary`, { required: true })}
-              />
-            </div>
-            <div className="mb-2">
-              <Input
-                label="After Placement"
-                {...register(`categories.${categoryIndex}.plans.${planIndex}.after_placement`, { required: true })}
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {plan.amounts.map((_, amountIndex) => (
-                <div key={amountIndex} className="w-28">
-                  <Input
-                    label={`Amount ${amountIndex + 1}`}
-                    type="number"
-                    {...register(`categories.${categoryIndex}.plans.${planIndex}.amounts.${amountIndex}`, {
-                      required: true,
-                      valueAsNumber: true,
-                    })}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   )
 }
@@ -234,7 +179,12 @@ export function FormCollectionEditModal({ onClose }) {
             <h2 className="mb-3 text-sm font-semibold text-slate-800">Pricing</h2>
             <div className="space-y-6">
               {(data.categories ?? []).map((category, categoryIndex) => (
-                <CategoryEditor key={category.code} category={category} categoryIndex={categoryIndex} register={register} />
+                <PricingCategoryFields
+                  key={category.code}
+                  category={category}
+                  path={`categories.${categoryIndex}`}
+                  register={register}
+                />
               ))}
             </div>
           </section>

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { ResourceListPage } from '@/components/resource/ResourceListPage'
 import { programService } from '@/services/programService'
+import { ProgramEditModal } from '@/pages/programs/ProgramEditModal'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
 import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -176,6 +177,9 @@ export function ProgramsPage() {
   const categoryOptions = categories.map((category) => ({ value: category.code, label: category.label }))
   const categoryFor = (code) => categories.find((category) => category.code === code)
 
+  // The create form only. Editing has a form of its own, which adds the
+  // chosen category's pricing to these - a new program is filed under pricing
+  // that already exists, so there is nothing to set there yet.
   const fields = [
     { name: 'name', label: 'Program Name', required: true },
     { name: 'category', label: 'Pricing Category', type: 'select', required: true, options: categoryOptions },
@@ -211,19 +215,14 @@ export function ProgramsPage() {
           renderBody: (row) => <ProgramDetail program={row} category={categoryFor(row.category)} />,
         },
         edit: {
-          title: (row) => `Edit ${row.name}`,
           permission: PERMISSIONS.PROGRAMS_UPDATE,
-          // `value` is deliberately not editable: existing leads store it, so
-          // renaming a program changes its display name, not its identity.
-          fields,
-          defaults: (row) => ({
-            name: row.name,
-            category: row.category,
-            description: row.description ?? '',
-            order: String(row.order ?? 0),
-            is_active: String(row.is_active),
-          }),
-          transform: normalise,
+          // A form of its own rather than the generic field list, because a
+          // program is not only its own five fields: the fee on the card in
+          // front of you belongs to its pricing category, and editing the
+          // program has to reach that too.
+          render: ({ row, onClose, onSaved }) => (
+            <ProgramEditModal program={row} onClose={onClose} onSaved={onSaved} />
+          ),
         },
         remove: {
           permission: PERMISSIONS.PROGRAMS_DELETE,
