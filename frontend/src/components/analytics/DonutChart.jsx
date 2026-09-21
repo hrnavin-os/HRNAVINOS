@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Pin } from 'lucide-react'
-import { CATEGORY_COLORS, EMPTY_COLOR, OTHER_COLOR } from '@/constants/analyticsPalette'
+import { rankedWithColor } from '@/constants/analyticsPalette'
 
 // Part-to-whole for one breakdown: how the candidates divide across categories
 // or call outcomes.
@@ -9,17 +9,28 @@ import { CATEGORY_COLORS, EMPTY_COLOR, OTHER_COLOR } from '@/constants/analytics
 // number the page used to lead with, and putting it at the centre of the thing
 // it is the total of says more than a separate tile did.
 //
-// Slices are capped. Past six the arcs get too thin to tell apart and adjacent
-// hues start to blur, so the tail folds into one "Other" slice rather than the
-// palette being extended - a seventh generated hue is indistinguishable from an
-// existing one under colour-blindness.
+// Colour is capped at the palette's six validated slots and the tail goes grey,
+// because a seventh generated hue is indistinguishable from an existing one
+// under colour-blindness. The values themselves are not capped: the tail keeps
+// one arc each and one legend row each, and the legend is where they are told
+// apart. It used to fold them into a single "Other (14)" arc, which drew the
+// same grey region on the ring while naming none of the fourteen - the one
+// reading nobody could get at was the one somebody scrolling the list is
+// after.
 //
 // The slots, the tail's grey and the empty grey all live in
-// constants/analyticsPalette now: the three charts beside this one on the
-// canvas assign from the same list, so the ring cannot own the colour of a
-// category it shares with them.
-const SLICE_COLORS = CATEGORY_COLORS
-const MAX_SLICES = SLICE_COLORS.length
+// constants/analyticsPalette: the three charts beside this one on the canvas
+// assign from the same list, so the ring cannot own the colour of a category it
+// shares with them.
+
+// How much of the legend stands above the fold. Five rows and a sliver of the
+// sixth - the sliver is the scrollbar's job description, and without it a list
+// of exactly six looks like a list of five.
+//
+// 32px a row (20px of text on 6px of padding each side), 20px for the sticky
+// header, and 16px of the sixth row showing: 5*32 + 20 + 16 = 196px, which is
+// also about the height of the ring it sits beside.
+const LEGEND_MAX = '12.25rem'
 
 const SIZE = 200
 const STROKE = 26
@@ -28,37 +39,6 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 // A gap of surface between arcs rather than a stroke around each one - a
 // border would read as part of the mark.
 const GAP = 3
-
-// Empty entries are legend-only, and are held out of the fold entirely rather
-// than sorted to the back of it. A zero-length arc cannot be drawn, so letting
-// one take a slice slot would spend it on nothing - and a category list with
-// several empties would push real slices into "Other" to make room for
-// categories that aren't there.
-//
-// They keep their place at the end of the returned list so the legend can print
-// them, and the caller's total is unaffected because they add zero to it.
-export function foldToSlices(items, valueKey = 'count') {
-  const sorted = [...items].sort((a, b) => b[valueKey] - a[valueKey])
-  const filled = sorted.filter((item) => item[valueKey] > 0)
-  const empty = sorted
-    .filter((item) => item[valueKey] <= 0)
-    .map((item) => ({ ...item, color: EMPTY_COLOR }))
-
-  if (filled.length <= MAX_SLICES) {
-    return [...filled.map((item, index) => ({ ...item, color: item.color ?? SLICE_COLORS[index] })), ...empty]
-  }
-  const head = filled.slice(0, MAX_SLICES - 1).map((item, index) => ({ ...item, color: SLICE_COLORS[index] }))
-  const tail = filled.slice(MAX_SLICES - 1)
-  return [
-    ...head,
-    {
-      value: `Other (${tail.length})`,
-      [valueKey]: tail.reduce((sum, item) => sum + item[valueKey], 0),
-      color: OTHER_COLOR,
-    },
-    ...empty,
-  ]
-}
 
 // A transparent arc drawn over each slice, wider than the paint, so a thin
 // segment is still catchable - hovering a 3px arc dead-centre is a pinpoint
@@ -87,11 +67,15 @@ export function DonutChart({
   const [hovered, setHovered] = useState(null)
   const [ownPin, setOwnPin] = useState(null)
 
-  const slices = foldToSlices(items, valueKey)
+  const slices = rankedWithColor(items, valueKey)
   const total = slices.reduce((sum, item) => sum + item[valueKey], 0)
 
   const controlled = typeof onSelect === 'function'
-  const pinnedIndex = controlled ? slices.findIndex((slice) => slice.value === selected) : ownPin
+  // The pin is a value, not a row number, in both modes: the list re-ranks
+  // whenever the filters change, and an index would then be pinning whatever
+  // has since moved into that position.
+  const pinnedValue = controlled ? selected : ownPin
+  const pinnedIndex = pinnedValue ? slices.findIndex((slice) => slice.value === pinnedValue) : -1
   const pinned = pinnedIndex >= 0 ? pinnedIndex : null
   const active = hovered ?? pinned
 
@@ -108,15 +92,10 @@ export function DonutChart({
   // Clicking the pinned slice again releases it, so the same gesture that turns
   // the pin on turns it off and there is no separate control to find.
   const togglePin = (index) => {
-    if (!controlled) {
-      setOwnPin((current) => (current === index ? null : index))
-      return
-    }
     const value = slices[index]?.value
-    // "Other (3)" is several values folded into one arc, so there is nothing
-    // for the other views to highlight - clicking it clears instead.
-    const foldable = value === selected || value?.startsWith('Other (')
-    onSelect(foldable ? null : value)
+    const next = !value || value === pinnedValue ? null : value
+    if (controlled) onSelect(next)
+    else setOwnPin(next)
   }
 
   // Geometry once, so the arcs and their hit areas can't drift apart.
@@ -274,116 +253,129 @@ export function DonutChart({
           and were worse in every way that mattered: each had to truncate its
           labels to fit beside the ring, the rank order had to be read down one
           column and back up the other, and the second column was usually the
-          all-grey empty ones, which read as something having gone wrong. A
-          taller list is simply a taller list. */}
+          all-grey empty ones, which read as something having gone wrong.
+
+          It scrolls past the fifth rather than running on: the list is the
+          only part of this cell that grows with the data, and left to itself a
+          dimension with twenty values made the donut's card three times the
+          height of the three beside it and broke the canvas into a column of
+          mismatched boxes. Ranked biggest-first, so what stands above the fold
+          is the top five and the scroll is the tail - which is the order
+          somebody reads them in anyway. */}
       <div className="min-w-0 flex-1">
         {/* Full width rather than sized to its own content. In a half-width
             cell of the canvas a content-sized table runs past the edge of the
             card and the share column gets clipped clean off; at full width,
             with the name column truncating, every cell's figures land on the
             same right margin. */}
-        <table className="w-full border-separate border-spacing-0 text-sm">
-          {/* Headed, because two columns of bare numbers beside a list of
-              names is a table asking to be misread - the count and the share
-              are not obviously which from the figures alone. */}
-          <thead>
-            <tr className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-              <th className="pb-2" />
-              <th className="pb-2" />
-              <th className="pb-2 pr-3 text-right font-semibold">Count</th>
-              <th className="pb-2 pr-2 text-right font-semibold">% of total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {slices.map((slice, index) => {
-              const isActive = active === index
-              const isPinned = pinned === index
-              const isEmpty = slice[valueKey] <= 0
-              // The background lives on the cells, not the row: a <tr> takes
-              // a colour but will not clip a radius, so the rounded ends have
-              // to come from the first and last cell.
-              const cell = `py-1.5 transition-colors first:rounded-l-md last:rounded-r-md ${
-                isActive ? 'bg-slate-100' : isEmpty ? '' : 'group-hover:bg-slate-50'
-              } ${active !== null && !isActive ? 'opacity-40' : ''}`
+        <div className="overflow-y-auto overscroll-contain" style={{ maxHeight: LEGEND_MAX }}>
+          <table className="w-full border-separate border-spacing-0 text-sm">
+            {/* Headed, because two columns of bare numbers beside a list of
+                names is a table asking to be misread - the count and the share
+                are not obviously which from the figures alone. */}
+            {/* Stuck on the cells as well as the section: Safari sticks a
+                <thead> nowhere, and a header that scrolls away leaves two
+                columns of bare numbers - which is the misreading it is here to
+                prevent. */}
+            <thead className="sticky top-0 z-10">
+              <tr className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                <th className="sticky top-0 bg-white pb-2" />
+                <th className="sticky top-0 bg-white pb-2" />
+                <th className="sticky top-0 bg-white pb-2 pr-3 text-right font-semibold">Count</th>
+                <th className="sticky top-0 bg-white pb-2 pr-2 text-right font-semibold">% of total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {slices.map((slice, index) => {
+                const isActive = active === index
+                const isPinned = pinned === index
+                const isEmpty = slice[valueKey] <= 0
+                // The background lives on the cells, not the row: a <tr> takes
+                // a colour but will not clip a radius, so the rounded ends have
+                // to come from the first and last cell.
+                const cell = `py-1.5 transition-colors first:rounded-l-md last:rounded-r-md ${
+                  isActive ? 'bg-slate-100' : isEmpty ? '' : 'group-hover:bg-slate-50'
+                } ${active !== null && !isActive ? 'opacity-40' : ''}`
 
-              return (
-                // An empty entry is printed, not offered: hovering it would
-                // dim the whole ring to highlight a slice that isn't drawn.
-                // So no handlers, no tab stop, and muted text - the eye
-                // should reach the categories with people in them first.
-                <tr
-                  key={slice.value}
-                  className={`group ${isEmpty ? '' : 'cursor-pointer outline-none'}`}
-                  {...(isEmpty
-                    ? {}
-                    : {
-                        tabIndex: 0,
-                        // aria-pressed is only meaningful on a button, so the
-                        // role has to come with it. Same trade the shared
-                        // DataTable makes for clickable rows: the control
-                        // semantics matter more here than the row ones.
-                        role: 'button',
-                        'aria-pressed': isPinned,
-                        onMouseEnter: () => setHovered(index),
-                        onFocus: () => setHovered(index),
-                        onBlur: () => setHovered(null),
-                        onClick: () => togglePin(index),
-                        onKeyDown: (event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault()
-                            togglePin(index)
-                          }
-                        },
-                      })}
-                >
-                  <td className={`${cell} pl-2 pr-2.5`}>
-                    {/* The pinned row's swatch grows a halo, so which slice
-                        is held is legible from the legend and not only from
-                        the badge in the middle of the ring. */}
-                    <span
-                      className={`block h-2.5 w-2.5 rounded-full transition-shadow ${
-                        isPinned ? 'ring-2 ring-slate-300 ring-offset-1' : ''
-                      }`}
-                      style={{ backgroundColor: slice.color }}
-                      aria-hidden="true"
-                    />
-                  </td>
-                  <td className={`${cell} pr-5`}>
-                    {/* The truncation floor. Without it the table grows to
-                        whatever the longest category is called and pushes
-                        the numbers off the panel. */}
-                    <span
-                      className={`block max-w-80 truncate ${
-                        isEmpty ? 'text-slate-400' : 'text-slate-700'
-                      }`}
-                      title={slice.value}
+                return (
+                  // An empty entry is printed, not offered: hovering it would
+                  // dim the whole ring to highlight a slice that isn't drawn.
+                  // So no handlers, no tab stop, and muted text - the eye
+                  // should reach the categories with people in them first.
+                  <tr
+                    key={slice.value}
+                    className={`group ${isEmpty ? '' : 'cursor-pointer outline-none'}`}
+                    {...(isEmpty
+                      ? {}
+                      : {
+                          tabIndex: 0,
+                          // aria-pressed is only meaningful on a button, so the
+                          // role has to come with it. Same trade the shared
+                          // DataTable makes for clickable rows: the control
+                          // semantics matter more here than the row ones.
+                          role: 'button',
+                          'aria-pressed': isPinned,
+                          onMouseEnter: () => setHovered(index),
+                          onFocus: () => setHovered(index),
+                          onBlur: () => setHovered(null),
+                          onClick: () => togglePin(index),
+                          onKeyDown: (event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              togglePin(index)
+                            }
+                          },
+                        })}
+                  >
+                    <td className={`${cell} pl-2 pr-2.5`}>
+                      {/* The pinned row's swatch grows a halo, so which slice
+                          is held is legible from the legend and not only from
+                          the badge in the middle of the ring. */}
+                      <span
+                        className={`block h-2.5 w-2.5 rounded-full transition-shadow ${
+                          isPinned ? 'ring-2 ring-slate-300 ring-offset-1' : ''
+                        }`}
+                        style={{ backgroundColor: slice.color }}
+                        aria-hidden="true"
+                      />
+                    </td>
+                    <td className={`${cell} pr-5`}>
+                      {/* The truncation floor. Without it the table grows to
+                          whatever the longest category is called and pushes
+                          the numbers off the panel. */}
+                      <span
+                        className={`block max-w-80 truncate ${
+                          isEmpty ? 'text-slate-400' : 'text-slate-700'
+                        }`}
+                        title={slice.value}
+                      >
+                        {slice.value}
+                      </span>
+                    </td>
+                    {/* Whichever measure the panel is set to reads as the
+                        figure; the other stays beside it, smaller, so
+                        switching never costs you the number you were not
+                        looking at. */}
+                    <td
+                      className={`${cell} pr-3 text-right tabular-nums ${
+                        byShare ? 'text-xs text-slate-400' : 'font-semibold'
+                      } ${isEmpty || byShare ? 'text-slate-400' : 'text-slate-900'}`}
                     >
-                      {slice.value}
-                    </span>
-                  </td>
-                  {/* Whichever measure the panel is set to reads as the
-                      figure; the other stays beside it, smaller, so
-                      switching never costs you the number you were not
-                      looking at. */}
-                  <td
-                    className={`${cell} pr-3 text-right tabular-nums ${
-                      byShare ? 'text-xs text-slate-400' : 'font-semibold'
-                    } ${isEmpty || byShare ? 'text-slate-400' : 'text-slate-900'}`}
-                  >
-                    {slice[valueKey]}
-                  </td>
-                  <td
-                    className={`${cell} pr-2 text-right tabular-nums ${
-                      byShare ? 'font-semibold' : 'text-xs text-slate-400'
-                    } ${isEmpty || !byShare ? 'text-slate-400' : 'text-slate-900'}`}
-                  >
-                    {share(slice[valueKey])}%
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+                      {slice[valueKey]}
+                    </td>
+                    <td
+                      className={`${cell} pr-2 text-right tabular-nums ${
+                        byShare ? 'font-semibold' : 'text-xs text-slate-400'
+                      } ${isEmpty || !byShare ? 'text-slate-400' : 'text-slate-900'}`}
+                    >
+                      {share(slice[valueKey])}%
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )

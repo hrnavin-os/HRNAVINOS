@@ -16,7 +16,8 @@ export const CATEGORY_COLORS = ['#2563eb', '#ea580c', '#0d9488', '#7c3aed', '#db
 // The tail, once there are more values than there are slots. A seventh
 // generated hue is indistinguishable from an existing one under colour
 // blindness, so the palette is never extended - the tail goes grey and its
-// identity is carried by its label instead.
+// identity is carried by its label instead. Which is why every view now prints
+// the label: grey is only honest when the name is beside it.
 export const OTHER_COLOR = '#94a3b8'
 
 // Anything with no value recorded. Deliberately outside the palette - it is
@@ -38,9 +39,11 @@ export const BAR = '#2563eb'
  * way to make a dashboard untrustworthy. So the assignment is made once, from
  * the entity's rank in the whole breakdown, and every view reads it.
  *
- * The fold rule matches the ring's exactly: past six values the sixth slot is
- * spent on the tail rather than on the sixth entity, so a value that is inside
- * the donut's "Other" arc is the same grey everywhere else too.
+ * Past six values the sixth slot is spent on the tail rather than on the sixth
+ * entity, so everything below the top five wears one grey in every view at
+ * once. Nothing is merged by it - the tail values still get their own arc,
+ * bar, column and tile, and their own row in the list beside it; they simply
+ * stop being told apart by hue, which past six slots they could not be.
  *
  * `item.color` wins where the data brings its own - the call-remark groups are
  * coloured by the constants every other surface names them from.
@@ -59,6 +62,26 @@ export function colorByEntity(items, valueKey = 'count') {
     if (item[valueKey] > 0) slot += 1
   }
   return colors
+}
+
+/**
+ * The breakdown ranked biggest-first, each row carrying its own colour.
+ *
+ * What the ring and the ranked bars are drawn from, and the one ordering all
+ * four views agree on. Nothing is folded away: every value keeps its own row,
+ * its own arc and its own bar, and the ones past the palette's six validated
+ * slots wear the tail's grey - identity there is carried by the label, which
+ * is now always printed beside the mark rather than swallowed by an
+ * "Other (14)" that named none of them.
+ *
+ * Empty values sort to the end, where the legend prints them and no chart
+ * draws them.
+ */
+export function rankedWithColor(items, valueKey = 'count') {
+  const colors = colorByEntity(items, valueKey)
+  return [...items]
+    .sort((a, b) => b[valueKey] - a[valueKey])
+    .map((item) => ({ ...item, color: colors.get(item.value) }))
 }
 
 // Which ink a label printed on top of a filled mark should wear. Computed from

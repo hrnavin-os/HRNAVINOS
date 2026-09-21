@@ -13,11 +13,10 @@ import { FilterDropdown } from '@/components/ui/FilterDropdown'
 import { TabStrip } from '@/components/ui/TabStrip'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
-import { foldToSlices } from '@/components/analytics/DonutChart'
 import { BreakdownGrid, visualsFor } from '@/components/analytics/BreakdownVisual'
 import { Panel, SegmentedToggle } from '@/components/analytics/Panel'
 import { MiniStatStrip, StatTile } from '@/components/analytics/StatTile'
-import { percent } from '@/constants/analyticsPalette'
+import { colorByEntity, percent } from '@/constants/analyticsPalette'
 import { BOARDS, BOARD_BY_KEY, shortMoney } from '@/constants/statisticsBoards'
 import { REMARK_GROUPS, REMARK_GROUP_BY_VALUE } from '@/constants/inductionCallRemarks'
 import { formatCurrency } from '@/utils/formatters'
@@ -207,10 +206,10 @@ export function StatisticsPage() {
   const now = data?.current
   const before = data?.comparison
 
-  // The ring's own colour assignment, read back so the ranking and the table
-  // can wear it too. The same entity keeps the same colour in every view,
-  // which is what lets a reader carry one across to another.
-  const colors = new Map(foldToSlices(chartRows).map((slice) => [slice.value, slice.color]))
+  // The canvas's colour assignment, read back so the ranking and the table can
+  // wear it too. The same entity keeps the same colour in every view, which is
+  // what lets a reader carry one across to another.
+  const colors = colorByEntity(chartRows)
 
   // On the remarks tab the chart shows outcomes while the table shows the
   // wordings inside them - so a highlight has to travel between the two

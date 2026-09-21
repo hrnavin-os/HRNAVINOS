@@ -1,15 +1,24 @@
 import { useState } from 'react'
 import { colorByEntity, MUTED } from '@/constants/analyticsPalette'
 
+// How many columns stand in the plot before it scrolls, and the floor a column
+// is never squeezed below.
+//
+// Six rather than the five the ring and the bars show: a column is a vertical
+// mark read left to right, so the cell's width is what decides how many fit,
+// and six is what its width holds at a readable column. Below the floor the
+// name underneath stops being readable at all, at which point a narrower
+// column buys nothing - so on a phone fewer than six show and the rest scroll.
+const VISIBLE_COLUMNS = 6
+const MIN_COLUMN = '3.5rem'
+const COLUMN_GAP = '0.5rem'
+
 /**
  * The breakdown as vertical columns on a common baseline.
  *
- * The view that shows *everything*. The ring and the ranked bars both fold
- * past six values into one "Other" slice, because seven arcs cannot be told
- * apart and a seventh hue is indistinguishable from an existing one under
- * colour blindness. Neither limit applies to a column: a chart of fourteen
- * batches or eleven courses is exactly what this is for, and nothing is folded
- * away here.
+ * The view that shows *everything*. The ring beside it draws fourteen batches
+ * as fourteen arcs, most of them slivers; the same fourteen as columns are all
+ * the same width and all readable, which is what this one is for.
  *
  * Coloured per entity, from the assignment every view on the canvas shares.
  * Alone, this chart wore one hue and that was right: a single measure across
@@ -19,14 +28,22 @@ import { colorByEntity, MUTED } from '@/constants/analyticsPalette'
  * between them. Colour here is redundant with the label underneath, which
  * costs nothing.
  *
- * Nothing is folded away, so the values past the palette's six validated slots
- * wear the same grey the ring's "Other" arc does rather than a seventh
- * generated hue.
+ * The palette is not extended past its six validated slots, so everything
+ * below the top five wears one grey here exactly as it does in the other three
+ * views. Nothing is merged by that: the name under each column is what tells
+ * the grey ones apart.
  *
  * `ordered` keeps the values in the order they were handed over - which for a
  * batch is chronological - rather than sorting them by size. A month is a
  * position on an axis, and re-ordering months by how many people came through
  * them is not a chart of anything.
+ *
+ * Six columns stand in the plot and the rest scroll in from the right, from a
+ * left-hand edge rather than centred. Centred, a chart of four values sat as
+ * four slabs in the middle of the cell and a chart of twenty started halfway
+ * off the left of it - neither of which is where the eye goes first. Anchored
+ * left, the biggest value (or the earliest month) is always the first thing
+ * under the pointer and the scroll runs the one direction a reader expects.
  */
 export function ColumnChart({
   items,
@@ -71,13 +88,12 @@ export function ColumnChart({
   return (
     // Horizontally scrollable, because the whole point of this view is that
     // nothing is folded away - twenty columns squeezed into the panel width
-    // would be a barcode. The plot keeps a floor of 3rem a column and scrolls
-    // past that.
-    <div className="w-full overflow-x-auto" onMouseLeave={() => setHovered(null)}>
+    // would be a barcode.
+    <div className="w-full overflow-x-auto overscroll-x-contain" onMouseLeave={() => setHovered(null)}>
       {/* items-stretch, not items-end: every column has to be as tall as the
           plot for its bar to be a percentage of anything. Sized to content,
           the track collapses and every bar comes out at zero height. */}
-      <div className="flex min-w-full items-stretch justify-center gap-2 px-1" style={{ height: '16rem' }}>
+      <div className="flex min-w-full items-stretch justify-start gap-2 px-1" style={{ height: '16rem' }}>
         {rows.map((row, index) => {
           const value = row[valueKey]
           const isEmpty = value <= 0
@@ -95,10 +111,22 @@ export function ColumnChart({
           return (
             <div
               key={row.value}
-              // Capped as well as shared out: four values across a cell of the
-              // canvas would otherwise be four slabs, which reads as a diagram
-              // rather than as a chart of anything.
-              className={`flex h-full min-w-12 max-w-24 flex-1 flex-col items-center rounded-md transition-opacity ${
+              // One sixth of the plot each, whether there are four values or
+              // forty: a column is only comparable to its neighbour if the two
+              // are the same width, and a width shared out between however many
+              // happen to exist makes a chart of four read as four slabs and a
+              // chart of twenty as a barcode. Fixed, the seventh onwards
+              // overflow the plot and the scroll reaches them.
+              //
+              // The basis resolves against the plot's own width rather than its
+              // scrolled length, which is what makes "one sixth" mean one sixth
+              // of what is on screen.
+              style={{
+                flex: `0 0 max(${MIN_COLUMN}, calc((100% - ${
+                  VISIBLE_COLUMNS - 1
+                } * ${COLUMN_GAP}) / ${VISIBLE_COLUMNS}))`,
+              }}
+              className={`flex h-full flex-col items-center rounded-md transition-opacity ${
                 dimmed ? 'opacity-40' : ''
               } ${isEmpty ? '' : 'cursor-pointer'}`}
               {...(isEmpty
