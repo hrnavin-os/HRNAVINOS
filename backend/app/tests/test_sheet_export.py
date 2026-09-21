@@ -118,10 +118,14 @@ async def test_the_export_cannot_be_aimed_at_the_two_way_syncs_own_tabs(client, 
     monkeypatch.setattr(env, "LEAD_SHEET_SYNC_ENABLED", True)
     monkeypatch.setattr(env, "LEAD_SHEET_SPREADSHEET_ID", "1GuW1RzWnA1SsKIwmzRFXdIa7ERSb3EELnrWABkPSHnk")
 
+    # The sync owns one tab per section ("Induction - A Section").
     with pytest.raises(BadRequestError, match="two-way sync"):
-        await _configure()
+        await _configure(induction_tab="Induction - A Section")
 
-    # Same spreadsheet, tabs of its own: allowed, because nothing overlaps.
+    # Same spreadsheet, tabs of its own: allowed, because nothing overlaps -
+    # including the plain board names, which the sync no longer writes.
+    config = await _configure(induction_tab="Induction", foundation_tab="Foundation")
+    assert config.enabled is True
     config = await _configure(induction_tab="ERP Induction", foundation_tab="ERP Foundation")
     assert config.enabled is True
 
@@ -134,7 +138,7 @@ async def test_a_target_that_only_clashes_later_is_caught_at_run_time(client, mo
     # Sync off: the default tab names against the sync's own spreadsheet save
     # without complaint.
     monkeypatch.setattr(env, "LEAD_SHEET_SYNC_ENABLED", False)
-    await _configure()
+    await _configure(foundation_tab="Foundation - B Section")
 
     # Same config, a server where the sync runs.
     monkeypatch.setattr(env, "LEAD_SHEET_SYNC_ENABLED", True)

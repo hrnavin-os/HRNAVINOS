@@ -52,6 +52,7 @@ from app.services.google_sheets_client import (
     access_token,
     service_account_email,
 )
+from app.services.lead_sheet_sync_service import is_sync_tab
 from app.services.lead_sheet_tabs import FoundationTab, InductionTab, SheetTabSpec, error_message
 
 logger = logging.getLogger("app.integrations.sheet_export")

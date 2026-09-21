@@ -15,11 +15,22 @@ from app.services.induction_entry_service import InductionEntryService
 from app.services.lead_service import LeadService
 from app.services.lead_sheet_sync_service import LeadSheetSyncService
 
+# Records made without a section land on each board's No Section tab.
+I = "Induction - No Section"
+F = "Foundation - No Section"
+
 
 class FakeSheets:
     def __init__(self) -> None:
-        self.tabs: dict[str, list[list[str]]] = {"Induction": [], "Foundation": []}
+        self.tabs: dict[str, list[list[str]]] = {I: [], F: []}
         self.writes = 0
+
+    async def tab_titles(self):
+        return list(self.tabs)
+
+    async def ensure_tabs(self, names):
+        for name in names:
+            self.tabs.setdefault(name, [])
 
     async def read_tabs(self, names):
         return {name: [list(row) for row in self.tabs[name]] for name in names}
@@ -64,11 +75,11 @@ async def test_erp_records_are_written_to_their_tabs(client):
 
     await sync(sheets)
 
-    foundation = sheets.rows("Foundation")
+    foundation = sheets.rows(F)
     assert [row["ERP ID"] for row in foundation] == [str(lead.id)]
     assert foundation[0]["Name"] == "Ravi Kumar"
     assert foundation[0]["Stage"] == "New Lead"
-    induction = sheets.rows("Induction")
+    induction = sheets.rows(I)
     assert induction[0]["ERP ID"] == str(entry.id)
     assert induction[0]["Category"] == "Fresher"
     assert induction[0]["Batch"] == "Batch-29"
@@ -91,10 +102,10 @@ async def test_sheet_edits_are_saved_to_the_erp(client):
     sheets = FakeSheets()
     await sync(sheets)
 
-    sheets.set_cell("Foundation", str(lead.id), "Paying Amount", "₹15,000")
-    sheets.set_cell("Foundation", str(lead.id), "Payment Remarks", "confirmed to pay")
-    sheets.set_cell("Induction", str(entry.id), "Category", "Experienced")
-    sheets.set_cell("Induction", str(entry.id), "Terms Signed", "yes")
+    sheets.set_cell(F, str(lead.id), "Paying Amount", "₹15,000")
+    sheets.set_cell(F, str(lead.id), "Payment Remarks", "confirmed to pay")
+    sheets.set_cell(I, str(entry.id), "Category", "Experienced")
+    sheets.set_cell(I, str(entry.id), "Terms Signed", "yes")
     await sync(sheets)
 
     lead = await Lead.get(lead.id)
@@ -104,7 +115,7 @@ async def test_sheet_edits_are_saved_to_the_erp(client):
     assert entry.category == "Experienced"
     assert entry.other_details.terms_form_signed is True
     # Written back in the ERP's own wording.
-    assert sheets.rows("Foundation")[0]["Payment Remarks"] == "Confirmed to pay"
+    assert sheets.rows(F)[0]["Payment Remarks"] == "Confirmed to pay"
 
 
 async def test_erp_edits_reach_the_sheet(client):
@@ -115,23 +126,23 @@ async def test_erp_edits_reach_the_sheet(client):
     await LeadService().update(lead.id, LeadUpdate(qr_code="Razor pay"), actor_id=None)
     await sync(sheets)
 
-    assert sheets.rows("Foundation")[0]["QR-Code"] == "Razor pay"
+    assert sheets.rows(F)[0]["QR-Code"] == "Razor pay"
 
 
 async def test_new_sheet_row_is_added_to_the_erp(client):
     sheets = FakeSheets()
     await sync(sheets)  # writes the header rows
 
-    sheets.append("Foundation", {"Name": "Karthik", "Mobile Number": "9000011111", "Course": "Recruitment"})
-    sheets.append("Induction", {"Name": "Meena", "Mobile Number": "9000022222", "Registration Date": "05/09/2026"})
+    sheets.append(F, {"Name": "Karthik", "Mobile Number": "9000011111", "Course": "Recruitment"})
+    sheets.append(I, {"Name": "Meena", "Mobile Number": "9000022222", "Registration Date": "05/09/2026"})
     await sync(sheets)
 
     lead = await Lead.find_one({"phone": "9000011111"})
     assert lead is not None and lead.name == "Karthik"
-    assert sheets.rows("Foundation")[0]["ERP ID"] == str(lead.id)
+    assert sheets.rows(F)[0]["ERP ID"] == str(lead.id)
     entry = await InductionEntry.find_one({"phone": "9000022222"})
     assert entry.registration_date == date(2026, 9, 5)
-    assert sheets.rows("Induction")[0]["ERP ID"] == str(entry.id)
+    assert sheets.rows(I)[0]["ERP ID"] == str(entry.id)
 
 
 async def test_refused_edit_is_reverted_and_explained(client):
@@ -140,27 +151,27 @@ async def test_refused_edit_is_reverted_and_explained(client):
     await sync(sheets)
 
     # Batch Confirmation can only be entered from Financial Approval.
-    sheets.set_cell("Foundation", str(lead.id), "Stage", "Batch Confirmation")
+    sheets.set_cell(F, str(lead.id), "Stage", "Batch Confirmation")
     await sync(sheets)
 
     assert (await Lead.get(lead.id)).status == LeadStatus.NEW_LEAD
-    row = sheets.rows("Foundation")[0]
+    row = sheets.rows(F)[0]
     assert row["Stage"] == "New Lead"
     assert "Stage:" in row["Sync Note"]
     # The note survives the next quiet run instead of flashing past.
     await sync(sheets)
-    assert "Stage:" in sheets.rows("Foundation")[0]["Sync Note"]
+    assert "Stage:" in sheets.rows(F)[0]["Sync Note"]
 
 
 async def test_incomplete_new_row_is_kept_with_a_note(client):
     sheets = FakeSheets()
     await sync(sheets)
 
-    sheets.append("Foundation", {"Name": "No Number"})
+    sheets.append(F, {"Name": "No Number"})
     await sync(sheets)
 
     assert await Lead.find({}).count() == 0
-    row = sheets.rows("Foundation")[0]
+    row = sheets.rows(F)[0]
     assert row["Name"] == "No Number"
     assert row["Sync Note"].startswith("Not added to the ERP")
 
@@ -174,7 +185,7 @@ async def test_record_deleted_in_erp_leaves_the_sheet(client):
     await LeadService().delete(lead.id, actor_id=None)
     await sync(sheets)
 
-    assert [row["Name"] for row in sheets.rows("Foundation")] == ["Second Lead"]
+    assert [row["Name"] for row in sheets.rows(F)] == ["Second Lead"]
 
 
 async def test_row_deleted_in_sheet_comes_back(client):
@@ -182,10 +193,56 @@ async def test_row_deleted_in_sheet_comes_back(client):
     sheets = FakeSheets()
     await sync(sheets)
 
-    sheets.tabs["Foundation"] = sheets.tabs["Foundation"][:1]
+    sheets.tabs[F] = sheets.tabs[F][:1]
     await sync(sheets)
 
-    assert [row["ERP ID"] for row in sheets.rows("Foundation")] == [str(lead.id)]
+    assert [row["ERP ID"] for row in sheets.rows(F)] == [str(lead.id)]
+
+
+async def test_each_section_gets_its_own_tab(client):
+    in_a = await _entry(section="a", group="Group 2")
+    in_b = await _entry(name="Kavya", phone="9000044444", section="b")
+    lead = await _lead(section="b")
+    sheets = FakeSheets()
+
+    await sync(sheets)
+
+    # Every configured section has a tab, even one nobody is filed under yet.
+    assert {"Induction - A Section", "Induction - C Section", "Foundation - A Section"} <= set(sheets.tabs)
+    a_rows = sheets.rows("Induction - A Section")
+    assert [row["ERP ID"] for row in a_rows] == [str(in_a.id)]
+    assert a_rows[0]["Group"] == "Group 2"
+    assert [row["ERP ID"] for row in sheets.rows("Induction - B Section")] == [str(in_b.id)]
+    assert [row["ERP ID"] for row in sheets.rows("Foundation - B Section")] == [str(lead.id)]
+    assert sheets.rows("Foundation - A Section") == []
+
+
+async def test_group_edited_in_the_sheet_moves_the_student(client):
+    entry = await _entry(section="a", group="Group 1")
+    sheets = FakeSheets()
+    await sync(sheets)
+
+    sheets.set_cell("Induction - A Section", str(entry.id), "Group", "group 3")
+    await sync(sheets)
+
+    entry = await InductionEntry.get(entry.id)
+    assert entry.foundation_group == 3
+    assert entry.foundation_group_history  # recorded as a move, as on the board
+    assert sheets.rows("Induction - A Section")[0]["Group"] == "Group 3"
+
+
+async def test_new_row_is_filed_under_the_tab_it_was_typed_into(client):
+    sheets = FakeSheets()
+    await sync(sheets)
+
+    sheets.append("Foundation - B Section", {"Name": "Karthik", "Mobile Number": "9000011111", "Course": "Recruitment"})
+    await sync(sheets)
+
+    lead = await Lead.find_one({"phone": "9000011111"})
+    assert lead.section == "b"
+    row = sheets.rows("Foundation - B Section")[0]
+    assert row["ERP ID"] == str(lead.id)
+    assert row["Section"] == "B Section"
 
 
 async def test_only_one_worker_holds_the_lease(client):
