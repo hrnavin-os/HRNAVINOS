@@ -33,6 +33,7 @@ from app.schemas.attendance_board_schema import (
 )
 from app.services.audit_service import AuditService
 from app.services.induction_entry_service import InductionEntryService, batch_for, stamp_terms_signature
+from app.schemas.foundation_group_schema import FoundationGroupMoveSchema
 from app.utils.foundation_groups import MAX_FOUNDATION_GROUP
 
 
@@ -257,7 +258,7 @@ class AttendanceBoardService:
             section=entry.section,
             batch=batch_for(entry.registration_date),
             foundation_group=entry.foundation_group,
-            foundation_group_history=entry.foundation_group_history,
+            foundation_group_history=FoundationGroupMoveSchema.of(entry.foundation_group_history),
             registration_date=entry.registration_date,
             status=entry.status.value,
             marks={key: marker.read(entry) for key, marker in MARKERS.items()},

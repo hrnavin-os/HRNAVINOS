@@ -424,3 +424,28 @@ async def test_group_filter_combines_with_a_marker_split(client, auth_headers):
         STUDENTS_URL, headers=auth_headers, params={"marker": "polls", "state": "no", "group": 1}
     )
     assert [row["name"] for row in pending.json()["items"]] == ["Chitra"]
+
+
+async def test_the_roll_still_loads_once_somebody_has_been_moved(client, auth_headers):
+    """A move is a nested model on the entry, and the response declares its own
+    schema for it - Pydantic v2 will not coerce one model class into the other,
+    so handing it the stored objects fails validation and takes the whole board
+    down with a 500.
+
+    Invisible until a move exists: an empty history validates against anything,
+    so every other test on this board passes either way. Hence a test that
+    actually moves somebody.
+    """
+    entry_id = await add_student_on(
+        client, auth_headers, name="Arun", phone="9876543210", registration_date="2026-08-04", group="Group 1"
+    )
+    moved = await client.put(
+        f"/api/v1/induction-entries/{entry_id}", headers=auth_headers, json={"foundation_group": 2}
+    )
+    assert moved.status_code == 200, moved.text
+
+    response = await client.get(STUDENTS_URL, headers=auth_headers)
+    assert response.status_code == 200, response.text
+    row = response.json()["items"][0]
+    assert row["foundation_group"] == 2
+    assert [(m["from_group"], m["to_group"]) for m in row["foundation_group_history"]] == [(1, 2)]

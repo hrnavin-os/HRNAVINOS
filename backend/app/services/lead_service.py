@@ -108,15 +108,7 @@ class LeadService:
             qr_code=lead.qr_code,
             batch_number=lead.batch_number,
             foundation_group=lead.foundation_group,
-            foundation_group_history=[
-                FoundationGroupMoveSchema(
-                    from_group=move.from_group,
-                    to_group=move.to_group,
-                    at=move.at,
-                    by_name=move.by_name,
-                )
-                for move in lead.foundation_group_history
-            ],
+            foundation_group_history=FoundationGroupMoveSchema.of(lead.foundation_group_history),
             group_assigned_at=lead.group_assigned_at,
             lost_reason=lead.lost_reason,
             lost_at=lead.lost_at,
