@@ -34,6 +34,26 @@ import { colorByEntity, labelledFill } from '@/constants/analyticsPalette'
  * slivers, which is as unreadable as the ring this is meant to replace.
  */
 
+// What a label needs, in the pixels the tiles are actually drawn at.
+//
+// The map is laid out in percentages of a box whose height is fixed and whose
+// width is whatever the panel gives it - so a percentage of the height is a
+// known number of pixels and a percentage of the width is not. Judging both by
+// one percentage was what left tiles blank: 13% of a 700px-wide canvas cell is
+// 91px, room for a name twice over, and a tile at 12% got nothing at all while
+// a far shorter one beside it got both lines.
+//
+// So height decides how much is printed, measured against the line it has to
+// fit, and width only has to clear a sliver - the name truncates, and a
+// truncated name identifies a tile where a blank one identifies nothing.
+const BOX_HEIGHT = 288 // h-72
+const LINE = 16 // one line of the 11px label
+const PAD_FULL = 16 // p-2, top and bottom
+const PAD_TIGHT = 8 // p-1, top and bottom
+// Below this there is no room for even an ellipsis, and half a letter reads as
+// a rendering fault rather than as a label.
+const MIN_WIDTH = 4 // percent
+
 // The worst aspect ratio in a row of tiles laid along `side`. The layout adds
 // tiles to a row while this keeps improving and closes the row when it stops.
 function worstRatio(row, side) {
@@ -114,10 +134,22 @@ export function TreemapChart({
 
   // Laid out in a 100x100 square and rendered as percentages, so the map fills
   // whatever width the panel gives it without anything measuring the DOM.
+  //
+  // How much of a label each tile can hold is decided once here rather than
+  // inside the render, so the note
+  // under the map can name exactly the tiles that came out blank. A tile
+  // nobody can identify is the one thing this view must not leave on screen,
+  // and at some mix of values there is always one too small to letter.
   const tiles = squarify(
     filled.map((item) => ({ ...item, weight: item[valueKey] })),
     { x: 0, y: 0, width: 100, height: 100 },
-  )
+  ).map((tile) => {
+    const height = (tile.height / 100) * BOX_HEIGHT
+    const wide = tile.width > MIN_WIDTH
+    const full = wide && height >= 2 * LINE + PAD_FULL
+    return { ...tile, pxHeight: height, full, named: wide && !full && height >= LINE + PAD_TIGHT }
+  })
+  const unlabelled = tiles.filter((tile) => !tile.full && !tile.named)
   const share = (value) => Math.round((value / total) * 1000) / 10
   const colors = colorByEntity(items, valueKey)
 
@@ -129,10 +161,13 @@ export function TreemapChart({
           const isHovered = hovered === tile.value
           const dimmed = (selected || hovered) && !isSelected && !isHovered
           const fill = labelledFill(colors.get(tile.value))
-          // Below roughly this size the label doesn't fit, and printing it
-          // anyway leaves a tile of broken text - the hover title and the
-          // table underneath carry those.
-          const roomy = tile.width > 13 && tile.height > 13
+          // Dropped a line at a time rather than all at once. A tile with room
+          // for two lines carries its name and its figure; one with room for a
+          // single line carries the name, because the name is the half that
+          // cannot be guessed from the tile itself - its area already says
+          // roughly what the figure is, and the exact number is on the hover
+          // title and in the three views beside this one.
+          const { full, named } = tile
           return (
             <button
               key={tile.value}
@@ -144,9 +179,11 @@ export function TreemapChart({
               onFocus={() => setHovered(tile.value)}
               onBlur={() => setHovered(null)}
               onClick={() => onSelect?.(isSelected ? null : tile.value)}
-              className={`absolute overflow-hidden p-2 text-left transition-opacity ${
-                dimmed ? 'opacity-35' : ''
-              } ${isSelected ? 'ring-2 ring-inset ring-slate-900' : ''}`}
+              className={`absolute overflow-hidden text-left transition-opacity ${
+                full ? 'p-2' : 'p-1'
+              } ${dimmed ? 'opacity-35' : ''} ${
+                isSelected ? 'ring-2 ring-inset ring-slate-900' : ''
+              }`}
               style={{
                 left: `${tile.x}%`,
                 top: `${tile.y}%`,
@@ -158,16 +195,20 @@ export function TreemapChart({
                 outline: '2px solid #f8fafc',
               }}
             >
-              {roomy && (
+              {(full || named) && (
+                <span className="block truncate text-[11px] font-semibold leading-4 text-white">
+                  {tile.value}
+                </span>
+              )}
+              {full && (
                 <>
-                  <span className="block truncate text-[11px] font-semibold text-white">
-                    {tile.value}
-                  </span>
-                  <span className="block text-[11px] font-bold tabular-nums text-white">
+                  <span className="block text-[11px] font-bold leading-4 tabular-nums text-white">
                     {measure === 'share' ? `${share(tile[valueKey])}%` : tile[valueKey]}
                   </span>
-                  {tile.period && tile.height > 22 && (
-                    <span className="block truncate text-[10px] text-white/80">{tile.period}</span>
+                  {tile.period && tile.pxHeight >= 3 * LINE + PAD_FULL && (
+                    <span className="block truncate text-[10px] leading-4 text-white/80">
+                      {tile.period}
+                    </span>
                   )}
                 </>
               )}
@@ -175,6 +216,19 @@ export function TreemapChart({
           )
         })}
       </div>
+
+      {/* The tiles too small to letter, named here instead. Two different
+          statements, so two different notes: one is a value with nobody in it
+          and no tile at all, the other is a tile that is drawn and simply has
+          nowhere to put its name. */}
+      {unlabelled.length > 0 && (
+        <p className="mt-2 text-[11px] text-slate-400">
+          Too small to label:{' '}
+          {unlabelled
+            .map((tile) => `${tile.value} (${measure === 'share' ? `${share(tile[valueKey])}%` : tile[valueKey]})`)
+            .join(' · ')}
+        </p>
+      )}
 
       {empty.length > 0 && (
         <p className="mt-2 text-[11px] text-slate-400">
