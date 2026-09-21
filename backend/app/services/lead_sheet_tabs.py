@@ -28,7 +28,7 @@ from app.schemas.induction_entry_schema import InductionDetailsUpdate, Induction
 from app.schemas.lead_schema import LeadCreate, LeadPlanAssign, LeadRemarkCreate, LeadUpdate
 from app.services.induction_entry_service import InductionEntryService, batch_for
 from app.services.lead_service import LeadService
-from app.utils.foundation_groups import foundation_group_label
+from app.utils.foundation_groups import foundation_group_label, parse_foundation_group
 
 
 @dataclass(frozen=True)
@@ -168,6 +168,26 @@ class SheetTabSpec:
     # no ERP ID to the record it already describes instead of duplicating it.
     phone_column: str = "phone"
     required_on_create: tuple[str, ...] = ()
+    # Set by for_section(): the tab then holds only that section's records
+    # (None = the ones filed under no section). Unset, it holds all of them.
+    scoped: bool = False
+    section: str | None = None
+
+    def for_section(self, code: str | None) -> "SheetTabSpec":
+        """This spec narrowed to one section, keyed apart so each section tab
+        keeps its own row snapshots."""
+        self.scoped = True
+        self.section = code
+        self.key = f"{self.key}:{code or '-'}"
+        return self
+
+    def scope(self, query: dict) -> dict:
+        return {**query, "section": self.section} if self.scoped else query
+
+    def default_section(self, raw: str) -> str | None:
+        """The section a new row is filed under: what its Section cell says,
+        else the section of the tab it was typed into."""
+        return optional(raw) or (self.section_label(self.section) if self.scoped and self.section else None)
 
     async def prepare(self) -> None:
         """Loads the lookups rendering needs (names, section labels) once per run."""
@@ -254,6 +274,7 @@ class InductionTab(SheetTabSpec):
         Column("paid_date", "Paid Date"),
         Column("batch", "Batch", editable=False),
         Column("section", "Section", create_only=True),
+        Column("group", "Group"),
         Column("assigned_to", "Assigned To", editable=False),
         Column("sales_person", "Sales Person"),
         Column("lead_source", "Lead Source"),
@@ -286,7 +307,7 @@ class InductionTab(SheetTabSpec):
         self.service = InductionEntryService()
 
     async def load_records(self) -> list[InductionEntry]:
-        return await InductionEntry.find({"is_deleted": False}).sort("+created_at").to_list()
+        return await InductionEntry.find(self.scope({"is_deleted": False})).sort("+created_at").to_list()
 
     def values(self, entry: InductionEntry) -> dict[str, str]:
         values = {field: cell_text(getattr(entry, field)) for field in _INDUCTION_TOP_FIELDS}
@@ -295,6 +316,7 @@ class InductionTab(SheetTabSpec):
         values.update(
             batch=batch_for(entry.registration_date),
             section=self.section_label(entry.section),
+            group=foundation_group_label(entry.foundation_group),
             assigned_to=self.assignee(entry.assigned_to),
             status=INDUCTION_STATUS_LABELS[entry.status],
             created_at=cell_text(entry.created_at),
@@ -319,7 +341,12 @@ class InductionTab(SheetTabSpec):
                 value = self._parse(field, raw)
                 if value is None and field in _NOT_BLANK:
                     raise ValueError("can't be blank")
-                if field in _GROUP_OF:
+                if field == "group":
+                    # A move between groups, recorded exactly as the board's
+                    # Group dropdown records one.
+                    update = InductionEntryUpdate(foundation_group=parse_foundation_group(raw))
+                    await self.service.update(entry.id, update, actor_id=None)
+                elif field in _GROUP_OF:
                     update = InductionDetailsUpdate(**{_GROUP_OF[field]: {field: value}})
                     await self.service.update_details(entry.id, update, actor_id=None)
                 else:
@@ -349,7 +376,8 @@ class InductionTab(SheetTabSpec):
             lead_source=optional(row.get("lead_source", "")),
             payment_mode=optional(row.get("payment_mode", "")),
             category=optional(row.get("category", "")),
-            section=optional(row.get("section", "")),
+            section=self.default_section(row.get("section", "")),
+            group=optional(row.get("group", "")),
         )
         entry = await self.service.create(data, actor_id=None)
         rest = {
@@ -369,6 +397,7 @@ _LEAD_TEXT_FIELDS = {
     "phone": "phone",
     "email": "email",
     "course": "course_interest",
+    "batch": "batch_number",
     "qr_code": "qr_code",
     "query": "notes",
 }
@@ -385,6 +414,7 @@ class FoundationTab(SheetTabSpec):
         Column("section", "Section", create_only=True),
         Column("date", "Date", editable=False),
         Column("group", "Group", editable=False),
+        Column("batch", "Batch"),
         Column("payment_plan", "Payment Method"),
         Column("paying_amount", "Paying Amount"),
         Column("qr_code", "QR-Code"),
@@ -402,7 +432,8 @@ class FoundationTab(SheetTabSpec):
     async def load_records(self) -> list[Lead]:
         # The board's own filter: an imported lead still waiting on Form Check
         # isn't on All Leads yet, so it isn't on the tab either.
-        return await Lead.find({"is_deleted": False, "reviewed": {"$ne": False}}).sort("+created_at").to_list()
+        query = self.scope({"is_deleted": False, "reviewed": {"$ne": False}})
+        return await Lead.find(query).sort("+created_at").to_list()
 
     def values(self, lead: Lead) -> dict[str, str]:
         values = {key: cell_text(getattr(lead, field)) for key, field in _LEAD_TEXT_FIELDS.items()}
@@ -474,7 +505,7 @@ class FoundationTab(SheetTabSpec):
 
     async def create(self, row: dict[str, str]) -> tuple[Lead, list[str]]:
         self._check_required(row)
-        section = await InductionEntryService().resolve_section(optional(row.get("section", "")))
+        section = await InductionEntryService().resolve_section(self.default_section(row.get("section", "")))
         data = LeadCreate(
             name=row["name"].strip(),
             phone=row["phone"].strip(),
@@ -485,7 +516,9 @@ class FoundationTab(SheetTabSpec):
             source=LeadSource.OTHER,
         )
         lead = await self.service.create(data, actor_id=None)
-        rest_keys = ("payment_plan", "paying_amount", "qr_code", "payment_call_remarks", "stage", "lost_reason", "remarks")
+        rest_keys = (
+            "batch", "payment_plan", "paying_amount", "qr_code", "payment_call_remarks", "stage", "lost_reason", "remarks",
+        )
         rest = {key: row[key] for key in rest_keys if row.get(key, "").strip()}
         # A new lead starts at New Lead; only a different stage is a change.
         if parse_choice_safe(rest.get("stage", ""), LEAD_STAGE_LABELS) == LeadStatus.NEW_LEAD:

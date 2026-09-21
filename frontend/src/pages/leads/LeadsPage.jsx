@@ -232,6 +232,86 @@ function AmountCell({ lead, onError }) {
   )
 }
 
+// The batch the student is in (e.g. "27"), typed straight into the row. The
+// same free-text `batch_number` Batch Confirmation writes, so either place
+// sees the other's edit. Reads as text until clicked, like AmountCell.
+function BatchCell({ lead, onError }) {
+  const queryClient = useQueryClient()
+  const [isEditing, setIsEditing] = useState(false)
+  const [value, setValue] = useState(lead.batch_number ?? '')
+
+  const mutation = useMutation({
+    mutationFn: () => leadService.update(lead.id, { batch_number: value.trim() || null }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      setIsEditing(false)
+    },
+    onError: (error) => onError(`Couldn't save the batch for ${lead.name}: ${getApiErrorMessage(error)}`),
+  })
+
+  function open(event) {
+    event.stopPropagation()
+    setValue(lead.batch_number ?? '')
+    mutation.reset()
+    setIsEditing(true)
+  }
+
+  if (!isEditing) {
+    return (
+      <button
+        type="button"
+        onClick={open}
+        className="w-full rounded-md px-2 py-1 text-sm transition-colors hover:bg-slate-100"
+      >
+        {lead.batch_number ? (
+          <span className="font-medium text-slate-900">{lead.batch_number}</span>
+        ) : (
+          <span className="text-slate-400">Add batch</span>
+        )}
+      </button>
+    )
+  }
+
+  return (
+    <div
+      className="flex items-center gap-1"
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') mutation.mutate()
+        if (event.key === 'Escape') setIsEditing(false)
+      }}
+    >
+      <input
+        autoFocus
+        type="text"
+        maxLength={50}
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder="Batch"
+        className="w-24 rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+      />
+      <button
+        type="button"
+        onClick={() => mutation.mutate()}
+        disabled={mutation.isPending}
+        aria-label="Save batch"
+        className="rounded p-1 text-emerald-600 transition-colors hover:bg-emerald-50 disabled:opacity-50"
+      >
+        <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        onClick={() => setIsEditing(false)}
+        disabled={mutation.isPending}
+        aria-label="Cancel"
+        className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50"
+      >
+        <X className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
+      </button>
+    </div>
+  )
+}
+
 // Past this many options the menu grows a search box. Seven payment remarks
 // are quicker to read than to filter; thirty QR accounts are not.
 const SEARCHABLE_FROM = 10
@@ -748,6 +828,12 @@ function FoundationLeadsBoard() {
       render: (row) => (
         <LeadGroupCell key={row.id} lead={row} options={groupOptions} onError={setEditError} />
       ),
+    },
+    {
+      key: 'batch_number',
+      header: 'Batch',
+      align: 'center',
+      render: (row) => <BatchCell key={row.id} lead={row} onError={setEditError} />,
     },
     {
       key: 'payment_plan',
