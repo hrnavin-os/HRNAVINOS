@@ -28,7 +28,7 @@ from app.schemas.induction_entry_schema import InductionDetailsUpdate, Induction
 from app.schemas.lead_schema import LeadCreate, LeadPlanAssign, LeadRemarkCreate, LeadUpdate
 from app.services.induction_entry_service import InductionEntryService, batch_for
 from app.services.lead_service import LeadService
-from app.utils.foundation_groups import foundation_group_for, foundation_group_label
+from app.utils.foundation_groups import foundation_group_label
 
 
 @dataclass(frozen=True)
@@ -409,7 +409,7 @@ class FoundationTab(SheetTabSpec):
         values.update(
             section=self.section_label(lead.section),
             date=cell_text(lead.created_at),
-            group=foundation_group_label(foundation_group_for(lead.created_at)),
+            group=foundation_group_label(lead.foundation_group),
             payment_plan=PAYMENT_PLAN_LABELS.get(lead.payment_plan, "") if lead.payment_plan else "",
             paying_amount=cell_text(lead.paying_amount),
             payment_call_remarks=(

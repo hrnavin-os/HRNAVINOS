@@ -221,6 +221,11 @@ class FoundationFormService:
                 lead.section = inherited_section
                 if lead.assigned_to is None:
                     lead.assigned_to = inherited_assignee
+                # Only ever fills a gap, like the section above it: a group set
+                # on the lead in the meantime is somebody's decision, and a
+                # late-arriving match is no reason to undo it.
+                if lead.foundation_group is None:
+                    lead.foundation_group = entry.foundation_group
                 await self._link(entry, lead)
 
         lead.touch()
@@ -253,6 +258,13 @@ class FoundationFormService:
             # None when nobody with this number came through Induction. That's
             # an unmatched Foundation lead - a normal outcome, not a failure.
             induction_entry_id=entry.id if entry else None,
+            # The group was decided on the Induction Call Form; a student does
+            # not change class by filling in a second form. Copied onto the
+            # lead rather than read back through the link on every render,
+            # because the Foundation board filters and sorts on it - and
+            # because the lead's group is editable from there afterwards, which
+            # a value read through the link could not be.
+            foundation_group=entry.foundation_group if entry else None,
             source=LeadSource.FOUNDATION_FORM,
             course_interest=derived.course_interest,
             payment_expected=derived.payment_expected,

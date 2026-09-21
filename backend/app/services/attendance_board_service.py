@@ -33,7 +33,7 @@ from app.schemas.attendance_board_schema import (
 )
 from app.services.audit_service import AuditService
 from app.services.induction_entry_service import InductionEntryService, batch_for, stamp_terms_signature
-from app.utils.foundation_groups import FOUNDATION_GROUPS, foundation_group_for, foundation_group_query
+from app.utils.foundation_groups import MAX_FOUNDATION_GROUP
 
 
 @dataclass(frozen=True)
@@ -256,7 +256,8 @@ class AttendanceBoardService:
             email=entry.email,
             section=entry.section,
             batch=batch_for(entry.registration_date),
-            foundation_group=foundation_group_for(entry.registration_date),
+            foundation_group=entry.foundation_group,
+            foundation_group_history=entry.foundation_group_history,
             registration_date=entry.registration_date,
             status=entry.status.value,
             marks={key: marker.read(entry) for key, marker in MARKERS.items()},
@@ -288,12 +289,12 @@ class AttendanceBoardService:
         conditions: list[dict] = []
         if state != "all":
             conditions.append(self.marker(marker_key).query(state == "yes"))
-        # Which of the month's two foundation classes - `$and`-composed for the
-        # same reason, and because its filter names registration_date, which the
-        # batch narrowing below claims too: merged in at the top level one would
-        # silently replace the other.
-        if group in FOUNDATION_GROUPS:
-            conditions.append(foundation_group_query(group, field="registration_date"))
+        # Which foundation class group. A stored field since the group became
+        # something the office decides rather than something the registration
+        # date implies, so this is an equality match and no longer has to be
+        # kept out of the batch narrowing's way.
+        if group:
+            query["foundation_group"] = group
         if conditions:
             query["$and"] = conditions
         if section:

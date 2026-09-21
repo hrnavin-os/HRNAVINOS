@@ -221,14 +221,17 @@ export function InductionAttendancePage() {
         ),
     },
     { key: 'batch', header: 'Batch', align: 'center' },
-    // Beside Batch, not beside the Foundation Class marker: the group is which
-    // sitting of that batch somebody belongs to, and the two only read as a
-    // pair next to each other.
+    // Beside Batch, not beside the Foundation Class marker: batch and group
+    // are read as a pair - "Group 2 of Batch-28" - and only do so next to each
+    // other. Read-only here; the group is set on the Induction board and on
+    // Foundation, and this board's business is the markers.
     {
       key: 'foundation_group',
       header: 'Group',
       align: 'center',
-      render: (row) => <FoundationGroupBadge group={row.foundation_group} />,
+      render: (row) => (
+        <FoundationGroupBadge group={row.foundation_group} history={row.foundation_group_history} />
+      ),
     },
     {
       key: 'registration_date',

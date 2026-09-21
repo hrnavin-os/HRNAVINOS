@@ -5,6 +5,8 @@ from datetime import date, datetime
 from pydantic import BaseModel, Field
 
 from app.models.enums import InductionStatus
+from app.schemas.foundation_group_schema import FoundationGroupMoveSchema
+from app.utils.foundation_groups import MAX_FOUNDATION_GROUP
 
 
 class InductionEntryCreate(BaseModel):
@@ -20,6 +22,11 @@ class InductionEntryCreate(BaseModel):
     # The section to file this entry under - a section code ("a") or its label
     # ("A Section"). Absent means the round-robin across every section picks.
     section: str | None = Field(default=None, max_length=100)
+    # The foundation class group, as the form's dropdown words it ("Group 2").
+    # Named `group` because that is the label on the form and the key an admin
+    # sees in the editor; read into the number stored as `foundation_group` by
+    # InductionEntryService.create.
+    group: str | None = Field(default=None, max_length=50)
 
 
 class InductionFormSubmitResponse(BaseModel):
@@ -132,6 +139,10 @@ class InductionEntryUpdate(BaseModel):
     # refuses a quit remark that arrives without one, and clears the stored
     # reason when the remark moves off quit.
     quit_reason: str | None = Field(default=None, max_length=500)
+    # Moving a student between groups. A number here, not the form's label:
+    # the board already knows which group it picked, and the service records
+    # the move from whatever was there before.
+    foundation_group: int | None = Field(default=None, ge=1, le=MAX_FOUNDATION_GROUP)
 
 
 class InductionEntryResponse(BaseModel):
@@ -156,6 +167,12 @@ class InductionEntryResponse(BaseModel):
     assigned_to: uuid.UUID | None = None
     assigned_to_name: str | None = None
     section: str | None = None
+    # Which foundation class group, and how it got there. The history is sent
+    # with every row rather than fetched on demand, because the board prints
+    # the last move beside the group - a student who was moved has to say so
+    # in the cell, not two clicks away.
+    foundation_group: int | None = None
+    foundation_group_history: list[FoundationGroupMoveSchema] = Field(default_factory=list)
     qualification: InductionQualificationSchema = Field(default_factory=InductionQualificationSchema)
     placement: InductionPlacementSchema = Field(default_factory=InductionPlacementSchema)
     remarks: InductionRemarksSchema = Field(default_factory=InductionRemarksSchema)

@@ -23,6 +23,7 @@ from app.schemas.attendance_board_schema import (
 )
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.services.attendance_board_service import AttendanceBoardService
+from app.utils.foundation_groups import MAX_FOUNDATION_GROUP
 
 router = APIRouter(prefix="/induction-attendance", tags=["Induction Attendance"])
 
@@ -61,10 +62,10 @@ async def list_students(
     # stored, so the service turns it back into the month it stands for.
     section: str | None = None,
     batch: str | None = None,
-    # Which of the month's two foundation classes. Derived from the same
-    # registration_date the batch is, so it narrows a batch rather than
-    # cutting across one.
-    group: int | None = Query(default=None, ge=1, le=2),
+    # Which foundation class group. A recorded field on the entry rather than
+    # a reading of its registration date, so it cuts across batches freely -
+    # a student moved into Group 2 keeps the batch they registered in.
+    group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
     sort_by: str = "registration_date",
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     actor: User = Depends(RequirePermissions(Permissions.INDUCTION_ATTENDANCE_VIEW)),
@@ -84,7 +85,7 @@ async def stats(
     # under them rather than the whole roll.
     section: str | None = None,
     batch: str | None = None,
-    group: int | None = Query(default=None, ge=1, le=2),
+    group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
     actor: User = Depends(RequirePermissions(Permissions.INDUCTION_ATTENDANCE_VIEW)),
 ) -> AttendanceStatsResponse:
     scope = await get_actor_scope(actor)

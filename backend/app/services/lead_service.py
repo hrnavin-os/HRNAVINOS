@@ -45,12 +45,14 @@ from app.schemas.lead_schema import (
     PaymentInstallmentResponse,
 )
 from app.services.audit_service import AuditService
+from app.services.foundation_group_sync import mirror_group_move
 from app.services.foundation_form_answers import derive_answers
 from app.services.foundation_form_pricing import build_installments, build_payment_expected_summary
 from app.services.induction_entry_service import batch_for
 from app.services.reminder_service import ReminderService
 from app.services.storage_service import StorageService
-from app.utils.foundation_groups import FOUNDATION_GROUPS, foundation_group_for, foundation_group_query
+from app.models.foundation_group import pop_group_move
+from app.schemas.foundation_group_schema import FoundationGroupMoveSchema
 from app.utils.phone import normalize_phone
 
 
@@ -105,7 +107,16 @@ class LeadService:
             paying_amount=lead.paying_amount,
             qr_code=lead.qr_code,
             batch_number=lead.batch_number,
-            foundation_group=foundation_group_for(lead.created_at),
+            foundation_group=lead.foundation_group,
+            foundation_group_history=[
+                FoundationGroupMoveSchema(
+                    from_group=move.from_group,
+                    to_group=move.to_group,
+                    at=move.at,
+                    by_name=move.by_name,
+                )
+                for move in lead.foundation_group_history
+            ],
             group_assigned_at=lead.group_assigned_at,
             lost_reason=lead.lost_reason,
             lost_at=lead.lost_at,
@@ -245,15 +256,12 @@ class LeadService:
             if date_to:
                 created_range["$lte"] = datetime.combine(date_to, time.max)
             filters["created_at"] = created_range
-        # Which of the month's two foundation classes the lead came through.
-        # Composed under `$and` rather than merged in at the top level: it names
-        # created_at, which the date range above has already claimed, so one
-        # would otherwise quietly overwrite the other.
-        if foundation_group in FOUNDATION_GROUPS:
-            filters["$and"] = [
-                *filters.get("$and", []),
-                foundation_group_query(foundation_group, field="created_at"),
-            ]
+        # Which foundation class group the lead is in. A stored field since the
+        # group became something the office decides rather than something the
+        # created_at date implies, so this is a plain equality match and no
+        # longer has to be composed around the date range above.
+        if foundation_group:
+            filters["foundation_group"] = foundation_group
         # Second place the reminder sweep is driven from, besides the
         # notification poll. That poll only happens while the bell is on
         # screen, which is a Section Admin on the Foundation board - so a
@@ -291,9 +299,29 @@ class LeadService:
             lead.follow_up_history.insert(
                 0, FollowUpEntry(scheduled_at=update_data["follow_up_at"], created_by=actor_id)
             )
+        # A move between foundation class groups is recorded rather than just
+        # written, so the board can say a student was moved. The name lookup is
+        # guarded because it costs a query and almost no edit touches the group.
+        moved = (
+            pop_group_move(
+                lead, update_data, actor_id=actor_id, actor_name=await self._actor_name(actor_id)
+            )
+            if "foundation_group" in update_data
+            else None
+        )
         await self.leads.update(lead, update_data)
+        # The induction entry this lead came from carries the group as well,
+        # and the attendance roll reads it off there.
+        if moved:
+            await mirror_group_move(lead, actor_id=actor_id, actor_name=await self._actor_name(actor_id))
         await self.audit.record(
-            user_id=actor_id, action="UPDATE", entity_type="Lead", entity_id=str(lead.id), changes=update_data
+            user_id=actor_id,
+            action="UPDATE",
+            entity_type="Lead",
+            entity_id=str(lead.id),
+            # The move beside the plain field writes: what the log wants is
+            # where the student went, not the whole history behind it.
+            changes={**update_data, **({"foundation_group": moved} if moved else {})},
         )
         return lead
 
@@ -641,9 +669,29 @@ class LeadService:
             lead.follow_up_history.insert(
                 0, FollowUpEntry(scheduled_at=update_data["follow_up_at"], created_by=actor_id)
             )
+        # A move between foundation class groups is recorded rather than just
+        # written, so the board can say a student was moved. The name lookup is
+        # guarded because it costs a query and almost no edit touches the group.
+        moved = (
+            pop_group_move(
+                lead, update_data, actor_id=actor_id, actor_name=await self._actor_name(actor_id)
+            )
+            if "foundation_group" in update_data
+            else None
+        )
         await self.leads.update(lead, update_data)
+        # The induction entry this lead came from carries the group as well,
+        # and the attendance roll reads it off there.
+        if moved:
+            await mirror_group_move(lead, actor_id=actor_id, actor_name=await self._actor_name(actor_id))
         await self.audit.record(
-            user_id=actor_id, action="UPDATE", entity_type="Lead", entity_id=str(lead.id), changes=update_data
+            user_id=actor_id,
+            action="UPDATE",
+            entity_type="Lead",
+            entity_id=str(lead.id),
+            # The move beside the plain field writes: what the log wants is
+            # where the student went, not the whole history behind it.
+            changes={**update_data, **({"foundation_group": moved} if moved else {})},
         )
         return lead
 

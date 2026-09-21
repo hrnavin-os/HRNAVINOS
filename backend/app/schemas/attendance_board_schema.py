@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.foundation_group_schema import FoundationGroupMoveSchema
+
 # The board's four tabs. Each is one yes/no marker against the induction roll;
 # the values are the API's names for them, and the registry in
 # app/services/attendance_board_service.py is what each one means in storage.
@@ -61,11 +63,14 @@ class AttendanceStudentResponse(BaseModel):
     email: str | None = None
     section: str | None = None
     batch: str
-    # Which of the batch's two foundation classes this candidate belongs to -
-    # 1 for the first sitting of the month, 2 for the second. Derived from the
-    # same registration_date the batch is, so the pair always describes one
-    # month: see app/utils/foundation_groups.py.
-    foundation_group: int
+    # Which foundation class group this candidate is in, as recorded on their
+    # induction entry. None until somebody says - see
+    # app/utils/foundation_groups.py.
+    foundation_group: int | None = None
+    # And how they got there. Sent with the row because this board is the roll
+    # somebody prints and calls from: a student moved since the last print is
+    # exactly who that person needs to notice.
+    foundation_group_history: list[FoundationGroupMoveSchema] = Field(default_factory=list)
     registration_date: date
     # Where this candidate is on the induction board (still in induction, moved
     # to Foundation, quit). Shown so the board reads without opening the other

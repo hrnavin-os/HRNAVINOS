@@ -31,12 +31,21 @@ async def entry_for(client, auth_headers, name: str) -> dict:
     return items[0]
 
 
-async def test_config_ends_with_a_required_section_dropdown(client):
+async def test_the_form_asks_for_a_required_section(client):
     fields = (await client.get(CONFIG_URL)).json()["fields"]
-    last = fields[-1]
-    assert last["key"] == "section"
-    assert last["required"] is True
-    assert last["options"] == ["A Section", "B Section", "C Section"]
+    section = next(field for field in fields if field["key"] == "section")
+    assert section["required"] is True
+    assert section["options"] == ["A Section", "B Section", "C Section"]
+
+
+async def test_the_form_asks_for_an_optional_group(client):
+    """Optional, unlike the section: the class a student will sit in is often
+    decided after they are keyed in, and a required field would make whoever
+    is typing guess one."""
+    fields = (await client.get(CONFIG_URL)).json()["fields"]
+    group = next(field for field in fields if field["key"] == "group")
+    assert group["required"] is False
+    assert group["options"] == ["Group 1", "Group 2", "Group 3"]
 
 
 async def test_existing_config_gets_the_section_field_appended(client):

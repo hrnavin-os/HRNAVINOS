@@ -6,13 +6,14 @@ from app.models.induction_form_config import InductionFormConfig, InductionFormF
 from app.repositories.induction_form_config_repository import InductionFormConfigRepository
 from app.schemas.induction_form_config_schema import InductionFormConfigUpdate
 from app.services.audit_service import AuditService
+from app.utils.foundation_groups import parse_foundation_group
 
 # The submit endpoint parses exactly these keys, so the set can't change from
 # the editor - an unknown key would render a field whose answer is silently
 # dropped, and a missing one would remove a question the API still needs.
 _ALLOWED_KEYS = {
     "name", "email", "phone", "registration_date", "paid_date",
-    "sales_person", "lead_source", "payment_mode", "category", "section",
+    "sales_person", "lead_source", "payment_mode", "category", "section", "group",
 }
 
 # Non-nullable on InductionEntry, so the form can't stop asking for them.
@@ -43,6 +44,15 @@ class InductionFormConfigService:
                 raise BadRequestError(f"'{field.label}' is stored on every entry and has to stay required.")
             if not field.label.strip():
                 raise BadRequestError("Every field needs a label.")
+            # The group field's options are read as numbers on submit, not kept
+            # as the text they were picked from, so an option that names no
+            # group would offer the student a choice the API then refuses.
+            # Caught here, where whoever typed it is looking, rather than on
+            # somebody's submission days later.
+            if field.key == "group":
+                for option in field.options:
+                    if option.strip():
+                        parse_foundation_group(option)
 
     async def update_config(
         self, data: InductionFormConfigUpdate, *, actor_id: uuid.UUID | None

@@ -15,6 +15,8 @@ from app.models.enums import (
     PaymentPlanOption,
     PaymentTimeline,
 )
+from app.schemas.foundation_group_schema import FoundationGroupMoveSchema
+from app.utils.foundation_groups import MAX_FOUNDATION_GROUP
 
 
 class LeadCreate(BaseModel):
@@ -71,6 +73,9 @@ class LeadUpdate(BaseModel):
     paying_amount: Decimal | None = Field(default=None, ge=0)
     qr_code: str | None = Field(default=None, max_length=100)
     batch_number: str | None = Field(default=None, max_length=50)
+    # Moving a student between foundation class groups, from the board's Group
+    # cell. LeadService.update records where they came from.
+    foundation_group: int | None = Field(default=None, ge=1, le=MAX_FOUNDATION_GROUP)
     # Required by LeadService.update whenever status moves to Lost.
     lost_reason: str | None = Field(default=None, max_length=500)
 
@@ -178,9 +183,12 @@ class LeadResponse(BaseModel):
     # Which of the month's two foundation classes this lead came through - 1 for
     # the first sitting, 2 for the second. Derived from `created_at` (the day
     # the Foundation Form was filled in, which is the day of the class) rather
-    # than stored: see app/utils/foundation_groups.py. Not to be confused with
-    # `group_assigned_at` below, which is about a WhatsApp group.
+    # Stored and editable: see app/utils/foundation_groups.py. Not to be
+    # confused with `group_assigned_at` below, which is about a WhatsApp group.
     foundation_group: int | None = None
+    # Every move between groups, so the board can say a student was moved
+    # rather than only where they now are.
+    foundation_group_history: list[FoundationGroupMoveSchema] = Field(default_factory=list)
     group_assigned_at: datetime | None = None
     lost_reason: str | None = None
     lost_at: datetime | None = None

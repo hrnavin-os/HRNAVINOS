@@ -25,6 +25,7 @@ from app.schemas.induction_entry_schema import (
     InductionEntryUpdate,
 )
 from app.services.induction_entry_service import InductionEntryService
+from app.utils.foundation_groups import MAX_FOUNDATION_GROUP
 
 router = APIRouter(prefix="/induction-entries", tags=["Induction Call Form"])
 
@@ -69,6 +70,9 @@ async def list_entries(
     category: str | None = None,
     assigned_to: uuid.UUID | None = None,
     batch: str | None = None,
+    # Which foundation class group. A stored field now rather than a rule read
+    # off the registration date, so this is a plain equality match.
+    foundation_group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
     # Registration-date window behind the board's Date filter, either end
     # optional: "everything since March" is as real a question as a range.
     date_from: date | None = None,
@@ -93,6 +97,7 @@ async def list_entries(
             "payment_mode": payment_mode,
             "category": category,
             "assigned_to": assigned_to,
+            "foundation_group": foundation_group,
         }.items()
         if value
     }

@@ -15,12 +15,14 @@ import { StatCard } from '@/components/ui/StatCard'
 import { InductionCallRemarkCell } from '@/components/leads/InductionCallRemarkCell'
 import { InductionScheduleCell } from '@/components/leads/InductionScheduleCell'
 import { InductionCategoryCell } from '@/components/leads/InductionCategoryCell'
+import { InductionGroupCell } from '@/components/leads/FoundationGroupCell'
 import { InductionQuitReasonCell } from '@/components/leads/InductionQuitReasonCell'
 import { InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
 import { InductionUpdateModal } from '@/components/leads/InductionUpdateModal'
 import { useAuth } from '@/hooks/useAuth'
 import { PERMISSIONS } from '@/constants/permissions'
 import { LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
+import { FOUNDATION_GROUP_LABELS, FOUNDATION_GROUP_OPTIONS } from '@/constants/foundationGroups'
 import { formatDate, formatDateTime } from '@/utils/formatters'
 
 const dash = <span className="text-slate-400">—</span>
@@ -183,6 +185,7 @@ const editFields = [
 
 const EMPTY_FILTERS = {
   batch: '',
+  foundation_group: '',
   sales_person: '',
   lead_source: '',
   payment_mode: '',
@@ -283,6 +286,16 @@ export function InductionLeadsBoard() {
     ...(options.category ?? []).filter((value) => !configuredCategories.includes(value)),
   ]
 
+  // What the Group cell offers, read from the same config for the same reason:
+  // a fourth class added in Admin > Form Collection has to be pickable on the
+  // board too, or students could be enrolled into a group nobody can move
+  // anyone else into. Falls back to the three defaults while the config is
+  // still loading, so the cell is never an empty menu.
+  const groupOptions =
+    (inductionConfigQuery.data?.fields ?? []).find((field) => field.key === 'group')?.options?.length
+      ? inductionConfigQuery.data.fields.find((field) => field.key === 'group').options
+      : FOUNDATION_GROUP_LABELS
+
   const byStatus = statsQuery.data?.by_status ?? {}
 
   // Built here rather than at module scope because the cells need somewhere to
@@ -298,6 +311,16 @@ export function InductionLeadsBoard() {
     key: 'category',
     header: 'Category',
     render: (row) => <InductionCategoryCell entry={row} options={categoryOptions} onError={setError} />,
+  }
+  // Beside the batch, because the two are read together - "Group 2 of
+  // Batch-28". Editable, unlike the batch next to it: the batch is the month
+  // somebody registered in and is nobody's decision, while the group is
+  // entirely somebody's, and gets changed.
+  const groupColumn = {
+    key: 'foundation_group',
+    header: 'Group',
+    align: 'center',
+    render: (row) => <InductionGroupCell entry={row} options={groupOptions} onError={setError} />,
   }
   // One column for the date and the time, because they are one fact - a date
   // with no time is half an appointment. Both used to live on the fourth page
@@ -317,14 +340,19 @@ export function InductionLeadsBoard() {
     render: (row) => <InductionQuitReasonCell entry={row} onError={setError} />,
   }
 
-  // Category, then schedule, then remark - the order they get filled in: what
-  // kind of candidate this is, when the call is, then how it went.
+  // Group sits with the batch it is read beside; category, then schedule, then
+  // remark follow in the order they get filled in: what kind of candidate this
+  // is, when the call is, then how it went.
   const pendingColumns = insertBefore(
     insertBefore(
       insertBefore(
-        // A Section Admin only ever sees their own section's entries, so every
-        // row would name them - a column of one repeated value.
-        scopedSection ? columns.filter((column) => column.key !== 'assigned_to') : columns,
+        insertBefore(
+          // A Section Admin only ever sees their own section's entries, so
+          // every row would name them - a column of one repeated value.
+          scopedSection ? columns.filter((column) => column.key !== 'assigned_to') : columns,
+          'registration_date',
+          groupColumn,
+        ),
         'assigned_to',
         categoryColumn,
       ),
@@ -334,10 +362,17 @@ export function InductionLeadsBoard() {
     'assigned_to',
     remarkColumn,
   )
+  // The Moved tab gets it too, and editable there as well: a student who has
+  // crossed to Foundation is still sitting in a class, and the attendance roll
+  // reads the group off this record whichever board it was set from.
   const movedColumns = insertBefore(
-    insertBefore(MOVED_COLUMNS, 'foundation_status', scheduleColumn),
+    insertBefore(
+      insertBefore(MOVED_COLUMNS, 'foundation_status', scheduleColumn),
+      'foundation_status',
+      remarkColumn,
+    ),
     'foundation_status',
-    remarkColumn,
+    groupColumn,
   )
 
   return (
@@ -424,13 +459,23 @@ export function InductionLeadsBoard() {
                 </button>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
               <FilterDropdown
                 grow
                 label="Batch"
                 value={filters.batch}
                 options={asOptions(options.batch)}
                 onChange={(value) => setFilter('batch', value)}
+              />
+              {/* A fixed list rather than the values in the data: "nobody is
+                  in Group 3" is an answer this filter should be able to give
+                  rather than an option it quietly drops. */}
+              <FilterDropdown
+                grow
+                label="Group"
+                value={filters.foundation_group}
+                options={FOUNDATION_GROUP_OPTIONS}
+                onChange={(value) => setFilter('foundation_group', value)}
               />
               <FilterDropdown
                 grow

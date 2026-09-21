@@ -256,12 +256,12 @@ async def test_blank_remark_is_rejected(client, auth_headers):
     assert response.status_code == 400
 
 
-async def make_lead_dated(client, auth_headers, *, name: str, phone: str, day: int) -> str:
-    """A lead whose Foundation Form landed on a given day of the month.
+async def make_lead_in_group(client, auth_headers, *, name: str, phone: str, group: int | None) -> str:
+    """A Foundation lead put into a foundation class group.
 
-    Backdated on the document rather than through the API: created_at is set at
-    insert time, so every lead a test creates would otherwise fall in whichever
-    half of the month the suite happens to run in.
+    Through the API, not by writing the document: the group is a decision
+    somebody makes, and the point of these tests is that it stays whatever they
+    said - which is only true if it goes in the way the board sends it.
     """
     create = await client.post(
         "/api/v1/leads",
@@ -269,26 +269,40 @@ async def make_lead_dated(client, auth_headers, *, name: str, phone: str, day: i
         json={"name": name, "phone": phone, "course_interest": "Data Science"},
     )
     assert create.status_code == 201, create.text
-    lead = await Lead.get(create.json()["id"])
-    lead.created_at = datetime(2026, 8, day, 10, 0, tzinfo=timezone.utc)
-    await lead.save()
-    return str(lead.id)
+    lead_id = create.json()["id"]
+    if group is not None:
+        response = await client.put(
+            f"/api/v1/leads/{lead_id}", headers=auth_headers, json={"foundation_group": group}
+        )
+        assert response.status_code == 200, response.text
+    return lead_id
 
 
-async def test_a_lead_carries_the_foundation_class_it_came_through(client, auth_headers):
-    """The foundation class runs twice a month: the 1st-15th is Group 1, the
-    16th onward Group 2. Derived from the day the form landed, never stored."""
-    await make_lead_dated(client, auth_headers, name="Arun", phone="9876543210", day=4)
-    await make_lead_dated(client, auth_headers, name="Divya", phone="9876500000", day=15)
-    await make_lead_dated(client, auth_headers, name="Bala", phone="9876511111", day=16)
+async def test_a_lead_carries_the_group_it_was_put_in(client, auth_headers):
+    """The group is recorded, not read off the calendar. Two leads created in
+    the same minute can sit in different groups, which is the whole reason it
+    stopped being derived from created_at."""
+    await make_lead_in_group(client, auth_headers, name="Arun", phone="9876543210", group=1)
+    await make_lead_in_group(client, auth_headers, name="Divya", phone="9876500000", group=1)
+    await make_lead_in_group(client, auth_headers, name="Bala", phone="9876511111", group=3)
 
     rows = (await client.get("/api/v1/leads", headers=auth_headers)).json()["items"]
-    assert {row["name"]: row["foundation_group"] for row in rows} == {"Arun": 1, "Divya": 1, "Bala": 2}
+    assert {row["name"]: row["foundation_group"] for row in rows} == {"Arun": 1, "Divya": 1, "Bala": 3}
+
+
+async def test_a_lead_with_no_group_yet_says_so(client, auth_headers):
+    """Rather than being filed into Group 1 by default. Nobody has decided, and
+    a board that guessed would send somebody to the wrong class."""
+    await make_lead_in_group(client, auth_headers, name="Arun", phone="9876543210", group=None)
+
+    rows = (await client.get("/api/v1/leads", headers=auth_headers)).json()["items"]
+    assert rows[0]["foundation_group"] is None
+    assert rows[0]["foundation_group_history"] == []
 
 
 async def test_foundation_group_filter_splits_the_board(client, auth_headers):
-    await make_lead_dated(client, auth_headers, name="Arun", phone="9876543210", day=4)
-    await make_lead_dated(client, auth_headers, name="Bala", phone="9876511111", day=20)
+    await make_lead_in_group(client, auth_headers, name="Arun", phone="9876543210", group=1)
+    await make_lead_in_group(client, auth_headers, name="Bala", phone="9876511111", group=2)
 
     first = await client.get("/api/v1/leads", headers=auth_headers, params={"foundation_group": 1})
     assert [row["name"] for row in first.json()["items"]] == ["Arun"]
@@ -297,19 +311,32 @@ async def test_foundation_group_filter_splits_the_board(client, auth_headers):
     assert [row["name"] for row in second.json()["items"]] == ["Bala"]
 
 
-async def test_foundation_group_and_date_range_both_apply(client, auth_headers):
-    """Both narrow created_at. Composed rather than merged, or the last one
-    written would quietly replace the other."""
-    await make_lead_dated(client, auth_headers, name="Arun", phone="9876543210", day=4)
-    await make_lead_dated(client, auth_headers, name="Bala", phone="9876511111", day=20)
-    await make_lead_dated(client, auth_headers, name="Chitra", phone="9876522222", day=25)
+async def test_moving_a_lead_between_groups_is_written_down(client, auth_headers):
+    """The board has to be able to say a student was moved, not only where they
+    ended up - a roll printed last week is wrong the moment somebody moves."""
+    lead_id = await make_lead_in_group(client, auth_headers, name="Arun", phone="9876543210", group=1)
+    await client.put(f"/api/v1/leads/{lead_id}", headers=auth_headers, json={"foundation_group": 2})
 
-    response = await client.get(
-        "/api/v1/leads",
-        headers=auth_headers,
-        params={"foundation_group": 2, "date_from": "2026-08-21", "date_to": "2026-08-31"},
-    )
-    assert [row["name"] for row in response.json()["items"]] == ["Chitra"]
+    row = (await client.get(f"/api/v1/leads/{lead_id}", headers=auth_headers)).json()
+    assert row["foundation_group"] == 2
+    # Being put into a group in the first place is recorded too, so the trail
+    # reads from nothing, to 1, to 2.
+    assert [(move["from_group"], move["to_group"]) for move in row["foundation_group_history"]] == [
+        (None, 1),
+        (1, 2),
+    ]
+
+
+async def test_restating_the_same_group_records_no_move(client, auth_headers):
+    """Saving the row again shouldn't say the student was moved from Group 2
+    to Group 2 - the cell would then claim a move that never happened."""
+    lead_id = await make_lead_in_group(client, auth_headers, name="Arun", phone="9876543210", group=2)
+    await client.put(f"/api/v1/leads/{lead_id}", headers=auth_headers, json={"foundation_group": 2})
+
+    row = (await client.get(f"/api/v1/leads/{lead_id}", headers=auth_headers)).json()
+    assert len(row["foundation_group_history"]) == 1
+
+
 # --------------------------------------------------------------------------
 # Statistics board - the Foundation half
 # --------------------------------------------------------------------------

@@ -39,6 +39,7 @@ from app.schemas.notification_schema import (
 )
 from app.services.induction_entry_service import InductionEntryService
 from app.services.lead_service import LeadService
+from app.utils.foundation_groups import MAX_FOUNDATION_GROUP
 
 router = APIRouter(prefix="/leads", tags=["Lead Management"])
 
@@ -70,9 +71,10 @@ async def list_leads(
     date_from: date | None = None,
     date_to: date | None = None,
     induction_matched: bool | None = None,
-    # Which of the month's two foundation classes the lead came through, read
-    # off the day their Foundation Form landed.
-    foundation_group: int | None = Query(default=None, ge=1, le=2),
+    # Which foundation class group the lead is in - a stored field, and no
+    # longer capped at two: the number of groups is whatever the Induction Call
+    # Form's Group dropdown offers.
+    foundation_group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> PaginatedResponse[LeadResponse]:
     params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)

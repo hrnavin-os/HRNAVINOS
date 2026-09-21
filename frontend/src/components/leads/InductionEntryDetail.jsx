@@ -1,4 +1,5 @@
 import {
+  ArrowRightLeft,
   Briefcase,
   Calendar,
   ClipboardList,
@@ -18,7 +19,8 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { MEDIA_BASE_URL } from '@/constants/config'
-import { formatDate } from '@/utils/formatters'
+import { foundationGroupLabel } from '@/constants/foundationGroups'
+import { formatDate, formatDateTime } from '@/utils/formatters'
 
 // Extracted from InductionLeadsBoard so the Foundation board can render it
 // too: once a lead is matched to an induction entry, its detail popup shows
@@ -180,6 +182,11 @@ function CallRecording({ url }) {
 }
 
 export function InductionEntryDetail({ entry, hideAssignee = false }) {
+  // Moves between groups, oldest first. Being put into a group in the first
+  // place is in the history too and is filtered out: that is not a change, it
+  // is how every student starts.
+  const moves = (entry.foundation_group_history ?? []).filter((move) => move.from_group)
+
   return (
     <div className="space-y-4">
       {/* Batch leads: it's the derived value everything else is filed under,
@@ -193,6 +200,20 @@ export function InductionEntryDetail({ entry, hideAssignee = false }) {
         <div className="min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wide text-brand-700/70">Batch</p>
           <p className="text-base font-semibold leading-tight text-brand-700">{entry.batch}</p>
+        </div>
+        {/* Beside the batch, because that is how the two are said out loud -
+            "Group 2 of Batch-28". Not in the tile grid below, where it would
+            read as one more collected answer rather than as half of where this
+            student sits. */}
+        <div className="min-w-0">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-brand-700/70">Group</p>
+          {entry.foundation_group ? (
+            <p className="text-base font-semibold leading-tight text-brand-700">
+              {foundationGroupLabel(entry.foundation_group)}
+            </p>
+          ) : (
+            <p className="text-base font-semibold leading-tight text-brand-700/40">Not set</p>
+          )}
         </div>
         {hideAssignee ? null : (
           <div className="ml-auto min-w-0 text-right">
@@ -224,6 +245,34 @@ export function InductionEntryDetail({ entry, hideAssignee = false }) {
         <DetailTile icon={CreditCard} label="Payment Mode" value={entry.payment_mode} tone="violet" />
         <DetailTile icon={Tag} label="Category" value={entry.category} tone="emerald" />
       </div>
+
+      {/* Every move between groups, when there has been one. The column on the
+          board says only the last of them, which is the right amount there and
+          not enough here: somebody reading the record is asking what happened
+          to this student, and a class changed twice is a different story from
+          one changed once. Skipped entirely for the students who were put in a
+          group and left there, which is most of them. */}
+      {moves.length > 0 && (
+        <DetailSection title="Group Changes" icon={ArrowRightLeft} tone="amber" entries={[]}>
+          {/* A list rather than the label/value grid the other sections use:
+              two moves in the same direction would collide as labels, and a
+              sequence of them is a timeline, which reads down rather than
+              across. Oldest first, so it reads as the story it is. */}
+          <ol className="space-y-1.5">
+            {moves.map((move) => (
+              <li key={move.at} className="flex flex-wrap items-baseline gap-x-2 text-sm">
+                <span className="font-medium text-slate-800">
+                  {foundationGroupLabel(move.from_group)} → {foundationGroupLabel(move.to_group) ?? 'no group'}
+                </span>
+                <span className="text-xs text-slate-500">
+                  {formatDateTime(move.at)}
+                  {move.by_name ? ` · ${move.by_name}` : ''}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </DetailSection>
+      )}
 
       {/* Why they left, when they have. Above the post-call pages rather than
           among them: on a candidate who has quit it is the single thing the

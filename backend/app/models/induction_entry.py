@@ -14,6 +14,7 @@ from pymongo import IndexModel
 
 from app.database.base import BaseDocument
 from app.models.enums import InductionStatus
+from app.models.foundation_group import FoundationGroupMove
 
 
 # The four pages of the post-call update form. Grouped rather than flattened
@@ -143,6 +144,19 @@ class InductionEntry(BaseDocument):
     # explains because this one is prose, not a disposition off a list.
     quit_reason: str | None = Field(default=None, max_length=500)
 
+    # Which foundation class group this student sits in. Asked for on the
+    # form as `group` and stored under the longer name the boards already use
+    # for it, so it can't be confused with the WhatsApp group on Lead.
+    #
+    # Stored rather than read off the registration date, which is what it used
+    # to be: there are three groups and students move between them, and a date
+    # can express neither. See app/utils/foundation_groups.py.
+    foundation_group: int | None = None
+    # Every time that number changed, oldest first. The board prints the last
+    # one beside the group - a student moved to Group 2 mid-course has to say
+    # so, or the roll the coordinator printed on Monday is quietly wrong.
+    foundation_group_history: list[FoundationGroupMove] = Field(default_factory=list)
+
     # Set once, on create, by the round-robin in InductionEntryService. Both
     # are stored rather than derived: who owns a row must not change when
     # someone is added to or removed from the Section Admin rota afterwards.
@@ -175,6 +189,9 @@ class InductionEntry(BaseDocument):
             IndexModel([("registration_date", -1)]),
             IndexModel([("phone", 1)]),
             IndexModel([("assigned_to", 1)]),
+            # The group column is filterable on three boards, and the roll for
+            # one group is the commonest thing anybody asks this collection.
+            IndexModel([("foundation_group", 1)]),
             # The matching lookup: by number, restricted to entries that have
             # not already been converted. Compound because every caller asks
             # both questions at once.

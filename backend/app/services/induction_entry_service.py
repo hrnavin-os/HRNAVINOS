@@ -7,6 +7,7 @@ from app.database.base import utcnow
 from app.exceptions.base import BadRequestError, NotFoundError
 from app.models.enums import InductionStatus
 from app.models.lead import Lead
+from app.models.foundation_group import pop_group_move
 from app.models.induction_entry import (
     InductionEntry,
     InductionOtherDetails,
@@ -28,6 +29,8 @@ from app.schemas.induction_entry_schema import (
     InductionEntryUpdate,
 )
 from app.services.audit_service import AuditService
+from app.services.foundation_group_sync import mirror_group_move
+from app.utils.foundation_groups import parse_foundation_group
 from app.utils.phone import normalize_phone
 
 # The batch sequence is anchored, not enumerated: August 2026 is Batch-28 and
@@ -229,7 +232,13 @@ class InductionEntryService:
         chosen = await self.resolve_section(data.section)
         assignee, section = await self._next_assignee(chosen)
         entry = InductionEntry(
-            **data.model_dump(exclude={"section"}),
+            **data.model_dump(exclude={"section", "group"}),
+            # The form sends the label its dropdown offered ("Group 2"); the
+            # number behind it is what every board filters and sorts on. No
+            # move is recorded for this one - arriving in a group is not being
+            # moved into it, and a history that said otherwise would put a
+            # "moved from" note on every row ever created.
+            foundation_group=parse_foundation_group(data.group),
             # The key the Foundation Form will match this person on later,
             # computed on write so the match is an indexed lookup.
             phone_normalized=normalize_phone(data.phone),
@@ -244,7 +253,11 @@ class InductionEntryService:
             action="CREATE",
             entity_type="InductionEntry",
             entity_id=str(entry.id),
-            changes={"assigned_to": str(assignee.id) if assignee else None, "section": section},
+            changes={
+                "assigned_to": str(assignee.id) if assignee else None,
+                "section": section,
+                "foundation_group": entry.foundation_group,
+            },
         )
         return entry
 
@@ -536,14 +549,33 @@ class InductionEntryService:
         if update_data.get("phone"):
             update_data["phone_normalized"] = normalize_phone(update_data["phone"])
         _resolve_quit_reason(entry, update_data)
+        # Moving a student between groups is the one edit this board has to be
+        # able to show afterwards, so it is recorded rather than just written.
+        # The name lookup is guarded because it costs a query and almost no
+        # edit through here touches the group.
+        moved = (
+            pop_group_move(
+                entry, update_data, actor_id=actor_id, actor_name=await self.actor_name(actor_id)
+            )
+            if "foundation_group" in update_data
+            else None
+        )
         update_data["updated_by"] = actor_id
         await self.entries.update(entry, update_data)
+        # A converted student is on the Foundation board too, reading the
+        # group off their lead. Moved after the entry is saved, so a failure
+        # here leaves the two out of step rather than losing the move entirely.
+        if moved:
+            await mirror_group_move(entry, actor_id=actor_id, actor_name=await self.actor_name(actor_id))
         await self.audit.record(
             user_id=actor_id,
             action="UPDATE",
             entity_type="InductionEntry",
             entity_id=str(entry.id),
-            changes=update_data,
+            # The move goes in beside the plain field writes rather than into
+            # them: what the log wants is where the student went, not the whole
+            # history it was appended to.
+            changes={**update_data, **({"foundation_group": moved} if moved else {})},
         )
         return entry
 

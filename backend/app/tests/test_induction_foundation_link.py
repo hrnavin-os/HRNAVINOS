@@ -851,3 +851,77 @@ async def test_a_one_ended_window_has_no_period_to_compare_with(client, auth_hea
 
     assert data["comparison"] is None
     assert data["current"] is None
+
+
+# --------------------------------------------------------------------------
+# The foundation class group
+#
+# Asked for once, on the Induction Call Form, and then carried: a student does
+# not change class by filling in a second form, and both records are live at
+# the same time - the attendance roll reads the entry, the Foundation board
+# reads the lead.
+# --------------------------------------------------------------------------
+
+
+async def test_the_group_crosses_to_the_lead_with_the_student(client, auth_headers):
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload(group="Group 3"))
+    await client.post(FOUNDATION_URL, json=foundation_payload())
+
+    rows = (await client.get("/api/v1/leads", headers=auth_headers)).json()["items"]
+    assert [row["foundation_group"] for row in rows] == [3]
+
+
+async def test_an_unmatched_foundation_lead_has_no_group(client, auth_headers):
+    """Nobody with that number came through Induction, so nobody has said which
+    class they belong in. Blank, not Group 1."""
+    await seed_programs(client)
+    await client.post(FOUNDATION_URL, json=foundation_payload())
+
+    rows = (await client.get("/api/v1/leads", headers=auth_headers)).json()["items"]
+    assert rows[0]["foundation_group"] is None
+
+
+async def test_moving_a_converted_student_moves_both_records(client, auth_headers):
+    """The attendance roll reads the induction entry and the Foundation board
+    reads the lead. A move recorded on one has to reach the other, or the two
+    coordinators call the same student into different classes."""
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload(group="Group 1"))
+    await client.post(FOUNDATION_URL, json=foundation_payload())
+
+    lead = (await client.get("/api/v1/leads", headers=auth_headers)).json()["items"][0]
+    await client.put(f"/api/v1/leads/{lead['id']}", headers=auth_headers, json={"foundation_group": 2})
+
+    entries = (
+        await client.get("/api/v1/induction-entries?status=moved_to_foundation", headers=auth_headers)
+    ).json()["items"]
+    assert entries[0]["foundation_group"] == 2
+    assert [(m["from_group"], m["to_group"]) for m in entries[0]["foundation_group_history"]] == [(1, 2)]
+
+
+async def test_a_move_on_the_induction_board_reaches_the_lead(client, auth_headers):
+    """The same rule in the other direction."""
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload(group="Group 1"))
+    await client.post(FOUNDATION_URL, json=foundation_payload())
+
+    entry = (
+        await client.get("/api/v1/induction-entries?status=moved_to_foundation", headers=auth_headers)
+    ).json()["items"][0]
+    await client.put(
+        f"/api/v1/induction-entries/{entry['id']}", headers=auth_headers, json={"foundation_group": 3}
+    )
+
+    rows = (await client.get("/api/v1/leads", headers=auth_headers)).json()["items"]
+    assert rows[0]["foundation_group"] == 3
+    assert [(m["from_group"], m["to_group"]) for m in rows[0]["foundation_group_history"]] == [(1, 3)]
+
+
+async def test_a_typed_group_that_names_no_class_is_refused(client):
+    """The dropdown accepts a typed value, as every dropdown on this form does,
+    but the answer is read as a number - so one that isn't a group has to fail
+    loudly rather than be filed as no group at all."""
+    response = await client.post(INDUCTION_URL, json=induction_payload(group="Morning batch"))
+    assert response.status_code == 400
+    assert "group" in response.text.lower()

@@ -404,20 +404,24 @@ async def test_opening_a_non_payment_notification_does_not_move_the_stage(seeded
     assert (await Lead.get(lead.id)).status == LeadStatus.BATCH_CONFIRMATION
 
 
-async def test_the_hr_row_says_which_foundation_class_they_came_through(client, auth_headers):
-    """Batch and group are meant to be read together - "the second foundation
-    class of Batch-28" - so the row carries both. The group comes off the day
-    the Foundation Form landed, which is the day of the class itself."""
+async def test_the_hr_row_says_which_foundation_class_they_are_in(client, auth_headers):
+    """Batch and group are meant to be read together - "Group 3 of Batch-28" -
+    so the row carries both. The group is the one recorded on the student, not
+    a second reading of the date the batch already comes from."""
     await make_lead(
         name="Arun",
         phone="9876543210",
         status=LeadStatus.BATCH_CONFIRMATION,
+        foundation_group=1,
         created_at=datetime(2026, 8, 4, 10, 0, tzinfo=timezone.utc),
     )
     await make_lead(
         name="Bala",
         phone="9876511111",
         status=LeadStatus.BATCH_CONFIRMATION,
+        foundation_group=3,
+        # Same month as Arun, and a day that the old rule would have called
+        # Group 2. Neither fact decides the group any more.
         created_at=datetime(2026, 8, 20, 10, 0, tzinfo=timezone.utc),
     )
 
@@ -426,4 +430,4 @@ async def test_the_hr_row_says_which_foundation_class_they_came_through(client, 
             "/api/v1/batch-confirmation/students", headers=auth_headers, params={"tab": "approved"}
         )
     ).json()
-    assert {row["name"]: row["foundation_group"] for row in rows} == {"Arun": 1, "Bala": 2}
+    assert {row["name"]: row["foundation_group"] for row in rows} == {"Arun": 1, "Bala": 3}

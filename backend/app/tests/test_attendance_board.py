@@ -310,7 +310,15 @@ async def test_an_unparseable_batch_narrows_nothing(client, auth_headers):
     assert response.json()["total"] == 1
 
 
-async def add_student_on(client, auth_headers, *, name: str, phone: str, registration_date: str) -> str:
+async def add_student_on(
+    client,
+    auth_headers,
+    *,
+    name: str,
+    phone: str,
+    registration_date: str,
+    group: str | None = None,
+) -> str:
     response = await client.post(
         INDUCTION_URL,
         headers=auth_headers,
@@ -320,32 +328,56 @@ async def add_student_on(client, auth_headers, *, name: str, phone: str, registr
             "registration_date": registration_date,
             "sales_person": "Priya",
             "lead_source": "Instagram",
+            **({"group": group} if group else {}),
         },
     )
     assert response.status_code in (200, 201), response.text
     return response.json()["id"]
 
 
-async def test_the_month_splits_into_two_foundation_groups(client, auth_headers):
-    """Two foundation classes a month, a fortnight apart: the first sitting is
-    Group 1, the second Group 2 - both inside the same batch."""
-    await add_student_on(client, auth_headers, name="Arun", phone="9876543210", registration_date="2026-08-04")
-    await add_student_on(client, auth_headers, name="Divya", phone="9876500000", registration_date="2026-08-15")
-    await add_student_on(client, auth_headers, name="Bala", phone="9876511111", registration_date="2026-08-16")
+async def test_the_roll_shows_the_group_the_form_put_them_in(client, auth_headers):
+    """The group comes off the Induction Call Form's Group dropdown and is not
+    tied to the batch: three students registered in the same month sit in
+    whichever of the three classes they were put in."""
+    await add_student_on(
+        client, auth_headers, name="Arun", phone="9876543210", registration_date="2026-08-04", group="Group 1"
+    )
+    await add_student_on(
+        client, auth_headers, name="Divya", phone="9876500000", registration_date="2026-08-15", group="Group 1"
+    )
+    await add_student_on(
+        client, auth_headers, name="Bala", phone="9876511111", registration_date="2026-08-16", group="Group 3"
+    )
 
     rows = (await client.get(STUDENTS_URL, headers=auth_headers)).json()["items"]
     groups = {row["name"]: row["foundation_group"] for row in rows}
-    assert groups == {"Arun": 1, "Divya": 1, "Bala": 2}
-    # The 15th belongs to the first sitting, the 16th to the second.
+    assert groups == {"Arun": 1, "Divya": 1, "Bala": 3}
     assert {row["batch"] for row in rows} == {"Batch-28"}
 
 
-async def test_group_filter_narrows_a_batch_rather_than_cutting_across_one(client, auth_headers):
+async def test_a_student_with_no_group_yet_shows_none(client, auth_headers):
+    """The Group field is optional on the form - often the class isn't decided
+    when the student is keyed in - and an unanswered one stays unanswered
+    rather than defaulting into the first class."""
     await add_student_on(client, auth_headers, name="Arun", phone="9876543210", registration_date="2026-08-04")
-    await add_student_on(client, auth_headers, name="Bala", phone="9876511111", registration_date="2026-08-20")
-    # Same half of a different month: the group is a day-of-month rule, so this
-    # one matches the group filter but not the batch it is combined with.
-    await add_student_on(client, auth_headers, name="Divya", phone="9876500000", registration_date="2026-09-22")
+
+    rows = (await client.get(STUDENTS_URL, headers=auth_headers)).json()["items"]
+    assert rows[0]["foundation_group"] is None
+
+
+async def test_group_filter_cuts_across_batches(client, auth_headers):
+    """The group is a class, not a half of a month, so it is free to hold
+    students from more than one batch - and is narrowed by combining it with
+    the batch filter rather than by being contained in one."""
+    await add_student_on(
+        client, auth_headers, name="Arun", phone="9876543210", registration_date="2026-08-04", group="Group 1"
+    )
+    await add_student_on(
+        client, auth_headers, name="Bala", phone="9876511111", registration_date="2026-08-20", group="Group 2"
+    )
+    await add_student_on(
+        client, auth_headers, name="Divya", phone="9876500000", registration_date="2026-09-22", group="Group 2"
+    )
 
     second = await client.get(STUDENTS_URL, headers=auth_headers, params={"group": 2})
     assert sorted(row["name"] for row in second.json()["items"]) == ["Bala", "Divya"]
@@ -361,9 +393,11 @@ async def test_group_filter_also_narrows_the_marker_counts(client, auth_headers)
     """The stat cards have to describe the rows under them - a group filter
     that moved the table but not the counts would have the two disagreeing."""
     arun = await add_student_on(
-        client, auth_headers, name="Arun", phone="9876543210", registration_date="2026-08-04"
+        client, auth_headers, name="Arun", phone="9876543210", registration_date="2026-08-04", group="Group 1"
     )
-    await add_student_on(client, auth_headers, name="Bala", phone="9876511111", registration_date="2026-08-20")
+    await add_student_on(
+        client, auth_headers, name="Bala", phone="9876511111", registration_date="2026-08-20", group="Group 2"
+    )
     await mark(client, auth_headers, arun, "polls", True)
 
     stats = (await client.get(STATS_URL, headers=auth_headers, params={"group": 1})).json()
@@ -376,10 +410,14 @@ async def test_group_filter_also_narrows_the_marker_counts(client, auth_headers)
 
 async def test_group_filter_combines_with_a_marker_split(client, auth_headers):
     arun = await add_student_on(
-        client, auth_headers, name="Arun", phone="9876543210", registration_date="2026-08-04"
+        client, auth_headers, name="Arun", phone="9876543210", registration_date="2026-08-04", group="Group 1"
     )
-    await add_student_on(client, auth_headers, name="Chitra", phone="9876522222", registration_date="2026-08-06")
-    await add_student_on(client, auth_headers, name="Bala", phone="9876511111", registration_date="2026-08-20")
+    await add_student_on(
+        client, auth_headers, name="Chitra", phone="9876522222", registration_date="2026-08-06", group="Group 1"
+    )
+    await add_student_on(
+        client, auth_headers, name="Bala", phone="9876511111", registration_date="2026-08-20", group="Group 2"
+    )
     await mark(client, auth_headers, arun, "polls", True)
 
     pending = await client.get(

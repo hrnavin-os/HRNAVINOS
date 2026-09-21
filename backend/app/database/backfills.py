@@ -53,6 +53,51 @@ async def backfill_phone_normalized(model: type[BaseDocument]) -> int:
     return result.modified_count
 
 
+async def backfill_foundation_group(model: type[BaseDocument], *, date_field: str) -> int:
+    """Writes down the group every existing row was already being shown as.
+
+    The group used to be computed on read from a date - the 1st-15th of the
+    month was Group 1, the 16th onward Group 2 - and is now a stored field that
+    people set and change (app/utils/foundation_groups.py). Without this, every
+    lead and induction entry in the database would lose the group its board has
+    been printing for months the moment that rule stopped being applied, and
+    someone would have to re-enter thousands of them by hand.
+
+    So the old rule runs one last time, here, and its answer is written down.
+    It is only an opening position: from this point on the group is whatever
+    somebody says it is.
+
+    Only touches rows with no group at all, so it can't overwrite a move made
+    after the first boot, and so every boot after that matches nothing.
+    """
+    collection = model.get_motor_collection()
+    result = await collection.update_many(
+        {
+            "$or": [{"foundation_group": {"$exists": False}}, {"foundation_group": None}],
+            # Rows whose date is missing or isn't a date get no group rather
+            # than Group 1: $dayOfMonth of null is null, which sorts below
+            # every number and would otherwise sweep the lot into the first
+            # group. "Nobody has said" is the honest answer for them.
+            date_field: {"$type": "date"},
+        },
+        [
+            {
+                "$set": {
+                    "foundation_group": {
+                        "$cond": [{"$lte": [{"$dayOfMonth": f"${date_field}"}, 15]}, 1, 2]
+                    },
+                    # The history stays empty: these rows were never moved,
+                    # they were only ever being read off a calendar, and a
+                    # board that said "moved to Group 1" about all of them
+                    # would be reporting an event that never happened.
+                    "foundation_group_history": [],
+                }
+            }
+        ],
+    )
+    return result.modified_count
+
+
 async def sync_permission_catalog() -> set[str]:
     """Inserts a Permission row for any code the app has gained since the
     database was seeded.
@@ -207,6 +252,13 @@ async def run_startup_backfills() -> None:
         updated = await backfill_phone_normalized(model)
         if updated:
             logger.info("Backfilled phone_normalized on %d %s rows.", updated, model.Settings.name)
+    # Each collection off its own date, the one the old rule read: an induction
+    # entry was grouped by when it registered, a lead by when its Foundation
+    # Form landed.
+    for model, date_field in ((Lead, "created_at"), (InductionEntry, "registration_date")):
+        updated = await backfill_foundation_group(model, date_field=date_field)
+        if updated:
+            logger.info("Backfilled foundation_group on %d %s rows.", updated, model.Settings.name)
     # Order matters: a role can only be granted a permission that exists, so
     # the catalogue is topped up first.
     new_codes = await sync_permission_catalog()

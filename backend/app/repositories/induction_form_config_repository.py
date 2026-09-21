@@ -64,6 +64,22 @@ _SEED_FIELDS = [
         "required": True,
         "options": ["A Section", "B Section", "C Section"],
     },
+    # Which foundation class group the student sits in. Unlike every other
+    # dropdown here the answer is read as a number rather than kept as text
+    # (see parse_foundation_group), so the boards can filter and sort on it -
+    # which means an option has to name a group: "Group 4" is fine, "Morning"
+    # is not.
+    #
+    # Optional, unlike section. The group is often decided after the student is
+    # keyed in, and a required field would force whoever is typing from
+    # WhatsApp to guess one; it is set on the board in that case. Tick Required
+    # in the editor if your intake always knows it up front.
+    {
+        "key": "group",
+        "label": "Group",
+        "required": False,
+        "options": ["Group 1", "Group 2", "Group 3"],
+    },
 ]
 
 

@@ -14,6 +14,17 @@ import { getApiErrorMessage } from '@/services/apiClient'
 // them. The server enforces this too - this only stops you trying.
 const ALWAYS_REQUIRED = new Set(['name', 'phone', 'registration_date'])
 
+// Two of the dropdowns are not free lists: their answers are resolved into
+// something else on submit, so an option that resolves to nothing is refused
+// rather than filed. Said here because the box gives no other clue that these
+// two are different from the seven that are pure suggestions.
+const OPTION_HINTS = {
+  section:
+    'Each option must name a Form Collection section (e.g. "A Section") — the entry is filed under that section and assigned to its admins.',
+  group:
+    'Each option must name a group (e.g. "Group 4") — the number is what the boards file, filter and move students by. Add a line to open another class.',
+}
+
 function FieldRow({ field, index, total, onChange, onMove }) {
   const locked = ALWAYS_REQUIRED.has(field.key)
 
@@ -79,9 +90,8 @@ function FieldRow({ field, index, total, onChange, onMove }) {
             onChange={(event) => onChange({ ...field, options: event.target.value.split('\n') })}
           />
           <p className="mt-1 text-[11px] text-slate-400">
-            {field.key === 'section'
-              ? 'Each option must name a Form Collection section (e.g. "A Section") — the entry is filed under that section and assigned to its admins.'
-              : 'Suggestions only — the form still accepts a typed value that isn’t listed.'}
+            {OPTION_HINTS[field.key] ??
+              'Suggestions only — the form still accepts a typed value that isn’t listed.'}
           </p>
         </div>
       ) : null}

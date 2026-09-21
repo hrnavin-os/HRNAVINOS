@@ -17,6 +17,7 @@ from app.models.enums import (
     PaymentPlanOption,
     WhatsAppGroupStatus,
 )
+from app.models.foundation_group import FoundationGroupMove
 
 # How long a candidate has to accept a group invite before the board starts
 # asking somebody to chase them. One working day: long enough that a candidate
@@ -171,6 +172,17 @@ class Lead(BaseDocument):
     # separate from `batch_preference` (what the student asked for on the form)
     # and from the Batch documents the allocation flow uses.
     batch_number: str | None = Field(default=None, max_length=50)
+    # Which foundation class group this student sits in. Inherited from the
+    # induction entry when the two are matched, since that is where it was
+    # asked for, and editable on the Foundation board afterwards.
+    #
+    # Not to be confused with `group_assigned_at` just below, which is about a
+    # WhatsApp group and has nothing to do with this one. See
+    # app/utils/foundation_groups.py.
+    foundation_group: int | None = None
+    # Every move between groups, oldest first, so the board can say a student
+    # was moved rather than only where they now are.
+    foundation_group_history: list[FoundationGroupMove] = Field(default_factory=list)
     # When the candidate actually joined their section's WhatsApp group. Named
     # for the queue it used to drive rather than for what it means; kept under
     # that name because every existing row already carries it, and exposed as
@@ -215,6 +227,9 @@ class Lead(BaseDocument):
             IndexModel([("status", 1)]),
             IndexModel([("assigned_to", 1)]),
             IndexModel([("section", 1)]),
+            # Filterable on the Foundation board, and the roll for one group is
+            # a question this collection is asked constantly.
+            IndexModel([("foundation_group", 1)]),
             # The reminder sweep runs on every notification poll, so the "whose
             # follow-up is due" query has to be an index hit rather than a scan
             # of every lead in the system.

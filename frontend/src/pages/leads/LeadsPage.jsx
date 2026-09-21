@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { leadService } from '@/services/leadService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
 import { foundationFormService } from '@/services/foundationFormService'
+import { inductionFormConfigService } from '@/services/inductionFormConfigService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
 import { PERMISSIONS } from '@/constants/permissions'
@@ -28,7 +29,7 @@ import { LeadCourseCell } from '@/components/leads/LeadCourseCell'
 import { LeadDetailModal } from '@/components/leads/LeadDetailModal'
 import { CreateLeadModal } from '@/components/leads/CreateLeadModal'
 import { LeadRemarksCell } from '@/components/leads/LeadRemarksCell'
-import { FoundationGroupBadge } from '@/components/leads/FoundationGroupBadge'
+import { LeadGroupCell } from '@/components/leads/FoundationGroupCell'
 import { InductionLeadsBoard } from '@/components/leads/InductionLeadsBoard'
 import { RowActions } from '@/components/resource/RowActions'
 import { ConfirmDeleteModal } from '@/components/resource/ConfirmDeleteModal'
@@ -40,7 +41,7 @@ import {
   QR_CODE_OPTIONS,
 } from '@/constants/paymentOptions'
 import { PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
-import { FOUNDATION_GROUP_OPTIONS } from '@/constants/foundationGroups'
+import { FOUNDATION_GROUP_LABELS, FOUNDATION_GROUP_OPTIONS } from '@/constants/foundationGroups'
 
 // Anchors a portaled popup under its trigger, clamped so it never runs off
 // the right edge of the viewport (a trigger in the table's rightmost column,
@@ -633,6 +634,19 @@ function FoundationLeadsBoard() {
   // share.
   const pricingQuery = useQuery({ queryKey: ['foundation-form-pricing'], queryFn: foundationFormService.getPricing })
 
+  // What the Group cell offers. Read from the Induction Call Form's own
+  // config, which is where the list of classes is maintained, so a fourth
+  // group added in Admin > Form Collection can be picked here too - a lead
+  // and the induction entry behind it must not disagree about which groups
+  // exist. The three defaults stand in while the config is loading.
+  const inductionConfigQuery = useQuery({
+    queryKey: ['induction-form-config'],
+    queryFn: inductionFormConfigService.get,
+  })
+  const configuredGroups =
+    (inductionConfigQuery.data?.fields ?? []).find((field) => field.key === 'group')?.options ?? []
+  const groupOptions = configuredGroups.length ? configuredGroups : FOUNDATION_GROUP_LABELS
+
   const courseOptionsQuery = useQuery({ queryKey: ['lead-course-options'], queryFn: leadService.getCourseOptions })
   // Everything the Course cell can offer, which is more than the filter's
   // list: a course nobody is on yet is a dead end to filter by and the point
@@ -722,14 +736,18 @@ function FoundationLeadsBoard() {
           },
         ]),
     { key: 'date', header: 'Date', align: 'center', render: (row) => formatDate(row.created_at) },
-    // Straight after Date, because it is that date read a second way: the
-    // foundation class runs twice a month, so the 1st-15th is Group 1 and the
-    // 16th onward Group 2, both within the same batch.
+    // Straight after Date, where it used to be a second reading of that date.
+    // It isn't any more: the group is recorded on the Induction Call Form and
+    // changed from here, and a student who moves keeps the date they arrived
+    // on. Editable for that reason - classes fill up and students switch, and
+    // the person who has to act on it is looking at this column.
     {
       key: 'foundation_group',
       header: 'Group',
       align: 'center',
-      render: (row) => <FoundationGroupBadge group={row.foundation_group} />,
+      render: (row) => (
+        <LeadGroupCell key={row.id} lead={row} options={groupOptions} onError={setEditError} />
+      ),
     },
     {
       key: 'payment_plan',
@@ -935,10 +953,9 @@ function FoundationLeadsBoard() {
             }}
           />
 
-          {/* A fixed pair rather than options read off the data: every batch
-              has exactly two foundation classes, so "nobody came to the second
-              one this month" is an answer the filter should be able to give
-              rather than an option it quietly drops. */}
+          {/* A fixed list rather than options read off the data: "nobody is in
+              Group 3 this month" is an answer the filter should be able to
+              give rather than an option it quietly drops. */}
           <FilterDropdown
             label="Group"
             value={groupFilter}

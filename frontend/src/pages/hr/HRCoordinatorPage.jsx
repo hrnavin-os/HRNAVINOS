@@ -63,9 +63,8 @@ function LostStudents() {
       align: 'center',
       render: (row) => (row.batch ? <Badge tone="blue">{row.batch}</Badge> : dash(null)),
     },
-    // Beside the batch, since it is which of that batch's two foundation
-    // classes they came through. Named in full because this page's other
-    // "Group" - the onboarding tab's - is the WhatsApp one.
+    // Beside the batch, since the two are read together. Named in full because
+    // this page's other "Group" - the onboarding tab's - is the WhatsApp one.
     {
       key: 'foundation_group',
       header: 'Foundation Group',
