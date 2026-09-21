@@ -146,10 +146,7 @@ class SheetsClient:
                 "can open it)."
             )
         if response.status_code == 400 and "Unable to parse range" in detail:
-            raise SheetsError(
-                f"A tab is missing. The spreadsheet needs tabs named '{settings.LEAD_SHEET_INDUCTION_TAB}' "
-                f"and '{settings.LEAD_SHEET_FOUNDATION_TAB}'."
-            )
+            raise SheetsError(f"A tab is missing from the spreadsheet - it may have been deleted mid-run. ({detail})")
         raise SheetsError(f"Google Sheets failed to {action} (HTTP {response.status_code}): {detail}")
 
     async def _sheet_properties(self) -> list[dict]:
@@ -160,6 +157,9 @@ class SheetsClient:
             "read the sheet layout",
         )
         return [sheet["properties"] for sheet in meta.get("sheets", [])]
+
+    async def tab_titles(self) -> list[str]:
+        return [properties["title"] for properties in await self._sheet_properties()]
 
     async def ensure_tabs(self, tabs: list[str]) -> list[str]:
         """Creates any of `tabs` the spreadsheet does not have yet.

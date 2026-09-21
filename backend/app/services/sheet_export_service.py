@@ -145,8 +145,7 @@ class SheetExportService:
         """
         if not settings.lead_sheet_sync_enabled or spreadsheet_id != settings.LEAD_SHEET_SPREADSHEET_ID:
             return None
-        owned = {settings.LEAD_SHEET_INDUCTION_TAB, settings.LEAD_SHEET_FOUNDATION_TAB}
-        clashing = sorted(owned & {induction, foundation})
+        clashing = sorted(tab for tab in {induction, foundation} if is_sync_tab(tab))
         if not clashing:
             return None
         return (
