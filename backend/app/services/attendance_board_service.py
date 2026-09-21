@@ -34,7 +34,6 @@ from app.schemas.attendance_board_schema import (
 from app.services.audit_service import AuditService
 from app.services.induction_entry_service import InductionEntryService, batch_for, stamp_terms_signature
 from app.schemas.foundation_group_schema import FoundationGroupMoveSchema
-from app.utils.foundation_groups import MAX_FOUNDATION_GROUP
 
 
 @dataclass(frozen=True)

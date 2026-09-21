@@ -1,18 +1,25 @@
 name: CI
 
+# Run by hand only. This used to fire on every push and pull request, which
+# meant two runs per commit: this one and Deploy to VPS. The deploy is the one
+# that matters here - it has never waited on this workflow and does not read
+# its result, so a red CI next to a green deploy reported nothing about what
+# was actually live, and reported it on every single push.
+#
+# Nothing is gated on it either way. To run the checks against a branch, open
+# Actions -> CI -> "Run workflow"; to put it back on every push, restore the
+# trigger below to:
+#
+#   on:
+#     push:
+#       branches: [main, develop]
+#     pull_request:
+#       branches: [main, develop]
+#
+# (and restore the concurrency block, which only earns its keep when pushes
+# can queue runs behind each other).
 on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main, develop]
-
-# A newer push makes the run in flight irrelevant - it is testing code that is
-# already superseded, and it holds a runner the new run is queueing for.
-# Cancelling it gets the current commit to deploy sooner. Keyed per ref, so
-# main and a branch never cancel each other.
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  workflow_dispatch:
 
 env:
   PYTHON_VERSION: "3.12"
