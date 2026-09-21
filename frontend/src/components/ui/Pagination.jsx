@@ -8,8 +8,13 @@ export function Pagination({ page, totalPages, onPageChange, total, pageSize }) 
   // Nothing to say and nowhere to go.
   if (totalPages <= 1 && !hasRange) return null
 
-  const from = (page - 1) * pageSize + 1
+  // Clamped to the total rather than computed from the page alone: handed a
+  // page that no longer exists - the last row of the last page deleted, say -
+  // the arithmetic reads "Showing 21-1 of 1", which is not a range. The page
+  // itself is corrected a beat later; the footer must not print nonsense in
+  // the meantime.
   const to = Math.min(page * pageSize, total)
+  const from = Math.min((page - 1) * pageSize + 1, to)
 
   const button = `inline-flex h-8 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5
     text-sm font-medium text-slate-600 transition-colors

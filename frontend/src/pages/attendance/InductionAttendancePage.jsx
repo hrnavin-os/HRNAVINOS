@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Check,
@@ -128,13 +128,12 @@ export function InductionAttendancePage() {
     state,
     ...filters,
   })
+  // A page number belongs to the view it was set on - page 3 of the whole roll
+  // is not page 3 of the four people still pending in B Section - which
+  // usePaginatedQuery now keeps straight for every board at once, from the
+  // params above. This page used to do it here in an effect, which reset after
+  // the stale page had already been fetched.
   const { setPage, search, setSearch } = query
-
-  // A page number belongs to the view it was set on: page 3 of the whole roll
-  // is not page 3 of the four people still pending in B Section.
-  useEffect(() => {
-    setPage(1)
-  }, [marker, state, section, batch, group, setPage])
 
   const statsQuery = useQuery({
     // The counts are filtered with the table, so they key off the filters too
