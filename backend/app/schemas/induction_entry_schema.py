@@ -128,6 +128,10 @@ class InductionEntryUpdate(BaseModel):
     payment_mode: str | None = Field(default=None, max_length=150)
     category: str | None = Field(default=None, max_length=150)
     call_remark: str | None = Field(default=None, max_length=100)
+    # Sent alongside call_remark when the remark says quit - the service
+    # refuses a quit remark that arrives without one, and clears the stored
+    # reason when the remark moves off quit.
+    quit_reason: str | None = Field(default=None, max_length=500)
 
 
 class InductionEntryResponse(BaseModel):
@@ -146,6 +150,8 @@ class InductionEntryResponse(BaseModel):
     # Where the candidate stands after the induction call, set from the board's
     # dropdown. Open text, not an enum - see the field on the model.
     call_remark: str | None = None
+    # Why they quit. Only ever set while the remark says quit.
+    quit_reason: str | None = None
     # Set by the round-robin at creation, not by the form.
     assigned_to: uuid.UUID | None = None
     assigned_to_name: str | None = None

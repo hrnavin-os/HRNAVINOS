@@ -13,6 +13,7 @@ import {
   PlayCircle,
   Tag,
   UserRound,
+  UserX,
   Wallet,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
@@ -223,6 +224,22 @@ export function InductionEntryDetail({ entry, hideAssignee = false }) {
         <DetailTile icon={CreditCard} label="Payment Mode" value={entry.payment_mode} tone="violet" />
         <DetailTile icon={Tag} label="Category" value={entry.category} tone="emerald" />
       </div>
+
+      {/* Why they left, when they have. Above the post-call pages rather than
+          among them: on a candidate who has quit it is the single thing the
+          record is read for, and it is prose, so it gets a panel that wraps
+          rather than a tile that truncates. */}
+      {entry.quit_reason && (
+        <DetailSection
+          title="Quit"
+          icon={UserX}
+          tone="rose"
+          entries={[
+            ['Call Remark', entry.call_remark],
+            ['Reason', entry.quit_reason],
+          ]}
+        />
+      )}
 
       {/* The post-call pages. Each section is skipped entirely when empty, so
           an entry nobody has worked yet reads as short rather than as a wall

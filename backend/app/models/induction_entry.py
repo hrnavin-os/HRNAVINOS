@@ -99,6 +99,19 @@ class InductionAttendance(BaseModel):
     foundation_class_attended: AttendanceMark = Field(default_factory=AttendanceMark)
 
 
+def is_quit_remark(remark: str | None) -> bool:
+    """Whether a call remark says this candidate has quit.
+
+    Matched on the word rather than against a list of the exact options: every
+    quit disposition contains "quit" and no other one does, and the options
+    themselves live in the frontend because they are operational and get added
+    to. Mirrors QUIT_REMARK in the repository, which asks the same question of
+    the database - so an entry cannot count as quit in one place and not the
+    other.
+    """
+    return bool(remark) and "quit" in remark.lower()
+
+
 class InductionEntry(BaseDocument):
     name: str = Field(max_length=150)
     email: str | None = Field(default=None, max_length=255)
@@ -123,6 +136,12 @@ class InductionEntry(BaseDocument):
     # added to, and a closed enum would need a deploy every time a new
     # disposition is wanted. The options live in the frontend constants.
     call_remark: str | None = Field(default=None, max_length=100)
+    # Why they quit, in the caller's own words. Required whenever the remark
+    # says quit and cleared the moment it stops saying so - a reason with no
+    # quit behind it is a sentence about nothing, so the two are written
+    # together (see InductionEntryService.update). Longer than the remark it
+    # explains because this one is prose, not a disposition off a list.
+    quit_reason: str | None = Field(default=None, max_length=500)
 
     # Set once, on create, by the round-robin in InductionEntryService. Both
     # are stored rather than derived: who owns a row must not change when
@@ -173,7 +192,7 @@ class InductionEntry(BaseDocument):
         Quit is checked first, matching the query in the repository: somebody
         who has quit is not still in Induction, whatever else is true of them.
         """
-        if self.call_remark and "quit" in self.call_remark.lower():
+        if is_quit_remark(self.call_remark):
             return InductionStatus.QUIT
         return (
             InductionStatus.MOVED_TO_FOUNDATION

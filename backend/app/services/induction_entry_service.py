@@ -13,6 +13,7 @@ from app.models.induction_entry import (
     InductionPlacement,
     InductionQualification,
     InductionRemarks,
+    is_quit_remark,
 )
 from app.models.user import User
 from app.repositories.foundation_form_config_repository import FoundationFormConfigRepository
@@ -46,6 +47,31 @@ def batch_for(registration_date: date) -> str:
     anchor_year, anchor_month = BATCH_ANCHOR
     months = (registration_date.year - anchor_year) * 12 + (registration_date.month - anchor_month)
     return f"Batch-{BATCH_ANCHOR_NUMBER + months}"
+
+
+def _resolve_quit_reason(entry: InductionEntry, update_data: dict) -> None:
+    """Keeps a quit remark and its reason true to each other, in place.
+
+    Marking somebody as quit is the one disposition that has to say why, so a
+    remark that says quit is refused unless a reason comes with it or one is
+    already stored. The converse matters just as much: a remark moved back off
+    quit takes the reason with it, or the Quit tab would be the only place the
+    stale sentence was no longer visible.
+
+    Both fields are optional on the payload and either can arrive alone, so the
+    question is asked of the entry as it will be after the update - not of what
+    this particular request happens to carry.
+    """
+    if "call_remark" not in update_data and "quit_reason" not in update_data:
+        return
+    remark = update_data.get("call_remark", entry.call_remark)
+    reason = (update_data.get("quit_reason", entry.quit_reason) or "").strip()
+    if not is_quit_remark(remark):
+        update_data["quit_reason"] = None
+        return
+    if not reason:
+        raise BadRequestError("A quit remark needs a reason. Say why this candidate quit.")
+    update_data["quit_reason"] = reason
 
 
 def stamp_terms_signature(
@@ -509,6 +535,7 @@ class InductionEntryService:
         # the entry would keep matching on the number it no longer has.
         if update_data.get("phone"):
             update_data["phone_normalized"] = normalize_phone(update_data["phone"])
+        _resolve_quit_reason(entry, update_data)
         update_data["updated_by"] = actor_id
         await self.entries.update(entry, update_data)
         await self.audit.record(

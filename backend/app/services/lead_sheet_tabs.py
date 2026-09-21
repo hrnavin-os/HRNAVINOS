@@ -232,7 +232,12 @@ _INDUCTION_TOP_FIELDS = (
     "payment_mode",
     "category",
     "call_remark",
+    "quit_reason",
 )
+# The remark and the reason behind it are one change, not two: the service
+# refuses a quit remark with no reason against it, so sending the pair as
+# separate updates would be turned down on whichever arrived first.
+_INDUCTION_PAIRED = ("call_remark", "quit_reason")
 _DATE_FIELDS = {"registration_date", "paid_date", "induction_call_date"}
 _BOOL_FIELDS = {"terms_form_signed", "whatsapp_group_added"}
 _NOT_BLANK = {"name", "phone", "registration_date"}
@@ -255,6 +260,7 @@ class InductionTab(SheetTabSpec):
         Column("payment_mode", "Payment Mode"),
         Column("category", "Category"),
         Column("call_remark", "Induction Call Remarks"),
+        Column("quit_reason", "Quit Reason"),
         Column("status", "Status", editable=False),
         Column("induction_call_date", "Induction Call Date"),
         Column("scheduled_time", "Scheduled Time"),
@@ -305,7 +311,10 @@ class InductionTab(SheetTabSpec):
 
     async def apply(self, entry: InductionEntry, edits: dict[str, str], row: dict[str, str]) -> list[str]:
         errors = []
+        paired = {field: edits[field] for field in _INDUCTION_PAIRED if field in edits}
         for field, raw in edits.items():
+            if field in paired:
+                continue
             try:
                 value = self._parse(field, raw)
                 if value is None and field in _NOT_BLANK:
@@ -317,6 +326,13 @@ class InductionTab(SheetTabSpec):
                     await self.service.update(entry.id, InductionEntryUpdate(**{field: value}), actor_id=None)
             except Exception as exc:  # noqa: BLE001 - every refusal becomes a Sync Note
                 errors.append(f"{self.column(field).header}: {error_message(exc)}")
+        if paired:
+            try:
+                update = InductionEntryUpdate(**{field: optional(raw) for field, raw in paired.items()})
+                await self.service.update(entry.id, update, actor_id=None)
+            except Exception as exc:  # noqa: BLE001 - every refusal becomes a Sync Note
+                headers = " / ".join(self.column(field).header for field in paired)
+                errors.append(f"{headers}: {error_message(exc)}")
         return errors
 
     async def create(self, row: dict[str, str]) -> tuple[InductionEntry, list[str]]:
@@ -339,7 +355,7 @@ class InductionTab(SheetTabSpec):
         rest = {
             key: value
             for key, value in row.items()
-            if value.strip() and (key == "call_remark" or key in _GROUP_OF)
+            if value.strip() and (key in _INDUCTION_PAIRED or key in _GROUP_OF)
         }
         return entry, await self.apply(entry, rest, row)
 

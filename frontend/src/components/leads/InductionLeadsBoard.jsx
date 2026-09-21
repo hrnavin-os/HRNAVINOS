@@ -15,6 +15,7 @@ import { StatCard } from '@/components/ui/StatCard'
 import { InductionCallRemarkCell } from '@/components/leads/InductionCallRemarkCell'
 import { InductionScheduleCell } from '@/components/leads/InductionScheduleCell'
 import { InductionCategoryCell } from '@/components/leads/InductionCategoryCell'
+import { InductionQuitReasonCell } from '@/components/leads/InductionQuitReasonCell'
 import { InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
 import { InductionUpdateModal } from '@/components/leads/InductionUpdateModal'
 import { useAuth } from '@/hooks/useAuth'
@@ -307,6 +308,14 @@ export function InductionLeadsBoard() {
     header: 'Induction Call Schedule',
     render: (row) => <InductionScheduleCell entry={row} onError={setError} />,
   }
+  // Only on the Quit tab, and only there: a reason exists precisely when the
+  // remark beside it says quit, which is what puts a row on that tab in the
+  // first place, so anywhere else this is a column of blanks.
+  const quitReasonColumn = {
+    key: 'quit_reason',
+    header: 'Quit Reason',
+    render: (row) => <InductionQuitReasonCell entry={row} onError={setError} />,
+  }
 
   // Category, then schedule, then remark - the order they get filled in: what
   // kind of candidate this is, when the call is, then how it went.
@@ -465,7 +474,7 @@ export function InductionLeadsBoard() {
           moved
             ? movedColumns
             : quit
-              ? pendingColumns
+              ? insertBefore(pendingColumns, 'assigned_to', quitReasonColumn)
               : [
                 ...pendingColumns,
                 {

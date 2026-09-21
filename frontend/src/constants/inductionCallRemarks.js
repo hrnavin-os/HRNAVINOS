@@ -92,6 +92,17 @@ export const REMARK_GROUPS = [
   },
 ]
 
+// Whether a remark says this candidate has quit - the question that decides
+// whether a reason has to be given for it.
+//
+// Matched on the word rather than against the quit group's options, because a
+// remark can also be typed by hand: "Quit-G2-After Demo Class" is not on the
+// list and is still a quit. This is the same rule the backend applies (see
+// is_quit_remark in app/models/induction_entry.py), and it has to be, or the
+// cell would collect a reason for a remark the server files as something else
+// - or worse, skip asking for one the server then demands.
+export const isQuitRemark = (remark) => Boolean(remark) && remark.toLowerCase().includes('quit')
+
 // value -> its group, so a cell can colour itself without knowing the grouping.
 // Built once rather than searched per render, since every row does this lookup.
 export const REMARK_GROUP_BY_VALUE = Object.fromEntries(

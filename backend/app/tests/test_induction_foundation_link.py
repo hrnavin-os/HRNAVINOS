@@ -403,9 +403,18 @@ async def test_the_call_remark_survives_the_move_to_foundation(client, auth_head
     assert moved["items"][0]["call_remark"] == "Induction Call Completed - Phone Call"
 
 
-async def set_remark(client, auth_headers, entry_id, remark):
-    await client.put(
-        f"/api/v1/induction-entries/{entry_id}", headers=auth_headers, json={"call_remark": remark}
+async def set_remark(client, auth_headers, entry_id, remark, reason="Joined another institute"):
+    """The board's dropdown, as the UI drives it.
+
+    A quit remark carries its reason up with it, because the two are one
+    change - the service refuses the remark on its own. Everything else goes
+    on its own, the way a click on the cell sends it.
+    """
+    payload = {"call_remark": remark}
+    if remark and "quit" in remark.lower():
+        payload["quit_reason"] = reason
+    return await client.put(
+        f"/api/v1/induction-entries/{entry_id}", headers=auth_headers, json=payload
     )
 
 
@@ -454,6 +463,97 @@ async def test_a_non_quit_remark_leaves_the_bucket_alone(client, auth_headers):
 
     assert (await client.get("/api/v1/induction-entries", headers=auth_headers)).json()["total"] == 1
     assert (await client.get("/api/v1/induction-entries?status=quit", headers=auth_headers)).json()["total"] == 0
+
+
+async def test_a_quit_remark_is_refused_without_a_reason(client, auth_headers):
+    """Quit is the one disposition that ends the candidate's journey, and the
+    Quit tab is read to find out why - so the remark cannot be recorded on its
+    own. The board asks in a dialog; this is what makes the answer mandatory
+    rather than merely requested."""
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())
+    entry_id = (await client.get("/api/v1/induction-entries", headers=auth_headers)).json()["items"][0]["id"]
+
+    refused = await client.put(
+        f"/api/v1/induction-entries/{entry_id}",
+        headers=auth_headers,
+        json={"call_remark": "Quit - Before Induction Call"},
+    )
+    assert refused.status_code == 400
+
+    # Nothing was half-written: the entry is exactly where it was.
+    entry = (await client.get(f"/api/v1/induction-entries/{entry_id}", headers=auth_headers)).json()
+    assert entry["call_remark"] is None
+    assert entry["quit_reason"] is None
+    assert (await client.get("/api/v1/induction-entries?status=quit", headers=auth_headers)).json()["total"] == 0
+
+
+async def test_whitespace_is_not_a_reason(client, auth_headers):
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())
+    entry_id = (await client.get("/api/v1/induction-entries", headers=auth_headers)).json()["items"][0]["id"]
+
+    refused = await set_remark(client, auth_headers, entry_id, "Quit - Before Induction Call", reason="   ")
+    assert refused.status_code == 400
+
+
+async def test_the_reason_saves_with_the_quit_remark(client, auth_headers):
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())
+    entry_id = (await client.get("/api/v1/induction-entries", headers=auth_headers)).json()["items"][0]["id"]
+
+    saved = await set_remark(
+        client, auth_headers, entry_id, "Quit - After Foundation Session", reason="  Fee not affordable  "
+    )
+    assert saved.status_code == 200
+    # Stored trimmed, so the Quit tab doesn't render the caller's stray spaces.
+    assert saved.json()["quit_reason"] == "Fee not affordable"
+
+
+async def test_the_reason_can_be_rewritten_on_its_own(client, auth_headers):
+    """The Quit tab edits it in place, without resending the remark the row
+    already carries - and entries that quit before the reason was asked for
+    get one this way."""
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())
+    entry_id = (await client.get("/api/v1/induction-entries", headers=auth_headers)).json()["items"][0]["id"]
+    await set_remark(client, auth_headers, entry_id, "Quit - After Foundation Session")
+
+    rewritten = await client.put(
+        f"/api/v1/induction-entries/{entry_id}",
+        headers=auth_headers,
+        json={"quit_reason": "Relocating to Chennai"},
+    )
+    assert rewritten.status_code == 200
+    assert rewritten.json()["quit_reason"] == "Relocating to Chennai"
+    assert rewritten.json()["call_remark"] == "Quit - After Foundation Session"
+
+    # And it cannot be emptied while the remark still says quit.
+    assert (
+        await client.put(
+            f"/api/v1/induction-entries/{entry_id}", headers=auth_headers, json={"quit_reason": None}
+        )
+    ).status_code == 400
+
+
+async def test_the_reason_goes_when_the_remark_stops_saying_quit(client, auth_headers):
+    """A remark corrected back off quit takes the reason with it. Left behind,
+    it would be a sentence explaining something that no longer happened - and
+    the only place it still showed would be the tab the entry just left."""
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())
+    entry_id = (await client.get("/api/v1/induction-entries", headers=auth_headers)).json()["items"][0]["id"]
+    await set_remark(client, auth_headers, entry_id, "Quit - Before Induction Call")
+
+    corrected = await set_remark(client, auth_headers, entry_id, "Induction Call Scheduled - Today")
+    assert corrected.json()["quit_reason"] is None
+
+    # Clearing the remark altogether does the same.
+    await set_remark(client, auth_headers, entry_id, "Quit - Before Induction Call")
+    cleared = await client.put(
+        f"/api/v1/induction-entries/{entry_id}", headers=auth_headers, json={"call_remark": None}
+    )
+    assert cleared.json()["quit_reason"] is None
 
 
 async def test_every_quit_wording_is_recognised(client, auth_headers):
