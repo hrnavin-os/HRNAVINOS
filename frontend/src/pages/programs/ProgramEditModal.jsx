@@ -80,7 +80,10 @@ export function ProgramEditModal({ program, onClose, onSaved }) {
   const chosen = watch('category')
   const pricingCode = watch('pricing.code')
   useEffect(() => {
-    if (!config || !chosen || !pricingCode || chosen === pricingCode) return
+    // No pricingCode guard: a program whose category has since been removed
+    // has no pricing at all, and picking one for it is exactly when the fields
+    // most need seeding.
+    if (!config || !chosen || chosen === pricingCode) return
     const next = (config.categories ?? []).find((category) => category.code === chosen)
     if (next) setValue('pricing', next)
   }, [config, chosen, pricingCode, setValue])
@@ -115,10 +118,10 @@ export function ProgramEditModal({ program, onClose, onSaved }) {
         throw new Error(`The program details saved, but its pricing didn't: ${getApiErrorMessage(cause)}`)
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['programs'] })
-      onSaved()
-    },
+    // onSaved refetches the program list for us - including the roster this
+    // modal reads to name who shares the category, which hangs off the same
+    // key prefix.
+    onSuccess: onSaved,
   })
 
   const pricing = chosen ? categoryFor(chosen) : null
