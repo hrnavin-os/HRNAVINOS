@@ -1,8 +1,11 @@
 """One-way export of the Induction and Foundation boards into a spreadsheet an
 admin nominates from Settings.
 
-    Induction tab   <-  every induction entry  (Admin > Induction Leads)
-    Foundation tab  <-  every Foundation lead  (Admin > All Leads)
+    Induction - <section> tabs   <-  induction entries  (Admin > Induction Leads)
+    Foundation - <section> tabs  <-  Foundation leads   (Admin > All Leads)
+
+The two tab names an admin picks are prefixes: each board is split into one tab
+per section ("Induction - A Section"), the same split the two-way sync uses.
 
 The spreadsheet is a mirror, never a source: each run rewrites both tabs from
 the database, so anything typed into them is replaced the next time round.
@@ -52,8 +55,8 @@ from app.services.google_sheets_client import (
     access_token,
     service_account_email,
 )
-from app.services.lead_sheet_sync_service import is_sync_tab
-from app.services.lead_sheet_tabs import FoundationTab, InductionTab, SheetTabSpec, error_message
+from app.services.lead_sheet_sync_service import is_sync_tab, section_tabs
+from app.services.lead_sheet_tabs import SheetTabSpec, error_message
 
 logger = logging.getLogger("app.integrations.sheet_export")
 
@@ -119,8 +122,8 @@ class SheetExportService:
 
     # -- configuration ------------------------------------------------------
 
-    def specs(self, config: SheetExport) -> list[tuple[str, SheetTabSpec]]:
-        return [(config.induction_tab, InductionTab()), (config.foundation_tab, FoundationTab())]
+    async def specs(self, config: SheetExport, existing: set[str] = frozenset()) -> list[tuple[str, SheetTabSpec]]:
+        return await section_tabs(config.induction_tab, config.foundation_tab, existing)
 
     async def get(self) -> SheetExport:
         return await self.repo.get_or_create()
@@ -228,11 +231,13 @@ class SheetExportService:
     async def status(self) -> SheetExportResponse:
         config = await self.repo.get_or_create()
         tabs = []
-        for tab_name, spec in self.specs(config):
+        for tab_name, spec in await self.specs(config):
+            board = spec.key.split(":")[0]
+            section = tab_name.rsplit(" - ", 1)[-1]
             tabs.append(
                 SheetExportTabInfo(
                     key=spec.key,
-                    label=TAB_LABELS.get(spec.key, spec.key.title()),
+                    label=f"{TAB_LABELS.get(board, board.title())} - {section}",
                     tab_name=tab_name,
                     headers=[column.header for column in spec.columns],
                     # Counted through the spec's own filter rather than a
@@ -269,7 +274,7 @@ class SheetExportService:
     async def export_once(self, sheets, config: SheetExport) -> dict[str, SheetExportTabStats]:
         """One full export against `sheets` (a SheetsClient, or a fake in
         tests). No lease - callers that can race hold one."""
-        specs = self.specs(config)
+        specs = await self.specs(config, set(await sheets.tab_titles()))
         names = [name for name, _ in specs]
         # Before the read: a spreadsheet the admin has only just created has
         # neither tab, and reading a range that doesn't exist is an error.

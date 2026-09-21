@@ -20,6 +20,9 @@ from app.services.lead_service import LeadService
 from app.services.sheet_export_service import SheetExportService, parse_spreadsheet_id
 
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1GuW1RzWnA1SsKIwmzRFXdIa7ERSb3EELnrWABkPSHnk/edit#gid=0"
+# Records made without a section land on each board's No Section tab.
+INDUCTION = "Induction - No Section"
+FOUNDATION = "Foundation - No Section"
 
 
 class FakeSheets:
@@ -28,6 +31,9 @@ class FakeSheets:
     def __init__(self) -> None:
         self.tabs: dict[str, list[list[str]]] = {"Sheet1": []}
         self.writes = 0
+
+    async def tab_titles(self):
+        return list(self.tabs)
 
     async def ensure_tabs(self, names):
         created = [name for name in names if name not in self.tabs]
@@ -118,14 +124,13 @@ async def test_the_export_cannot_be_aimed_at_the_two_way_syncs_own_tabs(client, 
     monkeypatch.setattr(env, "LEAD_SHEET_SYNC_ENABLED", True)
     monkeypatch.setattr(env, "LEAD_SHEET_SPREADSHEET_ID", "1GuW1RzWnA1SsKIwmzRFXdIa7ERSb3EELnrWABkPSHnk")
 
-    # The sync owns one tab per section ("Induction - A Section").
+    # Both split their board names into the same per-section tab names.
     with pytest.raises(BadRequestError, match="two-way sync"):
-        await _configure(induction_tab="Induction - A Section")
+        await _configure()
+    with pytest.raises(BadRequestError, match="two-way sync"):
+        await _configure(induction_tab="Induction - A Section", foundation_tab="Other")
 
-    # Same spreadsheet, tabs of its own: allowed, because nothing overlaps -
-    # including the plain board names, which the sync no longer writes.
-    config = await _configure(induction_tab="Induction", foundation_tab="Foundation")
-    assert config.enabled is True
+    # Same spreadsheet, tabs of its own: allowed, because nothing overlaps.
     config = await _configure(induction_tab="ERP Induction", foundation_tab="ERP Foundation")
     assert config.enabled is True
 
@@ -138,7 +143,7 @@ async def test_a_target_that_only_clashes_later_is_caught_at_run_time(client, mo
     # Sync off: the default tab names against the sync's own spreadsheet save
     # without complaint.
     monkeypatch.setattr(env, "LEAD_SHEET_SYNC_ENABLED", False)
-    await _configure(foundation_tab="Foundation - B Section")
+    await _configure()
 
     # Same config, a server where the sync runs.
     monkeypatch.setattr(env, "LEAD_SHEET_SYNC_ENABLED", True)
@@ -161,8 +166,26 @@ async def test_missing_tabs_are_created_before_the_first_export(client):
 
     await _export(sheets)
 
-    assert "Induction" in sheets.tabs
-    assert "Foundation" in sheets.tabs
+    # One per configured section, whether or not anyone is filed under it yet.
+    assert {"Induction - A Section", "Induction - C Section", "Foundation - B Section"} <= set(sheets.tabs)
+
+
+async def test_each_section_is_written_to_its_own_tab(client):
+    in_a = await _entry(section="a", group="Group 2")
+    await _entry(name="Kavya", phone="9000044444", section="b")
+    await _lead(section="b")
+    await _configure()
+    sheets = FakeSheets()
+
+    await _export(sheets)
+
+    a_rows = sheets.rows("Induction - A Section")
+    assert [row["Name"] for row in a_rows] == [in_a.name]
+    assert a_rows[0]["Section"] == "A Section"
+    assert a_rows[0]["Group"] == "Group 2"
+    assert [row["Name"] for row in sheets.rows("Induction - B Section")] == ["Kavya"]
+    assert [row["Name"] for row in sheets.rows("Foundation - B Section")] == ["Ravi Kumar"]
+    assert sheets.rows("Foundation - A Section") == []
 
 
 async def test_the_boards_are_written_under_their_own_headers(client):
@@ -173,20 +196,20 @@ async def test_the_boards_are_written_under_their_own_headers(client):
 
     stats = await _export(sheets)
 
-    induction = sheets.rows("Induction")
+    induction = sheets.rows(INDUCTION)
     assert induction[0]["Name"] == "Priya S"
     assert induction[0]["Mobile Number"] == "9123456780"
     assert induction[0]["Category"] == "Fresher"
     assert induction[0]["Batch"] == "Batch-29"
-    foundation = sheets.rows("Foundation")
+    foundation = sheets.rows(FOUNDATION)
     assert foundation[0]["Name"] == "Ravi Kumar"
     assert foundation[0]["Course"] == "Recruitment"
     assert foundation[0]["Stage"] == "New Lead"
-    assert stats["induction"].rows == 1
-    assert stats["foundation"].rows == 1
+    assert stats["induction:-"].rows == 1
+    assert stats["foundation:-"].rows == 1
     # Nothing of the two-way sync's bookkeeping leaks into a mirror.
-    assert "ERP ID" not in sheets.headers("Induction")
-    assert "Sync Note" not in sheets.headers("Foundation")
+    assert "ERP ID" not in sheets.headers(INDUCTION)
+    assert "Sync Note" not in sheets.headers(FOUNDATION)
     assert lead and entry  # created above; the rows above are theirs
 
 
@@ -197,8 +220,8 @@ async def test_custom_tab_names_are_honoured(client):
 
     await _export(sheets, config)
 
-    assert sheets.rows("Foundation Data")[0]["Name"] == "Ravi Kumar"
-    assert sheets.tabs["Induction Data"][0][0] == "Name"
+    assert sheets.rows("Foundation Data - No Section")[0]["Name"] == "Ravi Kumar"
+    assert sheets.tabs["Induction Data - A Section"][0][0] == "Name"
 
 
 async def test_an_erp_change_reaches_the_sheet(client):
@@ -210,7 +233,7 @@ async def test_an_erp_change_reaches_the_sheet(client):
     await InductionEntry.find_one({"_id": entry.id}).update({"$set": {"category": "Career Gap"}})
     await _export(sheets)
 
-    assert sheets.rows("Induction")[0]["Category"] == "Career Gap"
+    assert sheets.rows(INDUCTION)[0]["Category"] == "Career Gap"
 
 
 async def test_an_unchanged_board_is_not_rewritten(client):
@@ -223,7 +246,7 @@ async def test_an_unchanged_board_is_not_rewritten(client):
     stats = await _export(sheets)
 
     assert sheets.writes == writes
-    assert stats["foundation"].written is False
+    assert stats["foundation:-"].written is False
 
 
 async def test_a_sheet_edit_is_overwritten_rather_than_saved(client):
@@ -234,11 +257,11 @@ async def test_a_sheet_edit_is_overwritten_rather_than_saved(client):
     sheets = FakeSheets()
     await _export(sheets)
 
-    name_column = sheets.headers("Foundation").index("Name")
-    sheets.tabs["Foundation"][1][name_column] = "Typed Over"
+    name_column = sheets.headers(FOUNDATION).index("Name")
+    sheets.tabs[FOUNDATION][1][name_column] = "Typed Over"
     await _export(sheets)
 
-    assert sheets.rows("Foundation")[0]["Name"] == "Ravi Kumar"
+    assert sheets.rows(FOUNDATION)[0]["Name"] == "Ravi Kumar"
     assert (await Lead.find_one({"_id": lead.id})).name == "Ravi Kumar"
 
 
@@ -247,12 +270,12 @@ async def test_a_record_deleted_in_the_erp_leaves_the_sheet(client):
     await _configure()
     sheets = FakeSheets()
     await _export(sheets)
-    assert len(sheets.rows("Induction")) == 1
+    assert len(sheets.rows(INDUCTION)) == 1
 
     await InductionEntry.find_one({"_id": entry.id}).update({"$set": {"is_deleted": True}})
     await _export(sheets)
 
-    assert sheets.rows("Induction") == []
+    assert sheets.rows(INDUCTION) == []
 
 
 async def test_only_one_worker_holds_the_lease(client):
@@ -285,10 +308,10 @@ async def test_status_describes_both_tabs_with_their_headers(client):
     assert status.ready is True
     assert status.blocked_reason is None
     by_key = {tab.key: tab for tab in status.tabs}
-    assert by_key["induction"].record_count == 1
-    assert by_key["foundation"].record_count == 1
-    assert by_key["induction"].headers[:2] == ["Name", "Mobile Number"]
-    assert "Course" in by_key["foundation"].headers
+    assert by_key["induction:-"].record_count == 1
+    assert by_key["foundation:-"].record_count == 1
+    assert by_key["induction:-"].headers[:2] == ["Name", "Mobile Number"]
+    assert "Course" in by_key["foundation:-"].headers
 
 
 async def test_status_explains_why_it_cannot_run_yet(client):
@@ -311,7 +334,9 @@ async def test_the_settings_page_reads_its_own_status(client, auth_headers):
     body = response.json()
     assert body["enabled"] is False
     assert body["induction_tab"] == "Induction"
-    assert [tab["key"] for tab in body["tabs"]] == ["induction", "foundation"]
+    keys = [tab["key"] for tab in body["tabs"]]
+    assert keys[:3] == ["induction:a", "induction:b", "induction:c"]
+    assert "foundation:-" in keys  # the lead above has no section
 
 
 async def test_the_link_is_saved_through_the_endpoint(client, auth_headers):

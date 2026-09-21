@@ -72,11 +72,38 @@ def section_tab_name(board_tab: str, section_label: str) -> str:
 
 
 def is_sync_tab(name: str) -> bool:
-    """Whether the two-way sync owns a tab of this name."""
+    """Whether the two-way sync owns a tab of this name - or would, were a
+    one-way export to use it as its board tab name and split it the same way."""
     return any(
-        name.startswith(section_tab_name(board_tab, ""))
+        name == board_tab or name.startswith(section_tab_name(board_tab, ""))
         for board_tab in (settings.LEAD_SHEET_INDUCTION_TAB, settings.LEAD_SHEET_FOUNDATION_TAB)
     )
+
+
+async def section_tabs(induction_tab: str, foundation_tab: str, existing: set[str]) -> list[tuple[str, SheetTabSpec]]:
+    """One tab per board per section, named "<board tab> - <section>".
+    Shared by the two-way sync and the one-way export.
+
+    Every configured section gets its tab, as does any section a record is
+    filed under. `existing` is the spreadsheet's tab names: a tab already
+    there stays in the list even once nothing is filed under its section, so
+    rows typed into it are still picked up rather than silently ignored."""
+    config = await FoundationFormConfigRepository().get_or_create()
+    labels = {section.code: section.label for section in config.sections}
+    tabs = []
+    for board_tab, spec_type, model, query in (
+        (induction_tab, InductionTab, InductionEntry, {"is_deleted": False}),
+        (foundation_tab, FoundationTab, Lead, {"is_deleted": False, "reviewed": {"$ne": False}}),
+    ):
+        in_use = set(await model.get_motor_collection().distinct("section", query))
+        # distinct() leaves out records with no section field at all.
+        no_section = await model.find({**query, "section": None}).count() > 0
+        codes = list(labels) + sorted(code for code in in_use if code and code not in labels)
+        for code in [*codes, None]:
+            name = section_tab_name(board_tab, labels.get(code, code) if code else NO_SECTION)
+            if (code in labels) or (code in in_use) or (code is None and no_section) or name in existing:
+                tabs.append((name, spec_type().for_section(code)))
+    return tabs
 
 
 def _norm(value: str) -> str:
@@ -248,30 +275,7 @@ async def _store_snapshots(tab: str, snapshots: dict[str, tuple[dict[str, str], 
 
 class LeadSheetSyncService:
     async def tabs(self, existing: set[str]) -> list[tuple[str, SheetTabSpec]]:
-        """One tab per board per section. `existing` is the spreadsheet's tab
-        names: a tab already there stays synced even once nothing is filed
-        under its section, so rows typed into it are still picked up."""
-        config = await FoundationFormConfigRepository().get_or_create()
-        labels = {section.code: section.label for section in config.sections}
-        tabs = []
-        for board_tab, spec_type, model, query in (
-            (settings.LEAD_SHEET_INDUCTION_TAB, InductionTab, InductionEntry, {"is_deleted": False}),
-            (
-                settings.LEAD_SHEET_FOUNDATION_TAB,
-                FoundationTab,
-                Lead,
-                {"is_deleted": False, "reviewed": {"$ne": False}},
-            ),
-        ):
-            in_use = set(await model.get_motor_collection().distinct("section", query))
-            # distinct() leaves out records with no section field at all.
-            no_section = await model.find({**query, "section": None}).count() > 0
-            codes = list(labels) + sorted(code for code in in_use if code and code not in labels)
-            for code in [*codes, None]:
-                name = section_tab_name(board_tab, labels.get(code, code) if code else NO_SECTION)
-                if (code in labels) or (code in in_use) or (code is None and no_section) or name in existing:
-                    tabs.append((name, spec_type().for_section(code)))
-        return tabs
+        return await section_tabs(settings.LEAD_SHEET_INDUCTION_TAB, settings.LEAD_SHEET_FOUNDATION_TAB, existing)
 
     async def state(self) -> LeadSheetSyncState:
         state = await LeadSheetSyncState.find_one({"key": "lead_sheets"})
@@ -299,7 +303,7 @@ class LeadSheetSyncService:
             # Only after the write lands: a snapshot describes the sheet, and
             # a failed write must leave the old one to compare against.
             await _store_snapshots(spec.key, snapshots)
-            stats[name] = tab_sync.stats
+            stats[spec.key] = tab_sync.stats
         # Snapshots of tabs no longer synced (the old single Induction and
         # Foundation tabs, a renamed section) would never be read again.
         await LeadSheetSyncRow.find({"tab": {"$nin": [spec.key for _, spec in tabs]}}).delete()
