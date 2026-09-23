@@ -575,8 +575,8 @@ class LeadService:
     async def course_options(self) -> List[str]:
         return await self.leads.distinct_course_interests()
 
-    async def qr_code_options(self) -> List[str]:
-        return await self.leads.distinct_qr_codes()
+    async def field_options(self, field: str) -> List[str]:
+        return await self.leads.distinct_values(field)
 
     async def course_catalog(self) -> List[str]:
         """The courses a lead can be put on: the active programs, and nothing

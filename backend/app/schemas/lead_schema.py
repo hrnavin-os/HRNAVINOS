@@ -9,7 +9,6 @@ from app.models.enums import (
     InstallmentPaymentMode,
     LeadSource,
     LeadStatus,
-    PaymentCallRemark,
     PaymentMethod,
     PaymentOption,
     PaymentPlanOption,
@@ -69,7 +68,7 @@ class LeadUpdate(BaseModel):
     paid_amount: Decimal | None = Field(default=None, ge=0)
     remarks: str | None = Field(default=None, max_length=2000)
     payment_option: PaymentOption | None = None
-    payment_call_remarks: PaymentCallRemark | None = None
+    payment_call_remarks: str | None = Field(default=None, max_length=100)
     paying_amount: Decimal | None = Field(default=None, ge=0)
     qr_code: str | None = Field(default=None, max_length=100)
     batch_number: str | None = Field(default=None, max_length=50)
@@ -179,7 +178,7 @@ class LeadResponse(BaseModel):
     # render it without a request per row.
     remark_entries: list[LeadRemarkResponse] = []
     payment_option: PaymentOption | None = None
-    payment_call_remarks: PaymentCallRemark | None = None
+    payment_call_remarks: str | None = None
     paying_amount: Decimal | None = None
     qr_code: str | None = None
     batch_number: str | None = None

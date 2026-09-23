@@ -23,10 +23,11 @@ export const leadService = {
     const { data } = await apiClient.get('/leads/analytics', { params: { dimension, ...filters } })
     return data
   },
-  // Every QR-Code name already on a lead, so one added by hand is offered on
-  // every other lead too.
-  getQrCodeOptions: async () => {
-    const { data } = await apiClient.get('/leads/qr-code-options')
+  // Every value already on a lead for one of the board's open dropdowns
+  // (qr_code, payment_call_remarks), so one added by hand is offered on every
+  // other lead too.
+  getFieldOptions: async (field) => {
+    const { data } = await apiClient.get(`/leads/field-options/${field}`)
     return data
   },
   getCourseOptions: async () => {

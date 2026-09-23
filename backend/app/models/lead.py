@@ -11,7 +11,6 @@ from app.models.enums import (
     InstallmentPaymentMode,
     LeadSource,
     LeadStatus,
-    PaymentCallRemark,
     PaymentMethod,
     PaymentOption,
     PaymentPlanOption,
@@ -153,7 +152,9 @@ class Lead(BaseDocument):
     # working the lead's payment on the phone - independent of payment_plan/
     # installments (the structured Foundation Form payment-collection flow).
     payment_option: PaymentOption | None = None
-    payment_call_remarks: PaymentCallRemark | None = None
+    # Free text: the PaymentCallRemark values are the built-in menu, and the
+    # board can add a remark of its own the menu doesn't have.
+    payment_call_remarks: str | None = None
     # What the candidate actually paid, typed in by whoever took the payment.
     # Deliberately not derived from the installments: this is the manual
     # tracking pair above, used while a lead is still being chased on the

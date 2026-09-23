@@ -444,7 +444,9 @@ class FoundationTab(SheetTabSpec):
             payment_plan=PAYMENT_PLAN_LABELS.get(lead.payment_plan, "") if lead.payment_plan else "",
             paying_amount=cell_text(lead.paying_amount),
             payment_call_remarks=(
-                PAYMENT_REMARK_LABELS.get(lead.payment_call_remarks, "") if lead.payment_call_remarks else ""
+                PAYMENT_REMARK_LABELS.get(lead.payment_call_remarks, lead.payment_call_remarks)
+                if lead.payment_call_remarks
+                else ""
             ),
             stage=LEAD_STAGE_LABELS.get(lead.status, lead.status),
             lost_reason=cell_text(lead.lost_reason),
@@ -464,7 +466,9 @@ class FoundationTab(SheetTabSpec):
         elif key == "paying_amount":
             await self.service.update(lead_id, LeadUpdate(paying_amount=parse_amount(raw)), actor_id=None)
         elif key == "payment_call_remarks":
-            remark = parse_choice(raw, PAYMENT_REMARK_LABELS)
+            # A remark the menu doesn't have is kept as typed - the board can
+            # add its own, so the sheet can too.
+            remark = parse_choice_safe(raw, PAYMENT_REMARK_LABELS) or optional(raw)
             await self.service.update(lead_id, LeadUpdate(payment_call_remarks=remark), actor_id=None)
         elif key == "stage":
             stage = parse_choice(raw, LEAD_STAGE_LABELS)

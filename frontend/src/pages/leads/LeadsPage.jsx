@@ -318,9 +318,9 @@ function BatchCell({ lead, onError }) {
 // are quicker to read than to filter; thirty QR accounts are not.
 const SEARCHABLE_FROM = 10
 
-// `allowAdd` lets a name the list doesn't have be typed in and saved - for a
-// roster like the QR accounts, where a new person joining is routine and
-// shouldn't need a release. What was typed shows as it was stored.
+// `allowAdd` lets a value the list doesn't have be typed in and saved, so a
+// new QR account or a new kind of payment remark doesn't need a release. What
+// was typed shows as it was stored.
 function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, onError, plain = false, allowAdd = false }) {
   const queryClient = useQueryClient()
   const buttonRef = useRef(null)
@@ -330,22 +330,28 @@ function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, on
   const current =
     displayByValue?.[stored] ??
     options.find((option) => option.value === stored) ??
-    (stored && plain ? { value: stored, label: stored } : undefined)
+    (stored ? { value: stored, label: stored, tone: 'slate' } : undefined)
 
-  const searchable = options.length >= SEARCHABLE_FROM
+  // Always there when adding is allowed - the box is where a new one is typed.
+  const searchable = allowAdd || options.length >= SEARCHABLE_FROM
   const needle = query.trim().toLowerCase()
   const shown = needle ? options.filter((option) => option.label.toLowerCase().includes(needle)) : options
-  // Offered once the typed name isn't already one of the options, whatever
+  // Offered once the typed text isn't already one of the options, whatever
   // its case - "sneha" should pick Sneha, not add a second one.
   const typed = query.trim().slice(0, 100)
+  const lowered = typed.toLowerCase()
   const addable =
-    allowAdd && typed && !options.some((option) => option.label.toLowerCase() === typed.toLowerCase()) ? typed : null
+    allowAdd &&
+    typed &&
+    !options.some((option) => option.label.toLowerCase() === lowered || option.value.toLowerCase() === lowered)
+      ? typed
+      : null
 
   const mutation = useMutation({
     mutationFn: (value) => leadService.update(lead.id, { [field]: value }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
-      if (allowAdd) queryClient.invalidateQueries({ queryKey: ['lead-qr-code-options'] })
+      if (allowAdd) queryClient.invalidateQueries({ queryKey: ['lead-field-options', field] })
     },
     onError: (error) => onError(`Couldn't update ${lead.name}: ${getApiErrorMessage(error)}`),
   })
@@ -475,6 +481,23 @@ function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, on
         )}
     </div>
   )
+}
+
+function useFieldOptions(field) {
+  const query = useQuery({ queryKey: ['lead-field-options', field], queryFn: () => leadService.getFieldOptions(field) })
+  return query.data ?? []
+}
+
+// The built-in options first, in their own order, then whatever has been added
+// on leads - skipping anything that is only a built-in one in another case.
+function withAddedOptions(builtIn, added) {
+  const known = new Set(builtIn.flatMap((option) => [option.value.toLowerCase(), option.label.toLowerCase()]))
+  return [
+    ...builtIn,
+    ...added
+      .filter((value) => !known.has(value.toLowerCase()))
+      .map((value) => ({ value, label: value, tone: 'slate' })),
+  ]
 }
 
 // Anything already recorded against the current plan's installments. Changing
@@ -765,16 +788,11 @@ function FoundationLeadsBoard() {
     (inductionConfigQuery.data?.fields ?? []).find((field) => field.key === 'group')?.options ?? []
   const groupOptions = configuredGroups.length ? configuredGroups : FOUNDATION_GROUP_LABELS
 
-  // The QR-Code menu: the built-in accounts, plus any name somebody has added
-  // on a lead since, so an account added once is offered on every row.
-  const qrCodeQuery = useQuery({ queryKey: ['lead-qr-code-options'], queryFn: leadService.getQrCodeOptions })
-  const knownQrCodes = new Set(QR_CODE_OPTIONS.map((option) => option.value.toLowerCase()))
-  const qrCodeOptions = [
-    ...QR_CODE_OPTIONS,
-    ...(qrCodeQuery.data ?? [])
-      .filter((name) => !knownQrCodes.has(name.toLowerCase()))
-      .map((name) => ({ value: name, label: name })),
-  ]
+  // The QR-Code and Payment Remarks menus: the built-in options, plus any
+  // value somebody has added on a lead since, so one added once is offered on
+  // every row (and in the filter).
+  const qrCodeOptions = withAddedOptions(QR_CODE_OPTIONS, useFieldOptions('qr_code'))
+  const callRemarkOptions = withAddedOptions(CALL_REMARK_OPTIONS, useFieldOptions('payment_call_remarks'))
 
   const courseOptionsQuery = useQuery({ queryKey: ['lead-course-options'], queryFn: leadService.getCourseOptions })
   // Everything the Course cell can offer, which is more than the filter's
@@ -928,9 +946,10 @@ function FoundationLeadsBoard() {
           key={row.id}
           lead={row}
           field="payment_call_remarks"
-          options={CALL_REMARK_OPTIONS}
+          options={callRemarkOptions}
           displayByValue={CALL_REMARK_BY_VALUE}
           placeholder="Select…"
+          allowAdd
           onError={setEditError}
         />
       ),
@@ -1082,7 +1101,7 @@ function FoundationLeadsBoard() {
           <FilterDropdown
             label="Payment Remarks"
             value={callRemarkFilter}
-            options={CALL_REMARK_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+            options={callRemarkOptions.map((option) => ({ value: option.value, label: option.label }))}
             onChange={(value) => {
               setCallRemarkFilter(value)
               setPage(1)

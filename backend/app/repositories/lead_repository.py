@@ -157,8 +157,8 @@ class LeadRepository(BaseRepository[Lead]):
         )
         return sorted({v for v in values if v})
 
-    async def distinct_qr_codes(self) -> list[str]:
-        # Deleted leads count too: a QR name is an account, and it doesn't stop
-        # existing because the one lead that used it was removed.
-        values = await Lead.get_motor_collection().distinct("qr_code", {"qr_code": {"$ne": None}})
+    async def distinct_values(self, field: str) -> list[str]:
+        # Deleted leads count too: a QR name or remark somebody added doesn't
+        # stop being an option because the one lead that used it was removed.
+        values = await Lead.get_motor_collection().distinct(field, {field: {"$ne": None}})
         return sorted({v.strip() for v in values if v and v.strip()}, key=str.lower)

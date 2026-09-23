@@ -11,7 +11,6 @@ from app.exceptions.base import BadRequestError
 from app.models.enums import (
     InstallmentPaymentMode,
     LeadSource,
-    PaymentCallRemark,
     PaymentMethod,
     PaymentPlanOption,
 )
@@ -67,7 +66,7 @@ async def list_leads(
     section: str | None = None,
     course_interest: str | None = None,
     payment_plan: PaymentPlanOption | None = None,
-    payment_call_remarks: PaymentCallRemark | None = None,
+    payment_call_remarks: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
     induction_matched: bool | None = None,
@@ -150,13 +149,15 @@ async def list_course_options(
     return await LeadService().course_options()
 
 
-@router.get("/qr-code-options", response_model=list[str])
-async def list_qr_code_options(
+@router.get("/field-options/{field}", response_model=list[str])
+async def list_field_options(
+    field: Literal["qr_code", "payment_call_remarks"],
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> list[str]:
-    """Every QR-Code name recorded on a lead. The board merges this into its
-    built-in list, so a name somebody adds on one lead is offered on the rest."""
-    return await LeadService().qr_code_options()
+    """Every value recorded on a lead for one of the board's open dropdowns.
+    The board merges this into its built-in list, so a value somebody adds on
+    one lead is offered on the rest."""
+    return await LeadService().field_options(field)
 
 
 @router.get("/course-catalog", response_model=list[str])
