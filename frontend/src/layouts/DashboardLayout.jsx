@@ -32,10 +32,10 @@ export function DashboardLayout() {
     }
   }, [sidebarCollapsed])
 
-  // A sidebar is for choosing between destinations. A Section Admin has two -
-  // their board, which is where they land, and Notifications, which the header
-  // bell opens - and a role scoped to a single board has one. Either way the
-  // rail spends 256px to say nothing, so it isn't rendered.
+  // A sidebar is for choosing between destinations. A role scoped to a single
+  // board has one, and the rail would spend 256px to say nothing, so it isn't
+  // rendered. A Section Admin used to be hidden from it outright; now that they
+  // have Form Collection as well as their board, they get it like anyone else.
   //
   // Counted from the same list the sidebar would render, rather than from a
   // list of role names: a role that gains a second page gets its navigation
@@ -44,7 +44,7 @@ export function DashboardLayout() {
     (count, item) => count + (item.children ? item.children.length : 1),
     0,
   )
-  const hideSidebar = Boolean(user?.scoped_section) || destinations <= 1
+  const hideSidebar = destinations <= 1
 
   function toggleSidebar() {
     setSidebarCollapsed((collapsed) => !collapsed)

@@ -46,9 +46,12 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     # reach - LeadService.create forces the new lead into their own section
     # from Role.scoped_section, whatever the client sends, so a Section Admin
     # can only ever create onto the board they can already see.
-    "A-Section Admin": [P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW],
-    "B-Section Admin": [P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW],
-    "C-Section Admin": [P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW],
+    # FORM_COLLECTION_VIEW shows them their own section's Foundation form and
+    # its public link - the page narrows itself to that one card for a scoped
+    # user. Viewing only: editing the shared form stays with Admin.
+    "A-Section Admin": [P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW, P.FORM_COLLECTION_VIEW],
+    "B-Section Admin": [P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW, P.FORM_COLLECTION_VIEW],
+    "C-Section Admin": [P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW, P.FORM_COLLECTION_VIEW],
     # Owns the hand-off from CRM to classroom: allocates leads that reached the
     # Batch Confirmation stage into batches, then confirms the roster (which
     # creates the Student and Admission records) once the batch is ready.

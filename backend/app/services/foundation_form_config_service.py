@@ -21,7 +21,7 @@ from app.services.audit_service import AuditService
 from app.services.foundation_form_pricing import INSTALLMENT_LABELS
 from app.services.role_service import RoleService
 
-_SECTION_ROLE_PERMISSIONS = [Permissions.LEADS_VIEW, Permissions.LEADS_UPDATE]
+_SECTION_ROLE_PERMISSIONS = [Permissions.LEADS_VIEW, Permissions.LEADS_UPDATE, Permissions.FORM_COLLECTION_VIEW]
 
 _REQUIRED_CATEGORY_CODES = {"only_recruitment", "internship_or_generalist", "generalist_internship"}
 _REQUIRED_PLAN_VALUES = set(PaymentPlanOption)

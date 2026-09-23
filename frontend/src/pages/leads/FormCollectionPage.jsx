@@ -130,7 +130,12 @@ const TABS = [
 ]
 
 export function FormCollectionPage() {
+  const { user } = useAuth()
   const [activeTab, setActiveTab] = useState('induction')
+
+  // A Section Admin gets their own section's Foundation form and nothing else:
+  // the Induction Call Form is one institute-wide form, not theirs to run.
+  if (user?.scoped_section) return <FoundationCallForm />
 
   return (
     <div>
@@ -175,13 +180,16 @@ function FoundationCallForm() {
   if (error) return <ErrorMessage message={getApiErrorMessage(error)} />
 
   const sections = config?.sections ?? []
-  const ownSection = sections.find((section) => section.code === user?.scoped_section)
-  const visibleSections = ownSection ? [ownSection] : sections
+  // Scoped to their own card, and to nothing if their section has gone -
+  // falling back to every section would show them the other admins' forms.
+  const visibleSections = user?.scoped_section
+    ? sections.filter((section) => section.code === user.scoped_section)
+    : sections
 
   return (
     <div>
       <div className="mb-4 flex items-start justify-end gap-3">
-        {canConfigure && (
+        {canConfigure && !user?.scoped_section && (
           <Button onClick={() => addSectionMutation.mutate()} disabled={addSectionMutation.isPending}>
             <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
             {addSectionMutation.isPending ? 'Adding…' : 'Add Form'}
@@ -210,7 +218,7 @@ function FoundationCallForm() {
             // one, so a Section Admin seeing only their own card still gets
             // the colour that section has everywhere else.
             tone={sectionToneAt(sections.findIndex((s) => s.code === section.code))}
-            canConfigure={canConfigure}
+            canConfigure={canConfigure && !user?.scoped_section}
             onEdit={() => setIsEditOpen(true)}
             onDelete={() => handleDelete(section)}
             isDeleting={deleteSectionMutation.isPending && deleteSectionMutation.variables === section.code}

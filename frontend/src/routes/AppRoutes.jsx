@@ -77,7 +77,9 @@ export function AppRoutes() {
                 bookmarked the board still has. */}
             <Route path="/lead-analytics" element={<Navigate to="/statistics" replace />} />
           </Route>
-          <Route element={<ProtectedRoute permission={PERMISSIONS.FORM_COLLECTION_VIEW} blockScoped />}>
+          {/* Not blockScoped: a Section Admin gets the page narrowed to their own
+              section's Foundation form, rather than no page at all. */}
+          <Route element={<ProtectedRoute permission={PERMISSIONS.FORM_COLLECTION_VIEW} />}>
             <Route path="/leads/form-collection" element={<FormCollectionPage />} />
             <Route path="/leads/foundation-form" element={<Navigate to="/leads/form-collection" replace />} />
           </Route>

@@ -96,7 +96,8 @@ export const NAV_ITEMS = [
     permission: PERMISSIONS.FORM_COLLECTION_VIEW,
     icon: FileCheck2,
     hiddenForRoles: ['Finance'],
-    hiddenForScopedUsers: true,
+    // Shown to Section Admins too: the page narrows itself to their own
+    // section's Foundation form (FormCollectionPage).
   },
   {
     // Sits with the other Admin boards rather than under Administration: it is

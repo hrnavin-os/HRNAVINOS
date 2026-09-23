@@ -11,6 +11,9 @@ import { NotificationBell } from '@/components/layout/NotificationBell'
 // Dashboard" purely because that entry is listed first.
 function useCurrentPageTitle() {
   const { pathname } = useLocation()
+  // No title on the Lead Dashboard: the Induction / Foundation switch in the
+  // middle of the header already says where you are.
+  if (pathname === '/leads') return null
   const match = NAV_LEAF_ITEMS.filter((item) => (item.to === '/' ? pathname === '/' : pathname.startsWith(item.to)))
     .sort((a, b) => b.to.length - a.to.length)[0]
   return match?.label ?? 'HRNAVINOS ERP'
@@ -66,7 +69,7 @@ export function Topbar({ showBrand = false, onOpenSidebar }) {
               </span>
             </div>
           )}
-          <h1 className="truncate text-sm font-semibold text-slate-900">{pageTitle}</h1>
+          {pageTitle && <h1 className="truncate text-sm font-semibold text-slate-900">{pageTitle}</h1>}
         </div>
 
         {/* Absolutely centred rather than a middle flex column: the title and
