@@ -43,8 +43,13 @@ export function buildCustomFields(values, extraKnownKeys = []) {
 // how it is broken up. Split so the amount can lead at full size instead of
 // sitting mid-sentence, which is the number somebody is actually choosing on.
 export function splitAmount(summary) {
-  const match = String(summary ?? '').match(/^(.*?)\s*\((.+)\)$/)
-  return { total: match?.[1]?.trim() ?? summary, detail: match?.[2]?.trim() ?? null }
+  const text = String(summary ?? '').trim()
+  const match = text.match(/^(.*?)\s*\((.+)\)$/)
+  if (match) return { total: match[1].trim(), detail: match[2].trim() }
+  // A summary with no bracketed breakdown is only a headline figure when it is
+  // a bare amount - a sentence like "₹1,500 Per week & ..." set in the large
+  // price type wraps under the label and swamps the card.
+  return /[a-z]/i.test(text) ? { total: null, detail: text } : { total: text, detail: null }
 }
 
 // One selectable option - a payment plan or a payment day. A bordered card that
@@ -164,7 +169,7 @@ export function PaymentPlanField({
             >
               <span className="flex flex-wrap items-baseline justify-between gap-x-2">
                 <span className="text-sm font-semibold text-slate-900">{plan.label}</span>
-                <span className="text-base font-bold text-brand-700">{total}</span>
+                {total && <span className="text-base font-bold text-brand-700">{total}</span>}
               </span>
               {detail && <span className="mt-0.5 block text-xs text-slate-500">{detail}</span>}
               <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">

@@ -174,12 +174,12 @@ export function FoundationFormPage() {
               errors={errors}
             />
             <div className="flex gap-3">
-              <Button type="button" variant="secondary" className="w-full" onClick={() => setStepIndex((i) => i - 1)}>
+              <Button type="button" variant="secondary" className="flex-1" onClick={() => setStepIndex((i) => i - 1)}>
                 Back
               </Button>
               <Button
                 type={isLastStep ? 'submit' : 'button'}
-                className="w-full"
+                className="flex-1"
                 onClick={isLastStep ? undefined : handleNext}
                 disabled={isLastStep && (isSubmitting || submitMutation.isPending)}
               >
@@ -206,10 +206,10 @@ export function FoundationFormPage() {
             )}
             <ErrorMessage message={submitMutation.isError ? getApiErrorMessage(submitMutation.error) : null} />
             <div className="flex gap-3">
-              <Button type="button" variant="secondary" className="w-full" onClick={() => setStepIndex((i) => i - 1)}>
+              <Button type="button" variant="secondary" className="flex-1" onClick={() => setStepIndex((i) => i - 1)}>
                 Back
               </Button>
-              <Button type="submit" className="w-full" disabled={isSubmitting || submitMutation.isPending}>
+              <Button type="submit" className="flex-1" disabled={isSubmitting || submitMutation.isPending}>
                 {submitMutation.isPending ? 'Submitting…' : 'Submit'}
               </Button>
             </div>
