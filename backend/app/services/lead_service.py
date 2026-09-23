@@ -17,6 +17,7 @@ from app.models.enums import (
     PaymentCallRemark,
     PaymentMethod,
 )
+from app.models.induction_entry import InductionEntry
 from app.models.lead import FollowUpEntry, Lead, RemarkEntry
 from app.models.notification import Notification
 from app.permissions.permission_codes import Permissions
@@ -72,6 +73,7 @@ class LeadService:
     async def to_response(self, lead: Lead) -> LeadResponse:
         assignee = await self.users.get_by_id(lead.assigned_to) if lead.assigned_to else None
         assigned_to_name = f"{assignee.first_name} {assignee.last_name}".strip() if assignee else None
+        entry = await InductionEntry.get(lead.induction_entry_id) if lead.induction_entry_id else None
         return LeadResponse(
             id=lead.id,
             name=lead.name,
@@ -107,6 +109,7 @@ class LeadService:
             paying_amount=lead.paying_amount,
             qr_code=lead.qr_code,
             batch_number=lead.batch_number,
+            induction_batch=batch_for(entry.registration_date) if entry else None,
             foundation_group=lead.foundation_group,
             foundation_group_history=FoundationGroupMoveSchema.of(lead.foundation_group_history),
             group_assigned_at=lead.group_assigned_at,

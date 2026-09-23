@@ -182,6 +182,11 @@ class LeadResponse(BaseModel):
     paying_amount: Decimal | None = None
     qr_code: str | None = None
     batch_number: str | None = None
+    # The batch of the induction entry this lead came through ("Batch-29"),
+    # derived from that entry's registration date. What the Foundation board
+    # shows when nobody has typed a `batch_number` in yet, so a student who
+    # has a batch on the Induction board doesn't read as batchless here.
+    induction_batch: str | None = None
     # Which of the month's two foundation classes this lead came through - 1 for
     # the first sitting, 2 for the second. Derived from `created_at` (the day
     # the Foundation Form was filled in, which is the day of the class) rather

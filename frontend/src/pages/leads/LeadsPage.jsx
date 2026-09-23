@@ -267,6 +267,10 @@ function BatchCell({ lead, onError }) {
       >
         {lead.batch_number ? (
           <span className="font-medium text-slate-900">{lead.batch_number}</span>
+        ) : lead.induction_batch ? (
+          // Nothing typed here yet, but the student came through induction
+          // and has a batch there - show that rather than "Add batch".
+          <Badge tone="blue">{lead.induction_batch}</Badge>
         ) : (
           <span className="text-slate-400">Add batch</span>
         )}
