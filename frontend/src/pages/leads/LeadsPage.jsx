@@ -316,21 +316,35 @@ function BatchCell({ lead, onError }) {
 // are quicker to read than to filter; thirty QR accounts are not.
 const SEARCHABLE_FROM = 10
 
-function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, onError, plain = false }) {
+// `allowAdd` lets a name the list doesn't have be typed in and saved - for a
+// roster like the QR accounts, where a new person joining is routine and
+// shouldn't need a release. What was typed shows as it was stored.
+function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, onError, plain = false, allowAdd = false }) {
   const queryClient = useQueryClient()
   const buttonRef = useRef(null)
   const [menuPosition, setMenuPosition] = useState(null)
   const [query, setQuery] = useState('')
   const stored = lead[field]
-  const current = displayByValue?.[stored] ?? options.find((option) => option.value === stored)
+  const current =
+    displayByValue?.[stored] ??
+    options.find((option) => option.value === stored) ??
+    (stored && plain ? { value: stored, label: stored } : undefined)
 
   const searchable = options.length >= SEARCHABLE_FROM
   const needle = query.trim().toLowerCase()
   const shown = needle ? options.filter((option) => option.label.toLowerCase().includes(needle)) : options
+  // Offered once the typed name isn't already one of the options, whatever
+  // its case - "sneha" should pick Sneha, not add a second one.
+  const typed = query.trim().slice(0, 100)
+  const addable =
+    allowAdd && typed && !options.some((option) => option.label.toLowerCase() === typed.toLowerCase()) ? typed : null
 
   const mutation = useMutation({
     mutationFn: (value) => leadService.update(lead.id, { [field]: value }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['leads'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      if (allowAdd) queryClient.invalidateQueries({ queryKey: ['lead-qr-code-options'] })
+    },
     onError: (error) => onError(`Couldn't update ${lead.name}: ${getApiErrorMessage(error)}`),
   })
 
@@ -389,7 +403,14 @@ function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, on
                   autoFocus
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search…"
+                  placeholder={allowAdd ? 'Search or add new…' : 'Search…'}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') return
+                    const pick = shown.length === 1 ? shown[0].value : addable
+                    if (!pick) return
+                    mutation.mutate(pick)
+                    close(event)
+                  }}
                   className="mb-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                 />
               )}
@@ -428,7 +449,22 @@ function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, on
                   )}
                 </button>
               ))}
-              {searchable && !shown.length && (
+              {addable && (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    mutation.mutate(addable)
+                    close(event)
+                  }}
+                  className="mt-1 flex w-full items-center gap-1.5 rounded border-t border-slate-100 px-2 py-1.5 text-left text-sm text-brand-700 hover:bg-brand-50"
+                >
+                  <Plus className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} aria-hidden="true" />
+                  <span className="truncate">
+                    Add “<span className="font-medium">{addable}</span>”
+                  </span>
+                </button>
+              )}
+              {searchable && !shown.length && !addable && (
                 <p className="px-2 py-3 text-center text-sm text-slate-400">No match for “{query}”.</p>
               )}
             </div>
@@ -727,6 +763,17 @@ function FoundationLeadsBoard() {
     (inductionConfigQuery.data?.fields ?? []).find((field) => field.key === 'group')?.options ?? []
   const groupOptions = configuredGroups.length ? configuredGroups : FOUNDATION_GROUP_LABELS
 
+  // The QR-Code menu: the built-in accounts, plus any name somebody has added
+  // on a lead since, so an account added once is offered on every row.
+  const qrCodeQuery = useQuery({ queryKey: ['lead-qr-code-options'], queryFn: leadService.getQrCodeOptions })
+  const knownQrCodes = new Set(QR_CODE_OPTIONS.map((option) => option.value.toLowerCase()))
+  const qrCodeOptions = [
+    ...QR_CODE_OPTIONS,
+    ...(qrCodeQuery.data ?? [])
+      .filter((name) => !knownQrCodes.has(name.toLowerCase()))
+      .map((name) => ({ value: name, label: name })),
+  ]
+
   const courseOptionsQuery = useQuery({ queryKey: ['lead-course-options'], queryFn: leadService.getCourseOptions })
   // Everything the Course cell can offer, which is more than the filter's
   // list: a course nobody is on yet is a dead end to filter by and the point
@@ -860,8 +907,9 @@ function FoundationLeadsBoard() {
           key={row.id}
           lead={row}
           field="qr_code"
-          options={QR_CODE_OPTIONS}
+          options={qrCodeOptions}
           placeholder="Select…"
+          allowAdd
           // Plain text, not a badge - thirty accounts cannot each carry a
           // meaningful colour, and colouring some would imply a grouping.
           plain

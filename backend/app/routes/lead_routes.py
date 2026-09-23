@@ -150,6 +150,15 @@ async def list_course_options(
     return await LeadService().course_options()
 
 
+@router.get("/qr-code-options", response_model=list[str])
+async def list_qr_code_options(
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
+) -> list[str]:
+    """Every QR-Code name recorded on a lead. The board merges this into its
+    built-in list, so a name somebody adds on one lead is offered on the rest."""
+    return await LeadService().qr_code_options()
+
+
 @router.get("/course-catalog", response_model=list[str])
 async def list_course_catalog(
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
