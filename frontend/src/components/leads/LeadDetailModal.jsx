@@ -452,10 +452,17 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
               onChange={(event) => setScheduledAt(event.target.value)}
             />
             <ErrorMessage message={validationError} />
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button variant="secondary" onClick={() => setShowPaidFields(true)}>
-                Payment received — fill details
-              </Button>
+            {/* The save on the right, where it sits on the paid form; the
+                switch to that form as a quieter link on the left, so the two
+                share one line instead of stacking as two big buttons. */}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+              <button
+                type="button"
+                onClick={() => setShowPaidFields(true)}
+                className="text-sm font-semibold text-brand-600 hover:text-brand-700"
+              >
+                Payment received? Fill details
+              </button>
               <Button variant={justSaved ? 'success' : 'primary'} onClick={handleSaveSchedule} disabled={isSaving}>
                 {isSaving ? (
                   'Saving…'
@@ -491,15 +498,20 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
                   </option>
                 ))}
               </Select>
+              {/* Full width: alone in half a row it left a hole beside it. */}
               {(mode === 'card' || mode === 'netbanking') && (
-                <Input
-                  label="Transaction ID (optional)"
-                  value={transactionId}
-                  onChange={(event) => setTransactionId(event.target.value)}
-                />
+                <div className="sm:col-span-2">
+                  <Input
+                    label="Transaction ID (optional)"
+                    value={transactionId}
+                    onChange={(event) => setTransactionId(event.target.value)}
+                  />
+                </div>
               )}
               {mode === 'upi' && (
-                <Input label="UPI ID (optional)" value={upiId} onChange={(event) => setUpiId(event.target.value)} />
+                <div className="sm:col-span-2">
+                  <Input label="UPI ID (optional)" value={upiId} onChange={(event) => setUpiId(event.target.value)} />
+                </div>
               )}
             </div>
 
@@ -648,7 +660,9 @@ function PaymentCollectionSection({
           No max-height on purpose: the modal body is already the scroll
           container, and a second one nested inside it gave the popup two
           scrollbars side by side. */}
-      <div className={`grid grid-cols-1 gap-3 ${lead.installments.length > 1 ? 'sm:grid-cols-2' : ''}`}>
+      {/* items-start: a short schedule-only card beside a full payment form
+          would otherwise stretch into a tall, mostly empty box. */}
+      <div className={`grid grid-cols-1 items-start gap-3 ${lead.installments.length > 1 ? 'sm:grid-cols-2' : ''}`}>
         {lead.installments.map((installment, index) => (
           <InstallmentRow
             key={index}
