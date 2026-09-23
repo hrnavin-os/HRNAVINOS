@@ -42,13 +42,15 @@ import {
 } from '@/constants/paymentOptions'
 import { PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
 import { FOUNDATION_GROUP_LABELS, FOUNDATION_GROUP_OPTIONS } from '@/constants/foundationGroups'
+import { anchorPopup } from '@/utils/anchorPopup'
 
 // Anchors a portaled popup under its trigger, clamped so it never runs off
 // the right edge of the viewport (a trigger in the table's rightmost column,
-// Remarks, would otherwise push it past screen bounds).
-function popupPositionFor(rect, popupWidth, gap = 4) {
-  const maxLeft = window.innerWidth - popupWidth - 8
-  return { top: rect.bottom + gap, left: Math.max(8, Math.min(rect.left, maxLeft)) }
+// Remarks, would otherwise push it past screen bounds). Flips above the
+// trigger when there isn't `popupHeight` of room below it, so a row at the
+// bottom of a full table doesn't open a menu cut off by the screen edge.
+function popupPositionFor(rect, popupWidth, popupHeight = 288) {
+  return anchorPopup(rect, popupWidth, popupHeight)
 }
 
 // Splits text into lines of at most `n` words each, so a long query wraps
@@ -106,7 +108,7 @@ function TruncatedText({ text }) {
 
   function show() {
     const rect = triggerRef.current.getBoundingClientRect()
-    setPopupPosition(popupPositionFor(rect, 200))
+    setPopupPosition(popupPositionFor(rect, 200, 160))
   }
 
   return (
@@ -122,7 +124,7 @@ function TruncatedText({ text }) {
       {popupPosition &&
         createPortal(
           <div
-            style={{ top: popupPosition.top, left: popupPosition.left }}
+            style={{ top: popupPosition.top, bottom: popupPosition.bottom, left: popupPosition.left }}
             className="pointer-events-none fixed z-100 w-50 rounded-md border border-slate-200 bg-white p-2 text-xs font-normal text-slate-700 shadow-lg"
           >
             {wrapEveryNWords(trimmed, 4).map((line, index) => (
@@ -394,7 +396,7 @@ function SelectBadgeCell({ lead, field, options, displayByValue, placeholder, on
           <>
             <div className="fixed inset-0 z-40" onClick={close} />
             <div
-              style={{ top: menuPosition.top, left: menuPosition.left }}
+              style={{ top: menuPosition.top, bottom: menuPosition.bottom, left: menuPosition.left }}
               onClick={(event) => event.stopPropagation()}
               className="fixed z-50 max-h-72 w-64 overflow-y-auto rounded-md border border-slate-200 bg-white p-1.5 shadow-lg"
             >
@@ -600,7 +602,7 @@ function PaymentPlanCell({ lead, pricing, onError }) {
           <>
             <div className="fixed inset-0 z-40" onClick={close} />
             <div
-              style={{ top: menuPosition.top, left: menuPosition.left }}
+              style={{ top: menuPosition.top, bottom: menuPosition.bottom, left: menuPosition.left }}
               onClick={(event) => event.stopPropagation()}
               className="fixed z-50 max-h-72 w-64 overflow-y-auto rounded-md border border-slate-200 bg-white p-1.5 shadow-lg"
             >
