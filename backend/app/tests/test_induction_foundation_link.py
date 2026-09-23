@@ -925,3 +925,44 @@ async def test_a_typed_group_that_names_no_class_is_refused(client):
     response = await client.post(INDUCTION_URL, json=induction_payload(group="Morning batch"))
     assert response.status_code == 400
     assert "group" in response.text.lower()
+
+
+async def test_installment_takes_several_proofs_and_a_remark_without_an_id(
+    client, auth_headers, monkeypatch, tmp_path
+):
+    """The transaction / UPI id is optional now; a payment with a mode and
+    proof is paid. Proofs upload several at a time and add to what's there."""
+    from app.config.settings import settings
+
+    monkeypatch.setattr(settings, "UPLOAD_DIR", str(tmp_path))
+    await seed_programs(client)
+    await client.post(FOUNDATION_URL, json=foundation_payload(payment_plan="two_shot"))
+    lead_id = (await client.get("/api/v1/leads", headers=auth_headers)).json()["items"][0]["id"]
+    url = f"/api/v1/leads/{lead_id}/installments/0"
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 16
+
+    first = await client.post(
+        url,
+        headers=auth_headers,
+        data={"amount": "9000", "mode": "card", "remarks": "Paid at the front desk"},
+        files=[("files", ("a.png", png, "image/png")), ("files", ("b.png", png, "image/png"))],
+    )
+    assert first.status_code == 200, first.text
+    installment = first.json()["installments"][0]
+    assert installment["paid"] is True
+    assert installment["transaction_id"] is None
+    assert installment["remarks"] == "Paid at the front desk"
+    assert len(installment["proof_urls"]) == 2
+    assert installment["proof_url"] == installment["proof_urls"][0]
+
+    removed = installment["proof_urls"][0]
+    second = await client.post(
+        url,
+        headers=auth_headers,
+        data={"remove_proof_urls": removed, "clear_remarks": "true"},
+        files=[("files", ("c.png", png, "image/png"))],
+    )
+    installment = second.json()["installments"][0]
+    assert len(installment["proof_urls"]) == 2
+    assert removed not in installment["proof_urls"]
+    assert installment["remarks"] is None

@@ -168,6 +168,8 @@ class FoundationFormService:
             or installment.transaction_id
             or installment.upi_id
             or installment.proof_url
+            or installment.proof_urls
+            or installment.remarks
             for installment in lead.installments
         )
 

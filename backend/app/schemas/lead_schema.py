@@ -140,6 +140,8 @@ class PaymentInstallmentResponse(BaseModel):
     transaction_id: str | None
     upi_id: str | None
     proof_url: str | None
+    proof_urls: list[str] = []
+    remarks: str | None = None
     scheduled_at: date | None
     paid: bool
     paid_at: date | None

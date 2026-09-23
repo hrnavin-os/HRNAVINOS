@@ -74,13 +74,24 @@ class PaymentInstallment(BaseModel):
     mode: InstallmentPaymentMode | None = None
     transaction_id: str | None = Field(default=None, max_length=100)
     upi_id: str | None = Field(default=None, max_length=100)
+    # The first proof, kept for the readers that only ever show one (Payments,
+    # Cashbook). `proof_urls` is the whole set; LeadService keeps the two in
+    # step. Installments saved before multi-proof have only `proof_url`.
     proof_url: str | None = Field(default=None, max_length=500)
+    proof_urls: list[str] = Field(default_factory=list)
+    # Optional note from whoever collected the payment.
+    remarks: str | None = Field(default=None, max_length=1000)
     # Two-shot's 2nd installment starts as just a planned date before it's
     # actually paid.
     scheduled_at: date | None = None
     paid: bool = False
     # Set once, the moment `paid` first flips to True - LeadService.update_installment.
     paid_at: date | None = None
+
+    def all_proofs(self) -> list[str]:
+        """Every proof on file, including the lone `proof_url` of an
+        installment saved before there could be several."""
+        return list(self.proof_urls) or ([self.proof_url] if self.proof_url else [])
 
 
 class Lead(BaseDocument):

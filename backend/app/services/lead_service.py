@@ -57,6 +57,10 @@ from app.schemas.foundation_group_schema import FoundationGroupMoveSchema
 from app.utils.phone import normalize_phone
 
 
+# More than this on one installment is a mistake, not evidence.
+MAX_INSTALLMENT_PROOFS = 10
+
+
 class LeadService:
     def __init__(self) -> None:
         self.leads = LeadRepository()
@@ -123,6 +127,8 @@ class LeadService:
                     transaction_id=installment.transaction_id,
                     upi_id=installment.upi_id,
                     proof_url=installment.proof_url,
+                    proof_urls=installment.all_proofs(),
+                    remarks=installment.remarks,
                     scheduled_at=installment.scheduled_at,
                     paid=installment.paid,
                     paid_at=installment.paid_at,
@@ -928,6 +934,10 @@ class LeadService:
         upi_id: str | None,
         scheduled_at: date | None,
         actor_id: uuid.UUID | None,
+        files: List[UploadFile] | None = None,
+        remove_proof_urls: List[str] | None = None,
+        remarks: str | None = None,
+        clear_remarks: bool = False,
         scope: str | None = None,
     ) -> Lead:
         lead = await self.get(lead_id, scope=scope)
@@ -945,10 +955,27 @@ class LeadService:
             installment.upi_id = upi_id
         if scheduled_at is not None:
             installment.scheduled_at = scheduled_at
-        if file is not None:
-            installment.proof_url = await self.storage.save_image(file, subdir=f"leads/{lead_id}/installments")
+        if clear_remarks:
+            installment.remarks = None
+        elif remarks is not None:
+            installment.remarks = remarks.strip()[:1000] or None
+
+        # Proofs accumulate: several screenshots of one payment are normal (a
+        # bank app splits the receipt across screens), so a new upload is added
+        # beside what is there rather than replacing it. Removal is explicit.
+        proofs = [url for url in installment.all_proofs() if url not in set(remove_proof_urls or [])]
+        uploads = [upload for upload in [file, *(files or [])] if upload is not None]
+        if len(proofs) + len(uploads) > MAX_INSTALLMENT_PROOFS:
+            raise BadRequestError(f"An installment can hold at most {MAX_INSTALLMENT_PROOFS} proof images.")
+        for upload in uploads:
+            proofs.append(await self.storage.save_image(upload, subdir=f"leads/{lead_id}/installments"))
+        installment.proof_urls = proofs
+        installment.proof_url = proofs[0] if proofs else None
+
         was_paid = installment.paid
-        installment.paid = bool(installment.mode and (installment.transaction_id or installment.upi_id) and installment.proof_url)
+        # The transaction / UPI id is optional: a payment is recorded once its
+        # mode is known and there is proof of it.
+        installment.paid = bool(installment.mode and proofs)
         if installment.paid and not was_paid:
             installment.paid_at = utcnow().date()
 

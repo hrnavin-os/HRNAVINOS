@@ -342,6 +342,12 @@ async def update_installment(
     transaction_id: str | None = Form(default=None),
     upi_id: str | None = Form(default=None),
     scheduled_at: date | None = Form(default=None),
+    # Several proof images at once, added to what is already on file.
+    files: list[UploadFile] | None = File(default=None),
+    remove_proof_urls: list[str] | None = Form(default=None),
+    remarks: str | None = Form(default=None, max_length=1000),
+    # An empty form field arrives as "not sent", so clearing is its own flag.
+    clear_remarks: bool = Form(default=False),
     actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
 ) -> LeadResponse:
     parsed_amount: Decimal | None = None
@@ -364,6 +370,10 @@ async def update_installment(
         scheduled_at=scheduled_at,
         actor_id=actor.id,
         scope=scope,
+        files=files,
+        remove_proof_urls=remove_proof_urls,
+        remarks=remarks,
+        clear_remarks=clear_remarks,
     )
     return await service.to_response(lead)
 
