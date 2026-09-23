@@ -331,14 +331,39 @@ export function PaymentDetailContent({ lead, error, onMarkLost, isMarkingLost, s
         </p>
       )}
 
-      {summary.proofUrl && (
+      {summary.remarks && (
+        <p className="text-sm text-slate-600">
+          <span className="text-slate-400">Payment Remarks — </span>
+          {summary.remarks}
+        </p>
+      )}
+
+      {summary.proofUrls.length > 0 && (
         <div>
-          <p className="mb-1.5 text-sm font-medium text-slate-700">Payment Proof</p>
-          <img
-            src={`${MEDIA_BASE_URL}${summary.proofUrl}`}
-            alt="Payment proof"
-            className="max-h-64 w-full rounded-md border border-slate-200 object-contain"
-          />
+          <p className="mb-1.5 text-sm font-medium text-slate-700">
+            Payment Proof{summary.proofUrls.length > 1 ? ` (${summary.proofUrls.length})` : ''}
+          </p>
+          {/* One proof keeps the full-width view; several sit side by side,
+              each opening the full image. */}
+          {summary.proofUrls.length === 1 ? (
+            <img
+              src={`${MEDIA_BASE_URL}${summary.proofUrls[0]}`}
+              alt="Payment proof"
+              className="max-h-64 w-full rounded-md border border-slate-200 object-contain"
+            />
+          ) : (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {summary.proofUrls.map((url) => (
+                <a key={url} href={`${MEDIA_BASE_URL}${url}`} target="_blank" rel="noreferrer">
+                  <img
+                    src={`${MEDIA_BASE_URL}${url}`}
+                    alt="Payment proof"
+                    className="h-40 w-full rounded-md border border-slate-200 bg-slate-50 object-contain"
+                  />
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

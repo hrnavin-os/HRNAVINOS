@@ -82,9 +82,21 @@ export const leadService = {
     })
     return data
   },
-  updateInstallment: async (id, index, { file, amount, mode, transactionId, upiId, scheduledAt }) => {
+  updateInstallment: async (
+    id,
+    index,
+    { file, files, removeProofUrls, remarks, amount, mode, transactionId, upiId, scheduledAt },
+  ) => {
     const formData = new FormData()
     if (file) formData.append('file', file)
+    for (const picked of files ?? []) formData.append('files', picked)
+    for (const url of removeProofUrls ?? []) formData.append('remove_proof_urls', url)
+    // An empty form field reads as "not sent" on the server, so clearing the
+    // remark is said explicitly.
+    if (remarks !== undefined) {
+      if (remarks.trim()) formData.append('remarks', remarks.trim())
+      else formData.append('clear_remarks', 'true')
+    }
     if (amount !== undefined && amount !== null && amount !== '') formData.append('amount', amount)
     if (mode) formData.append('mode', mode)
     if (transactionId) formData.append('transaction_id', transactionId)

@@ -6,7 +6,6 @@ import {
   Check,
   CheckCircle2,
   Clock,
-  Eye,
   ImagePlus,
   Info,
   Link2,
@@ -22,9 +21,11 @@ import {
   Trash2,
   UserPlus,
   Wallet,
+  X,
 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
+import { Textarea } from '@/components/ui/Textarea'
 import { Select } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -338,10 +339,37 @@ function PlanAssignmentForm({ onAssign, isAssigning, error }) {
   )
 }
 
+// One payment proof in the installment form: a square thumbnail that opens
+// the full image, with a corner button to take it off.
+function ProofThumb({ href, title, isNew = false, onRemove }) {
+  return (
+    <div className="relative">
+      <a href={href} target="_blank" rel="noreferrer" title={title ?? 'View proof'}>
+        <img
+          src={href}
+          alt="Payment proof"
+          className={`h-14 w-14 rounded-md border object-cover ${isNew ? 'border-brand-300' : 'border-slate-200'}`}
+        />
+      </a>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label="Remove proof"
+        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm hover:text-red-600"
+      >
+        <X className="h-3 w-3" strokeWidth={2.5} aria-hidden="true" />
+      </button>
+    </div>
+  )
+}
+
 function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved = false }) {
   const isTwoShotSecond = lead.payment_plan === 'two_shot' && index === 1
   const [showPaidFields, setShowPaidFields] = useState(!isTwoShotSecond || installment.paid || Boolean(installment.mode))
-  const [file, setFile] = useState(null)
+  // New images picked but not yet saved, and saved ones marked for removal.
+  const [files, setFiles] = useState([])
+  const [removed, setRemoved] = useState([])
+  const [remarks, setRemarks] = useState(installment.remarks ?? '')
   const [amount, setAmount] = useState(installment.amount ?? '')
   const [mode, setMode] = useState(installment.mode ?? '')
   const [transactionId, setTransactionId] = useState(installment.transaction_id ?? '')
@@ -350,20 +378,24 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
   const [validationError, setValidationError] = useState(null)
   const fileInputRef = useRef(null)
 
-  const previewUrl = useMemo(() => {
-    if (file) return URL.createObjectURL(file)
-    if (installment.proof_url) return `${MEDIA_BASE_URL}${installment.proof_url}`
-    return null
-  }, [file, installment.proof_url])
+  // Installments saved before several proofs were possible carry only the
+  // single `proof_url`.
+  const storedKey = (installment.proof_urls?.length ? installment.proof_urls : [installment.proof_url])
+    .filter(Boolean)
+    .join('|')
+  const stored = useMemo(() => (storedKey ? storedKey.split('|') : []), [storedKey])
+  const kept = stored.filter((url) => !removed.includes(url))
 
-  // Every createObjectURL above pins its blob in memory until it's revoked,
-  // and picking a different image just made another one. Only the blob URLs
-  // are revoked - the stored proof is a plain URL and revoking it is a no-op,
-  // but checking `file` keeps the intent obvious.
+  // Once a save lands the server's list is the truth: what was picked is now
+  // in it, and what was removed is gone from it.
   useEffect(() => {
-    if (!file || !previewUrl) return undefined
-    return () => URL.revokeObjectURL(previewUrl)
-  }, [file, previewUrl])
+    setFiles([])
+    setRemoved([])
+  }, [storedKey])
+
+  const filePreviews = useMemo(() => files.map((picked) => URL.createObjectURL(picked)), [files])
+  // Every createObjectURL pins its blob in memory until it's revoked.
+  useEffect(() => () => filePreviews.forEach((url) => URL.revokeObjectURL(url)), [filePreviews])
 
   function handleSaveSchedule() {
     if (!scheduledAt) {
@@ -375,20 +407,16 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
   }
 
   function handleSavePayment() {
-    const missing =
-      !amount ||
-      !mode ||
-      (mode === 'upi' ? !upiId : !transactionId) ||
-      (!file && !installment.proof_url)
-    if (missing) {
-      setValidationError('Please fill in the amount, mode, ID, and payment proof before saving.')
+    // The transaction / UPI id and the remarks are optional.
+    if (!amount || !mode || (!files.length && !kept.length)) {
+      setValidationError('Please fill in the amount, mode, and at least one payment proof before saving.')
       return
     }
     setValidationError(null)
-    onSave(index, { file, amount, mode, transactionId, upiId })
+    onSave(index, { files, removeProofUrls: removed, remarks, amount, mode, transactionId, upiId })
   }
 
-  const hasProof = Boolean(file || installment.proof_url)
+  const hasProof = Boolean(files.length || kept.length)
 
   return (
     <div
@@ -465,21 +493,28 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
               </Select>
               {(mode === 'card' || mode === 'netbanking') && (
                 <Input
-                  label="Transaction ID"
+                  label="Transaction ID (optional)"
                   value={transactionId}
                   onChange={(event) => setTransactionId(event.target.value)}
                 />
               )}
               {mode === 'upi' && (
-                <Input label="UPI ID" value={upiId} onChange={(event) => setUpiId(event.target.value)} />
+                <Input label="UPI ID (optional)" value={upiId} onChange={(event) => setUpiId(event.target.value)} />
               )}
             </div>
 
-            {/* A fixed thumbnail rather than the full image. Proofs are phone
-                screenshots - tall and narrow - and rendered full-width with
-                object-contain each one sat in a band of white taller than the
-                rest of the form. Cropped to a square it reads as "there is a
-                proof, here's roughly what it is"; View opens the real thing. */}
+            <Textarea
+              label="Remarks (optional)"
+              rows={2}
+              maxLength={1000}
+              value={remarks}
+              onChange={(event) => setRemarks(event.target.value)}
+            />
+
+            {/* Fixed square thumbnails rather than the full images. Proofs are
+                phone screenshots - tall and narrow - and rendered full-width
+                each one sat in a band of white taller than the rest of the
+                form. Clicking one opens the real thing. */}
             <div>
               <p className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700">
                 <ImagePlus className="h-4 w-4 text-slate-400" strokeWidth={2} aria-hidden="true" />
@@ -489,51 +524,53 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                multiple
+                onChange={(event) => {
+                  const picked = Array.from(event.target.files ?? [])
+                  if (picked.length) setFiles((current) => [...current, ...picked])
+                  // Cleared so picking the same file again still fires onChange.
+                  event.target.value = ''
+                }}
                 className="hidden"
               />
               <div
-                className={`flex items-center gap-3 rounded-lg border p-2 ${
+                className={`flex flex-wrap items-center gap-2 rounded-lg border p-2 ${
                   hasProof ? 'border-slate-200 bg-white' : 'border-dashed border-slate-300 bg-slate-50'
                 }`}
               >
-                {previewUrl ? (
-                  <img
-                    src={previewUrl}
-                    alt="Payment proof"
-                    className="h-14 w-14 shrink-0 rounded-md border border-slate-200 object-cover"
+                {kept.map((url) => (
+                  <ProofThumb
+                    key={url}
+                    href={`${MEDIA_BASE_URL}${url}`}
+                    onRemove={() => setRemoved((current) => [...current, url])}
                   />
-                ) : (
-                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-400">
-                    <ImagePlus className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
-                  </span>
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-medium text-slate-700" title={file?.name}>
-                    {file ? file.name : installment.proof_url ? 'Proof on file' : 'No proof uploaded'}
-                  </p>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="text-xs font-semibold text-brand-600 hover:text-brand-700"
-                    >
-                      {hasProof ? 'Replace' : 'Upload image'}
-                    </button>
-                    {previewUrl && (
-                      <a
-                        href={previewUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700"
-                      >
-                        <Eye className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-                        View
-                      </a>
-                    )}
-                  </div>
-                </div>
+                ))}
+                {files.map((picked, fileIndex) => (
+                  <ProofThumb
+                    key={filePreviews[fileIndex]}
+                    href={filePreviews[fileIndex]}
+                    title={picked.name}
+                    isNew
+                    onRemove={() => setFiles((current) => current.filter((_, i) => i !== fileIndex))}
+                  />
+                ))}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex h-14 min-w-14 flex-col items-center justify-center gap-0.5 rounded-md border border-dashed border-slate-300 bg-slate-50 px-2 text-[11px] font-semibold text-brand-600 hover:border-brand-400 hover:bg-brand-50"
+                >
+                  <ImagePlus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                  {hasProof ? 'Add more' : 'Upload images'}
+                </button>
+                {!hasProof && <p className="text-xs font-medium text-slate-500">No proof uploaded</p>}
               </div>
+              {(files.length > 0 || removed.length > 0) && (
+                <p className="mt-1 text-xs text-slate-500">
+                  {files.length > 0 && `${files.length} new image${files.length === 1 ? '' : 's'}`}
+                  {files.length > 0 && removed.length > 0 && ', '}
+                  {removed.length > 0 && `${removed.length} to remove`} - saved with the payment.
+                </p>
+              )}
             </div>
 
             <ErrorMessage message={validationError} />

@@ -18,6 +18,9 @@ export function getLeadPaymentSummary(lead) {
       transactionId: latest?.transaction_id ?? null,
       upiId: latest?.upi_id ?? null,
       proofUrl: latest?.proof_url ?? null,
+      // Every proof of that payment - an installment can hold several.
+      proofUrls: latest?.proof_urls?.length ? latest.proof_urls : latest?.proof_url ? [latest.proof_url] : [],
+      remarks: latest?.remarks ?? null,
     }
   }
 
@@ -29,6 +32,8 @@ export function getLeadPaymentSummary(lead) {
     transactionId: null,
     upiId: null,
     proofUrl: lead.payment_image_url ?? null,
+    proofUrls: lead.payment_image_url ? [lead.payment_image_url] : [],
+    remarks: null,
   }
 }
 
