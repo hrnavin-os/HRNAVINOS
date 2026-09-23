@@ -11,8 +11,9 @@ import { CARD_PLATE_CLASSES, CARD_TONE_CLASSES } from '@/constants/sectionTones'
 // /induction-form and are assigned to a Section Admin on the way in, so there
 // is nothing to key in or manage here.
 export function InductionCallForm() {
-  const { hasPermission } = useAuth()
-  const canConfigure = hasPermission(PERMISSIONS.FORM_COLLECTION_CONFIGURE)
+  const { user, hasPermission } = useAuth()
+  // Not for a Section Admin even if granted: this one form serves every section.
+  const canConfigure = hasPermission(PERMISSIONS.FORM_COLLECTION_CONFIGURE) && !user?.scoped_section
   const [copied, setCopied] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const formUrl = `${window.location.origin}/induction-form`

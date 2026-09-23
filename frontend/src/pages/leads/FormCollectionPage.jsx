@@ -129,13 +129,11 @@ const TABS = [
   { key: 'foundation', label: 'Foundation Call Form', active: 'bg-white text-violet-700 shadow-sm' },
 ]
 
+// A Section Admin sees both tabs too - the Induction link to share, and only
+// their own section's Foundation card - but neither with the edit controls,
+// since both forms are shared with every other section.
 export function FormCollectionPage() {
-  const { user } = useAuth()
   const [activeTab, setActiveTab] = useState('induction')
-
-  // A Section Admin gets their own section's Foundation form and nothing else:
-  // the Induction Call Form is one institute-wide form, not theirs to run.
-  if (user?.scoped_section) return <FoundationCallForm />
 
   return (
     <div>
