@@ -561,7 +561,7 @@ class InductionEntryService:
             pop_group_move(
                 entry, update_data, actor_id=actor_id, actor_name=await self.actor_name(actor_id)
             )
-            if "foundation_group" in update_data
+            if "foundation_group" in update_data or "foundation_group_direct" in update_data
             else None
         )
         update_data["updated_by"] = actor_id

@@ -49,7 +49,12 @@ export function foundationGroupValue(label) {
 // history too, and is not something the board should announce - every student
 // was put into a group once, and a column that said so about all of them would
 // be a column of noise.
+//
+// A change recorded as direct ("belongs in Group 3", not "moved to it") wipes
+// the note: the latest change is what the row describes, and it says there
+// was no move.
 export function lastGroupMove(history) {
   const moves = (history ?? []).filter((move) => move.from_group)
-  return moves.length ? moves[moves.length - 1] : null
+  const last = moves[moves.length - 1]
+  return last && !last.direct ? last : null
 }

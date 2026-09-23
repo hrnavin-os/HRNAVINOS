@@ -24,6 +24,8 @@ class FoundationGroupMoveSchema(BaseModel):
     to_group: int | None = None
     at: datetime
     by_name: str | None = None
+    # True when the change was recorded as a direct placement, not a move.
+    direct: bool = False
 
     @classmethod
     def of(cls, moves: Iterable[FoundationGroupMove]) -> list["FoundationGroupMoveSchema"]:
@@ -41,6 +43,12 @@ class FoundationGroupMoveSchema(BaseModel):
         until the first student is moved, and then the whole board 500s.
         """
         return [
-            cls(from_group=move.from_group, to_group=move.to_group, at=move.at, by_name=move.by_name)
+            cls(
+                from_group=move.from_group,
+                to_group=move.to_group,
+                at=move.at,
+                by_name=move.by_name,
+                direct=move.direct,
+            )
             for move in moves
         ]

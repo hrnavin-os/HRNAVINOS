@@ -36,7 +36,11 @@ const TRIGGER_CLASS = {
  * list itself is open: it comes from the Induction Call Form's Group field, so
  * adding a fourth class in Admin > Form Collection puts it here too.
  *
- * `onSave` takes the number, so the two boards can send it under whichever
+ * Changing a set group to another asks one more thing: whether the student
+ * was moved there (the board then says "moved from Group 1") or belongs there
+ * directly (it says nothing).
+ *
+ * `onSave` takes the number and whether it was direct, so the two boards can send it under whichever
  * name their own API uses.
  */
 export function FoundationGroupCell({ row, options, onSave, isSaving = false }) {
@@ -53,7 +57,22 @@ export function FoundationGroupCell({ row, options, onSave, isSaving = false }) 
         clearLabel="No group"
         searchLabel="Search groups"
         isSaving={isSaving}
-        onSave={(label) => onSave(foundationGroupValue(label))}
+        confirmChoice={(label) => {
+          // Only a change from one group to another is ambiguous. Setting a
+          // group for the first time, or clearing one, is just that.
+          const from = row.foundation_group
+          const to = foundationGroupValue(label)
+          if (!from || !to || from === to) return null
+          const fromLabel = foundationGroupLabel(from)
+          return {
+            title: `${fromLabel} → ${label}`,
+            choices: [
+              { key: 'direct', label: `Direct ${label}`, hint: 'Belongs in this group outright - no "moved from" note' },
+              { key: 'moved', label: `Moved from ${fromLabel}`, hint: `Shows "moved from ${fromLabel}" under the group` },
+            ],
+          }
+        }}
+        onSave={(label, how) => onSave(foundationGroupValue(label), how === 'direct')}
       />
       {/* Under the control rather than inside it: the dropdown says where the
           student is now, and this says how they got there. A move is the whole
@@ -81,7 +100,11 @@ export function FoundationGroupCell({ row, options, onSave, isSaving = false }) 
 export function InductionGroupCell({ entry, options, onError }) {
   const queryClient = useQueryClient()
   const mutation = useMutation({
-    mutationFn: (foundation_group) => inductionEntryService.update(entry.id, { foundation_group }),
+    mutationFn: ({ foundation_group, direct }) =>
+      inductionEntryService.update(entry.id, {
+        foundation_group,
+        foundation_group_direct: direct,
+      }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['induction-entries'] }),
     onError: (error) => onError?.(`Couldn't change the group for ${entry.name}: ${getApiErrorMessage(error)}`),
   })
@@ -91,7 +114,7 @@ export function InductionGroupCell({ entry, options, onError }) {
       row={entry}
       options={options}
       isSaving={mutation.isPending}
-      onSave={(group) => mutation.mutate(group)}
+      onSave={(group, direct) => mutation.mutate({ foundation_group: group, direct })}
     />
   )
 }
@@ -100,7 +123,8 @@ export function InductionGroupCell({ entry, options, onError }) {
 export function LeadGroupCell({ lead, options, onError }) {
   const queryClient = useQueryClient()
   const mutation = useMutation({
-    mutationFn: (foundation_group) => leadService.update(lead.id, { foundation_group }),
+    mutationFn: ({ foundation_group, direct }) =>
+      leadService.update(lead.id, { foundation_group, foundation_group_direct: direct }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['leads'] }),
     onError: (error) => onError?.(`Couldn't change the group for ${lead.name}: ${getApiErrorMessage(error)}`),
   })
@@ -110,7 +134,7 @@ export function LeadGroupCell({ lead, options, onError }) {
       row={lead}
       options={options}
       isSaving={mutation.isPending}
-      onSave={(group) => mutation.mutate(group)}
+      onSave={(group, direct) => mutation.mutate({ foundation_group: group, direct })}
     />
   )
 }

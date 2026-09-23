@@ -44,6 +44,11 @@ async def mirror_group_move(
         far = await InductionEntry.get(record.induction_entry_id) if record.induction_entry_id else None
     if far is None:
         return
-    if record_group_move(far, record.foundation_group, actor_id=actor_id, actor_name=actor_name):
+    # Direct or moved, the far side says the same thing about it as this one.
+    last = record.foundation_group_history[-1] if record.foundation_group_history else None
+    direct = bool(last and last.direct)
+    if record_group_move(
+        far, record.foundation_group, actor_id=actor_id, actor_name=actor_name, direct=direct
+    ):
         far.touch(actor_id)
         await far.save()

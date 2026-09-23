@@ -139,7 +139,7 @@ export function InductionScheduleCell({ entry, onError }) {
               aria-hidden="true"
             />
             <div
-              style={{ top: popup.top, left: popup.left, width: POPUP_WIDTH }}
+              style={{ top: popup.top, bottom: popup.bottom, left: popup.left, width: POPUP_WIDTH }}
               className="fixed z-50 rounded-lg border border-slate-200 bg-white p-3 shadow-xl"
               onClick={(event) => event.stopPropagation()}
               onKeyDown={(event) => {

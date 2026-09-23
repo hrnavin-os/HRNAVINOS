@@ -143,6 +143,9 @@ class InductionEntryUpdate(BaseModel):
     # the board already knows which group it picked, and the service records
     # the move from whatever was there before.
     foundation_group: int | None = Field(default=None, ge=1, le=MAX_FOUNDATION_GROUP)
+    # With a group change: True when the student belongs in the new group
+    # outright rather than being moved there, so no "moved from" is shown.
+    foundation_group_direct: bool | None = None
 
 
 class InductionEntryResponse(BaseModel):

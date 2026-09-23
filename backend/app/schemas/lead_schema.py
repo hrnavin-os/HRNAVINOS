@@ -76,6 +76,9 @@ class LeadUpdate(BaseModel):
     # Moving a student between foundation class groups, from the board's Group
     # cell. LeadService.update records where they came from.
     foundation_group: int | None = Field(default=None, ge=1, le=MAX_FOUNDATION_GROUP)
+    # With a group change: True when the student belongs in the new group
+    # outright rather than being moved there, so no "moved from" is shown.
+    foundation_group_direct: bool | None = None
     # Required by LeadService.update whenever status moves to Lost.
     lost_reason: str | None = Field(default=None, max_length=500)
 

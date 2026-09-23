@@ -58,10 +58,15 @@ export function InlineSelectCell({
   maxLength = 100,
   // Off where a typo would pollute a list people filter by.
   allowCustom = true,
+  // Optional second step: `(next) => ({ title, choices: [{ key, label, hint? }] })`
+  // or null. When it returns choices, picking `next` asks which of them is
+  // meant before saving, and `onSave(next, choice.key)` says which.
+  confirmChoice,
 }) {
   const triggerRef = useRef(null)
   const [menu, setMenu] = useState(null)
   const [query, setQuery] = useState('')
+  const [pending, setPending] = useState(null)
 
   // Groups keep their order so any colours run in a predictable sequence, and
   // an emptied group drops out rather than leaving a gap while filtering.
@@ -93,17 +98,32 @@ export function InlineSelectCell({
       return
     }
     setQuery('')
+    setPending(null)
     setMenu(anchorPopup(triggerRef.current.getBoundingClientRect()))
   }
 
-  function choose(next) {
+  function close() {
     setMenu(null)
     setQuery('')
-    if (next !== value) onSave(next)
+    setPending(null)
+  }
+
+  function choose(next) {
+    if (next === value) {
+      close()
+      return
+    }
+    const step = confirmChoice?.(next)
+    if (step?.choices?.length) {
+      setPending({ next, ...step })
+      return
+    }
+    close()
+    onSave(next)
   }
 
   function onKeyDown(event) {
-    if (event.key === 'Escape') setMenu(null)
+    if (event.key === 'Escape') close()
     // Type enough to leave one candidate, press Enter, move on - the whole
     // point of the search box for someone working down a column of rows.
     if (event.key === 'Enter' && first) choose(first)
@@ -138,88 +158,124 @@ export function InlineSelectCell({
               className="fixed inset-0 z-40"
               onClick={(event) => {
                 event.stopPropagation()
-                setMenu(null)
+                close()
               }}
             />
             <div
-              style={{ top: menu.top, left: menu.left }}
+              style={{ top: menu.top, bottom: menu.bottom, left: menu.left }}
               className="fixed z-50 flex max-h-[21rem] w-80 flex-col rounded-lg border border-slate-200 bg-white shadow-xl"
             >
-              <div className="flex items-center gap-2 border-b border-slate-100 px-2.5 py-2">
-                <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden="true" />
-                <input
-                  autoFocus
-                  value={query}
-                  maxLength={maxLength}
-                  onChange={(event) => setQuery(event.target.value)}
-                  onKeyDown={onKeyDown}
-                  placeholder={searchLabel}
-                  className="w-full border-0 p-0 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-0"
-                />
-              </div>
-
-              <div className="overflow-y-auto p-1">
-                {/* Clearing has to be reachable: a value set by mistake could
-                    otherwise never be taken off the candidate again. */}
-                {!query && (
-                  <button
-                    type="button"
-                    onClick={() => choose(null)}
-                    className={`${row} justify-between ${
-                      value ? 'text-slate-600 hover:bg-slate-50' : 'bg-brand-50 font-medium text-brand-700'
-                    }`}
-                  >
-                    {clearLabel}
-                    {!value && <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} aria-hidden="true" />}
-                  </button>
-                )}
-
-                {shown.map((group) => (
-                  // A gap and the colour are the whole separation. A heading
-                  // said out loud what the dot already says, and cost a line
-                  // of the menu each time it did.
-                  <div key={group.key} className="mt-1 first:mt-0">
-                    {group.options.map((option) => (
+              {pending ? (
+                <div className="p-1">
+                  <p className="border-b border-slate-100 px-2.5 pb-2 pt-1.5 text-xs font-medium text-slate-500">
+                    {pending.title}
+                  </p>
+                  <div className="pt-1">
+                    {pending.choices.map((choice, index) => (
                       <button
-                        key={option}
+                        key={choice.key}
                         type="button"
-                        onClick={() => choose(option)}
-                        className={`${row} ${
-                          option === value ? 'bg-slate-100 font-semibold' : 'hover:bg-slate-50'
-                        } ${group.text ?? 'text-slate-700'}`}
+                        autoFocus={index === 0}
+                        onClick={() => {
+                          const { next } = pending
+                          close()
+                          onSave(next, choice.key)
+                        }}
+                        onKeyDown={(event) => event.key === 'Escape' && close()}
+                        className={`${row} flex-col items-start gap-0 text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none`}
                       >
-                        {group.dot && (
-                          <span className={`h-2 w-2 shrink-0 rounded-full ${group.dot}`} aria-hidden="true" />
-                        )}
-                        <span className="min-w-0 flex-1">{option}</span>
-                        {option === value && (
-                          <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} aria-hidden="true" />
-                        )}
+                        <span className="font-medium">{choice.label}</span>
+                        {choice.hint && <span className="text-xs text-slate-500">{choice.hint}</span>}
                       </button>
                     ))}
+                    <button
+                      type="button"
+                      onClick={() => setPending(null)}
+                      className={`${row} mt-1 border-t border-slate-100 pt-2 text-xs text-slate-500 hover:bg-slate-50`}
+                    >
+                      Back
+                    </button>
                   </div>
-                ))}
+                </div>
+              ) : (
+                <>
+                <div className="flex items-center gap-2 border-b border-slate-100 px-2.5 py-2">
+                  <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" strokeWidth={2} aria-hidden="true" />
+                  <input
+                    autoFocus
+                    value={query}
+                    maxLength={maxLength}
+                    onChange={(event) => setQuery(event.target.value)}
+                    onKeyDown={onKeyDown}
+                    placeholder={searchLabel}
+                    className="w-full border-0 p-0 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-0"
+                  />
+                </div>
 
-                {custom && (
-                  <button
-                    type="button"
-                    onClick={() => choose(custom)}
-                    className={`${row} mt-1 border-t border-slate-100 pt-2 text-slate-600 hover:bg-slate-50`}
-                  >
-                    <span
-                      className="h-2 w-2 shrink-0 rounded-full border border-dashed border-slate-400"
-                      aria-hidden="true"
-                    />
-                    <span className="min-w-0 flex-1">
-                      Use “<span className="font-medium text-slate-800">{custom}</span>”
-                    </span>
-                  </button>
-                )}
+                <div className="overflow-y-auto p-1">
+                  {/* Clearing has to be reachable: a value set by mistake could
+                      otherwise never be taken off the candidate again. */}
+                  {!query && (
+                    <button
+                      type="button"
+                      onClick={() => choose(null)}
+                      className={`${row} justify-between ${
+                        value ? 'text-slate-600 hover:bg-slate-50' : 'bg-brand-50 font-medium text-brand-700'
+                      }`}
+                    >
+                      {clearLabel}
+                      {!value && <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} aria-hidden="true" />}
+                    </button>
+                  )}
 
-                {!shown.length && !custom && (
-                  <p className="px-2.5 py-3 text-sm text-slate-400">Nothing matches that.</p>
-                )}
-              </div>
+                  {shown.map((group) => (
+                    // A gap and the colour are the whole separation. A heading
+                    // said out loud what the dot already says, and cost a line
+                    // of the menu each time it did.
+                    <div key={group.key} className="mt-1 first:mt-0">
+                      {group.options.map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => choose(option)}
+                          className={`${row} ${
+                            option === value ? 'bg-slate-100 font-semibold' : 'hover:bg-slate-50'
+                          } ${group.text ?? 'text-slate-700'}`}
+                        >
+                          {group.dot && (
+                            <span className={`h-2 w-2 shrink-0 rounded-full ${group.dot}`} aria-hidden="true" />
+                          )}
+                          <span className="min-w-0 flex-1">{option}</span>
+                          {option === value && (
+                            <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} aria-hidden="true" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+
+                  {custom && (
+                    <button
+                      type="button"
+                      onClick={() => choose(custom)}
+                      className={`${row} mt-1 border-t border-slate-100 pt-2 text-slate-600 hover:bg-slate-50`}
+                    >
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full border border-dashed border-slate-400"
+                        aria-hidden="true"
+                      />
+                      <span className="min-w-0 flex-1">
+                        Use “<span className="font-medium text-slate-800">{custom}</span>”
+                      </span>
+                    </button>
+                  )}
+
+                  {!shown.length && !custom && (
+                    <p className="px-2.5 py-3 text-sm text-slate-400">Nothing matches that.</p>
+                  )}
+                </div>
+                </>
+              )}
             </div>
           </>,
           document.body,

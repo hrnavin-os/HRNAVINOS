@@ -29,10 +29,20 @@ class FoundationGroupMove(BaseModel):
     # The mover's name as it was at the time, so a page of rows renders without
     # a user lookup each - the same reason the attendance marks snapshot it.
     by_name: str | None = Field(default=None, max_length=150)
+    # A change the coordinator said was not a move: the student belongs in the
+    # new group outright (the first one was a mistake, or they joined it
+    # directly). Kept in the history so the log is complete, but the boards
+    # print no "moved from" for it.
+    direct: bool = False
 
 
 def record_group_move(
-    record, new_group: int | None, *, actor_id: uuid.UUID | None, actor_name: str | None
+    record,
+    new_group: int | None,
+    *,
+    actor_id: uuid.UUID | None,
+    actor_name: str | None,
+    direct: bool = False,
 ) -> bool:
     """Moves `record` into `new_group`, writing down where it came from.
 
@@ -52,6 +62,7 @@ def record_group_move(
             to_group=new_group,
             by=actor_id,
             by_name=actor_name,
+            direct=direct,
         )
     )
     record.foundation_group = new_group
@@ -75,10 +86,19 @@ def pop_group_move(
     Foundation board, and Form Check - all go through here, so a move can't be
     recorded on one of them and quietly skipped on another.
     """
+    # Taken out whether or not the group is in the payload: it describes the
+    # change, and is not a field of its own to be $set onto the document.
+    direct = bool(update_data.pop("foundation_group_direct", None))
     if "foundation_group" not in update_data:
         return None
     was = record.foundation_group
     moved = record_group_move(
-        record, update_data.pop("foundation_group"), actor_id=actor_id, actor_name=actor_name
+        record,
+        update_data.pop("foundation_group"),
+        actor_id=actor_id,
+        actor_name=actor_name,
+        direct=direct,
     )
-    return {"from": was, "to": record.foundation_group} if moved else None
+    if not moved:
+        return None
+    return {"from": was, "to": record.foundation_group, **({"direct": True} if direct else {})}

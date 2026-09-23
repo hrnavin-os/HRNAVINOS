@@ -327,6 +327,24 @@ async def test_moving_a_lead_between_groups_is_written_down(client, auth_headers
     ]
 
 
+async def test_a_direct_group_change_is_marked_direct(client, auth_headers):
+    """Group 1 to Group 3 "directly" is still written down, but flagged so the
+    board shows no "moved from Group 1" under it."""
+    lead_id = await make_lead_in_group(client, auth_headers, name="Arun", phone="9876543210", group=1)
+    response = await client.put(
+        f"/api/v1/leads/{lead_id}",
+        headers=auth_headers,
+        json={"foundation_group": 3, "foundation_group_direct": True},
+    )
+    assert response.status_code == 200
+
+    row = (await client.get(f"/api/v1/leads/{lead_id}", headers=auth_headers)).json()
+    assert row["foundation_group"] == 3
+    assert [
+        (move["from_group"], move["to_group"], move["direct"]) for move in row["foundation_group_history"]
+    ] == [(None, 1, False), (1, 3, True)]
+
+
 async def test_restating_the_same_group_records_no_move(client, auth_headers):
     """Saving the row again shouldn't say the student was moved from Group 2
     to Group 2 - the cell would then claim a move that never happened."""

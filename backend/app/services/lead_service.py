@@ -298,7 +298,7 @@ class LeadService:
             pop_group_move(
                 lead, update_data, actor_id=actor_id, actor_name=await self._actor_name(actor_id)
             )
-            if "foundation_group" in update_data
+            if "foundation_group" in update_data or "foundation_group_direct" in update_data
             else None
         )
         await self.leads.update(lead, update_data)
@@ -671,7 +671,7 @@ class LeadService:
             pop_group_move(
                 lead, update_data, actor_id=actor_id, actor_name=await self._actor_name(actor_id)
             )
-            if "foundation_group" in update_data
+            if "foundation_group" in update_data or "foundation_group_direct" in update_data
             else None
         )
         await self.leads.update(lead, update_data)
