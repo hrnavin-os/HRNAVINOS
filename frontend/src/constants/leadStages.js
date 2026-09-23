@@ -6,7 +6,7 @@ export const LEAD_STAGES = [
   { value: 'pre_screening', label: 'Follow up call', tone: 'amber' },
   { value: 'financial_approval', label: 'Financial Approval', tone: 'violet' },
   { value: 'batch_confirmation', label: 'Batch Confirmation', tone: 'emerald' },
-  { value: 'lost', label: 'Lost', tone: 'slate' },
+  { value: 'lost', label: 'Quit', tone: 'slate' },
 ]
 
 export const LEAD_STAGE_BY_VALUE = Object.fromEntries(LEAD_STAGES.map((stage) => [stage.value, stage]))

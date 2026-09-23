@@ -657,7 +657,7 @@ class LeadService:
         if data.status == LeadStatus.LOST and lead.status != LeadStatus.LOST:
             reason = (data.lost_reason or "").strip()
             if not reason:
-                raise BadRequestError("Give a reason when marking a lead as Lost.")
+                raise BadRequestError("Give a reason when marking a lead as Quit.")
             update_data["lost_reason"] = reason
             update_data["lost_at"] = utcnow()
         if update_data.get("follow_up_at"):
@@ -981,8 +981,8 @@ class LeadService:
             await self.notifications.create(
                 Notification(
                     user_id=hr_user.id,
-                    title="Lead marked Lost - non-payment",
-                    message=f"{lead.name} was marked Lost after 2 consecutive missed EMI payments. Warning sign.",
+                    title="Lead marked Quit - non-payment",
+                    message=f"{lead.name} was marked Quit after 2 consecutive missed EMI payments. Warning sign.",
                     type=NotificationType.WARNING,
                 )
             )
@@ -1171,7 +1171,7 @@ class LeadService:
         """
         lead = await self.get(lead_id, scope=scope)
         if lead.status != LeadStatus.LOST:
-            raise BadRequestError("Only a lead at the Lost stage can rejoin.")
+            raise BadRequestError("Only a lead at the Quit stage can rejoin.")
         update_data: dict = {
             "status": LeadStatus.NEW_LEAD,
             "course_interest": data.course_interest.strip(),

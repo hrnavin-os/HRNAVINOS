@@ -175,7 +175,7 @@ export const BOARDS = [
         icon: BadgeIndianRupee,
         tone: 'emerald',
       },
-      { key: 'lost', label: 'Lost', rateLabel: 'Loss rate', icon: UserX, tone: 'red', invert: true },
+      { key: 'lost', label: 'Quit', rateLabel: 'Quit rate', icon: UserX, tone: 'red', invert: true },
     ],
     // The Foundation half's own measure. Money has no equivalent on the
     // Induction side, where nobody has paid anything yet, so it is a column
@@ -190,7 +190,7 @@ export const BOARDS = [
         icon: Activity,
         tone: 'amber',
       },
-      { label: 'Lost', value: lost, of: total, icon: XCircle, tone: 'red' },
+      { label: 'Quit', value: lost, of: total, icon: XCircle, tone: 'red' },
     ],
     dimensions: [
       {

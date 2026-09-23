@@ -138,7 +138,7 @@ LEAD_STAGE_LABELS = {
     LeadStatus.PRE_SCREENING: "Follow up call",
     LeadStatus.FINANCIAL_APPROVAL: "Financial Approval",
     LeadStatus.BATCH_CONFIRMATION: "Batch Confirmation",
-    LeadStatus.LOST: "Lost",
+    LeadStatus.LOST: "Quit",
 }
 PAYMENT_REMARK_LABELS = {
     PaymentCallRemark.CONFIRMED_TO_PAY: "Confirmed to pay",

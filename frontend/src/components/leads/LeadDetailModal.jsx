@@ -652,7 +652,7 @@ function RejoinPanel({ lead, onRejoin, isRejoining, error }) {
       tone="emerald"
       action={
         lead.lost_at ? (
-          <span className="text-[11px] font-medium text-slate-400">Lost on {formatDate(lead.lost_at)}</span>
+          <span className="text-[11px] font-medium text-slate-400">Quit on {formatDate(lead.lost_at)}</span>
         ) : null
       }
     >
@@ -1088,7 +1088,7 @@ export function LeadDetailModal({ lead, onClose }) {
 
         {pendingLostStage && (
           <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-            <p className="mb-2 text-sm font-semibold text-red-700">Why is this lead being marked Lost?</p>
+            <p className="mb-2 text-sm font-semibold text-red-700">Why is this lead being marked Quit?</p>
             <Input
               autoFocus
               placeholder="e.g. Joined elsewhere, not interested, unreachable…"
@@ -1110,7 +1110,7 @@ export function LeadDetailModal({ lead, onClose }) {
                 disabled={!lostReason.trim() || stageMutation.isPending}
                 onClick={() => stageMutation.mutate({ status: 'lost', lostReason: lostReason.trim() })}
               >
-                {stageMutation.isPending ? 'Saving…' : 'Mark Lost'}
+                {stageMutation.isPending ? 'Saving…' : 'Mark Quit'}
               </Button>
             </div>
           </div>
