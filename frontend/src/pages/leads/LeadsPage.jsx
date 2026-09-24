@@ -961,6 +961,27 @@ function FoundationLeadsBoard() {
         />
       ),
     },
+    // The day the student picked on the Foundation Form's "When will you make
+    // the payment?" step - stored on the lead's raw form answers since
+    // submission, just never shown on the board. Next to Payment Remarks
+    // because it's what the payment call is chasing.
+    {
+      key: 'payment_date',
+      header: 'Payment Date',
+      align: 'center',
+      render: (row) => {
+        const day = row.raw_form_data?.payment_date
+        if (!day) return <span className="text-slate-400">—</span>
+        return (
+          <div className="whitespace-nowrap">
+            <p className="text-sm text-slate-900">{formatDate(day)}</p>
+            {row.raw_form_data?.payment_timeline && (
+              <p className="text-xs text-slate-500">{row.raw_form_data.payment_timeline}</p>
+            )}
+          </div>
+        )
+      },
+    },
     {
       key: 'payment_call_remarks',
       header: 'Payment Remarks',
