@@ -13,6 +13,7 @@ import {
   Settings,
   FileCheck2,
   ClipboardList,
+  ListChecks,
 } from 'lucide-react'
 import { PERMISSIONS } from '@/constants/permissions'
 
@@ -108,6 +109,16 @@ export const NAV_ITEMS = [
     permission: PERMISSIONS.INDUCTION_ATTENDANCE_VIEW,
     icon: ClipboardList,
     hiddenForScopedUsers: true,
+  },
+  {
+    // Section Admins' view of the Attendance board above: the poll marker
+    // only, on their own section's students (the API narrows both). Shares
+    // the board's permission because it is the same board, not a new one.
+    label: 'Polls',
+    to: '/polls',
+    permission: PERMISSIONS.INDUCTION_ATTENDANCE_VIEW,
+    icon: ListChecks,
+    scopedUsersOnly: true,
   },
   {
     label: 'Programs',

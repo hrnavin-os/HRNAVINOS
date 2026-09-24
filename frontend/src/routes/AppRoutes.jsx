@@ -99,6 +99,10 @@ export function AppRoutes() {
           <Route element={<ProtectedRoute permission={PERMISSIONS.INDUCTION_ATTENDANCE_VIEW} blockScoped />}>
             <Route path="/induction-attendance" element={<InductionAttendancePage />} />
           </Route>
+          {/* The same board for Section Admins, fixed to the poll marker. */}
+          <Route element={<ProtectedRoute permission={PERMISSIONS.INDUCTION_ATTENDANCE_VIEW} scopedOnly />}>
+            <Route path="/polls" element={<InductionAttendancePage only="polls" />} />
+          </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.COURSES_VIEW} />}>
             <Route path="/courses" element={<CoursesPage />} />
           </Route>

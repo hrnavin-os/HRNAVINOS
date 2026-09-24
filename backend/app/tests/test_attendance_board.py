@@ -444,3 +444,65 @@ async def test_the_roll_still_loads_once_somebody_has_been_moved(client, auth_he
     row = response.json()["items"][0]
     assert row["foundation_group"] == 2
     assert [(m["from_group"], m["to_group"]) for m in row["foundation_group_history"]] == [(1, 2)]
+
+
+# ---------------------------------------------------------------------------
+# Section Admins: the Polls menu
+# ---------------------------------------------------------------------------
+
+
+async def section_admin_headers(client, auth_headers, section: str = "a") -> dict:
+    """Logs in as a user of the seeded Section Admin role for `section`."""
+    roles = (await client.get("/api/v1/roles", headers=auth_headers, params={"page_size": 100})).json()["items"]
+    role = next(r for r in roles if r["name"] == f"{section.upper()}-Section Admin")
+    created = await client.post(
+        "/api/v1/users",
+        headers=auth_headers,
+        json={
+            "email": f"polls-{section}@hrnavinos.com",
+            "password": "PollsPass123",
+            "first_name": "Section",
+            "last_name": "Admin",
+            "role_id": role["id"],
+        },
+    )
+    assert created.status_code == 201, created.text
+    login = await client.post(
+        "/api/v1/auth/login", json={"email": f"polls-{section}@hrnavinos.com", "password": "PollsPass123"}
+    )
+    assert login.status_code == 200, login.text
+    return {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+
+async def test_a_section_admin_sees_polls_for_their_own_section_only(client, auth_headers):
+    await add_student(client, auth_headers, name="Arun", phone="9876543210")
+    await add_student(client, auth_headers, name="Bala", phone="9876511111")
+    await set_section("Arun", "a")
+    await set_section("Bala", "b")
+    headers = await section_admin_headers(client, auth_headers, "a")
+
+    rows = await client.get(STUDENTS_URL, headers=headers, params={"marker": "polls", "section": "b"})
+    assert rows.status_code == 200, rows.text
+    # Asking for another section is overridden by their own.
+    assert [row["name"] for row in rows.json()["items"]] == ["Arun"]
+
+
+async def test_a_section_admin_can_mark_polls_in_their_section(client, auth_headers):
+    arun = await add_student(client, auth_headers, name="Arun", phone="9876543210")
+    await set_section("Arun", "a")
+    headers = await section_admin_headers(client, auth_headers, "a")
+
+    response = await mark(client, headers, arun, "polls", True)
+    assert response.status_code == 200, response.text
+    assert response.json()["marks"]["polls"]["marked"] is True
+
+
+async def test_a_section_admin_cannot_mark_another_section_or_another_marker(client, auth_headers):
+    arun = await add_student(client, auth_headers, name="Arun", phone="9876543210")
+    bala = await add_student(client, auth_headers, name="Bala", phone="9876511111")
+    await set_section("Arun", "a")
+    await set_section("Bala", "b")
+    headers = await section_admin_headers(client, auth_headers, "a")
+
+    assert (await mark(client, headers, bala, "polls", True)).status_code == 404
+    assert (await mark(client, headers, arun, "terms", True)).status_code == 403

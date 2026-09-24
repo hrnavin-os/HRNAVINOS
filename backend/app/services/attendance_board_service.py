@@ -383,7 +383,13 @@ class AttendanceBoardService:
         return {"sections": sections, "batches": batches}
 
     async def set_mark(
-        self, entry_id: uuid.UUID, marker_key: str, *, marked: bool | None, actor_id: uuid.UUID | None
+        self,
+        entry_id: uuid.UUID,
+        marker_key: str,
+        *,
+        marked: bool | None,
+        actor_id: uuid.UUID | None,
+        section: str | None = None,
     ) -> InductionEntry:
         """Moves one student across one marker.
 
@@ -394,6 +400,10 @@ class AttendanceBoardService:
         marker = self.marker(marker_key)
         entry = await self.entries.get_by_id(entry_id)
         if not entry or entry.is_deleted:
+            raise NotFoundError("That student is no longer on the induction list.")
+        # A Section Admin's scope: a student in another section is not one
+        # they can see, so it is reported as missing rather than forbidden.
+        if section is not None and entry.section != section:
             raise NotFoundError("That student is no longer on the induction list.")
 
         marker.write(entry, marked, actor_id, await self.induction.actor_name(actor_id))

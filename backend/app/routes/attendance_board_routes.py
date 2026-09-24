@@ -10,6 +10,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query
 
 from app.core.dependencies import RequirePermissions, get_actor_scope
+from app.exceptions.base import ForbiddenError
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.attendance_board_schema import (
@@ -26,6 +27,10 @@ from app.services.attendance_board_service import AttendanceBoardService
 from app.utils.foundation_groups import MAX_FOUNDATION_GROUP
 
 router = APIRouter(prefix="/induction-attendance", tags=["Induction Attendance"])
+
+# The markers a Section Admin may set: their portal's Polls menu. The other
+# markers stay with the Admin who owns the whole Attendance board.
+SCOPED_MARKERS = {"polls"}
 
 
 @router.get("/terms-document", response_model=TermsDocumentResponse)
@@ -117,5 +122,10 @@ async def set_mark(
     the Foundation link says.
     """
     service = AttendanceBoardService()
-    entry = await service.set_mark(entry_id, marker, marked=payload.marked, actor_id=actor.id)
+    # A Section Admin marks polls, and only on their own section's students -
+    # the list is already narrowed that way, and the write has to be too.
+    scope = await get_actor_scope(actor)
+    if scope is not None and marker not in SCOPED_MARKERS:
+        raise ForbiddenError("Section Admins can only mark polls.")
+    entry = await service.set_mark(entry_id, marker, marked=payload.marked, actor_id=actor.id, section=scope)
     return service.to_response(entry)

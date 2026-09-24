@@ -103,12 +103,16 @@ const stateLabel = (key, tab) => (key === 'all' ? 'All students' : key === 'yes'
 // Every marker travels on every row, so the columns show all four at once and
 // the tabs decide which one the action button and the Marked/Pending filter
 // are about. Switching tabs is not a new question about different people.
-export function InductionAttendancePage() {
+//
+// `only` fixes the board to one marker - the Section Admins' Polls menu is
+// this page with only="polls".
+export function InductionAttendancePage({ only }) {
   const { hasPermission } = useAuth()
   const queryClient = useQueryClient()
   const canMark = hasPermission(PERMISSIONS.INDUCTION_ATTENDANCE_MARK)
 
-  const [marker, setMarker] = useState('terms')
+  const tabs = only ? TABS.filter((tab) => tab.key === only) : TABS
+  const [marker, setMarker] = useState(only ?? 'terms')
   const [state, setState] = useState('all')
   const [section, setSection] = useState('')
   const [batch, setBatch] = useState('')
@@ -295,9 +299,13 @@ export function InductionAttendancePage() {
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="h-9 w-1 shrink-0 rounded-full bg-brand-500" aria-hidden="true" />
             <div className="min-w-0">
-              <h1 className="text-base font-bold tracking-tight text-slate-900">Attendance</h1>
+              <h1 className="text-base font-bold tracking-tight text-slate-900">
+                {only ? TAB_BY_KEY[only].label : 'Attendance'}
+              </h1>
               <p className="text-[11px] font-medium text-amber-600">
-                Terms, polls, success meet and foundation class across the induction list
+                {only
+                  ? `Who was selected in the ${TAB_BY_KEY[only].label.toLowerCase()}, across your section's induction list`
+                  : 'Terms, polls, success meet and foundation class across the induction list'}
               </p>
             </div>
           </div>
@@ -312,7 +320,7 @@ export function InductionAttendancePage() {
             brackets after a label. The open one fills solid, the way the
             induction and section card rows select. */}
         <div className="flex flex-wrap gap-3 border-t border-slate-200 bg-slate-50/70 px-4 py-3">
-          {TABS.map((tab) => {
+          {tabs.map((tab) => {
             const split = stats?.markers?.[tab.key]
             return (
               <StatCard

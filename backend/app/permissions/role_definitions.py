@@ -49,9 +49,22 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     # FORM_COLLECTION_VIEW shows them their own section's Foundation form and
     # its public link - the page narrows itself to that one card for a scoped
     # user. Viewing only: editing the shared form stays with Admin.
-    "A-Section Admin": [P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW, P.FORM_COLLECTION_VIEW],
-    "B-Section Admin": [P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW, P.FORM_COLLECTION_VIEW],
-    "C-Section Admin": [P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW, P.FORM_COLLECTION_VIEW],
+    # INDUCTION_ATTENDANCE_VIEW/MARK are their Polls menu: the attendance
+    # board's poll marker, narrowed to their own section by the routes and
+    # limited to that one marker (see SCOPED_MARKERS). Not CONFIGURE - the
+    # terms wording is shared by every section.
+    "A-Section Admin": [
+        P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW, P.FORM_COLLECTION_VIEW,
+        P.INDUCTION_ATTENDANCE_VIEW, P.INDUCTION_ATTENDANCE_MARK,
+    ],
+    "B-Section Admin": [
+        P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW, P.FORM_COLLECTION_VIEW,
+        P.INDUCTION_ATTENDANCE_VIEW, P.INDUCTION_ATTENDANCE_MARK,
+    ],
+    "C-Section Admin": [
+        P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW, P.FORM_COLLECTION_VIEW,
+        P.INDUCTION_ATTENDANCE_VIEW, P.INDUCTION_ATTENDANCE_MARK,
+    ],
     # Owns the hand-off from CRM to classroom: allocates leads that reached the
     # Batch Confirmation stage into batches, then confirms the roster (which
     # creates the Student and Admission records) once the batch is ready.
