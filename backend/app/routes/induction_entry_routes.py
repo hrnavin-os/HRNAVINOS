@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Query, status
 
 from app.core.dependencies import RequirePermissions, get_actor_scope
 from app.models.enums import InductionStatus
+from app.models.induction_entry import parse_batch
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.common import MessageResponse, PaginatedResponse, PaginationParams
@@ -33,9 +34,7 @@ router = APIRouter(prefix="/induction-entries", tags=["Induction Call Form"])
 def _date_window(*ranges: tuple[date, date] | tuple[date | None, date | None] | None) -> dict:
     """The overlap of every given (start, end) pair, as a Mongo range.
 
-    Batch and the Date filter both narrow registration_date, so asking for
-    Batch-29 and "last 7 days" has to mean the days in both - the tightest
-    bound on each side wins. Either end of any range may be missing, and an
+    The tightest bound on each side wins. Either end of any range may be missing, and an
     empty result means nothing was asked for, so no clause is added at all.
     """
     bounds = [pair for pair in ranges if pair]
@@ -113,12 +112,12 @@ class BoardFilters:
             }.items()
             if value
         }
-        # Batch is derived from registration_date rather than stored, so
-        # filtering by it becomes a range query over the month it represents -
-        # the same field the Date filter narrows, which is why the two
-        # intersect below rather than one overwriting the other.
-        batch_window = InductionEntryService.batch_date_range(self.batch) if self.batch else None
-        window = _date_window((self.date_from, self.date_to), batch_window)
+        # The filter offers "Batch-20"; what is stored is 20. An unparseable
+        # value narrows nothing rather than erroring.
+        number = parse_batch(self.batch)
+        if number is not None:
+            filters["batch_number"] = number
+        window = _date_window((self.date_from, self.date_to))
         if window:
             filters["registration_date"] = window
         return filters

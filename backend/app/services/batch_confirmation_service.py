@@ -26,7 +26,7 @@ from app.models.enums import (
     TutorStatus,
     WhatsAppGroupStatus,
 )
-from app.models.induction_entry import InductionEntry
+from app.models.induction_entry import InductionEntry, batch_label
 from app.models.lead import INVITE_WAIT, Lead
 from app.models.student import Student
 from app.repositories.admission_repository import AdmissionRepository
@@ -54,7 +54,6 @@ from app.schemas.batch_schema import BatchCreate
 from app.services.audit_service import AuditService
 from app.services.batch_service import BatchService
 from app.services.foundation_form_config_service import FoundationFormConfigService
-from app.services.induction_entry_service import batch_for
 from app.services.whatsapp_service import WhatsAppService
 
 # Smallest roster the institute will run a batch with. Deliberately a single
@@ -291,7 +290,9 @@ class BatchConfirmationService:
             return {}
 
         entries = await InductionEntry.find({"_id": {"$in": entry_ids}}).to_list()
-        batch_by_entry = {entry.id: batch_for(entry.registration_date) for entry in entries}
+        batch_by_entry = {
+            entry.id: batch_label(entry.batch_number) for entry in entries if entry.batch_number is not None
+        }
         return {
             lead.id: batch_by_entry[lead.induction_entry_id]
             for lead in leads

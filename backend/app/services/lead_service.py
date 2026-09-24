@@ -17,7 +17,7 @@ from app.models.enums import (
     PaymentCallRemark,
     PaymentMethod,
 )
-from app.models.induction_entry import InductionEntry
+from app.models.induction_entry import InductionEntry, batch_label
 from app.models.lead import FollowUpEntry, Lead, RemarkEntry
 from app.models.notification import Notification
 from app.permissions.permission_codes import Permissions
@@ -49,7 +49,6 @@ from app.services.audit_service import AuditService
 from app.services.foundation_group_sync import mirror_group_move
 from app.services.foundation_form_answers import derive_answers
 from app.services.foundation_form_pricing import build_installments, build_payment_expected_summary
-from app.services.induction_entry_service import batch_for
 from app.services.reminder_service import ReminderService
 from app.services.storage_service import StorageService
 from app.models.foundation_group import pop_group_move
@@ -60,6 +59,14 @@ from app.utils.phone import normalize_phone
 # More than this on one installment is a mistake, not evidence.
 MAX_INSTALLMENT_PROOFS = 10
 
+
+
+# The Statistics board's monthly intake chart labels each month with a batch
+# number counted from August 2026 = Batch-28. Kept only for that chart; the
+# Induction form's batch is entered by hand (InductionEntry.batch_number).
+def _month_batch(start: date) -> str:
+    months = (start.year - 2026) * 12 + (start.month - 8)
+    return f"Batch-{28 + months}"
 
 class LeadService:
     def __init__(self) -> None:
@@ -113,7 +120,7 @@ class LeadService:
             paying_amount=lead.paying_amount,
             qr_code=lead.qr_code,
             batch_number=lead.batch_number,
-            induction_batch=batch_for(entry.registration_date) if entry else None,
+            induction_batch=batch_label(entry.batch_number) if entry else None,
             foundation_group=lead.foundation_group,
             foundation_group_history=FoundationGroupMoveSchema.of(lead.foundation_group_history),
             group_assigned_at=lead.group_assigned_at,
@@ -452,10 +459,10 @@ class LeadService:
     ) -> dict:
         """Leads per batch, which is to say per month.
 
-        The batch IS the month a lead's Foundation Form landed in - the same
-        rule the Induction board's batch column uses, so the two boards can't
-        name the same month differently - which is why this groups on the year
-        and month of created_at and names each group with `batch_for`. Read in
+        Groups on the year and month a lead's Foundation Form landed in and
+        names each month with `_month_batch`. The Induction form now takes the
+        batch as a typed number, so this monthly naming is the Statistics
+        chart's own and no longer what the Induction board shows. Read in
         UTC, like every other rule that works off a stored timestamp (see
         app/utils/foundation_groups.py).
 
@@ -482,7 +489,7 @@ class LeadService:
             start = date(year, month, 1)
             items.append(
                 {
-                    "value": batch_for(start),
+                    "value": _month_batch(start),
                     # The batch number is the label everybody uses, but only the
                     # month says which one that is to somebody who wasn't there.
                     "period": start.strftime("%b %Y"),

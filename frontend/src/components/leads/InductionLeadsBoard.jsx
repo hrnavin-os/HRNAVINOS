@@ -66,12 +66,11 @@ const columns = [
     ),
   },
   {
-    // Derived server-side from the registration date, so it is never edited
-    // and never drifts from it.
+    // The number typed on the Induction form, shown as "Batch-20".
     key: 'batch',
     header: 'Batch',
     align: 'center',
-    render: (row) => <Badge tone="blue">{row.batch}</Badge>,
+    render: (row) => (row.batch ? <Badge tone="blue">{row.batch}</Badge> : dash),
   },
   {
     key: 'registration_date',
@@ -135,7 +134,7 @@ const MOVED_COLUMNS = [
     key: 'batch',
     header: 'Batch',
     align: 'center',
-    render: (row) => <Badge tone="blue">{row.batch}</Badge>,
+    render: (row) => (row.batch ? <Badge tone="blue">{row.batch}</Badge> : dash),
   },
   {
     // The linked lead's pipeline stage, resolved server-side for the page.
@@ -176,6 +175,8 @@ const editFields = [
   { name: 'phone', label: 'Phone Number', required: true },
   { name: 'registration_date', label: 'Registration Date', type: 'date', required: true },
   { name: 'paid_date', label: 'Paid Date', type: 'date' },
+  // The number alone; the board shows it as "Batch-20".
+  { name: 'batch_number', label: 'Batch Number', type: 'number' },
   { name: 'sales_person', label: 'Sales Person' },
   { name: 'lead_source', label: 'Lead Source' },
   { name: 'payment_mode', label: 'Payment Mode' },
@@ -324,9 +325,7 @@ export function InductionLeadsBoard() {
     render: (row) => <InductionCategoryCell entry={row} options={categoryOptions} onError={setError} />,
   }
   // Beside the batch, because the two are read together - "Group 2 of
-  // Batch-28". Editable, unlike the batch next to it: the batch is the month
-  // somebody registered in and is nobody's decision, while the group is
-  // entirely somebody's, and gets changed.
+  // Batch-28".
   const groupColumn = {
     key: 'foundation_group',
     header: 'Group',
@@ -578,6 +577,7 @@ export function InductionLeadsBoard() {
                     phone: row.phone,
                     registration_date: row.registration_date?.slice(0, 10) ?? '',
                     paid_date: row.paid_date?.slice(0, 10) ?? '',
+                    batch_number: row.batch_number ?? '',
                     sales_person: row.sales_person ?? '',
                     lead_source: row.lead_source ?? '',
                     payment_mode: row.payment_mode ?? '',

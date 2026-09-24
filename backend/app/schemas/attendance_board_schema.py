@@ -62,7 +62,7 @@ class AttendanceStudentResponse(BaseModel):
     phone: str
     email: str | None = None
     section: str | None = None
-    batch: str
+    batch: str | None = None
     # Which foundation class group this candidate is in, as recorded on their
     # induction entry. None until somebody says - see
     # app/utils/foundation_groups.py.

@@ -219,7 +219,7 @@ export function InductionAttendancePage() {
           <span className="text-slate-400">—</span>
         ),
     },
-    { key: 'batch', header: 'Batch', align: 'center' },
+    { key: 'batch', header: 'Batch', align: 'center', render: (row) => row.batch ?? '—' },
     // Beside Batch, not beside the Foundation Class marker: batch and group
     // are read as a pair - "Group 2 of Batch-28" - and only do so next to each
     // other. Read-only here; the group is set on the Induction board and on

@@ -19,6 +19,9 @@ class InductionEntryCreate(BaseModel):
     lead_source: str | None = Field(default=None, max_length=150)
     payment_mode: str | None = Field(default=None, max_length=100)
     category: str | None = Field(default=None, max_length=150)
+    # The batch number alone (20); shown back as "Batch-20". The form's field
+    # takes digits only.
+    batch: int | None = Field(default=None, ge=1, le=999999)
     # The section to file this entry under - a section code ("a") or its label
     # ("A Section"). Absent means the round-robin across every section picks.
     section: str | None = Field(default=None, max_length=100)
@@ -134,6 +137,7 @@ class InductionEntryUpdate(BaseModel):
     lead_source: str | None = Field(default=None, max_length=150)
     payment_mode: str | None = Field(default=None, max_length=150)
     category: str | None = Field(default=None, max_length=150)
+    batch_number: int | None = Field(default=None, ge=1, le=999999)
     call_remark: str | None = Field(default=None, max_length=100)
     # Sent alongside call_remark when the remark says quit - the service
     # refuses a quit remark that arrives without one, and clears the stored
@@ -153,8 +157,9 @@ class InductionEntryResponse(BaseModel):
     name: str
     email: str | None
     phone: str
-    # Derived from registration_date, never stored and never accepted on input.
-    batch: str
+    # "Batch-20", built from the stored batch_number; None when none was entered.
+    batch: str | None = None
+    batch_number: int | None = None
     registration_date: date
     paid_date: date | None
     sales_person: str | None

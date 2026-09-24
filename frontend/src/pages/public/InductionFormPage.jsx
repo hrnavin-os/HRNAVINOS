@@ -14,14 +14,22 @@ import { PublicFormShell } from '@/components/public/PublicFormShell'
 import { FormProgress } from '@/components/public/FormProgress'
 
 // Which input a field gets is structural (a date is a date), so it's derived
-// from the key rather than being another thing to configure. Batch is absent
-// throughout - derived from the registration date by the backend and never an
-// input anywhere.
+// from the key rather than being another thing to configure.
 const INPUT_TYPE_BY_KEY = {
   email: 'email',
   registration_date: 'date',
   paid_date: 'date',
   phone: 'tel',
+}
+
+// Batch is typed as the number alone ("20") and shown everywhere as
+// "Batch-20". Text with a numeric keypad rather than type="number", which
+// would accept "1e3" and spin on scroll.
+const EXTRA_PROPS_BY_KEY = {
+  batch: { inputMode: 'numeric', placeholder: 'e.g. 20', autoComplete: 'off' },
+}
+const RULES_BY_KEY = {
+  batch: { pattern: { value: /^\d+$/, message: 'Enter the batch number only, e.g. 20' } },
 }
 
 const PAGES = [
@@ -183,8 +191,10 @@ export function InductionFormPage() {
                 label={field.label}
                 required={field.required}
                 error={errors[field.key]?.message}
+                {...EXTRA_PROPS_BY_KEY[field.key]}
                 {...register(field.key, {
                   required: field.required ? `${field.label} is required` : false,
+                  ...RULES_BY_KEY[field.key],
                 })}
               />
             ),

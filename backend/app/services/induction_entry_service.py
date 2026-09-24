@@ -14,6 +14,7 @@ from app.models.induction_entry import (
     InductionPlacement,
     InductionQualification,
     InductionRemarks,
+    batch_label,
     is_quit_remark,
 )
 from app.models.user import User
@@ -32,25 +33,6 @@ from app.services.audit_service import AuditService
 from app.services.foundation_group_sync import mirror_group_move
 from app.utils.foundation_groups import parse_foundation_group
 from app.utils.phone import normalize_phone
-
-# The batch sequence is anchored, not enumerated: August 2026 is Batch-28 and
-# every following month is one higher. Anchoring rather than hardcoding a
-# lookup means the numbering keeps going for future months and years with no
-# further changes here - Dec 2026 is 32, Jan 2027 is 33, and so on.
-BATCH_ANCHOR = (2026, 8)
-BATCH_ANCHOR_NUMBER = 28
-
-
-def batch_for(registration_date: date) -> str:
-    """'Batch-N' for the month a student registered in.
-
-    Derived from the registration date rather than today, so a row keeps the
-    batch it was registered into once the month rolls over.
-    """
-    anchor_year, anchor_month = BATCH_ANCHOR
-    months = (registration_date.year - anchor_year) * 12 + (registration_date.month - anchor_month)
-    return f"Batch-{BATCH_ANCHOR_NUMBER + months}"
-
 
 def _resolve_quit_reason(entry: InductionEntry, update_data: dict) -> None:
     """Keeps a quit remark and its reason true to each other, in place.
@@ -199,7 +181,7 @@ class InductionEntryService:
         assignee = await self.users.get_by_id(entry.assigned_to) if entry.assigned_to else None
         return InductionEntryResponse(
             **entry.model_dump(),
-            batch=batch_for(entry.registration_date),
+            batch=batch_label(entry.batch_number),
             status=entry.status,
             foundation_status=foundation_status,
             assigned_to_name=f"{assignee.first_name} {assignee.last_name}".strip() if assignee else None,
@@ -232,7 +214,9 @@ class InductionEntryService:
         chosen = await self.resolve_section(data.section)
         assignee, section = await self._next_assignee(chosen)
         entry = InductionEntry(
-            **data.model_dump(exclude={"section", "group"}),
+            **data.model_dump(exclude={"section", "group", "batch"}),
+            # Typed as the bare number; "Batch-20" is only ever how it's shown.
+            batch_number=data.batch,
             # The form sends the label its dropdown offered ("Group 2"); the
             # number behind it is what every board filters and sorts on. No
             # move is recorded for this one - arriving in a group is not being
@@ -293,30 +277,6 @@ class InductionEntryService:
         )
         return PaginatedResponse.build(items, total, params.page, params.page_size)
 
-    @staticmethod
-    def batch_date_range(batch: str) -> tuple[date, date] | None:
-        """Turns 'Batch-29' back into the month it covers.
-
-        Batch isn't stored - it's derived from registration_date - so filtering
-        by it means filtering on the date range that produces it. Returns None
-        for anything unparseable so a junk query param yields no filter rather
-        than a 500.
-        """
-        try:
-            number = int(batch.split("-", 1)[1])
-        except (IndexError, ValueError):
-            return None
-        anchor_year, anchor_month = BATCH_ANCHOR
-        months = number - BATCH_ANCHOR_NUMBER
-        # Shift to a 0-based month index so the year rolls over correctly in
-        # both directions, then back to 1-based.
-        index = (anchor_year * 12 + (anchor_month - 1)) + months
-        year, month = divmod(index, 12)
-        month += 1
-        start = date(year, month, 1)
-        end = date(year + (month == 12), 1 if month == 12 else month + 1, 1) - timedelta(days=1)
-        return start, end
-
     async def filter_options(
         self, *, section: str | None = None, status: InductionStatus = InductionStatus.PENDING_INDUCTION
     ) -> dict:
@@ -325,12 +285,12 @@ class InductionEntryService:
         Deliberately read from the entries rather than the form config: the
         dropdowns accept typed values that aren't on the configured list, and
         a filter offering an option that matches nothing (or omitting one that
-        matches rows) would be worse than useless. Batches are derived per
-        entry and returned newest-first.
+        matches rows) would be worse than useless. Batches are returned
+        newest-first.
         """
         entries = await self.entries.list_all_for_options(section=section, status=status)
         distinct = {field: set() for field in ("sales_person", "lead_source", "payment_mode", "category")}
-        batches: set[str] = set()
+        batches: set[int] = set()
         assignees: dict[str, str] = {}
 
         for entry in entries:
@@ -338,7 +298,8 @@ class InductionEntryService:
                 value = getattr(entry, field)
                 if value:
                     distinct[field].add(value)
-            batches.add(batch_for(entry.registration_date))
+            if entry.batch_number is not None:
+                batches.add(entry.batch_number)
             if entry.assigned_to:
                 assignees[str(entry.assigned_to)] = ""
 
@@ -348,8 +309,8 @@ class InductionEntryService:
 
         return {
             **{field: sorted(values) for field, values in distinct.items()},
-            # "Batch-9" before "Batch-10" needs a numeric sort, not a string one.
-            "batch": sorted(batches, key=lambda b: int(b.split("-")[1]), reverse=True),
+            # Sorted as numbers, so "Batch-9" comes after "Batch-10".
+            "batch": [batch_label(number) for number in sorted(batches, reverse=True)],
             "assigned_to": [{"value": key, "label": label} for key, label in sorted(assignees.items(), key=lambda kv: kv[1])],
         }
 

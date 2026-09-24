@@ -1,11 +1,9 @@
 """InductionEntry document — one row of the Induction Call Form.
 
-Deliberately has no `batch` field. Batch is a pure function of
-registration_date (see InductionEntryService.batch_for) and is computed on
-read, so it can never drift from the date, can never be edited by hand, and
-historical rows keep the batch they were registered into when the month rolls
-over.
+Batch is typed on the form as a bare number and stored as `batch_number`;
+"Batch-20" is how it is shown (see batch_label), never how it is stored.
 """
+import re
 import uuid
 from datetime import date, datetime
 
@@ -100,6 +98,21 @@ class InductionAttendance(BaseModel):
     foundation_class_attended: AttendanceMark = Field(default_factory=AttendanceMark)
 
 
+def batch_label(number: int | None) -> str | None:
+    """"Batch-20" for a stored 20, or None when no batch was entered."""
+    return f"Batch-{number}" if number is not None else None
+
+
+def parse_batch(value: str | int | None) -> int | None:
+    """The number behind a batch as a filter sends it: 20, "20" or "Batch-20".
+    None for anything else, so a junk query param narrows nothing rather than
+    failing."""
+    if value is None:
+        return None
+    match = re.fullmatch(r"\s*(?:batch\s*-?\s*)?(\d{1,6})\s*", str(value), re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
 def is_quit_remark(remark: str | None) -> bool:
     """Whether a call remark says this candidate has quit.
 
@@ -131,6 +144,11 @@ class InductionEntry(BaseDocument):
     lead_source: str | None = Field(default=None, max_length=150)
     payment_mode: str | None = Field(default=None, max_length=100)
     category: str | None = Field(default=None, max_length=150)
+    # The batch the student joins, entered on the form as just the number (20)
+    # and shown everywhere as "Batch-20". Stored rather than read off the
+    # registration month, which is what it used to be: the batch is decided by
+    # the team, not by the calendar. None on rows keyed in before the field.
+    batch_number: int | None = None
     # Where this candidate stands after the induction call - set from a
     # dropdown on the board. Open text rather than an enum for the same reason
     # the fields above are: the list is long, entirely operational, and gets
@@ -192,6 +210,8 @@ class InductionEntry(BaseDocument):
             # The group column is filterable on three boards, and the roll for
             # one group is the commonest thing anybody asks this collection.
             IndexModel([("foundation_group", 1)]),
+            # The Batch filter on the Induction and Attendance boards.
+            IndexModel([("batch_number", 1)]),
             # The matching lookup: by number, restricted to entries that have
             # not already been converted. Compound because every caller asks
             # both questions at once.

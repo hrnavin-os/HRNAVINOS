@@ -14,6 +14,9 @@ _SEED_FIELDS = [
     {"key": "phone", "label": "Phone Number", "required": True, "options": []},
     {"key": "registration_date", "label": "Registration Date", "required": True, "options": []},
     {"key": "paid_date", "label": "Paid Date", "required": False, "options": []},
+    # The batch number only ("20"); every board shows it as "Batch-20". No
+    # options, so it renders as a plain number input on the first page.
+    {"key": "batch", "label": "Batch Number", "required": True, "options": []},
     {
         "key": "sales_person",
         "label": "Sales Person",

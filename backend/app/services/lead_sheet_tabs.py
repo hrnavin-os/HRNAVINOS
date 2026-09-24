@@ -20,13 +20,13 @@ from pydantic import ValidationError
 from app.database.base import utcnow
 from app.exceptions.base import AppException
 from app.models.enums import InductionStatus, LeadSource, LeadStatus, PaymentCallRemark, PaymentPlanOption
-from app.models.induction_entry import InductionEntry
+from app.models.induction_entry import InductionEntry, batch_label, parse_batch
 from app.models.lead import Lead
 from app.models.user import User
 from app.repositories.foundation_form_config_repository import FoundationFormConfigRepository
 from app.schemas.induction_entry_schema import InductionDetailsUpdate, InductionEntryCreate, InductionEntryUpdate
 from app.schemas.lead_schema import LeadCreate, LeadPlanAssign, LeadRemarkCreate, LeadUpdate
-from app.services.induction_entry_service import InductionEntryService, batch_for
+from app.services.induction_entry_service import InductionEntryService
 from app.services.lead_service import LeadService
 from app.utils.foundation_groups import foundation_group_label, parse_foundation_group
 
@@ -272,7 +272,7 @@ class InductionTab(SheetTabSpec):
         Column("email", "Email"),
         Column("registration_date", "Registration Date"),
         Column("paid_date", "Paid Date"),
-        Column("batch", "Batch", editable=False),
+        Column("batch", "Batch"),
         Column("section", "Section", create_only=True),
         Column("group", "Group"),
         Column("assigned_to", "Assigned To", editable=False),
@@ -314,7 +314,7 @@ class InductionTab(SheetTabSpec):
         for field, group in _GROUP_OF.items():
             values[field] = cell_text(getattr(getattr(entry, group), field))
         values.update(
-            batch=batch_for(entry.registration_date),
+            batch=cell_text(batch_label(entry.batch_number)),
             section=self.section_label(entry.section),
             group=foundation_group_label(entry.foundation_group),
             assigned_to=self.assignee(entry.assigned_to),
@@ -341,7 +341,13 @@ class InductionTab(SheetTabSpec):
                 value = self._parse(field, raw)
                 if value is None and field in _NOT_BLANK:
                     raise ValueError("can't be blank")
-                if field == "group":
+                if field == "batch":
+                    # Typed as "20" or "Batch-20"; stored as the number.
+                    number = parse_batch(raw)
+                    if number is None and value is not None:
+                        raise ValueError("enter the batch number, e.g. 20")
+                    await self.service.update(entry.id, InductionEntryUpdate(batch_number=number), actor_id=None)
+                elif field == "group":
                     # A move between groups, recorded exactly as the board's
                     # Group dropdown records one.
                     update = InductionEntryUpdate(foundation_group=parse_foundation_group(raw))
@@ -376,6 +382,7 @@ class InductionTab(SheetTabSpec):
             lead_source=optional(row.get("lead_source", "")),
             payment_mode=optional(row.get("payment_mode", "")),
             category=optional(row.get("category", "")),
+            batch=parse_batch(row.get("batch", "")),
             section=self.default_section(row.get("section", "")),
             group=optional(row.get("group", "")),
         )

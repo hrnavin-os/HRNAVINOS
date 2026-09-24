@@ -189,8 +189,8 @@ export function InductionEntryDetail({ entry, hideAssignee = false }) {
 
   return (
     <div className="space-y-4">
-      {/* Batch leads: it's the derived value everything else is filed under,
-          and the first thing you check on an entry. Given the accent plate the
+      {/* Batch leads: it's what everything else is filed under, and the
+          first thing you check on an entry. Given the accent plate the
           tiles below gave up, so one thing on this tab carries real colour and
           it's the thing you look for first. */}
       <div className="flex items-center gap-3 rounded-lg border border-brand-100 bg-brand-50 px-3.5 py-2.5">
@@ -199,7 +199,11 @@ export function InductionEntryDetail({ entry, hideAssignee = false }) {
         </span>
         <div className="min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wide text-brand-700/70">Batch</p>
-          <p className="text-base font-semibold leading-tight text-brand-700">{entry.batch}</p>
+          {entry.batch ? (
+            <p className="text-base font-semibold leading-tight text-brand-700">{entry.batch}</p>
+          ) : (
+            <p className="text-base font-semibold leading-tight text-brand-700/40">Not set</p>
+          )}
         </div>
         {/* Beside the batch, because that is how the two are said out loud -
             "Group 2 of Batch-28". Not in the tile grid below, where it would

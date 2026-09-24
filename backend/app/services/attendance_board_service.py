@@ -17,7 +17,7 @@ from typing import Callable
 
 from app.database.base import utcnow
 from app.exceptions.base import BadRequestError, NotFoundError
-from app.models.induction_entry import AttendanceMark, InductionEntry
+from app.models.induction_entry import AttendanceMark, InductionEntry, batch_label, parse_batch
 from app.models.terms_document import TermsDocument
 from app.repositories.induction_entry_repository import InductionEntryRepository
 from app.repositories.user_repository import UserRepository
@@ -32,7 +32,7 @@ from app.schemas.attendance_board_schema import (
     TermsDocumentUpdate,
 )
 from app.services.audit_service import AuditService
-from app.services.induction_entry_service import InductionEntryService, batch_for, stamp_terms_signature
+from app.services.induction_entry_service import InductionEntryService, stamp_terms_signature
 from app.schemas.foundation_group_schema import FoundationGroupMoveSchema
 
 
@@ -255,7 +255,7 @@ class AttendanceBoardService:
             phone=entry.phone,
             email=entry.email,
             section=entry.section,
-            batch=batch_for(entry.registration_date),
+            batch=batch_label(entry.batch_number),
             foundation_group=entry.foundation_group,
             foundation_group_history=FoundationGroupMoveSchema.of(entry.foundation_group_history),
             registration_date=entry.registration_date,
@@ -299,13 +299,12 @@ class AttendanceBoardService:
             query["$and"] = conditions
         if section:
             query["section"] = section
-        # Batch isn't stored - it's derived from registration_date (see
-        # InductionEntryService.batch_for) - so filtering by it is a range over
-        # the month it stands for. An unparseable batch narrows nothing rather
-        # than erroring: a junk query param should return the roll, not a 500.
-        window = InductionEntryService.batch_date_range(batch) if batch else None
-        if window:
-            query["registration_date"] = {"$gte": window[0], "$lte": window[1]}
+        # The filter offers "Batch-20"; what is stored is 20. An unparseable
+        # batch narrows nothing rather than erroring: a junk query param should
+        # return the roll, not a 500.
+        number = parse_batch(batch)
+        if number is not None:
+            query["batch_number"] = number
         return query
 
     async def list_students(
@@ -368,7 +367,7 @@ class AttendanceBoardService:
         Read from the entries rather than from the form config, for the same
         reason the induction board's own options are: a filter offering a value
         that matches nothing - or missing one that matches rows - is worse than
-        no filter at all. Batches are derived per entry, newest first.
+        no filter at all. Batches newest first.
         """
         query: dict = {"is_deleted": False}
         if section:
@@ -376,12 +375,11 @@ class AttendanceBoardService:
         entries = await InductionEntry.find(query).to_list()
 
         sections = sorted({entry.section for entry in entries if entry.section})
-        batches = sorted(
-            {batch_for(entry.registration_date) for entry in entries},
-            # "Batch-9" before "Batch-10" needs a numeric sort, not a string one.
-            key=lambda value: int(value.split("-")[1]),
-            reverse=True,
-        )
+        # Sorted as numbers, so "Batch-9" comes after "Batch-10".
+        batches = [
+            batch_label(number)
+            for number in sorted({e.batch_number for e in entries if e.batch_number is not None}, reverse=True)
+        ]
         return {"sections": sections, "batches": batches}
 
     async def set_mark(

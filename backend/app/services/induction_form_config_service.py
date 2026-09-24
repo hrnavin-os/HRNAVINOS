@@ -13,7 +13,7 @@ from app.utils.foundation_groups import parse_foundation_group
 # dropped, and a missing one would remove a question the API still needs.
 _ALLOWED_KEYS = {
     "name", "email", "phone", "registration_date", "paid_date",
-    "sales_person", "lead_source", "payment_mode", "category", "section", "group",
+    "sales_person", "lead_source", "payment_mode", "category", "section", "group", "batch",
 }
 
 # Non-nullable on InductionEntry, so the form can't stop asking for them.
@@ -49,6 +49,10 @@ class InductionFormConfigService:
             # group would offer the student a choice the API then refuses.
             # Caught here, where whoever typed it is looking, rather than on
             # somebody's submission days later.
+            # A number field: a dropdown of suggestions would render it as a
+            # free-text combobox and move it to the second page.
+            if field.key == "batch" and any(option.strip() for option in field.options):
+                raise BadRequestError("Batch Number is typed as a number and can't have dropdown options.")
             if field.key == "group":
                 for option in field.options:
                     if option.strip():
