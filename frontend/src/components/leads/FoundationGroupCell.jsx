@@ -7,9 +7,7 @@ import {
   foundationGroupLabel,
   foundationGroupTone,
   foundationGroupValue,
-  lastGroupMove,
 } from '@/constants/foundationGroups'
-import { formatDateTime } from '@/utils/formatters'
 
 // The trigger wears the colour of the group it holds, the same hue the
 // read-only badge uses, so a column of cells and a column of badges on the
@@ -36,18 +34,15 @@ const TRIGGER_CLASS = {
  * list itself is open: it comes from the Induction Call Form's Group field, so
  * adding a fourth class in Admin > Form Collection puts it here too.
  *
- * Changing a set group to another asks one more thing: whether the student
- * was moved there (the board then says "moved from Group 1") or belongs there
- * directly (it says nothing).
+ * A change is always saved as direct - the board no longer asks whether the
+ * student was "moved from" another group, nor shows a note saying so.
  *
  * `onSave` takes the number and whether it was direct, so the two boards can send it under whichever
  * name their own API uses.
  */
 export function FoundationGroupCell({ row, options, onSave, isSaving = false }) {
-  const moved = lastGroupMove(row.foundation_group_history)
-
   return (
-    <div className="inline-flex flex-col items-stretch gap-0.5">
+    <div className="inline-flex flex-col items-stretch">
       <InlineSelectCell
         value={foundationGroupLabel(row.foundation_group)}
         groups={[{ key: 'groups', options }]}
@@ -57,35 +52,8 @@ export function FoundationGroupCell({ row, options, onSave, isSaving = false }) 
         clearLabel="No group"
         searchLabel="Search groups"
         isSaving={isSaving}
-        confirmChoice={(label) => {
-          // Only a change from one group to another is ambiguous. Setting a
-          // group for the first time, or clearing one, is just that.
-          const from = row.foundation_group
-          const to = foundationGroupValue(label)
-          if (!from || !to || from === to) return null
-          const fromLabel = foundationGroupLabel(from)
-          return {
-            title: `${fromLabel} → ${label}`,
-            choices: [
-              { key: 'direct', label: `Direct ${label}`, hint: 'Belongs in this group outright - no "moved from" note' },
-              { key: 'moved', label: `Moved from ${fromLabel}`, hint: `Shows "moved from ${fromLabel}" under the group` },
-            ],
-          }
-        }}
-        onSave={(label, how) => onSave(foundationGroupValue(label), how === 'direct')}
+        onSave={(label) => onSave(foundationGroupValue(label), true)}
       />
-      {/* Under the control rather than inside it: the dropdown says where the
-          student is now, and this says how they got there. A move is the whole
-          reason the column had to become editable, so the board has to admit
-          to one rather than quietly showing the new value. */}
-      {moved && (
-        <span
-          className="text-[11px] leading-tight text-amber-600"
-          title={`Moved by ${moved.by_name ?? 'someone'} on ${formatDateTime(moved.at)}`}
-        >
-          moved from {foundationGroupLabel(moved.from_group)}
-        </span>
-      )}
     </div>
   )
 }
