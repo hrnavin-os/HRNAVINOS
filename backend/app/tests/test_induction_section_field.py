@@ -181,3 +181,33 @@ async def test_every_card_counts_the_same_population_as_its_own_tab(client, seed
         assert listed == counted, f"{tab}: card said {counted}, table has {listed}"
     assert cards["quit"] == 1
     assert cards["pending_induction"] == 3
+
+
+async def test_the_form_asks_for_the_batch_number(client):
+    fields = (await client.get(CONFIG_URL)).json()["fields"]
+    batch = next(field for field in fields if field["key"] == "batch")
+    assert batch["required"] is True
+    assert batch["options"] == []
+
+
+async def test_a_typed_batch_number_reads_back_as_batch_n(client, auth_headers):
+    """The form takes the number alone; every board shows "Batch-20"."""
+    response = await client.post(SUBMIT_URL, json=payload(batch="20", section="A Section"))
+    assert response.status_code in (200, 201), response.text
+
+    entry = await entry_for(client, auth_headers, "Arun")
+    assert entry["batch"] == "Batch-20"
+    assert entry["batch_number"] == 20
+
+
+async def test_the_batch_no_longer_follows_the_registration_month(client, auth_headers):
+    """An entry with no batch typed has none - it isn't read off the date."""
+    response = await client.post(SUBMIT_URL, json=payload(section="A Section"))
+    assert response.status_code in (200, 201), response.text
+
+    assert (await entry_for(client, auth_headers, "Arun"))["batch"] is None
+
+
+async def test_the_batch_number_must_be_a_number(client):
+    response = await client.post(SUBMIT_URL, json=payload(batch="twenty", section="A Section"))
+    assert response.status_code == 422

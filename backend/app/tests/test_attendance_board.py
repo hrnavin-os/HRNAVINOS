@@ -12,7 +12,9 @@ DOCUMENT_URL = "/api/v1/induction-attendance/terms-document"
 FOUNDATION_URL = "/api/v1/public/foundation-form/submit"
 
 
-async def add_student(client, auth_headers, *, name: str = "Arun", phone: str = "9876543210") -> str:
+async def add_student(
+    client, auth_headers, *, name: str = "Arun", phone: str = "9876543210", batch: int = 28
+) -> str:
     response = await client.post(
         INDUCTION_URL,
         headers=auth_headers,
@@ -22,6 +24,7 @@ async def add_student(client, auth_headers, *, name: str = "Arun", phone: str = 
             "registration_date": "2026-08-04",
             "sales_person": "Priya",
             "lead_source": "Instagram",
+            "batch": batch,
         },
     )
     assert response.status_code in (200, 201), response.text
@@ -252,22 +255,11 @@ async def test_section_filter_narrows_the_roll_and_its_counts(client, auth_heade
     assert stats["markers"]["terms"] == {"total": 1, "yes": 1, "no": 0}
 
 
-async def test_batch_filter_narrows_by_the_month_it_stands_for(client, auth_headers):
-    """Batch isn't stored - it's derived from registration_date - so filtering
-    by it is a range over the month it represents."""
-    await add_student(client, auth_headers, name="Arun", phone="9876543210")
-    september = await client.post(
-        INDUCTION_URL,
-        headers=auth_headers,
-        json={
-            "name": "Divya",
-            "phone": "9876500000",
-            "registration_date": "2026-09-10",
-            "sales_person": "Priya",
-            "lead_source": "Instagram",
-        },
-    )
-    assert september.status_code in (200, 201), september.text
+async def test_batch_filter_matches_the_typed_batch_number(client, auth_headers):
+    """Batch is the number typed on the form, not the registration month: two
+    students registered the same day can sit in different batches."""
+    await add_student(client, auth_headers, name="Arun", phone="9876543210", batch=28)
+    await add_student(client, auth_headers, name="Divya", phone="9876500000", batch=29)
 
     august = await client.get(STUDENTS_URL, headers=auth_headers, params={"batch": "Batch-28"})
     assert [row["name"] for row in august.json()["items"]] == ["Arun"]
@@ -318,6 +310,7 @@ async def add_student_on(
     phone: str,
     registration_date: str,
     group: str | None = None,
+    batch: int = 28,
 ) -> str:
     response = await client.post(
         INDUCTION_URL,
@@ -328,6 +321,7 @@ async def add_student_on(
             "registration_date": registration_date,
             "sales_person": "Priya",
             "lead_source": "Instagram",
+            "batch": batch,
             **({"group": group} if group else {}),
         },
     )
@@ -376,7 +370,8 @@ async def test_group_filter_cuts_across_batches(client, auth_headers):
         client, auth_headers, name="Bala", phone="9876511111", registration_date="2026-08-20", group="Group 2"
     )
     await add_student_on(
-        client, auth_headers, name="Divya", phone="9876500000", registration_date="2026-09-22", group="Group 2"
+        client, auth_headers, name="Divya", phone="9876500000", registration_date="2026-09-22", group="Group 2",
+        batch=29,
     )
 
     second = await client.get(STUDENTS_URL, headers=auth_headers, params={"group": 2})

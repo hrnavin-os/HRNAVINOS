@@ -62,16 +62,16 @@ async def test_approved_excludes_anyone_already_in_a_group(client):
 
 
 async def test_batch_comes_from_the_linked_induction_entry(client):
-    """The coordinator was re-typing a number the system already derives from
-    the induction registration month, and any typo silently disagreed with the
-    Induction board."""
-    entry = InductionEntry(name="Harish", phone="9876543210", registration_date=date(2026, 8, 4))
+    """The coordinator was re-typing a number already entered on the Induction
+    form, and any typo silently disagreed with the Induction board."""
+    entry = InductionEntry(
+        name="Harish", phone="9876543210", registration_date=date(2026, 8, 4), batch_number=28
+    )
     await entry.insert()
     lead = await make_lead(status=LeadStatus.BATCH_CONFIRMATION, induction_entry_id=entry.id)
 
     batches = await BatchConfirmationService().batches_for([lead])
 
-    # August 2026 is the anchor month - see InductionEntryService.batch_for.
     assert batches[lead.id] == "Batch-28"
 
 

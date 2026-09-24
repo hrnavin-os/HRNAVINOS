@@ -190,7 +190,7 @@ async def test_each_section_is_written_to_its_own_tab(client):
 
 async def test_the_boards_are_written_under_their_own_headers(client):
     lead = await _lead()
-    entry = await _entry(category="Fresher")
+    entry = await _entry(category="Fresher", batch=29)
     await _configure()
     sheets = FakeSheets()
 

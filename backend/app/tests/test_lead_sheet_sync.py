@@ -70,7 +70,7 @@ async def _entry(**overrides) -> InductionEntry:
 
 async def test_erp_records_are_written_to_their_tabs(client):
     lead = await _lead()
-    entry = await _entry(category="Fresher")
+    entry = await _entry(category="Fresher", batch=29)
     sheets = FakeSheets()
 
     await sync(sheets)

@@ -722,7 +722,9 @@ async def seed_three_months(client) -> None:
     ):
         await client.post(
             INDUCTION_URL,
-            json=induction_payload(name=name, phone=f"90000001{index:02d}", registration_date=day),
+            json=induction_payload(
+                name=name, phone=f"90000001{index:02d}", registration_date=day, batch=10 + index
+            ),
         )
 
 
@@ -751,9 +753,8 @@ async def test_either_end_of_the_date_filter_may_be_left_open(client, auth_heade
 
 
 async def test_batch_and_the_date_filter_intersect(client, auth_headers):
-    """Both narrow registration_date. Whichever the route reads second must not
-    replace the other, or picking a batch would silently widen the dates back
-    out to the whole month."""
+    """Picking a batch and a date window must mean the rows in both, not
+    whichever filter the route happened to read last."""
     await seed_three_months(client)
     rows = (await client.get(f"{LIST_URL}?page_size=100", headers=auth_headers)).json()["items"]
     april_batch = next(row["batch"] for row in rows if row["name"] == "April")
@@ -764,7 +765,7 @@ async def test_batch_and_the_date_filter_intersect(client, auth_headers):
 
 async def test_the_board_can_be_ordered_oldest_first(client, auth_headers):
     """The Newest/Oldest toggle sorts on registration date, which is what the
-    board shows and what its batches are derived from."""
+    board shows."""
     await seed_three_months(client)
 
     assert await names_at(client, auth_headers, "sort_order=asc") == ["March", "April", "May"]
