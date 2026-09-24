@@ -1,7 +1,8 @@
 """Tests for the Lead Management (CRM / Pre-Sales) module."""
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
+from app.models.induction_entry import InductionEntry
 from app.models.lead import Lead
 
 
@@ -456,48 +457,50 @@ async def test_foundation_analytics_leaves_out_leads_still_in_form_check(client,
     assert (await analytics(client, auth_headers, "course"))["total"] == 1
 
 
-async def test_foundation_analytics_groups_by_batch_and_names_the_month(client, auth_headers):
-    """The batch IS the month the form landed in, so the rows are named for the
-    batch and carry the month that says which one it was."""
-    august = datetime(2026, 8, 4, 10, 0, tzinfo=timezone.utc)
-    await make_lead(client, auth_headers, name="Arun", phone="9000000101", when=august)
-    await make_lead(client, auth_headers, name="Bala", phone="9000000102", when=august)
+async def induction_entry(batch: int | None) -> InductionEntry:
+    entry = InductionEntry(
+        name="Induction", phone="9000009999", registration_date=date(2026, 8, 4), batch_number=batch
+    )
+    await entry.insert()
+    return entry
+
+
+async def test_foundation_analytics_groups_by_the_induction_batch(client, auth_headers):
+    """A lead is counted in the batch entered on its Induction form, whatever
+    month it arrived in - and that number beats anything typed on the lead."""
+    twenty = await induction_entry(20)
+    await make_lead(client, auth_headers, name="Arun", phone="9000000101", induction_entry_id=twenty.id)
     await make_lead(
         client,
         auth_headers,
-        name="Chitra",
-        phone="9000000103",
+        name="Bala",
+        phone="9000000102",
+        induction_entry_id=twenty.id,
+        batch_number="21",
         when=datetime(2026, 10, 2, 10, 0, tzinfo=timezone.utc),
     )
+    # Never came through Induction, so the typed batch is used.
+    await make_lead(client, auth_headers, name="Chitra", phone="9000000103", batch_number="20")
+    await make_lead(client, auth_headers, name="Devi", phone="9000000104")
 
     data = await analytics(client, auth_headers, "batch")
 
     by_value = {item["value"]: item for item in data["items"]}
-    assert by_value["Batch-28"]["count"] == 2
-    assert by_value["Batch-28"]["period"] == "Aug 2026"
-    assert by_value["Batch-28"]["start"] == "2026-08-01"
-    assert by_value["Batch-30"]["count"] == 1
-    # Biggest first, like every other dimension - the chronological views sort
-    # on `start` themselves.
-    assert data["items"][0]["value"] == "Batch-28"
+    assert set(by_value) == {"Batch-20", "Not set"}
+    assert by_value["Batch-20"]["count"] == 3
+    assert by_value["Batch-20"]["order"] == 20
+    assert by_value["Not set"]["order"] is None
+    assert data["items"][0]["value"] == "Batch-20"
 
 
-async def test_foundation_analytics_fills_in_a_month_nobody_came_through(client, auth_headers):
+async def test_foundation_analytics_fills_in_a_batch_nobody_is_in(client, auth_headers):
     """A gap in the intake is a finding. Left out, a chart draws a straight
-    line across the missing month and says the opposite."""
+    line across the missing batch and says the opposite."""
     await make_lead(
-        client,
-        auth_headers,
-        name="Arun",
-        phone="9000000101",
-        when=datetime(2026, 8, 4, 10, 0, tzinfo=timezone.utc),
+        client, auth_headers, name="Arun", phone="9000000101", induction_entry_id=(await induction_entry(28)).id
     )
     await make_lead(
-        client,
-        auth_headers,
-        name="Chitra",
-        phone="9000000103",
-        when=datetime(2026, 10, 2, 10, 0, tzinfo=timezone.utc),
+        client, auth_headers, name="Chitra", phone="9000000103", induction_entry_id=(await induction_entry(30)).id
     )
 
     data = await analytics(client, auth_headers, "batch")
@@ -505,8 +508,24 @@ async def test_foundation_analytics_fills_in_a_month_nobody_came_through(client,
     by_value = {item["value"]: item for item in data["items"]}
     assert set(by_value) == {"Batch-28", "Batch-29", "Batch-30"}
     assert by_value["Batch-29"]["count"] == 0
-    # The empty month is still a month, so it still says which one.
-    assert by_value["Batch-29"]["period"] == "Sep 2026"
+
+
+async def test_a_lead_shows_its_induction_batch(client, auth_headers):
+    """The Induction form's batch is the lead's batch on every board."""
+    lead = await make_lead(
+        client,
+        auth_headers,
+        name="Arun",
+        phone="9000000101",
+        induction_entry_id=(await induction_entry(20)).id,
+        batch_number="99",
+    )
+    typed = await make_lead(client, auth_headers, name="Bala", phone="9000000102", batch_number="7")
+
+    shown = (await client.get(f"/api/v1/leads/{lead.id}", headers=auth_headers)).json()
+    assert shown["batch"] == "Batch-20"
+    assert shown["induction_batch"] == "Batch-20"
+    assert (await client.get(f"/api/v1/leads/{typed.id}", headers=auth_headers)).json()["batch"] == "Batch-7"
 
 
 async def test_foundation_analytics_window_narrows_the_population(client, auth_headers):

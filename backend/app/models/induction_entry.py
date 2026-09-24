@@ -113,6 +113,22 @@ def parse_batch(value: str | int | None) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def lead_batch_label(induction_number: int | None, typed: str | None) -> str | None:
+    """The one batch a lead is shown in, everywhere.
+
+    The number entered on the Induction form wins for any lead that came
+    through Induction - it is the single source, so the boards can't disagree.
+    Only a lead with no induction batch falls back to what was typed on the
+    lead itself, shown as "Batch-N" when it is a number.
+    """
+    if induction_number is not None:
+        return batch_label(induction_number)
+    if not typed or not typed.strip():
+        return None
+    number = parse_batch(typed)
+    return batch_label(number) if number is not None else typed.strip()
+
+
 def is_quit_remark(remark: str | None) -> bool:
     """Whether a call remark says this candidate has quit.
 

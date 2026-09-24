@@ -17,7 +17,7 @@ from app.models.enums import (
     PaymentCallRemark,
     PaymentMethod,
 )
-from app.models.induction_entry import InductionEntry, batch_label
+from app.models.induction_entry import InductionEntry, batch_label, lead_batch_label, parse_batch
 from app.models.lead import FollowUpEntry, Lead, RemarkEntry
 from app.models.notification import Notification
 from app.permissions.permission_codes import Permissions
@@ -59,14 +59,6 @@ from app.utils.phone import normalize_phone
 # More than this on one installment is a mistake, not evidence.
 MAX_INSTALLMENT_PROOFS = 10
 
-
-
-# The Statistics board's monthly intake chart labels each month with a batch
-# number counted from August 2026 = Batch-28. Kept only for that chart; the
-# Induction form's batch is entered by hand (InductionEntry.batch_number).
-def _month_batch(start: date) -> str:
-    months = (start.year - 2026) * 12 + (start.month - 8)
-    return f"Batch-{28 + months}"
 
 class LeadService:
     def __init__(self) -> None:
@@ -121,6 +113,7 @@ class LeadService:
             qr_code=lead.qr_code,
             batch_number=lead.batch_number,
             induction_batch=batch_label(entry.batch_number) if entry else None,
+            batch=lead_batch_label(entry.batch_number if entry else None, lead.batch_number),
             foundation_group=lead.foundation_group,
             foundation_group_history=FoundationGroupMoveSchema.of(lead.foundation_group_history),
             group_assigned_at=lead.group_assigned_at,
@@ -353,8 +346,8 @@ class LeadService:
     # reachable from the caller would be a way to read fields this endpoint
     # never meant to expose. Adding a dimension means adding it here on purpose.
     #
-    # "batch" is absent because it isn't a stored field - it is the month the
-    # lead's form landed in, computed in _batch_analytics below.
+    # "batch" is absent because it is read through the lead's induction entry,
+    # in _batch_analytics below.
     _ANALYTICS_FIELDS = {
         "course": "$course_interest",
         # The board's "Payment Method" column is payment_plan, so the dimension
@@ -457,64 +450,64 @@ class LeadService:
     async def _batch_analytics(
         self, *, section: str | None, date_from: date | None, date_to: date | None
     ) -> dict:
-        """Leads per batch, which is to say per month.
+        """Leads per batch - the batch number entered on the Induction form.
 
-        Groups on the year and month a lead's Foundation Form landed in and
-        names each month with `_month_batch`. The Induction form now takes the
-        batch as a typed number, so this monthly naming is the Statistics
-        chart's own and no longer what the Induction board shows. Read in
-        UTC, like every other rule that works off a stored timestamp (see
-        app/utils/foundation_groups.py).
+        Read through the lead's induction entry, falling back to the batch
+        typed on the lead when it has none (see lead_batch_label), so this
+        chart counts the same batch every board shows.
 
-        Months nobody came through are filled in at zero rather than left out. A
-        gap in the intake is a finding, and a chart that simply skips the month
-        draws a straight line across it and says the opposite.
+        Batch numbers nobody is in between the first and the last are filled
+        in at zero rather than left out: a gap in the intake is a finding, and
+        a chart that skips it draws a straight line across it.
         """
         rows = await Lead.aggregate(
             [
                 {"$match": self._analytics_match(section, date_from, date_to)},
                 {
+                    "$lookup": {
+                        "from": InductionEntry.Settings.name,
+                        "localField": "induction_entry_id",
+                        "foreignField": "_id",
+                        "as": "_induction",
+                    }
+                },
+                {
                     "$group": {
-                        "_id": {"year": {"$year": "$created_at"}, "month": {"$month": "$created_at"}},
+                        "_id": {
+                            "induction": {"$arrayElemAt": ["$_induction.batch_number", 0]},
+                            "typed": "$batch_number",
+                        },
                         **self._ANALYTICS_MEASURES,
                     }
                 },
             ]
         ).to_list()
 
-        by_month = {(row["_id"]["year"], row["_id"]["month"]): row for row in rows if row["_id"]["year"]}
-        items = []
-        for year, month in self._months_between(min(by_month, default=None), max(by_month, default=None)):
-            row = by_month.get((year, month))
-            start = date(year, month, 1)
-            items.append(
-                {
-                    "value": _month_batch(start),
-                    # The batch number is the label everybody uses, but only the
-                    # month says which one that is to somebody who wasn't there.
-                    "period": start.strftime("%b %Y"),
-                    "start": start,
-                    **{key: (row[key] if row else 0) for key in self._ANALYTICS_MEASURES},
-                }
-            )
+        # Several (induction, typed) pairs name the same batch - "20" typed and
+        # 20 from Induction are both Batch-20 - so they are merged here.
+        by_label: dict[str, dict] = {}
+        for row in rows:
+            label = lead_batch_label(row["_id"].get("induction"), row["_id"].get("typed")) or "Not set"
+            merged = by_label.setdefault(label, {key: 0 for key in self._ANALYTICS_MEASURES})
+            for key in self._ANALYTICS_MEASURES:
+                merged[key] += row[key]
 
+        numbers = [n for n in (parse_batch(label) for label in by_label) if n is not None]
+        if numbers:
+            for number in range(min(numbers), max(numbers) + 1):
+                by_label.setdefault(batch_label(number), {key: 0 for key in self._ANALYTICS_MEASURES})
+
+        items = [
+            {"value": label, "order": parse_batch(label), **measures}
+            for label, measures in by_label.items()
+        ]
         # Sorted biggest-first like every other dimension, so the board's
         # "largest" tile and its ranking read the same way whichever tab is
-        # open. The chronological views sort on `start` themselves.
+        # open. The chronological views sort on `order` themselves.
         items.sort(key=lambda item: item["count"], reverse=True)
         return await self._analytics_response(
             "batch", items, section=section, date_from=date_from, date_to=date_to
         )
-
-    @staticmethod
-    def _months_between(first: tuple[int, int] | None, last: tuple[int, int] | None):
-        """Every (year, month) from `first` to `last` inclusive, gaps included."""
-        if first is None or last is None:
-            return
-        year, month = first
-        while (year, month) <= last:
-            yield year, month
-            year, month = (year + 1, 1) if month == 12 else (year, month + 1)
 
     async def _analytics_response(
         self,

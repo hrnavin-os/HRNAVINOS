@@ -189,6 +189,9 @@ class LeadResponse(BaseModel):
     # shows when nobody has typed a `batch_number` in yet, so a student who
     # has a batch on the Induction board doesn't read as batchless here.
     induction_batch: str | None = None
+    # The batch to show: induction_batch when there is one, otherwise the
+    # typed batch_number as "Batch-N". See lead_batch_label.
+    batch: str | None = None
     # Which of the month's two foundation classes this lead came through - 1 for
     # the first sitting, 2 for the second. Derived from `created_at` (the day
     # the Foundation Form was filled in, which is the day of the class) rather
@@ -241,6 +244,9 @@ class LeadAnalyticsItem(BaseModel):
     # ranked breakdown has no period, so both stay None there.
     period: str | None = None
     start: date | None = None
+    # The batch dimension's position on its axis (the batch number), which the
+    # chronological views sort on. None for a batch that isn't a number.
+    order: int | None = None
 
 
 class LeadAnalyticsComparison(BaseModel):

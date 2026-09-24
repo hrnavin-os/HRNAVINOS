@@ -208,13 +208,13 @@ export const BOARDS = [
       },
       {
         key: 'batch',
-        label: 'Batch & Month',
+        label: 'Batch',
         icon: CalendarRange,
         column: 'Batch',
         noun: 'batch',
         title: 'Leads by Batch',
-        subtitle: 'The intake month by month, in the batch number the institute calls it by.',
-        hint: 'A batch is the month the Foundation Form landed in. Months nobody came through are shown at zero rather than left out.',
+        subtitle: 'The intake batch by batch, as entered on the Induction form.',
+        hint: 'A lead is counted in the batch entered on its Induction form, or the batch typed on the lead when it never came through Induction. Batch numbers nobody is in are shown at zero rather than left out.',
         empty: 'No leads recorded yet.',
         leader: 'Largest batch',
         // The one dimension that runs along an axis rather than being a set of

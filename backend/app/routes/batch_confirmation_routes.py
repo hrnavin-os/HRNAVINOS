@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query, status
 
 from app.core.dependencies import RequireAnyPermission, RequirePermissions
 from app.models.enums import AllocationStatus, WhatsAppGroupStatus
+from app.models.induction_entry import lead_batch_label
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.batch_confirmation_schema import (
@@ -177,10 +178,10 @@ def _to_hr_student(lead, batch: str | None = None, handled_by: str | None = None
         section=lead.section,
         status=lead.status,
         batch_number=lead.batch_number,
-        # Derived from Induction where there is one; otherwise whatever was
+        # The Induction form's batch where there is one; otherwise whatever was
         # typed by hand, so leads that never came through Induction still show
         # a batch.
-        batch=batch or lead.batch_number,
+        batch=batch or lead_batch_label(None, lead.batch_number),
         foundation_group=lead.foundation_group,
         group_assigned_at=lead.group_assigned_at,
         joined_at=lead.group_assigned_at,

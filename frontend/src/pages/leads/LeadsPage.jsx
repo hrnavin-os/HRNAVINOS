@@ -234,9 +234,11 @@ function AmountCell({ lead, onError }) {
   )
 }
 
-// The batch the student is in (e.g. "27"), typed straight into the row. The
-// same free-text `batch_number` Batch Confirmation writes, so either place
-// sees the other's edit. Reads as text until clicked, like AmountCell.
+// The batch the student is in. For a lead that came through Induction it is
+// the number entered on the Induction form and can't be changed here - that
+// form is the one source. Otherwise it is typed straight into the row (e.g.
+// "27"), the same `batch_number` Batch Confirmation writes. Reads as text
+// until clicked, like AmountCell.
 function BatchCell({ lead, onError }) {
   const queryClient = useQueryClient()
   const [isEditing, setIsEditing] = useState(false)
@@ -258,6 +260,14 @@ function BatchCell({ lead, onError }) {
     setIsEditing(true)
   }
 
+  if (lead.induction_batch) {
+    return (
+      <span title="Set on the Induction form">
+        <Badge tone="blue">{lead.induction_batch}</Badge>
+      </span>
+    )
+  }
+
   if (!isEditing) {
     return (
       <button
@@ -265,12 +275,8 @@ function BatchCell({ lead, onError }) {
         onClick={open}
         className="w-full rounded-md px-2 py-1 text-sm transition-colors hover:bg-slate-100"
       >
-        {lead.batch_number ? (
-          <span className="font-medium text-slate-900">{lead.batch_number}</span>
-        ) : lead.induction_batch ? (
-          // Nothing typed here yet, but the student came through induction
-          // and has a batch there - show that rather than "Add batch".
-          <Badge tone="blue">{lead.induction_batch}</Badge>
+        {lead.batch ? (
+          <span className="font-medium text-slate-900">{lead.batch}</span>
         ) : (
           <span className="text-slate-400">Add batch</span>
         )}

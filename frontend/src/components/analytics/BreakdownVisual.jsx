@@ -164,11 +164,11 @@ export function BreakdownGrid({ visuals, items, unit, ordered, ...shared }) {
 
 export function BreakdownVisual({ view, items, unit, empty, measure, ordered, selected, onSelect }) {
   // The two views that run along an axis take the values in their own order -
-  // chronological for a batch - rather than ranked by size. A month is a
-  // position, and re-ordering months by how many people came through them is
-  // not a chart of anything.
+  // in batch-number order for a batch - rather than ranked by size. A batch is
+  // a position, and re-ordering batches by how many people came through them
+  // is not a chart of anything. Values with no number go last.
   const sequence = ordered
-    ? [...items].sort((a, b) => String(a.start ?? '').localeCompare(String(b.start ?? '')))
+    ? [...items].sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity))
     : items
 
   const shared = { items, measure, selected, onSelect, emptyMessage: empty }

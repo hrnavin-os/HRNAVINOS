@@ -20,7 +20,7 @@ from pydantic import ValidationError
 from app.database.base import utcnow
 from app.exceptions.base import AppException
 from app.models.enums import InductionStatus, LeadSource, LeadStatus, PaymentCallRemark, PaymentPlanOption
-from app.models.induction_entry import InductionEntry, batch_label, parse_batch
+from app.models.induction_entry import InductionEntry, batch_label, lead_batch_label, parse_batch
 from app.models.lead import Lead
 from app.models.user import User
 from app.repositories.foundation_form_config_repository import FoundationFormConfigRepository
@@ -440,11 +440,23 @@ class FoundationTab(SheetTabSpec):
         # The board's own filter: an imported lead still waiting on Form Check
         # isn't on All Leads yet, so it isn't on the tab either.
         query = self.scope({"is_deleted": False, "reviewed": {"$ne": False}})
-        return await Lead.find(query).sort("+created_at").to_list()
+        leads = await Lead.find(query).sort("+created_at").to_list()
+        # The Induction form's batch, per lead, fetched once for the tab: it is
+        # the batch the sheet shows for any lead that came through Induction.
+        entry_ids = [lead.induction_entry_id for lead in leads if lead.induction_entry_id]
+        entries = await InductionEntry.find({"_id": {"$in": entry_ids}}).to_list() if entry_ids else []
+        number_by_entry = {entry.id: entry.batch_number for entry in entries}
+        self._induction_batch = {
+            lead.id: number_by_entry.get(lead.induction_entry_id) for lead in leads if lead.induction_entry_id
+        }
+        return leads
 
     def values(self, lead: Lead) -> dict[str, str]:
         values = {key: cell_text(getattr(lead, field)) for key, field in _LEAD_TEXT_FIELDS.items()}
         values.update(
+            batch=cell_text(
+                lead_batch_label(getattr(self, "_induction_batch", {}).get(lead.id), lead.batch_number)
+            ),
             section=self.section_label(lead.section),
             date=cell_text(lead.created_at),
             group=foundation_group_label(lead.foundation_group),
@@ -465,6 +477,10 @@ class FoundationTab(SheetTabSpec):
         return values
 
     async def _apply_one(self, lead_id: uuid.UUID, key: str, raw: str, row: dict[str, str]) -> None:
+        if key == "batch" and getattr(self, "_induction_batch", {}).get(lead_id) is not None:
+            # This lead's batch comes from its Induction entry; a number typed
+            # here would never be shown.
+            raise ValueError("set on the Induction form - change it on the Induction tab")
         if key in _LEAD_TEXT_FIELDS:
             value = optional(raw)
             if value is None and key in {"name", "phone"}:
