@@ -31,7 +31,13 @@ const STAGE_ICONS = {
 // allLabel: what the unfiltered card is called - "All Leads" on the Foundation
 // board, "All Entries" on the Induction one, which counts records rather than
 // leads.
-export function LeadSectionStats({ total, sections, bySection, activeSection, onSelect, allLabel = 'All Leads' }) {
+// lostCount/onSelectLost: optional trailing "Lost Students" card (Foundation
+// board only) - every lost lead across all sections, as its own tab. While it's
+// active no section card is.
+export function LeadSectionStats({
+  total, sections, bySection, activeSection, onSelect, allLabel = 'All Leads',
+  lostCount, isLostActive = false, onSelectLost,
+}) {
   return (
     <div className="mb-4 flex flex-wrap gap-3">
       <StatCard
@@ -39,7 +45,7 @@ export function LeadSectionStats({ total, sections, bySection, activeSection, on
         value={total}
         toneName="brand"
         icon={Users}
-        isActive={activeSection === ''}
+        isActive={!isLostActive && activeSection === ''}
         onClick={() => onSelect('')}
       />
       {sections.map((section, index) => (
@@ -49,10 +55,20 @@ export function LeadSectionStats({ total, sections, bySection, activeSection, on
           value={bySection[section.code] ?? 0}
           toneName={SECTION_TONE_ORDER[index % SECTION_TONE_ORDER.length]}
           icon={Layers}
-          isActive={activeSection === section.code}
+          isActive={!isLostActive && activeSection === section.code}
           onClick={() => onSelect(section.code)}
         />
       ))}
+      {onSelectLost && (
+        <StatCard
+          label="Lost Students"
+          value={lostCount ?? 0}
+          toneName="red"
+          icon={XCircle}
+          isActive={isLostActive}
+          onClick={onSelectLost}
+        />
+      )}
     </div>
   )
 }

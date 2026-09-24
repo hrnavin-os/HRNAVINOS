@@ -735,6 +735,10 @@ function FoundationLeadsBoard() {
   // here instead of the cell silently reverting as if nothing happened.
   const [editError, setEditError] = useState(null)
   const [sectionFilter, setSectionFilter] = useState('')
+  // The "Lost Students" tab: every lost lead on the board, across sections.
+  // Its own state rather than the Stage filter set to Lost, so leaving it (a
+  // section card, All Leads) doesn't leave a Stage filter behind.
+  const [showLost, setShowLost] = useState(false)
   const [courseFilter, setCourseFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   // The two payment columns, filterable because "who is on EMI" and "who said
@@ -819,7 +823,7 @@ function FoundationLeadsBoard() {
   } = usePaginatedQuery('leads', leadService, {
     section: effectiveSectionFilter || undefined,
     course_interest: courseFilter || undefined,
-    status: statusFilter || undefined,
+    status: showLost ? 'lost' : statusFilter || undefined,
     payment_plan: planFilter || undefined,
     payment_call_remarks: callRemarkFilter || undefined,
     foundation_group: groupFilter || undefined,
@@ -830,6 +834,16 @@ function FoundationLeadsBoard() {
 
   function selectSection(code) {
     setSectionFilter(code)
+    setShowLost(false)
+    setPage(1)
+  }
+
+  // Across every section, so the section selection is dropped - the Section
+  // column comes back to say where each one was.
+  function selectLost() {
+    setSectionFilter('')
+    setStatusFilter('')
+    setShowLost(true)
     setPage(1)
   }
 
@@ -975,6 +989,23 @@ function FoundationLeadsBoard() {
         )
       },
     },
+    // Why and when they were lost - what the Lost Students tab is read for.
+    ...(showLost
+      ? [
+          {
+            key: 'lost_reason',
+            header: 'Lost Reason',
+            align: 'center',
+            render: (row) => <TruncatedText text={row.lost_reason} />,
+          },
+          {
+            key: 'lost_at',
+            header: 'Lost On',
+            align: 'center',
+            render: (row) => (row.lost_at ? formatDate(row.lost_at) : '—'),
+          },
+        ]
+      : []),
     { key: 'query', header: 'Query', align: 'center', render: (row) => <TruncatedText text={row.notes} /> },
     {
       key: 'remarks',
@@ -1024,6 +1055,9 @@ function FoundationLeadsBoard() {
           bySection={bySection}
           activeSection={sectionFilter}
           onSelect={selectSection}
+          lostCount={byStatus.lost}
+          isLostActive={showLost}
+          onSelectLost={selectLost}
         />
       )}
 
@@ -1078,15 +1112,18 @@ function FoundationLeadsBoard() {
           {/* No Section filter here: the stat cards above already are the
               section switcher, and two controls driving one piece of state
               just invited them to disagree on screen. */}
-          <FilterDropdown
-            label="Stage"
-            value={statusFilter}
-            options={LEAD_STAGES.map((stage) => ({ value: stage.value, label: stage.label }))}
-            onChange={(value) => {
-              setStatusFilter(value)
-              setPage(1)
-            }}
-          />
+          {/* Every row on the Lost Students tab is the same stage. */}
+          {!showLost && (
+            <FilterDropdown
+              label="Stage"
+              value={statusFilter}
+              options={LEAD_STAGES.map((stage) => ({ value: stage.value, label: stage.label }))}
+              onChange={(value) => {
+                setStatusFilter(value)
+                setPage(1)
+              }}
+            />
+          )}
 
           {/* Both name their values exactly as the columns they filter do -
               PAYMENT_PLAN_LABELS and CALL_REMARK_OPTIONS are the same two
