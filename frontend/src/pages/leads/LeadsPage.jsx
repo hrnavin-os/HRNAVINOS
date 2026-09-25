@@ -464,7 +464,6 @@ function PaymentPlanCell({ lead, pricing, onError }) {
     // The board's own short labels, not the price list's sentence-long ones,
     // so the column reads the same as every other surface naming a plan.
     label: PAYMENT_PLAN_LABELS[plan.value] ?? plan.label,
-    summary: plan.summary,
     tone: PAYMENT_PLAN_TONES[plan.value] ?? 'slate',
   }))
 
@@ -562,10 +561,10 @@ function PaymentPlanCell({ lead, pricing, onError }) {
                     lead.payment_plan === option.value ? 'bg-slate-50' : ''
                   }`}
                 >
+                  {/* The plan name only. The fee is the program's and the cash
+                      is recorded in the lead popup's Payment Collection, so the
+                      price list's amounts aren't repeated here. */}
                   <Badge tone={option.tone}>{option.label}</Badge>
-                  {/* What the plan costs, so the choice isn't made on its name
-                      alone - the same summary the public form shows. */}
-                  <span className="mt-0.5 block px-1 text-xs text-slate-500">{option.summary}</span>
                 </button>
               ))}
             </div>
