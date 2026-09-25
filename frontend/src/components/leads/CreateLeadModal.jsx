@@ -3,12 +3,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BookOpen } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
+import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { leadService } from '@/services/leadService'
 import { foundationFormService } from '@/services/foundationFormService'
+import { inductionFormConfigService } from '@/services/inductionFormConfigService'
 import { getApiErrorMessage } from '@/services/apiClient'
+import { FOUNDATION_GROUP_LABELS, foundationGroupValue } from '@/constants/foundationGroups'
 import {
   DynamicField,
   PaymentPlanField,
@@ -51,6 +54,17 @@ export function CreateLeadModal({ sections, defaultSection, lockSection, onClose
   // this modal is normally a cache read rather than a request.
   const pricingQuery = useQuery({ queryKey: ['foundation-form-pricing'], queryFn: foundationFormService.getPricing })
 
+  // The groups the board's Group cell offers: the Induction Call Form's Group
+  // list, where the classes are maintained, under the board's own query key.
+  // The three defaults stand in while it loads or if none are configured.
+  const inductionConfigQuery = useQuery({
+    queryKey: ['induction-form-config'],
+    queryFn: inductionFormConfigService.get,
+  })
+  const configuredGroups =
+    (inductionConfigQuery.data?.fields ?? []).find((field) => field.key === 'group')?.options ?? []
+  const groupOptions = configuredGroups.length ? configuredGroups : FOUNDATION_GROUP_LABELS
+
   const {
     register,
     handleSubmit,
@@ -89,6 +103,10 @@ export function CreateLeadModal({ sections, defaultSection, lockSection, onClose
       // A section-scoped user's own section is forced by the backend anyway;
       // sending it keeps the two agreeing on what was just created.
       section: lockSection ? defaultSection : values.section || null,
+      // "Group 2" -> 2, the number the board's Group cell stores.
+      foundation_group: foundationGroupValue(values.foundation_group),
+      // Typed as the Batch cell takes it ("29"); the board shows it as Batch-29.
+      batch_number: values.batch_number?.trim() || null,
       notes: values.notes?.trim() || null,
       // Whatever an admin has added to the form beyond the built-in questions.
       custom_fields: buildCustomFields(values, EXTRA_KNOWN_KEYS),
@@ -189,6 +207,27 @@ export function CreateLeadModal({ sections, defaultSection, lockSection, onClose
               ))}
             </Select>
           )}
+
+          {/* Also not form questions - the office decides both - but a lead
+              keyed in without them lands on the board with the Group and Batch
+              columns empty. Optional, like everything here but name and
+              number: a walk-in may not have been placed in a class yet. */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Select label="Group" {...register('foundation_group')}>
+              <option value="">Select…</option>
+              {groupOptions.map((label) => (
+                <option key={label} value={label}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+            <Input
+              label="Batch"
+              placeholder="e.g. 29"
+              maxLength={50}
+              {...register('batch_number')}
+            />
+          </div>
 
           {/* The form's page 2. Nothing to show until a program is picked -
               the plans and their prices are the chosen program's, and there is

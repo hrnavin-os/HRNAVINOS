@@ -34,6 +34,11 @@ class LeadCreate(BaseModel):
     assigned_to: uuid.UUID | None = None
     section: str | None = None
     remarks: str | None = Field(default=None, max_length=2000)
+    # The class group and batch, asked on the Create Lead form so a hand-keyed
+    # lead doesn't land on the board with both columns empty. The same two
+    # fields, and the same limits, as the board's Group and Batch cells write.
+    foundation_group: int | None = Field(default=None, ge=1, le=MAX_FOUNDATION_GROUP)
+    batch_number: str | None = Field(default=None, max_length=50)
     # The rest of the Foundation Form's questions, so a lead hand-keyed during
     # a call carries everything one submitted through the form does. Validated
     # against the live programs/pricing config in the service.
@@ -80,6 +85,9 @@ class LeadUpdate(BaseModel):
     foundation_group_direct: bool | None = None
     # Required by LeadService.update whenever status moves to Lost.
     lost_reason: str | None = Field(default=None, max_length=500)
+    # Required whenever status moves back to an earlier stage. Kept on the
+    # timeline entry for the move rather than on the lead.
+    stage_change_reason: str | None = Field(default=None, max_length=500)
 
 
 class LeadRejoin(BaseModel):

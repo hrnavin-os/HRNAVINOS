@@ -790,6 +790,18 @@ class LeadService:
                 raise BadRequestError("Give a reason when marking a lead as Quit.")
             update_data["lost_reason"] = reason
             update_data["lost_at"] = utcnow()
+        # Not a lead field - it goes to the timeline, not the document.
+        back_reason = (update_data.pop("stage_change_reason", None) or "").strip()
+        previous_status = lead.status
+        stage_changes: dict = {}
+        if data.status is not None and data.status != previous_status:
+            stage_changes["previous_status"] = previous_status
+            # Moving a lead back undoes progress somebody recorded, so it has to
+            # say why - and the why is what the timeline shows beside the move.
+            if self._is_stage_reversal(previous_status, data.status):
+                if not back_reason:
+                    raise BadRequestError("Give a reason for moving this lead back to an earlier stage.")
+                stage_changes["reason"] = back_reason
         # The fees follow the course: see _follow_course_to_program.
         repriced = (
             await self._follow_course_to_program(lead, update_data["course_interest"])
@@ -817,14 +829,38 @@ class LeadService:
             await mirror_group_move(lead, actor_id=actor_id, actor_name=await self._actor_name(actor_id))
         await self.audit.record(
             user_id=actor_id,
-            action="UPDATE",
+            # Its own action so the timeline can set a move back apart from
+            # ordinary edits - it's the entry somebody reading the history is
+            # looking for.
+            action="STAGE_BACK" if "reason" in stage_changes else "UPDATE",
             entity_type="Lead",
             entity_id=str(lead.id),
             # The move beside the plain field writes: what the log wants is
             # where the student went, not the whole history behind it.
-            changes={**update_data, **repriced, **({"foundation_group": moved} if moved else {})},
+            changes={
+                **update_data,
+                **repriced,
+                **stage_changes,
+                **({"foundation_group": moved} if moved else {}),
+            },
         )
         return lead
+
+    # The pipeline in order. Quit is the exit rather than a step, so moving to
+    # it isn't "back" (it asks for its own reason), and leaving it is Rejoin.
+    _STAGE_ORDER = [
+        LeadStatus.NEW_LEAD,
+        LeadStatus.RNR,
+        LeadStatus.PRE_SCREENING,
+        LeadStatus.FINANCIAL_APPROVAL,
+        LeadStatus.BATCH_CONFIRMATION,
+    ]
+
+    @classmethod
+    def _is_stage_reversal(cls, current: LeadStatus, new: LeadStatus) -> bool:
+        if current not in cls._STAGE_ORDER or new not in cls._STAGE_ORDER:
+            return False
+        return cls._STAGE_ORDER.index(new) < cls._STAGE_ORDER.index(current)
 
     async def _follow_course_to_program(self, lead: Lead, course: str | None) -> dict:
         """Move the lead onto the program a new course names, and reprice its

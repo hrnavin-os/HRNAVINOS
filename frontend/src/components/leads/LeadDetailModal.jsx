@@ -19,6 +19,7 @@ import {
   Plus,
   RotateCcw,
   Trash2,
+  Undo2,
   UserPlus,
   Wallet,
   X,
@@ -84,7 +85,14 @@ const STAGE_ACTIVE_TONES = {
 const STAGE_IDLE = 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
 const STAGE_IDLE_LOST = 'border-slate-200 bg-white text-slate-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700'
 
-const ACTION_ICONS = { CREATE: Plus, UPDATE: Pencil, ASSIGN: UserPlus, DELETE: Trash2, REJOIN: RotateCcw }
+const ACTION_ICONS = {
+  CREATE: Plus,
+  UPDATE: Pencil,
+  ASSIGN: UserPlus,
+  DELETE: Trash2,
+  REJOIN: RotateCcw,
+  STAGE_BACK: Undo2,
+}
 const ACTION_TONES = {
   CREATE: 'bg-emerald-100 text-emerald-600',
   UPDATE: 'bg-blue-100 text-blue-600',
@@ -93,6 +101,47 @@ const ACTION_TONES = {
   // Its own entry rather than an UPDATE, because "this student came back" is
   // the one thing you scan a lost-and-returned lead's history for.
   REJOIN: 'bg-teal-100 text-teal-600',
+  // A move back undoes somebody's progress, so it stands out from the edits.
+  STAGE_BACK: 'bg-amber-100 text-amber-600',
+}
+
+// The pipeline in order, for telling a move back from a move forward. Quit is
+// the exit rather than a step (it asks its own question). Mirrors
+// LeadService._STAGE_ORDER on the backend, which refuses a move back with no
+// reason.
+const STAGE_ORDER = ['new_lead', 'rnr', 'pre_screening', 'financial_approval', 'batch_confirmation']
+
+function isStageReversal(current, target) {
+  const from = STAGE_ORDER.indexOf(current)
+  const to = STAGE_ORDER.indexOf(target)
+  return from !== -1 && to !== -1 && to < from
+}
+
+function stageLabel(value) {
+  return LEAD_STAGE_BY_VALUE[value]?.label ?? titleCase(value ?? '')
+}
+
+// What a timeline entry says happened. Stage moves are spelled out with where
+// the lead came from and went to, and the reason given - the rest stay a plain
+// "Update by ...", as they always were.
+function describeTimelineEntry(entry) {
+  const changes = entry.changes ?? {}
+  const by = entry.user_name ? ` by ${entry.user_name}` : ''
+  if (entry.action === 'STAGE_BACK') {
+    return {
+      title: `Moved back to ${stageLabel(changes.status)}${by}`,
+      detail: changes.previous_status ? `from ${stageLabel(changes.previous_status)}` : null,
+      reason: changes.reason ?? null,
+    }
+  }
+  if (entry.action === 'UPDATE' && changes.status) {
+    return {
+      title: `Moved to ${stageLabel(changes.status)}${by}`,
+      detail: changes.previous_status ? `from ${stageLabel(changes.previous_status)}` : null,
+      reason: changes.status === 'lost' ? (changes.lost_reason ?? null) : null,
+    }
+  }
+  return { title: `${titleCase(entry.action)}${by}`, detail: null, reason: null }
 }
 
 // Induction is conditional - only leads matched to an induction entry have one,
@@ -1071,16 +1120,23 @@ function TimelineTab({ leadId }) {
     <ul className="space-y-3">
       {entries.map((entry) => {
         const Icon = ACTION_ICONS[entry.action] ?? Clock
+        const { title, detail, reason } = describeTimelineEntry(entry)
         return (
           <li key={entry.id} className="flex gap-3">
             <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${ACTION_TONES[entry.action] ?? 'bg-slate-100 text-slate-500'}`}>
               <Icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
             </span>
             <div className="min-w-0 flex-1 border-b border-slate-100 pb-3">
-              <p className="text-sm font-medium text-slate-900">
-                {titleCase(entry.action)} {entry.user_name ? `by ${entry.user_name}` : ''}
+              <p className="text-sm font-medium text-slate-900">{title}</p>
+              <p className="text-xs text-slate-400">
+                {detail ? `${detail} · ` : ''}
+                {formatDateTime(entry.created_at)}
               </p>
-              <p className="text-xs text-slate-400">{formatDateTime(entry.created_at)}</p>
+              {reason && (
+                <p className="mt-1.5 rounded-md bg-slate-50 px-2.5 py-1.5 text-sm text-slate-700">
+                  <span className="font-medium text-slate-500">Reason:</span> {reason}
+                </p>
+              )}
             </div>
           </li>
         )
@@ -1099,8 +1155,10 @@ export function LeadDetailModal({ lead, onClose }) {
   const [liveLead, setLiveLead] = useState(lead)
   const [savingInstallmentIndex, setSavingInstallmentIndex] = useState(null)
   const [savedInstallmentIndex, setSavedInstallmentIndex] = useState(null)
-  const [pendingLostStage, setPendingLostStage] = useState(false)
-  const [lostReason, setLostReason] = useState('')
+  // A stage move that has to say why first: Quit, or a move back to an
+  // earlier stage. { status, kind: 'lost' | 'back' } while the prompt is open.
+  const [pendingStage, setPendingStage] = useState(null)
+  const [stageReason, setStageReason] = useState('')
 
   function invalidateLeadQueries() {
     queryClient.invalidateQueries({ queryKey: ['leads'] })
@@ -1111,22 +1169,45 @@ export function LeadDetailModal({ lead, onClose }) {
   }
 
   const stageMutation = useMutation({
-    mutationFn: ({ status, lostReason }) =>
-      leadService.update(lead.id, lostReason ? { status, lost_reason: lostReason } : { status }),
+    mutationFn: ({ status, lostReason, backReason }) =>
+      leadService.update(lead.id, {
+        status,
+        ...(lostReason ? { lost_reason: lostReason } : {}),
+        ...(backReason ? { stage_change_reason: backReason } : {}),
+      }),
     onSuccess: () => {
       invalidateLeadQueries()
       onClose()
     },
   })
 
-  // Moving to Lost needs a reason (the server rejects it without one), so
-  // that stage alone routes through a prompt instead of firing immediately.
+  // Moving to Quit, or back to an earlier stage, needs a reason (the server
+  // rejects either without one), so those route through a prompt instead of
+  // firing immediately. The reason for a move back lands on the timeline.
   function selectStage(newStatus) {
     if (newStatus === 'lost') {
-      setPendingLostStage(true)
+      setPendingStage({ status: 'lost', kind: 'lost' })
+      return
+    }
+    if (isStageReversal(liveLead.status, newStatus)) {
+      setPendingStage({ status: newStatus, kind: 'back' })
       return
     }
     stageMutation.mutate({ status: newStatus })
+  }
+
+  function cancelPendingStage() {
+    setPendingStage(null)
+    setStageReason('')
+  }
+
+  function confirmPendingStage() {
+    const reason = stageReason.trim()
+    stageMutation.mutate(
+      pendingStage.kind === 'lost'
+        ? { status: 'lost', lostReason: reason }
+        : { status: pendingStage.status, backReason: reason },
+    )
   }
 
   // Stays open on success, unlike a stage change: the lead is back on the
@@ -1267,31 +1348,49 @@ export function LeadDetailModal({ lead, onClose }) {
         )}
         {activeTab === 'timeline' && <TimelineTab leadId={lead.id} />}
 
-        {pendingLostStage && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-            <p className="mb-2 text-sm font-semibold text-red-700">Why is this lead being marked Quit?</p>
+        {pendingStage && (
+          <div
+            className={`rounded-lg border p-4 ${
+              pendingStage.kind === 'lost' ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'
+            }`}
+          >
+            <p
+              className={`mb-2 text-sm font-semibold ${
+                pendingStage.kind === 'lost' ? 'text-red-700' : 'text-amber-800'
+              }`}
+            >
+              {pendingStage.kind === 'lost'
+                ? 'Why is this lead being marked Quit?'
+                : `Why is this lead moving back to ${stageLabel(pendingStage.status)}?`}
+            </p>
             <Input
               autoFocus
-              placeholder="e.g. Joined elsewhere, not interested, unreachable…"
-              value={lostReason}
-              onChange={(event) => setLostReason(event.target.value)}
+              maxLength={500}
+              placeholder={
+                pendingStage.kind === 'lost'
+                  ? 'e.g. Joined elsewhere, not interested, unreachable…'
+                  : 'e.g. Payment not received yet, student asked to call later…'
+              }
+              value={stageReason}
+              onChange={(event) => setStageReason(event.target.value)}
             />
+            {pendingStage.kind === 'back' && (
+              <p className="mt-1.5 text-xs text-amber-700">Shown on the lead&rsquo;s timeline with the move.</p>
+            )}
             <div className="mt-3 flex justify-end gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setPendingLostStage(false)
-                  setLostReason('')
-                }}
-              >
+              <Button variant="secondary" onClick={cancelPendingStage}>
                 Cancel
               </Button>
               <Button
-                variant="danger"
-                disabled={!lostReason.trim() || stageMutation.isPending}
-                onClick={() => stageMutation.mutate({ status: 'lost', lostReason: lostReason.trim() })}
+                variant={pendingStage.kind === 'lost' ? 'danger' : 'primary'}
+                disabled={!stageReason.trim() || stageMutation.isPending}
+                onClick={confirmPendingStage}
               >
-                {stageMutation.isPending ? 'Saving…' : 'Mark Quit'}
+                {stageMutation.isPending
+                  ? 'Saving…'
+                  : pendingStage.kind === 'lost'
+                    ? 'Mark Quit'
+                    : `Move back to ${stageLabel(pendingStage.status)}`}
               </Button>
             </div>
           </div>
