@@ -205,8 +205,9 @@ export function NotificationBell() {
         title={label}
         aria-label={label}
         aria-expanded={isOpen}
+        // Light on the header's theme gradient, the one place the bell lives.
         className={`relative rounded-md p-2 transition-colors ${
-          isOpen ? 'bg-slate-100 text-slate-700' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+          isOpen ? 'bg-white/20 text-white' : 'text-white/80 hover:bg-white/10 hover:text-white'
         }`}
       >
         <Bell className="h-5 w-5" strokeWidth={2} aria-hidden="true" />

@@ -21,7 +21,11 @@
 // toolbar, not a switch. Past three, and especially where the labels differ
 // wildly in length ("Category" against "Induction Call Remarks"), equal shares
 // stop the strip looking lopsided and give every tab the same target size.
-export function TabStrip({ tabs, value, onChange, equal = false, className = '' }) {
+//
+// `onDark` is for a strip sitting on the theme gradient (the header's board
+// switch): the track becomes a frosted band and the idle labels go light. The
+// raised tab stays white either way, so "selected" looks the same everywhere.
+export function TabStrip({ tabs, value, onChange, equal = false, onDark = false, className = '' }) {
   return (
     // Equal mode is a grid, not a wrapping flex row. Flex shares are computed
     // from flex-basis but items refuse to shrink below their own label, so a
@@ -33,7 +37,7 @@ export function TabStrip({ tabs, value, onChange, equal = false, className = '' 
     // rather than one line that scrolls half the control out of sight.
     <div
       style={equal ? { '--tab-count': tabs.length } : undefined}
-      className={`gap-1 rounded-md bg-slate-100 p-0.5 ${
+      className={`gap-1 rounded-md p-0.5 ${onDark ? 'bg-white/15 ring-1 ring-inset ring-white/20' : 'bg-slate-100'} ${
         equal
           ? 'grid w-full grid-cols-2 sm:grid-cols-[repeat(var(--tab-count),minmax(0,1fr))]'
           : 'inline-flex max-w-full overflow-x-auto'
@@ -55,7 +59,9 @@ export function TabStrip({ tabs, value, onChange, equal = false, className = '' 
             } ${
               isActive
                 ? (tab.active ?? 'bg-white text-brand-700 shadow-sm ring-1 ring-slate-900/5')
-                : 'text-slate-500 hover:text-slate-700'
+                : onDark
+                  ? 'text-white/80 hover:text-white'
+                  : 'text-slate-500 hover:text-slate-700'
             }`}
           >
             {tab.icon && <tab.icon className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />}
