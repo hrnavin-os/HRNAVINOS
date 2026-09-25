@@ -38,29 +38,23 @@ export function Topbar({ showBrand = false }) {
 
   return (
     <>
-      {/* The theme gradient, run left to right. It starts on brand-600, the
-          colour at the top of the sidebar, so the two meet without a seam, and
-          deepens toward the controls on the right. The bottom hairline is the
-          same white/10 the sidebar's logo row uses. */}
-      <header className="relative flex h-14 items-center justify-between gap-2 border-b border-white/10 bg-linear-to-r from-brand-600 via-brand-700 to-brand-800 px-4 sm:px-6">
+      <header className="relative flex h-14 items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-2 sm:gap-4">
           {/* The logo normally lives at the top of the sidebar, so it moves here
               when there isn't one - otherwise the app loses its name entirely
-              for a Section Admin. Styled as the sidebar's own logo row. */}
+              for a Section Admin. */}
           {showBrand && (
-            <div className="flex items-center gap-2.5 sm:border-r sm:border-white/20 sm:pr-4">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-brand-600 shadow-md shadow-brand-900/25">
+            <div className="flex items-center gap-2 sm:border-r sm:border-slate-200 sm:pr-4">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-600 text-white">
                 <GraduationCap className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
               </span>
-              <span className="hidden items-center gap-1.5 sm:flex">
-                <span className="text-[15px] font-bold tracking-tight text-white">HRNAVINOS</span>
-                <span className="rounded-md bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-white">
-                  ERP
-                </span>
+              <span className="hidden sm:block">
+                <span className="text-[15px] font-semibold leading-none tracking-tight text-slate-900">HRNAVINOS</span>
+                <span className="ml-1 text-[15px] font-normal leading-none text-slate-400">ERP</span>
               </span>
             </div>
           )}
-          {pageTitle && <h1 className="truncate text-sm font-semibold text-white">{pageTitle}</h1>}
+          {pageTitle && <h1 className="truncate text-sm font-semibold text-slate-900">{pageTitle}</h1>}
         </div>
 
         {/* Absolutely centred rather than a middle flex column: the title and
@@ -80,17 +74,17 @@ export function Topbar({ showBrand = false }) {
         <div className="flex shrink-0 items-center gap-2 sm:gap-4">
           <NotificationBell />
           <div className="flex items-center gap-3">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-xs font-semibold text-brand-700 shadow-sm shadow-brand-900/20">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-semibold text-brand-700 ring-1 ring-brand-100">
               {initials(user?.first_name, user?.last_name)}
             </span>
             {/* Name and role are the first thing to go on a narrow screen -
                 the avatar already says who is signed in. */}
             <div className="hidden text-right lg:block">
-              <p className="text-sm font-medium text-white">{`${user?.first_name ?? ''} ${user?.last_name ?? ''}`.trim()}</p>
-              <p className="text-xs text-white/70">{user?.role}</p>
+              <p className="text-sm font-medium text-slate-900">{`${user?.first_name ?? ''} ${user?.last_name ?? ''}`.trim()}</p>
+              <p className="text-xs text-slate-500">{user?.role}</p>
             </div>
           </div>
-          <Button variant="onDark" onClick={handleLogout} className="px-2! sm:px-3.5!" aria-label="Logout">
+          <Button variant="secondary" onClick={handleLogout} className="px-2! sm:px-3.5!" aria-label="Logout">
             <LogOut className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden="true" />
             <span className="hidden sm:inline">Logout</span>
           </Button>

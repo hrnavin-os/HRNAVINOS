@@ -22,13 +22,9 @@ export function LeadBoardTabs({ bar = false }) {
 
   // Each board's `active` classes ride along on the tab, so Foundation keeps
   // its violet while the strip itself stays the shared one.
-  // In the header it sits on the theme gradient; as its own row below md it
-  // sits on white, so only the header copy takes the light-on-dark strip.
-  if (!bar) return <TabStrip tabs={LEAD_BOARDS} value={board} onChange={setBoard} onDark />
+  const tabs = <TabStrip tabs={LEAD_BOARDS} value={board} onChange={setBoard} />
 
-  return (
-    <div className="border-b border-slate-200 bg-white px-4 py-2 md:hidden">
-      <TabStrip tabs={LEAD_BOARDS} value={board} onChange={setBoard} />
-    </div>
-  )
+  if (!bar) return tabs
+
+  return <div className="border-b border-slate-200 bg-white px-4 py-2 md:hidden">{tabs}</div>
 }
