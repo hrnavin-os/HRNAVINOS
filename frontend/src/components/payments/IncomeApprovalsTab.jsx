@@ -54,8 +54,14 @@ const columns = [
     key: 'due',
     header: 'Due Amount',
     render: (row) => {
-      const { hasPlan, dueAmount } = getLeadPaymentSummary(row)
-      return hasPlan ? formatCurrency(dueAmount) : '—'
+      const { hasPlan, dueAmount, balanceDueAt } = getLeadPaymentSummary(row)
+      if (!hasPlan) return '—'
+      return (
+        <div>
+          {formatCurrency(dueAmount)}
+          {dueAmount > 0 && balanceDueAt && <p className="text-xs text-slate-500">by {formatDate(balanceDueAt)}</p>}
+        </div>
+      )
     },
   },
   {

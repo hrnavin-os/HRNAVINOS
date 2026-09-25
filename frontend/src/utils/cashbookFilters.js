@@ -2,6 +2,8 @@
 // CashbookFilters component file so that file only exports a component -
 // mixing the two breaks React Fast Refresh for it.
 
+import { getInstallmentCollected } from '@/utils/leadPayment'
+
 export const EMPTY_CASHBOOK_FILTERS = { search: '', dateFrom: '', dateTo: '', plan: '', mode: '' }
 
 export function isCashbookFiltered(filters) {
@@ -22,7 +24,9 @@ export function applyCashbookFilters(leads, filters) {
       // any installment rather than just the latest - filtering by UPI should
       // still find a lead who paid one instalment by UPI and another by card.
       const modes = lead.installments?.length
-        ? lead.installments.filter((installment) => installment.paid).map((installment) => installment.mode)
+        ? lead.installments
+            .filter((installment) => getInstallmentCollected(installment) > 0)
+            .map((installment) => installment.mode)
         : [lead.payment_mode]
       if (!modes.includes(filters.mode)) return false
     }

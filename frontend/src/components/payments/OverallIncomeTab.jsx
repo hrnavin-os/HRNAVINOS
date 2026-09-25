@@ -60,11 +60,18 @@ const columns = [
     align: 'right',
     numeric: true,
     render: (row) => {
-      const { hasPlan, dueAmount } = getLeadPaymentSummary(row)
+      const { hasPlan, dueAmount, balanceDueAt } = getLeadPaymentSummary(row)
       if (!hasPlan) return dash
       // A non-zero balance is the thing someone scanning this column is
-      // looking for, so it gets weight; a settled zero stays quiet.
-      return dueAmount > 0 ? <span className="font-medium text-amber-700">{formatCurrency(dueAmount)}</span> : formatCurrency(dueAmount)
+      // looking for, so it gets weight; a settled zero stays quiet. The date
+      // under it is when the student said the rest would come.
+      if (dueAmount <= 0) return formatCurrency(dueAmount)
+      return (
+        <div>
+          <span className="font-medium text-amber-700">{formatCurrency(dueAmount)}</span>
+          {balanceDueAt && <p className="text-xs text-slate-500">by {formatDate(balanceDueAt)}</p>}
+        </div>
+      )
     },
   },
   {

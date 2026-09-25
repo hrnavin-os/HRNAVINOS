@@ -362,6 +362,8 @@ async def update_installment(
     index: int,
     file: UploadFile | None = File(default=None),
     amount: str | None = Form(default=None),
+    # What was actually collected - can be less than the fee, leaving a balance.
+    received_amount: str | None = Form(default=None),
     mode: InstallmentPaymentMode | None = Form(default=None),
     transaction_id: str | None = Form(default=None),
     upi_id: str | None = Form(default=None),
@@ -380,6 +382,12 @@ async def update_installment(
             parsed_amount = Decimal(amount)
         except InvalidOperation as exc:
             raise BadRequestError("Amount must be a valid number.") from exc
+    parsed_received: Decimal | None = None
+    if received_amount:
+        try:
+            parsed_received = Decimal(received_amount)
+        except InvalidOperation as exc:
+            raise BadRequestError("Amount received must be a valid number.") from exc
 
     service = LeadService()
     scope = await get_actor_scope(actor)
@@ -388,6 +396,7 @@ async def update_installment(
         index,
         file=file,
         amount=parsed_amount,
+        received_amount=parsed_received,
         mode=mode,
         transaction_id=transaction_id,
         upi_id=upi_id,

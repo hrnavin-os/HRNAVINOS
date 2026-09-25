@@ -2,18 +2,38 @@
 // each pre-populated with its share of the total course fee) or, for older/
 // manually-created leads, the single generic paid_amount/payment_mode fields.
 // This normalizes both into one shape so payment UIs don't need to branch.
+// Money actually received against one installment. `amount` is the fee the
+// program prices it at; `received_amount` is what was keyed in, which can fall
+// short of it (part now, the balance on a promised date). Mirrors
+// PaymentInstallment.collected on the backend. Installments saved before
+// part-payments existed have no received_amount and were paid in full.
+export function getInstallmentCollected(installment) {
+  if (installment.paid) return Number(installment.received_amount ?? installment.amount ?? 0)
+  const hasProof = Boolean(installment.proof_urls?.length || installment.proof_url)
+  if (installment.received_amount && installment.mode && hasProof) return Number(installment.received_amount)
+  return 0
+}
+
 export function getLeadPaymentSummary(lead) {
   if (lead.payment_plan && lead.installments?.length) {
     const installments = lead.installments
     const totalAmount = installments.reduce((sum, installment) => sum + Number(installment.amount ?? 0), 0)
-    const paidInstallments = installments.filter((installment) => installment.paid)
-    const paidAmount = paidInstallments.reduce((sum, installment) => sum + Number(installment.amount ?? 0), 0)
+    const paidInstallments = installments.filter((installment) => getInstallmentCollected(installment) > 0)
+    const paidAmount = installments.reduce((sum, installment) => sum + getInstallmentCollected(installment), 0)
     const latest = paidInstallments[paidInstallments.length - 1] ?? null
+    // When the next money is expected: the earliest date on anything still
+    // owed - a part-paid installment's balance, or a scheduled one.
+    const balanceDueAt =
+      installments
+        .filter((installment) => !installment.paid && installment.scheduled_at)
+        .map((installment) => installment.scheduled_at)
+        .sort()[0] ?? null
 
     return {
       hasPlan: true,
       paidAmount,
       dueAmount: totalAmount - paidAmount,
+      balanceDueAt,
       mode: latest?.mode ?? null,
       transactionId: latest?.transaction_id ?? null,
       upiId: latest?.upi_id ?? null,
@@ -28,6 +48,7 @@ export function getLeadPaymentSummary(lead) {
     hasPlan: false,
     paidAmount: lead.paid_amount ?? null,
     dueAmount: null,
+    balanceDueAt: null,
     mode: lead.payment_mode ?? null,
     transactionId: null,
     upiId: null,
@@ -60,7 +81,8 @@ export function getAfterPlacementFee(lead) {
 // actually landed for this lead? Handles both representations - a structured
 // installment plan, or the older single paid_amount on manual leads.
 export function hasFirstPayment(lead) {
-  if (lead.installments?.length) return Boolean(lead.installments[0].paid)
+  // A part-payment counts - money has landed, the balance is still due.
+  if (lead.installments?.length) return getInstallmentCollected(lead.installments[0]) > 0
   return Number(lead.paid_amount ?? 0) > 0
 }
 

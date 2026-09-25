@@ -177,13 +177,22 @@ class ReminderService:
         for lead in await self.leads.list_due_installments(today=today):
             recipients = await self._section_admins(lead.section)
             for index, label in _due_installments(lead, today):
-                due = lead.installments[index].scheduled_at.isoformat()
+                installment = lead.installments[index]
+                due = installment.scheduled_at.isoformat()
+                # A part-paid installment's date is when the rest was promised.
+                collected = installment.collected()
+                message = (
+                    f"{lead.name} paid ₹{collected:,.0f} of their {label}; the balance of "
+                    f"₹{installment.amount - collected:,.0f} was due on {due} and is still unpaid."
+                    if collected and installment.amount
+                    else f"{lead.name}'s {label} was scheduled for {due} and is still unpaid."
+                )
                 for user in recipients:
                     created += await self._raise(
                         user_id=user.id,
                         lead=lead,
                         title="Scheduled payment due",
-                        message=f"{lead.name}'s {label} was scheduled for {due} and is still unpaid.",
+                        message=message,
                         category=NotificationCategory.INSTALLMENT_DUE,
                         # Index as well as date: a plan can have two unpaid
                         # installments falling on the same day.

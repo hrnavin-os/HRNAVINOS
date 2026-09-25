@@ -37,9 +37,9 @@ import { PAYMENT_PLAN_TONES } from '@/constants/paymentOptions'
 import { leadService } from '@/services/leadService'
 import { foundationFormService } from '@/services/foundationFormService'
 import { PaymentDetailContent } from '@/components/payments/PaymentDetailModal'
-import { hasFirstPayment } from '@/utils/leadPayment'
+import { getInstallmentCollected, hasFirstPayment } from '@/utils/leadPayment'
 import { getApiErrorMessage } from '@/services/apiClient'
-import { formatDate, formatDateTime, titleCase } from '@/utils/formatters'
+import { formatCurrency, formatDate, formatDateTime, titleCase } from '@/utils/formatters'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { DetailPanel, InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
 import { MEDIA_BASE_URL } from '@/constants/config'
@@ -370,7 +370,10 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
   const [files, setFiles] = useState([])
   const [removed, setRemoved] = useState([])
   const [remarks, setRemarks] = useState(installment.remarks ?? '')
-  const [amount, setAmount] = useState(installment.amount ?? '')
+  // What came in, not the fee: the fee is the program's and stays fixed, and a
+  // student can pay part of it now. Starts at the fee because paying in full
+  // is still the usual case.
+  const [received, setReceived] = useState(installment.received_amount ?? installment.amount ?? '')
   const [mode, setMode] = useState(installment.mode ?? '')
   const [transactionId, setTransactionId] = useState(installment.transaction_id ?? '')
   const [upiId, setUpiId] = useState(installment.upi_id ?? '')
@@ -406,14 +409,32 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
     onSave(index, { scheduledAt })
   }
 
+  const fee = Number(installment.amount ?? 0)
+  // Anything short of the fee stays due, on a date the student promised.
+  const balance = received !== '' && Number(received) > 0 ? Math.max(fee - Number(received), 0) : 0
+  const isPartPaid = !installment.paid && getInstallmentCollected(installment) > 0
+
   function handleSavePayment() {
     // The transaction / UPI id and the remarks are optional.
-    if (!amount || !mode || (!files.length && !kept.length)) {
-      setValidationError('Please fill in the amount, mode, and at least one payment proof before saving.')
+    if (!received || Number(received) <= 0 || !mode || (!files.length && !kept.length)) {
+      setValidationError('Please fill in the amount received, mode, and at least one payment proof before saving.')
+      return
+    }
+    if (balance > 0 && !scheduledAt) {
+      setValidationError('Pick the date the balance amount will be paid.')
       return
     }
     setValidationError(null)
-    onSave(index, { files, removeProofUrls: removed, remarks, amount, mode, transactionId, upiId })
+    onSave(index, {
+      files,
+      removeProofUrls: removed,
+      remarks,
+      receivedAmount: received,
+      mode,
+      transactionId,
+      upiId,
+      scheduledAt: balance > 0 ? scheduledAt : undefined,
+    })
   }
 
   const hasProof = Boolean(files.length || kept.length)
@@ -440,6 +461,12 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
         {/* Settled rows are the common case once a plan is running - saying so
             here means you don't have to read the form below to know. */}
         {installment.paid && <Badge tone="emerald">Paid</Badge>}
+        {isPartPaid && (
+          <Badge tone="amber">
+            Part paid · {formatCurrency(fee - getInstallmentCollected(installment))} due
+            {installment.scheduled_at ? ` ${formatDate(installment.scheduled_at)}` : ''}
+          </Badge>
+        )}
       </div>
 
       <div className="p-3.5">
@@ -482,13 +509,21 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
             {/* Amount and mode side by side: they're one thought ("how much,
                 how"), and stacked in a half-width card they pushed the proof
                 and the save button off the bottom of the popup. */}
+            {/* The fee is the program's; the payment method above is only its
+                label. What was actually handed over is typed below. */}
+            {fee > 0 && (
+              <p className="text-sm text-slate-500">
+                Fee <span className="font-semibold text-slate-900">{formatCurrency(fee)}</span>
+              </p>
+            )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Input
-                label="Payment Amount"
+                label="Amount Received"
                 type="number"
                 step="0.01"
-                value={amount}
-                onChange={(event) => setAmount(event.target.value)}
+                min="0"
+                value={received}
+                onChange={(event) => setReceived(event.target.value)}
               />
               <Select label="Payment Mode" value={mode} onChange={(event) => setMode(event.target.value)}>
                 <option value="">Select Mode</option>
@@ -514,6 +549,23 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
                 </div>
               )}
             </div>
+
+            {/* Short of the fee: the rest stays due, and Finance chases it on
+                the date given here - the due reminder fires on it. */}
+            {balance > 0 && (
+              <div className="grid grid-cols-1 items-end gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-amber-700">Balance Due</p>
+                  <p className="text-lg font-semibold text-amber-800">{formatCurrency(balance)}</p>
+                </div>
+                <Input
+                  type="date"
+                  label="Balance Due Date"
+                  value={scheduledAt}
+                  onChange={(event) => setScheduledAt(event.target.value)}
+                />
+              </div>
+            )}
 
             <Textarea
               label="Remarks (optional)"

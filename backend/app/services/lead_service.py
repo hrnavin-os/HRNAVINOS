@@ -128,6 +128,7 @@ class LeadService:
                 PaymentInstallmentResponse(
                     label=installment.label,
                     amount=installment.amount,
+                    received_amount=installment.received_amount,
                     mode=installment.mode,
                     transaction_id=installment.transaction_id,
                     upi_id=installment.upi_id,
@@ -710,7 +711,8 @@ class LeadService:
         older single `paid_amount` field on manually-created leads.
         """
         if lead.installments:
-            if not lead.installments[0].paid:
+            # A part-payment counts: money has landed, the balance is still due.
+            if not lead.installments[0].collected():
                 raise BadRequestError(
                     "The first installment must be recorded as paid (amount, mode, reference and proof) "
                     "before this lead can move to Financial Approval."
@@ -813,7 +815,7 @@ class LeadService:
             # The new course doesn't offer this plan. With nothing collected yet
             # the plan is dropped so it can be picked again from the new price
             # list; with money on it, dropping it would throw that record away.
-            if any(installment.paid for installment in lead.installments):
+            if any(installment.collected() for installment in lead.installments):
                 raise BadRequestError(
                     f"{program.name} doesn't offer this lead's payment method, and payments are already "
                     "recorded against it. Change the course and plan together from the lead's detail view."
@@ -832,7 +834,16 @@ class LeadService:
             elif prior.paid:
                 installments.append(prior)
             else:
-                installments.append(prior.model_copy(update={"amount": priced.amount}))
+                # A part-payment keeps what was received; only the fee it is
+                # measured against moves - which can settle it outright.
+                repriced = prior.model_copy(update={"amount": priced.amount})
+                repriced.paid = bool(
+                    repriced.received_amount is not None
+                    and repriced.received_amount >= priced.amount
+                    and repriced.mode
+                    and repriced.all_proofs()
+                )
+                installments.append(repriced)
         lead.installments = installments
         lead.payment_expected = build_payment_expected_summary(config, program.category, lead.payment_plan)
         return {**changes, "payment_expected": lead.payment_expected}
@@ -1068,6 +1079,7 @@ class LeadService:
         file: UploadFile | None,
         amount: Decimal | None,
         mode: InstallmentPaymentMode | None,
+        received_amount: Decimal | None = None,
         transaction_id: str | None,
         upi_id: str | None,
         scheduled_at: date | None,
@@ -1110,10 +1122,26 @@ class LeadService:
         installment.proof_urls = proofs
         installment.proof_url = proofs[0] if proofs else None
 
+        if received_amount is not None:
+            if received_amount <= 0:
+                raise BadRequestError("The amount received must be more than zero.")
+            installment.received_amount = received_amount
+
         was_paid = installment.paid
         # The transaction / UPI id is optional: a payment is recorded once its
         # mode is known and there is proof of it.
-        installment.paid = bool(installment.mode and proofs)
+        recorded = bool(installment.mode and proofs)
+        # The payment method is only the label; the cash is whatever was keyed
+        # in. Short of the fee, the rest stays due - and a balance nobody has
+        # promised a date for is one nobody will chase, so it needs one.
+        short = (
+            installment.received_amount is not None
+            and installment.amount is not None
+            and installment.received_amount < installment.amount
+        )
+        if recorded and short and installment.scheduled_at is None:
+            raise BadRequestError("Pick the date the balance amount will be paid.")
+        installment.paid = recorded and not short
         if installment.paid and not was_paid:
             installment.paid_at = utcnow().date()
 
@@ -1125,7 +1153,12 @@ class LeadService:
             action="UPDATE",
             entity_type="Lead",
             entity_id=str(lead.id),
-            changes={"installment_index": index, "paid": installment.paid},
+            changes={
+                "installment_index": index,
+                "paid": installment.paid,
+                "received_amount": str(installment.received_amount) if installment.received_amount is not None else None,
+                "scheduled_at": installment.scheduled_at.isoformat() if installment.scheduled_at else None,
+            },
         )
         return lead
 

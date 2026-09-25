@@ -22,7 +22,12 @@ import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { leadService } from '@/services/leadService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { formatCurrency, formatDate, titleCase } from '@/utils/formatters'
-import { getAfterPlacementFee, getEmiPaymentHealth, getLeadPaymentSummary } from '@/utils/leadPayment'
+import {
+  getAfterPlacementFee,
+  getEmiPaymentHealth,
+  getInstallmentCollected,
+  getLeadPaymentSummary,
+} from '@/utils/leadPayment'
 import { PAYMENT_PLAN_LABELS, INSTALLMENT_MODE_TONES } from '@/constants/installmentPaymentModes'
 import { PAYMENT_PLAN_TONES } from '@/constants/paymentOptions'
 import { MEDIA_BASE_URL } from '@/constants/config'
@@ -66,6 +71,10 @@ function buildInfoItems(lead, summary) {
     value: summary.hasPlan ? formatCurrency(summary.dueAmount) : '—',
     tone: 'amber',
   })
+  // When the student said the balance would come - what Finance chases on.
+  if (summary.dueAmount > 0 && summary.balanceDueAt) {
+    items.push({ icon: Calendar, label: 'Balance Due Date', value: formatDate(summary.balanceDueAt), tone: 'amber' })
+  }
   // Owed only once the student is placed, so it sits apart from Due Amount
   // (what's outstanding on the training fee right now).
   items.push({
@@ -234,6 +243,7 @@ function NonPaymentAction({ lead, summary }) {
 // 6-installment EMI plan reads as a timeline instead of a tall column.
 function InstallmentScheduleCard({ installment }) {
   const isPaid = installment.paid
+  const collected = getInstallmentCollected(installment)
   const tone = isPaid ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
   const Icon = isPaid ? CheckCircle2 : Calendar
   const dateLabel = isPaid ? 'Payment Date' : 'Due Date'
@@ -248,6 +258,10 @@ function InstallmentScheduleCard({ installment }) {
         <p className="truncate text-sm font-semibold text-slate-900">{installment.label}</p>
       </div>
       <p className="mt-2 text-base font-semibold text-slate-900">{formatCurrency(installment.amount)}</p>
+      {/* Part-paid: what came in, so the fee above isn't read as received. */}
+      {!isPaid && collected > 0 && (
+        <p className="text-xs font-medium text-amber-700">{formatCurrency(collected)} received</p>
+      )}
       <p className="mt-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">{dateLabel}</p>
       <p className={`text-xs font-medium ${isPaid ? 'text-emerald-600' : 'text-slate-600'}`}>
         {dateValue ? formatDate(dateValue) : 'Not scheduled yet'}

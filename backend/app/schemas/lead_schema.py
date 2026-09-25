@@ -136,6 +136,7 @@ class FollowUpEntryResponse(BaseModel):
 class PaymentInstallmentResponse(BaseModel):
     label: str
     amount: Decimal | None
+    received_amount: Decimal | None = None
     mode: InstallmentPaymentMode | None
     transaction_id: str | None
     upi_id: str | None

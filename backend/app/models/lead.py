@@ -1,6 +1,7 @@
 """Lead document — a prospective student tracked through the CRM / Pre-Sales pipeline."""
 import uuid
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 
 from pymongo import IndexModel
 from pydantic import BaseModel, Field
@@ -70,7 +71,13 @@ class PaymentInstallment(BaseModel):
     table at submission time; staff fill in the rest as each is collected."""
 
     label: str
+    # The fee this installment is for, priced from the program.
     amount: MongoDecimal | None = None
+    # What was actually collected, keyed in by hand. Can fall short of
+    # `amount` - a student on single shot who pays part now and the rest in a
+    # couple of days - and the shortfall stays due until `scheduled_at`.
+    # None on installments saved before this existed: those were paid in full.
+    received_amount: MongoDecimal | None = None
     mode: InstallmentPaymentMode | None = None
     transaction_id: str | None = Field(default=None, max_length=100)
     upi_id: str | None = Field(default=None, max_length=100)
@@ -92,6 +99,15 @@ class PaymentInstallment(BaseModel):
         """Every proof on file, including the lone `proof_url` of an
         installment saved before there could be several."""
         return list(self.proof_urls) or ([self.proof_url] if self.proof_url else [])
+
+    def collected(self) -> Decimal:
+        """Money actually received against this installment: the full fee
+        once paid, or the part-payment on record (mode and proof) before that."""
+        if self.paid:
+            return Decimal(self.received_amount if self.received_amount is not None else self.amount or 0)
+        if self.received_amount and self.mode and self.all_proofs():
+            return Decimal(self.received_amount)
+        return Decimal(0)
 
 
 class Lead(BaseDocument):
