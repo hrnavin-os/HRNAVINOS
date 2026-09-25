@@ -1,63 +1,68 @@
-import { ChartBar, ChartColumn, ChartLine, ChartPie, LayoutGrid } from 'lucide-react'
+import { ChartLine, ChartPie, LayoutGrid, Percent, SquareStack } from 'lucide-react'
 import { DonutChart } from '@/components/analytics/DonutChart'
-import { CategoryBars } from '@/components/analytics/CategoryBars'
-import { ColumnChart } from '@/components/analytics/ColumnChart'
+import { RateBars } from '@/components/analytics/RateBars'
+import { OutcomeStack } from '@/components/analytics/OutcomeStack'
 import { TrendChart } from '@/components/analytics/TrendChart'
 import { TreemapChart } from '@/components/analytics/TreemapChart'
+import { colorByEntity } from '@/constants/analyticsPalette'
+import { shortMoney } from '@/constants/statisticsBoards'
 
 /**
- * One breakdown, drawn every way it can honestly be drawn - all of them at
- * once, on one canvas.
+ * One breakdown, read four different ways - four analytics, not four drawings
+ * of the same count.
  *
- * Four visuals over one set of numbers, because they answer four different
- * questions and none of them is the "best" chart:
+ *   Intake       how many sit under each value, and their share of the whole
+ *   Conversion   the rate each value turns into the good outcome - which one
+ *                actually works, which the headcount can't say
+ *   Outcomes     where each value's people ended up: converted, still open,
+ *                or lost - the mix behind the rate
+ *   Money /      what each value brought in (Foundation), or its share of all
+ *   Conversions  the conversions (Induction, where nobody has paid yet)
+ *   Trend        the shape between periods, on the batch tab only
  *
- *   Donut    how the whole divides - the shape of it, at a glance
- *   Bars     which is biggest and by how much, on a common baseline (the only
- *            encoding small differences can be read off accurately)
- *   Columns  the same comparison with nothing folded away, so twenty values
- *            are all still there
- *   Treemap  part-to-whole when there are too many values for a ring
- *   Trend    the shape between periods - climbing, flat or falling
+ * They sit together as small multiples rather than behind a picker, because
+ * the questions come one after another - which course is biggest, does it
+ * convert, where do the rest go, what did it earn - and side by side the eye
+ * carries the answer from one to the next for free.
  *
- * They sit together as small multiples rather than behind a picker. The
- * questions above get asked one after another - which category is biggest,
- * then what share of the intake it is - and answering the second used to mean
- * clicking to another view and holding the first in your head. Side by side
- * the eye does that for free, and the page costs a scroll instead.
- *
- * What makes four charts a canvas rather than four widgets: they are fed the
- * same rows, they read the same count-or-percentage switch, they share one
- * highlight, and - the one that does the most work - a category is the same
- * colour in all four of them. That assignment is made once, in
- * constants/analyticsPalette, so no chart here decides its own colours.
+ * What makes them one canvas: they are fed the same rows, share one highlight,
+ * and a value is the same colour in all of them. That colour is assigned once
+ * here, ranked by headcount, and handed to every view - so the money map, which
+ * sizes by rupees, doesn't repaint a course because it ranks differently there.
  *
  * The trend is drawn only where the values sit on an axis. A line across
  * categories asserts that the gap between two of them means something, and
  * between "Data Science" and "Full Stack" it means nothing - so on those
  * dimensions the view isn't drawn rather than being drawn and lying. Where it
- * is drawn it takes the full width: a line is read along its length, and it is
- * the one view here a half-width cell actually cramps.
+ * is drawn it takes the full width: a line is read along its length.
  */
-export const VISUALS = [
-  // `reads` is the caption at the right of each cell - the question that view
-  // is the answer to. Four charts of the same numbers otherwise look like the
-  // same chart four times, and the reader has to work out for themselves why
-  // they are being shown all of them.
-  { value: 'donut', label: 'Donut', icon: ChartPie, reads: 'Share of the whole' },
-  { value: 'bars', label: 'Bars', icon: ChartBar, reads: 'Ranked on one baseline' },
-  { value: 'columns', label: 'Columns', icon: ChartColumn, reads: 'Every value, unfolded' },
-  { value: 'treemap', label: 'Treemap', icon: LayoutGrid, reads: 'Area is the share' },
-  // See above: temporal dimensions only.
-  {
-    value: 'trend',
-    label: 'Trend',
-    icon: ChartLine,
-    reads: 'Shape between periods',
-    orderedOnly: true,
-    wide: true,
-  },
-]
+function visualsForBoard(board) {
+  const [good] = board.outcomes
+  return [
+    // `reads` is the caption at the right of each cell - the question that
+    // view answers.
+    { value: 'intake', label: 'Intake', icon: ChartPie, reads: `${board.unit} under each value` },
+    {
+      value: 'conversion',
+      label: 'Conversion rate',
+      icon: Percent,
+      reads: `${good.rateLabel} per value, vs overall`,
+    },
+    { value: 'outcomes', label: 'Outcome mix', icon: SquareStack, reads: 'Where each value ended up' },
+    board.money
+      ? { value: 'money', label: `${board.money.label} amount`, icon: LayoutGrid, reads: 'Area is the money' }
+      : { value: 'conversions', label: 'Share of conversions', icon: LayoutGrid, reads: `Area is ${good.label.toLowerCase()}` },
+    // See above: temporal dimensions only.
+    {
+      value: 'trend',
+      label: 'Trend',
+      icon: ChartLine,
+      reads: 'Shape between periods',
+      orderedOnly: true,
+      wide: true,
+    },
+  ]
+}
 
 // The visuals are drawn at four fifths of their natural size - the charts
 // only, never the cell's own header or the note underneath.
@@ -75,8 +80,8 @@ export const VISUALS = [
 // is where this started: a busier canvas, not a broken one.
 const CHART_ZOOM = 0.8
 
-export function visualsFor(dimension) {
-  return VISUALS.filter((visual) => !visual.orderedOnly || dimension.ordered)
+export function visualsFor(dimension, board) {
+  return visualsForBoard(board).filter((visual) => !visual.orderedOnly || dimension.ordered)
 }
 
 /**
@@ -91,7 +96,7 @@ export function visualsFor(dimension) {
  * beside it and the columns want room per bar, so narrower than that a
  * half-width cell isn't a smaller chart, it's a truncated one.
  */
-export function BreakdownGrid({ visuals, items, unit, ordered, ...shared }) {
+export function BreakdownGrid({ visuals, items, unit, ordered, board, ...shared }) {
   // Categories nobody has been filed under, named once underneath rather than
   // drawn four times over.
   //
@@ -108,7 +113,11 @@ export function BreakdownGrid({ visuals, items, unit, ordered, ...shared }) {
   // in the line - and dropping those points would redraw the shape of the
   // trend rather than tidy it.
   const unfiled = ordered ? [] : items.filter((item) => !(item.count > 0))
-  const drawn = unfiled.length ? items.filter((item) => item.count > 0) : items
+  const filed = unfiled.length ? items.filter((item) => item.count > 0) : items
+  // One colour per value for the whole canvas, ranked by headcount - see the
+  // note at the top. A colour the data brings (the call-remark outcomes) wins.
+  const colors = colorByEntity(filed)
+  const drawn = filed.map((item) => ({ ...item, color: colors.get(item.value) }))
 
   return (
     <>
@@ -143,7 +152,14 @@ export function BreakdownGrid({ visuals, items, unit, ordered, ...shared }) {
                   padded flex cell above, so the card's own padding stays the
                   same as every other card's on the page. */}
               <div className="w-full min-w-0" style={{ zoom: CHART_ZOOM }}>
-                <BreakdownVisual view={visual.value} items={drawn} unit={unit} ordered={ordered} {...shared} />
+                <BreakdownVisual
+                  view={visual.value}
+                  items={drawn}
+                  unit={unit}
+                  ordered={ordered}
+                  board={board}
+                  {...shared}
+                />
               </div>
             </div>
           </figure>
@@ -162,20 +178,43 @@ export function BreakdownGrid({ visuals, items, unit, ordered, ...shared }) {
   )
 }
 
-export function BreakdownVisual({ view, items, unit, empty, measure, ordered, selected, onSelect }) {
-  // The two views that run along an axis take the values in their own order -
-  // in batch-number order for a batch - rather than ranked by size. A batch is
-  // a position, and re-ordering batches by how many people came through them
-  // is not a chart of anything. Values with no number go last.
+export function BreakdownVisual({ view, items, unit, empty, measure, ordered, board, selected, onSelect }) {
+  // The trend takes the values in their own order - batch-number order for a
+  // batch - rather than ranked by size. A batch is a position, and re-ordering
+  // batches by how many people came through them is not a chart of anything.
+  // Values with no number go last.
   const sequence = ordered
     ? [...items].sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity))
     : items
 
   const shared = { items, measure, selected, onSelect, emptyMessage: empty }
+  const [good] = board.outcomes
 
-  if (view === 'bars') return <CategoryBars {...shared} />
-  if (view === 'columns') return <ColumnChart {...shared} items={sequence} ordered={ordered} />
-  if (view === 'treemap') return <TreemapChart {...shared} />
+  if (view === 'conversion') {
+    return <RateBars {...shared} numeratorKey={good.key} noun={good.rateLabel.toLowerCase()} />
+  }
+  if (view === 'outcomes') return <OutcomeStack {...shared} outcomes={board.outcomes} />
+  if (view === 'money') {
+    return (
+      <TreemapChart
+        {...shared}
+        valueKey={board.money.key}
+        format={shortMoney}
+        emptyMessage={`No money ${board.money.label.toLowerCase()} in this window yet.`}
+        emptyNote={() => 'nothing collected yet'}
+      />
+    )
+  }
+  if (view === 'conversions') {
+    return (
+      <TreemapChart
+        {...shared}
+        valueKey={good.key}
+        emptyMessage={`Nobody ${good.label.toLowerCase()} in this window yet.`}
+        emptyNote={(names, plural) => `none of ${plural ? 'them' : 'it'} ${good.label.toLowerCase()} yet`}
+      />
+    )
+  }
   if (view === 'trend') return <TrendChart {...shared} items={sequence} />
   return <DonutChart {...shared} centerLabel={unit} />
 }

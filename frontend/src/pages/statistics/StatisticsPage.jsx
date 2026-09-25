@@ -30,15 +30,20 @@ const MEASURES = [
 // colours by. Nineteen slices is a list, not a chart - the useful shape is how
 // the calls landed across six kinds of outcome, and the individual wordings
 // keep their detail in the table beside the ring.
-function groupRemarks(items) {
-  const totals = REMARK_GROUPS.map((group) => ({ value: group.label, color: group.color, count: 0 }))
+//
+// Every figure a row carries is summed, not just the count - the conversion and
+// outcome views read the outcome columns, and a group that only knew its
+// headcount would show every outcome as nobody.
+function groupRemarks(items, keys) {
+  const zeros = () => Object.fromEntries(keys.map((key) => [key, 0]))
+  const totals = REMARK_GROUPS.map((group) => ({ value: group.label, color: group.color, ...zeros() }))
   const byLabel = Object.fromEntries(totals.map((row) => [row.value, row]))
-  let ungrouped = 0
+  const ungrouped = zeros()
 
   for (const item of items) {
     const group = REMARK_GROUP_BY_VALUE[item.value]
-    if (group) byLabel[group.label].count += item.count
-    else ungrouped += item.count
+    const into = group ? byLabel[group.label] : ungrouped
+    for (const key of keys) into[key] += item[key] ?? 0
   }
 
   // All six outcomes, including the ones nothing landed in. An outcome with
@@ -47,7 +52,7 @@ function groupRemarks(items) {
   const rows = [...totals]
   // "Not set" and anything typed before the dropdown existed. Named rather
   // than dropped: how much of the data is missing is itself a finding.
-  if (ungrouped) rows.push({ value: 'No remark yet', color: '#94a3b8', count: ungrouped })
+  if (ungrouped.count) rows.push({ value: 'No remark yet', color: '#94a3b8', ...ungrouped })
   return rows.sort((a, b) => b.count - a.count)
 }
 
@@ -193,7 +198,7 @@ export function StatisticsPage() {
   )
   // The call-remark chart is a level up from its table: nineteen wordings roll
   // into the six outcomes they belong to.
-  const chartRows = dimension.grouped ? groupRemarks(items) : rows
+  const chartRows = dimension.grouped ? groupRemarks(items, Object.keys(zero)) : rows
 
   // The API returns rows biggest-first, so the head is the largest group. Read
   // rather than re-sorted, so the tile and the table can't disagree.
@@ -229,7 +234,7 @@ export function StatisticsPage() {
   // them is drawn, so this is a filter rather than a picker: a trend belongs on
   // the batch tab and nowhere else, so on the other dimensions it isn't here at
   // all rather than being drawn across categories.
-  const visuals = visualsFor(dimension)
+  const visuals = visualsFor(dimension, board)
 
   const columns = [
     {
@@ -441,6 +446,7 @@ export function StatisticsPage() {
                 empty={dimension.empty}
                 measure={measure}
                 ordered={Boolean(dimension.ordered)}
+                board={board}
                 selected={chartSelection}
                 onSelect={pick}
               />
