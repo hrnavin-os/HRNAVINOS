@@ -115,6 +115,11 @@ export function TreemapChart({
   valueKey = 'count',
   emptyMessage = 'Nothing to show yet.',
   measure = 'count',
+  // How a tile's own figure is written - money reads as "₹45K", not 45000.
+  format = (value) => value,
+  // What an empty value is, for the note under the map. Nobody filed under it
+  // for a headcount; nothing collected for money.
+  emptyNote = (names, plural) => `nobody has been filed under ${plural ? 'them' : 'it'} yet`,
   selected,
   onSelect,
 }) {
@@ -173,7 +178,7 @@ export function TreemapChart({
               key={tile.value}
               type="button"
               aria-pressed={isSelected}
-              title={`${tile.value}${tile.period ? ` · ${tile.period}` : ''}: ${tile[valueKey]} (${share(tile[valueKey])}%)`}
+              title={`${tile.value}${tile.period ? ` · ${tile.period}` : ''}: ${format(tile[valueKey])} (${share(tile[valueKey])}%)`}
               onMouseEnter={() => setHovered(tile.value)}
               onMouseLeave={() => setHovered(null)}
               onFocus={() => setHovered(tile.value)}
@@ -203,7 +208,7 @@ export function TreemapChart({
               {full && (
                 <>
                   <span className="block text-[11px] font-bold leading-4 tabular-nums text-white">
-                    {measure === 'share' ? `${share(tile[valueKey])}%` : tile[valueKey]}
+                    {measure === 'share' ? `${share(tile[valueKey])}%` : format(tile[valueKey])}
                   </span>
                   {tile.period && tile.pxHeight >= 3 * LINE + PAD_FULL && (
                     <span className="block truncate text-[10px] leading-4 text-white/80">
@@ -225,15 +230,15 @@ export function TreemapChart({
         <p className="mt-2 text-[11px] text-slate-400">
           Too small to label:{' '}
           {unlabelled
-            .map((tile) => `${tile.value} (${measure === 'share' ? `${share(tile[valueKey])}%` : tile[valueKey]})`)
+            .map((tile) => `${tile.value} (${measure === 'share' ? `${share(tile[valueKey])}%` : format(tile[valueKey])})`)
             .join(' · ')}
         </p>
       )}
 
       {empty.length > 0 && (
         <p className="mt-2 text-[11px] text-slate-400">
-          Nothing to draw for {empty.map((item) => item.value).join(', ')} - nobody has been filed under
-          {empty.length > 1 ? ' them' : ' it'} yet.
+          Nothing to draw for {empty.map((item) => item.value).join(', ')} -{' '}
+          {emptyNote(empty.map((item) => item.value), empty.length > 1)}.
         </p>
       )}
     </div>
