@@ -52,7 +52,14 @@ const VIEWS = [
 // No create form: entries arrive through the shareable form in
 // Admin > Form Collection. Editing stays available for corrections.
 const columns = [
-  { key: 'name', header: 'Name', render: (row) => <span className="font-medium text-slate-900">{row.name}</span> },
+  // Pinned: the row is read far out to the right, and the name is what says
+  // whose it is.
+  {
+    key: 'name',
+    header: 'Name',
+    sticky: true,
+    render: (row) => <span className="font-medium text-slate-900">{row.name}</span>,
+  },
   {
     // Phone over email is a deliberate two-line stack, not wrapping - each
     // line is still a single unbroken value.
@@ -116,7 +123,12 @@ const columns = [
 // induction bookkeeping, and what you actually want to know is who moved, when
 // they registered, when they crossed, and where they are now.
 const MOVED_COLUMNS = [
-  { key: 'name', header: 'Name', render: (row) => <span className="font-medium text-slate-900">{row.name}</span> },
+  {
+    key: 'name',
+    header: 'Name',
+    sticky: true,
+    render: (row) => <span className="font-medium text-slate-900">{row.name}</span>,
+  },
   { key: 'phone', header: 'Mobile Number' },
   {
     key: 'registration_date',

@@ -11,6 +11,15 @@ const ALIGN = { left: 'text-left', center: 'text-center', right: 'text-right' }
 // against the card border.
 const EDGE_PADDING = 'first:pl-5 last:pr-5'
 
+// `sticky: true` on a column pins it to the left edge while the table scrolls
+// sideways - the name, so a row read far out at Payment Mode still says whose
+// it is. Pinned cells need a solid background of their own (the columns slide
+// underneath them), which tracks the row's hover and focus tint by hand.
+const STICKY_CELL = 'sticky left-0 z-10'
+// Only once something has actually slid under the pinned column: a shadow on
+// a table sitting at its start marks an edge nothing is behind.
+const STICKY_SHADOW = 'shadow-[6px_0_6px_-6px_rgba(15,23,42,0.18)]'
+
 // Row rhythm: px-4 py-2.5 on a 13px/20px cell is a 40px row. That is the
 // density an operations table is read at - a dozen rows in view without
 // scrolling, and still a comfortable click target. Header and body carry the
@@ -41,6 +50,7 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
   const barRef = useRef(null)
   const [scrollWidth, setScrollWidth] = useState(0)
   const [overflowing, setOverflowing] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
 
   // The proxy bar has to be exactly as wide as the table to scroll it 1:1, and
   // the table's width isn't known at mount - columns arrive with the data. So
@@ -125,7 +135,14 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
           itself, the page scrolls it. Its own scrollbar is hidden (.table-box)
           because the sticky proxy below is the one you see and drag - two bars
           for one axis would be scrolling the same thing twice. */}
-      <div ref={boxRef} onScroll={sync(boxRef, barRef)} className="table-box w-full overflow-x-auto">
+      <div
+        ref={boxRef}
+        onScroll={(event) => {
+          sync(boxRef, barRef)()
+          setScrolled(event.currentTarget.scrollLeft > 0)
+        }}
+        className="table-box w-full overflow-x-auto"
+      >
         <table className="min-w-full border-separate border-spacing-0">
           <thead>
             <tr>
@@ -142,8 +159,15 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
                   // border-separate stays: it is what lets each cell paint its
                   // own border, which the collapsed default would hoist onto the
                   // table instead.
-                  className={`whitespace-nowrap border-b border-slate-200 bg-slate-50/80 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 ${EDGE_PADDING} ${
+                  //
+                  // A pinned heading is opaque (bg-slate-50, not /80), or the
+                  // headings scrolling under it show through.
+                  className={`whitespace-nowrap border-b border-slate-200 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 ${EDGE_PADDING} ${
                     ALIGN[column.align] ?? ALIGN.left
+                  } ${
+                    column.sticky
+                      ? `${STICKY_CELL} bg-slate-50 ${scrolled ? STICKY_SHADOW : ''}`
+                      : 'bg-slate-50/80'
                   }`}
                 >
                   {column.header}
@@ -202,7 +226,13 @@ export function DataTable({ columns, rows, isLoading, error, emptyMessage = 'No 
                       // genuinely long-form.
                       className={`border-b border-slate-100 px-4 py-2.5 text-sm text-slate-700 group-last:border-b-0 ${EDGE_PADDING} ${
                         ALIGN[column.align] ?? ALIGN.left
-                      } ${column.numeric ? 'tabular-nums' : ''} ${column.wrap ? '' : 'whitespace-nowrap'}`}
+                      } ${column.numeric ? 'tabular-nums' : ''} ${column.wrap ? '' : 'whitespace-nowrap'} ${
+                        column.sticky
+                          ? `${STICKY_CELL} bg-white transition-colors group-hover:bg-slate-50 group-focus:bg-slate-50 ${
+                              scrolled ? STICKY_SHADOW : ''
+                            }`
+                          : ''
+                      }`}
                     >
                       {/* Second arg is the row's index within this page; columns
                           that don't need it simply ignore it. */}

@@ -884,6 +884,9 @@ function FoundationLeadsBoard() {
     {
       key: 'name',
       header: 'Name',
+      // Pinned while the board scrolls sideways, so the payment columns out
+      // on the right still say whose row they are.
+      sticky: true,
       render: (row) => (
         <div className="flex items-center gap-3">
           <LeadAvatar name={row.name} />
