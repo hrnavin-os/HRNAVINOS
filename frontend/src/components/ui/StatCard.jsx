@@ -1,6 +1,5 @@
 // Shared stat tile that doubles as a filter/tab control - the Admin board's
-// section and stage rows, and the HR Coordinator's student tabs. (The passive
-// Dashboard summary tile is components/dashboard/StatCard.)
+// section and stage rows, and the HR Coordinator's student tabs.
 //
 // Each card is a flat wash of its own accent so a row of them scans as a
 // legend; the selected one fills solid with white text, so the active choice
