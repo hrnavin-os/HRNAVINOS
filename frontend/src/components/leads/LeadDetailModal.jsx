@@ -904,7 +904,12 @@ function OverviewTab({
         <RejoinPanel lead={lead} onRejoin={onRejoin} isRejoining={isRejoining} error={rejoinError} />
       )}
 
-      {lead.status === 'pre_screening' && (
+      {/* Open at every stage, not only Follow up call: money turns up when it
+          turns up, often before the lead has been moved on the board, and the
+          person taking it shouldn't have to change the stage first to record
+          it. Not on a quit student - the Rejoin panel above is what that
+          popup is for, and their payment history stays on Payment Details. */}
+      {lead.status !== 'lost' && (
         <PaymentCollectionSection
           lead={lead}
           onAssignPlan={onAssignPlan}
