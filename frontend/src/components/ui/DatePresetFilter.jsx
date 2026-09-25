@@ -52,7 +52,9 @@ function customLabel({ from, to }) {
   return `${formatDate(from)} – ${formatDate(to)}`
 }
 
-function Calendar({ from, to, onPick }) {
+// A single day is from === to. `min` (YYYY-MM-DD) greys out and disables the
+// days before it - the follow-up picker has no business offering yesterday.
+export function Calendar({ from, to, onPick, min }) {
   const initial = from ? new Date(`${from}T00:00:00`) : new Date()
   const [view, setView] = useState({ year: initial.getFullYear(), month: initial.getMonth() })
   const today = isoDay(new Date())
@@ -104,13 +106,17 @@ function Calendar({ from, to, onPick }) {
           if (!day) return <span key={`blank-${index}`} />
           const isEdge = day === from || day === to
           const inRange = from && to && day > from && day < to
+          const isBefore = Boolean(min) && day < min
           return (
             <button
               key={day}
               type="button"
               onClick={() => onPick(day)}
+              disabled={isBefore}
               className={`h-9 rounded-md text-sm transition-colors ${
-                isEdge
+                isBefore
+                  ? 'cursor-not-allowed text-slate-300'
+                  : isEdge
                   ? 'bg-brand-600 font-semibold text-white'
                   : inRange
                     ? 'bg-brand-50 text-brand-700'
