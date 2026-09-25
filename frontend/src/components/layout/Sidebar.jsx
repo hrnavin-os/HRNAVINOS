@@ -211,7 +211,15 @@ function SidebarNav({ collapsed, onExpandSidebar }) {
               // Not above the first group: there is nothing to divide it from.
               index > 0 && <hr className="mx-2 my-3 border-white/15" aria-hidden="true" />
             ) : (
-              <h3 className="mt-6 mb-1.5 px-3 text-[10.5px] font-semibold tracking-[0.08em] text-brand-100/80 uppercase first:mt-0">
+              // The gap above is keyed off the list position, not `first:` -
+              // each heading is the first child of its own row wrapper, so
+              // `first:mt-0` matched every one of them and pressed each
+              // heading up against the row before it.
+              <h3
+                className={`mb-1.5 px-3 text-[10.5px] font-semibold tracking-[0.08em] text-brand-100/80 uppercase ${
+                  index > 0 ? 'mt-5' : ''
+                }`}
+              >
                 {item.group}
               </h3>
             ))}
