@@ -15,14 +15,17 @@ class LeadRepository(BaseRepository[Lead]):
     # Leads inserted before the `reviewed` field existed have no such key stored in
     # Mongo at all, so we match "not explicitly False" rather than "== True" —
     # otherwise an exact-match query would silently exclude every pre-existing lead.
-    async def count_total(self, *, section: str | None = None) -> int:
-        query = {"is_deleted": False, "reviewed": {"$ne": False}}
+    # `narrow` on the three card counts below is the board's filter row (course,
+    # payment, group, dates, search...) as a Mongo filter, so the stat cards
+    # count the same leads the table under them lists.
+    async def count_total(self, *, section: str | None = None, narrow: dict | None = None) -> int:
+        query = {**(narrow or {}), "is_deleted": False, "reviewed": {"$ne": False}}
         if section:
             query["section"] = section
         return await Lead.find(query).count()
 
-    async def count_by_status(self, *, section: str | None = None) -> dict[str, int]:
-        match = {"is_deleted": False, "reviewed": {"$ne": False}}
+    async def count_by_status(self, *, section: str | None = None, narrow: dict | None = None) -> dict[str, int]:
+        match = {**(narrow or {}), "is_deleted": False, "reviewed": {"$ne": False}}
         if section:
             match["section"] = section
         counts = await Lead.aggregate(
@@ -46,10 +49,17 @@ class LeadRepository(BaseRepository[Lead]):
         count and points the admin at deactivating instead."""
         return await Lead.find({"is_deleted": False, "program_interest": value}).count()
 
-    async def count_by_section_all(self) -> dict[str, int]:
+    async def count_by_section_all(self, *, narrow: dict | None = None) -> dict[str, int]:
         counts = await Lead.aggregate(
             [
-                {"$match": {"is_deleted": False, "reviewed": {"$ne": False}, "section": {"$ne": None}}},
+                {
+                    "$match": {
+                        **(narrow or {}),
+                        "is_deleted": False,
+                        "reviewed": {"$ne": False},
+                        "section": {"$ne": None},
+                    }
+                },
                 {"$group": {"_id": "$section", "count": {"$sum": 1}}},
             ]
         ).to_list()

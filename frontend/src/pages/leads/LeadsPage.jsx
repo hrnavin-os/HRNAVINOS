@@ -765,20 +765,6 @@ function FoundationLeadsBoard() {
   // selection - for Admin/Super Admin this is just whichever tab is active.
   const effectiveSectionFilter = scopedSection || sectionFilter
 
-  // Scoped to the user's own section for a Section Admin (so this becomes
-  // that section's stage breakdown), but NOT to whichever tab an Admin/Super
-  // Admin happens to have selected - their stat row always shows every
-  // section's true count, tab selection only filters the table beneath it.
-  // The backend clears by_section whenever a section is passed in, so
-  // passing the tab selection here would zero out the other cards.
-  const statsQuery = useQuery({
-    queryKey: ['leads-stats', scopedSection],
-    queryFn: () => leadService.getStats(scopedSection || undefined),
-  })
-  const total = statsQuery.data?.total ?? 0
-  const bySection = statsQuery.data?.by_section ?? {}
-  const byStatus = statsQuery.data?.by_status ?? {}
-
   // Sections are admin-managed and open-ended (see Form Collection's "Add
   // Form"), so the top stat cards and Section badge read live from config
   // rather than a fixed list.
@@ -822,25 +808,57 @@ function FoundationLeadsBoard() {
     (course) => !EXCLUDED_COURSE_OPTIONS.includes(course),
   )
 
-  // `total` above is the stat cards' unfiltered count across the whole board;
-  // this one is how many rows the current filters actually matched, which is
-  // what the table footer should report.
+  // The filter row, shared by the table and the stat cards so a filter moves
+  // both. Stage, section and the Lost tab are added per consumer below.
+  const boardFilters = {
+    course_interest: courseFilter || undefined,
+    payment_plan: planFilter || undefined,
+    payment_call_remarks: callRemarkFilter || undefined,
+    qr_code: qrCodeFilter || undefined,
+    foundation_group: groupFilter || undefined,
+    date_from: dateRange?.from || undefined,
+    date_to: dateRange?.to || undefined,
+  }
+
+  // `total` from the stat cards counts every section (and every stage, for a
+  // Section Admin); this one is how many rows the table actually matched,
+  // which is what the footer should report.
   const {
     items, page, setPage, search, setSearch, isLoading, error, totalPages,
     total: filteredTotal,
     pageSize,
   } = usePaginatedQuery('leads', leadService, {
+    ...boardFilters,
     section: effectiveSectionFilter || undefined,
-    course_interest: courseFilter || undefined,
     status: showLost ? 'lost' : statusFilter || undefined,
-    payment_plan: planFilter || undefined,
-    payment_call_remarks: callRemarkFilter || undefined,
-    qr_code: qrCodeFilter || undefined,
-    foundation_group: groupFilter || undefined,
     sort_order: sortOrder,
-    date_from: dateRange?.from || undefined,
-    date_to: dateRange?.to || undefined,
   })
+
+  // Scoped to the user's own section for a Section Admin (so this becomes
+  // that section's stage breakdown), but NOT to whichever tab an Admin/Super
+  // Admin happens to have selected - their stat row always shows every
+  // section's count, tab selection only filters the table beneath it. The
+  // backend clears by_section whenever a section is passed in, so passing the
+  // tab selection here would zero out the other cards. The Lost tab is left
+  // out for the same reason.
+  //
+  // Every other filter does narrow the cards. Stage too, for an Admin; not for
+  // a Section Admin, whose cards *are* the stages and would all but one read 0.
+  const statsFilters = {
+    ...boardFilters,
+    status: scopedSection ? undefined : statusFilter || undefined,
+    search: search || undefined,
+  }
+  const statsQuery = useQuery({
+    queryKey: ['leads-stats', scopedSection, statsFilters],
+    queryFn: () => leadService.getStats(scopedSection || undefined, statsFilters),
+    // Keeps the last numbers up while a new filter's counts load, rather than
+    // every card dropping to 0 and back.
+    placeholderData: (previousData) => previousData,
+  })
+  const total = statsQuery.data?.total ?? 0
+  const bySection = statsQuery.data?.by_section ?? {}
+  const byStatus = statsQuery.data?.by_status ?? {}
 
   function selectSection(code) {
     setSectionFilter(code)

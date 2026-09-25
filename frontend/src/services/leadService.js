@@ -7,8 +7,12 @@ export const leadService = {
     const { data } = await apiClient.post(`/leads/${id}/assign`, { assigned_to: assignedTo })
     return data
   },
-  getStats: async (section) => {
-    const { data } = await apiClient.get('/leads/stats', { params: section ? { section } : undefined })
+  // `filters` is the Foundation board's filter row - the same params its list
+  // call takes - so the stat cards count what the table shows.
+  getStats: async (section, filters = {}) => {
+    const { data } = await apiClient.get('/leads/stats', {
+      params: { ...(section ? { section } : {}), ...filters },
+    })
     return data
   },
   // Counts per distinct course, batch, payment method or payment remark, for

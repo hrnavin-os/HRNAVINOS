@@ -1,4 +1,5 @@
 """Business logic for the Lead Management (CRM / Pre-Sales) module."""
+import re
 import uuid
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
@@ -58,6 +59,10 @@ from app.utils.phone import normalize_phone
 
 # More than this on one installment is a mistake, not evidence.
 MAX_INSTALLMENT_PROOFS = 10
+
+# What the Foundation board's search box matches against - the table and the
+# stat cards both, so they agree on who a search found.
+LEAD_SEARCH_FIELDS = ["name", "phone", "email", "course_interest"]
 
 
 class LeadService:
@@ -241,33 +246,17 @@ class LeadService:
             filters["section"] = section_scope
         elif section:
             filters["section"] = section
-        if course_interest:
-            filters["course_interest"] = course_interest
-        # The two manual payment columns on the board. Both are stored on the
-        # lead as plain enum values, so filtering is an equality match - a lead
-        # with neither set simply never matches, which is what "show me the
-        # two-shot leads" means.
-        if payment_plan:
-            filters["payment_plan"] = payment_plan
-        if payment_call_remarks:
-            filters["payment_call_remarks"] = payment_call_remarks
-        # Which QR account the lead paid into. The board's QR-Code menu is what
-        # writes it, so the same exact match finds everyone on one account.
-        if qr_code:
-            filters["qr_code"] = qr_code
-        if date_from or date_to:
-            created_range: dict[str, datetime] = {}
-            if date_from:
-                created_range["$gte"] = datetime.combine(date_from, time.min)
-            if date_to:
-                created_range["$lte"] = datetime.combine(date_to, time.max)
-            filters["created_at"] = created_range
-        # Which foundation class group the lead is in. A stored field since the
-        # group became something the office decides rather than something the
-        # created_at date implies, so this is a plain equality match and no
-        # longer has to be composed around the date range above.
-        if foundation_group:
-            filters["foundation_group"] = foundation_group
+        filters.update(
+            self._board_filters(
+                course_interest=course_interest,
+                payment_plan=payment_plan,
+                payment_call_remarks=payment_call_remarks,
+                qr_code=qr_code,
+                date_from=date_from,
+                date_to=date_to,
+                foundation_group=foundation_group,
+            )
+        )
         # Second place the reminder sweep is driven from, besides the
         # notification poll. That poll only happens while the bell is on
         # screen, which is a Section Admin on the Foundation board - so a
@@ -280,7 +269,7 @@ class LeadService:
             page=params.page,
             page_size=params.page_size,
             search=params.search,
-            search_fields=["name", "phone", "email", "course_interest"],
+            search_fields=LEAD_SEARCH_FIELDS,
             sort_by=params.sort_by,
             sort_order=params.sort_order,
             filters=filters or None,
@@ -331,13 +320,92 @@ class LeadService:
         )
         return lead
 
-    async def stats(self, *, section: str | None = None) -> LeadStatsResponse:
-        total = await self.leads.count_total(section=section)
-        by_status = await self.leads.count_by_status(section=section)
+    @staticmethod
+    def _board_filters(
+        *,
+        status: str | None = None,
+        course_interest: str | None = None,
+        payment_plan: str | None = None,
+        payment_call_remarks: str | None = None,
+        qr_code: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        foundation_group: int | None = None,
+        search: str | None = None,
+    ) -> dict:
+        """The Foundation board's filter row as a Mongo filter - one copy, read
+        by both the table and the stat cards above it, so a filter can't narrow
+        one and leave the other counting everybody."""
+        filters: dict = {}
+        if status:
+            filters["status"] = status
+        if course_interest:
+            filters["course_interest"] = course_interest
+        # The two manual payment columns on the board. Both are stored on the
+        # lead as plain enum values, so filtering is an equality match - a lead
+        # with neither set simply never matches, which is what "show me the
+        # two-shot leads" means.
+        if payment_plan:
+            filters["payment_plan"] = payment_plan
+        if payment_call_remarks:
+            filters["payment_call_remarks"] = payment_call_remarks
+        # Which QR account the lead paid into. The board's QR-Code menu is what
+        # writes it, so the same exact match finds everyone on one account.
+        if qr_code:
+            filters["qr_code"] = qr_code
+        if date_from or date_to:
+            created_range: dict[str, datetime] = {}
+            if date_from:
+                created_range["$gte"] = datetime.combine(date_from, time.min)
+            if date_to:
+                created_range["$lte"] = datetime.combine(date_to, time.max)
+            filters["created_at"] = created_range
+        # Which foundation class group the lead is in. A stored field since the
+        # group became something the office decides rather than something the
+        # created_at date implies, so this is a plain equality match and no
+        # longer has to be composed around the date range above.
+        if foundation_group:
+            filters["foundation_group"] = foundation_group
+        # The same match the table's search box makes (BaseRepository._build_query).
+        if search:
+            pattern = re.escape(search)
+            filters["$or"] = [{field: {"$regex": pattern, "$options": "i"}} for field in LEAD_SEARCH_FIELDS]
+        return filters
+
+    async def stats(
+        self,
+        *,
+        section: str | None = None,
+        status: str | None = None,
+        course_interest: str | None = None,
+        payment_plan: str | None = None,
+        payment_call_remarks: str | None = None,
+        qr_code: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        foundation_group: int | None = None,
+        search: str | None = None,
+    ) -> LeadStatsResponse:
+        # Whatever the board's filter row is set to, so the cards move with the
+        # table. Not the section: that is what the cards themselves pick, and
+        # passing it would zero every section card but the selected one.
+        narrow = self._board_filters(
+            status=status,
+            course_interest=course_interest,
+            payment_plan=payment_plan,
+            payment_call_remarks=payment_call_remarks,
+            qr_code=qr_code,
+            date_from=date_from,
+            date_to=date_to,
+            foundation_group=foundation_group,
+            search=search,
+        )
+        total = await self.leads.count_total(section=section, narrow=narrow)
+        by_status = await self.leads.count_by_status(section=section, narrow=narrow)
         # The section breakdown only makes sense for the unscoped "All
         # Sections" view - once a caller is already looking at one section's
         # stage counts, there's nothing else to break down by section.
-        by_section = await self.leads.count_by_section_all() if section is None else {}
+        by_section = await self.leads.count_by_section_all(narrow=narrow) if section is None else {}
         return LeadStatsResponse(
             total=total,
             by_status=by_status,

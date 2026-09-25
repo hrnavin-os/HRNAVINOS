@@ -91,6 +91,44 @@ async def test_filter_leads_by_qr_code(client, auth_headers):
     assert body["items"][0]["id"] == ids[0]
 
 
+async def test_stat_cards_follow_the_board_filters(client, auth_headers):
+    """The cards above the Foundation board count what the filter row leaves
+    in the table - the total, each section and Lost alike - rather than the
+    whole board whatever is picked."""
+    ids = []
+    for name, phone, section in (
+        ("A Axis", "1111111111", "a"),
+        ("B Axis", "2222222222", "b"),
+        ("B Gold", "3333333333", "b"),
+    ):
+        created = await client.post(
+            "/api/v1/leads",
+            headers=auth_headers,
+            json={"name": name, "phone": phone, "course_interest": "Data Science", "section": section},
+        )
+        assert created.status_code == 201, created.text
+        ids.append(created.json()["id"])
+    for lead_id, qr in zip(ids, ("Chitra-Axis", "Chitra-Axis", "Raja Gold")):
+        await client.put(f"/api/v1/leads/{lead_id}", headers=auth_headers, json={"qr_code": qr})
+
+    unfiltered = (await client.get("/api/v1/leads/stats", headers=auth_headers)).json()
+    assert unfiltered["total"] == 3
+    assert unfiltered["by_section"] == {"a": 1, "b": 2}
+
+    filtered = await client.get("/api/v1/leads/stats", headers=auth_headers, params={"qr_code": "Chitra-Axis"})
+    assert filtered.status_code == 200
+    body = filtered.json()
+    assert body["total"] == 2
+    assert body["by_section"] == {"a": 1, "b": 1}
+
+    # The search box narrows them the same way the table's does.
+    searched = (
+        await client.get("/api/v1/leads/stats", headers=auth_headers, params={"search": "gold"})
+    ).json()
+    assert searched["total"] == 1
+    assert searched["by_section"] == {"b": 1}
+
+
 async def test_the_course_catalog_is_the_programs_and_only_the_programs(client, auth_headers):
     """Programs Management is where the courses are decided. The board's Course
     dropdown offers those and nothing else - padded with whatever is already

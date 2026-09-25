@@ -103,10 +103,32 @@ async def list_leads(
 @router.get("/stats", response_model=LeadStatsResponse)
 async def lead_stats(
     section: str | None = None,
+    # The Foundation board's filter row, the same parameters the list above
+    # takes, so the stat cards count what the table shows.
+    search: str | None = None,
+    status_filter: str | None = Query(default=None, alias="status"),
+    course_interest: str | None = None,
+    payment_plan: PaymentPlanOption | None = None,
+    payment_call_remarks: str | None = None,
+    qr_code: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    foundation_group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> LeadStatsResponse:
     scope = await get_actor_scope(actor)
-    return await LeadService().stats(section=scope or section)
+    return await LeadService().stats(
+        section=scope or section,
+        search=search,
+        status=status_filter,
+        course_interest=course_interest,
+        payment_plan=payment_plan,
+        payment_call_remarks=payment_call_remarks,
+        qr_code=qr_code,
+        date_from=date_from,
+        date_to=date_to,
+        foundation_group=foundation_group,
+    )
 
 
 @router.get("/analytics", response_model=LeadAnalyticsResponse)
