@@ -31,7 +31,7 @@ const STAGE_ICONS = {
 // allLabel: what the unfiltered card is called - "All Leads" on the Foundation
 // board, "All Entries" on the Induction one, which counts records rather than
 // leads.
-// lostCount/onSelectLost: optional trailing "Lost Students" card (Foundation
+// lostCount/onSelectLost: optional trailing "Quit Students" card (Foundation
 // board only) - every lost lead across all sections, as its own tab. While it's
 // active no section card is.
 export function LeadSectionStats({
@@ -61,7 +61,7 @@ export function LeadSectionStats({
       ))}
       {onSelectLost && (
         <StatCard
-          label="Lost Students"
+          label="Quit Students"
           value={lostCount ?? 0}
           toneName="red"
           icon={XCircle}

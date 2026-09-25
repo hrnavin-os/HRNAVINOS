@@ -741,7 +741,7 @@ function FoundationLeadsBoard() {
   // here instead of the cell silently reverting as if nothing happened.
   const [editError, setEditError] = useState(null)
   const [sectionFilter, setSectionFilter] = useState('')
-  // The "Lost Students" tab: every lost lead on the board, across sections.
+  // The "Quit Students" tab: every lost lead on the board, across sections.
   // Its own state rather than the Stage filter set to Lost, so leaving it (a
   // section card, All Leads) doesn't leave a Stage filter behind.
   const [showLost, setShowLost] = useState(false)
@@ -1016,7 +1016,7 @@ function FoundationLeadsBoard() {
         )
       },
     },
-    // Why and when they were lost - what the Lost Students tab is read for.
+    // Why and when they were lost - what the Quit Students tab is read for.
     ...(showLost
       ? [
           {
@@ -1139,7 +1139,7 @@ function FoundationLeadsBoard() {
           {/* No Section filter here: the stat cards above already are the
               section switcher, and two controls driving one piece of state
               just invited them to disagree on screen. */}
-          {/* Every row on the Lost Students tab is the same stage. */}
+          {/* Every row on the Quit Students tab is the same stage. */}
           {!showLost && (
             <FilterDropdown
               label="Stage"
