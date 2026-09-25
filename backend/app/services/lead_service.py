@@ -215,6 +215,7 @@ class LeadService:
         course_interest: str | None = None,
         payment_plan: str | None = None,
         payment_call_remarks: str | None = None,
+        qr_code: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
         induction_matched: bool | None = None,
@@ -250,6 +251,10 @@ class LeadService:
             filters["payment_plan"] = payment_plan
         if payment_call_remarks:
             filters["payment_call_remarks"] = payment_call_remarks
+        # Which QR account the lead paid into. The board's QR-Code menu is what
+        # writes it, so the same exact match finds everyone on one account.
+        if qr_code:
+            filters["qr_code"] = qr_code
         if date_from or date_to:
             created_range: dict[str, datetime] = {}
             if date_from:

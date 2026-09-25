@@ -70,6 +70,27 @@ async def test_filter_leads_by_status(client, auth_headers):
     assert body["items"][0]["id"] == lead_two
 
 
+async def test_filter_leads_by_qr_code(client, auth_headers):
+    """The QR Code filter: everyone who paid into one account, and nobody on
+    another account or with no account picked yet."""
+    ids = []
+    for name, phone in (("On Axis", "1111111111"), ("On Gold", "2222222222"), ("No QR", "3333333333")):
+        created = await client.post(
+            "/api/v1/leads",
+            headers=auth_headers,
+            json={"name": name, "phone": phone, "course_interest": "Data Science"},
+        )
+        ids.append(created.json()["id"])
+    await client.put(f"/api/v1/leads/{ids[0]}", headers=auth_headers, json={"qr_code": "Chitra-Axis"})
+    await client.put(f"/api/v1/leads/{ids[1]}", headers=auth_headers, json={"qr_code": "Raja Gold"})
+
+    response = await client.get("/api/v1/leads", headers=auth_headers, params={"qr_code": "Chitra-Axis"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["id"] == ids[0]
+
+
 async def test_the_course_catalog_is_the_programs_and_only_the_programs(client, auth_headers):
     """Programs Management is where the courses are decided. The board's Course
     dropdown offers those and nothing else - padded with whatever is already

@@ -751,6 +751,9 @@ function FoundationLeadsBoard() {
   // they'd pay and hasn't" are the two questions the board is worked from.
   const [planFilter, setPlanFilter] = useState('')
   const [callRemarkFilter, setCallRemarkFilter] = useState('')
+  // Which QR account the money went into - how a payment is reconciled
+  // against one account's statement.
+  const [qrCodeFilter, setQrCodeFilter] = useState('')
   // Which of the month's two foundation classes a lead came through - read off
   // the day their Foundation Form landed, which is the Date column beside it.
   const [groupFilter, setGroupFilter] = useState('')
@@ -832,6 +835,7 @@ function FoundationLeadsBoard() {
     status: showLost ? 'lost' : statusFilter || undefined,
     payment_plan: planFilter || undefined,
     payment_call_remarks: callRemarkFilter || undefined,
+    qr_code: qrCodeFilter || undefined,
     foundation_group: groupFilter || undefined,
     sort_order: sortOrder,
     date_from: dateRange?.from || undefined,
@@ -1162,6 +1166,17 @@ function FoundationLeadsBoard() {
             options={Object.entries(PAYMENT_PLAN_LABELS).map(([value, label]) => ({ value, label }))}
             onChange={(value) => {
               setPlanFilter(value)
+              setPage(1)
+            }}
+          />
+
+          {/* Same list the QR-Code cells offer, added accounts included. */}
+          <FilterDropdown
+            label="QR Code"
+            value={qrCodeFilter}
+            options={qrCodeOptions.map((option) => ({ value: option.value, label: option.label }))}
+            onChange={(value) => {
+              setQrCodeFilter(value)
               setPage(1)
             }}
           />
