@@ -674,6 +674,12 @@ class LeadService:
                 raise BadRequestError("Give a reason when marking a lead as Quit.")
             update_data["lost_reason"] = reason
             update_data["lost_at"] = utcnow()
+        # The fees follow the course: see _follow_course_to_program.
+        repriced = (
+            await self._follow_course_to_program(lead, update_data["course_interest"])
+            if "course_interest" in update_data
+            else {}
+        )
         if update_data.get("follow_up_at"):
             lead.follow_up_history.insert(
                 0, FollowUpEntry(scheduled_at=update_data["follow_up_at"], created_by=actor_id)
@@ -700,9 +706,68 @@ class LeadService:
             entity_id=str(lead.id),
             # The move beside the plain field writes: what the log wants is
             # where the student went, not the whole history behind it.
-            changes={**update_data, **({"foundation_group": moved} if moved else {})},
+            changes={**update_data, **repriced, **({"foundation_group": moved} if moved else {})},
         )
         return lead
+
+    async def _follow_course_to_program(self, lead: Lead, course: str | None) -> dict:
+        """Move the lead onto the program a new course names, and reprice its
+        payment plan from that program's price list.
+
+        The Course column is the program's name, but the fees are keyed off
+        program_interest - so changing the course from the board (a student who
+        filled the form for Generalist and settles on HR Recruitment) used to
+        leave them on the old course's fees.
+
+        The plan itself stays; only its amounts follow the course. An
+        installment already marked paid keeps its amount, since that is money
+        actually received. A course that isn't a live program (a legacy value,
+        or cleared) leaves the pricing alone - there's nothing to price it from.
+
+        Mutates the lead in place and returns what changed, for the audit log.
+        """
+        name = (course or "").strip().casefold()
+        if not name:
+            return {}
+        program = next(
+            (p for p in await self.programs.list_active() if p.name.strip().casefold() == name), None
+        )
+        if program is None or program.value == lead.program_interest:
+            return {}
+        lead.program_interest = program.value
+        changes: dict = {"program_interest": program.value}
+        if not lead.payment_plan:
+            return changes
+
+        config = await self.foundation_form_config.get_or_create()
+        category = next((c for c in config.categories if c.code == program.category), None)
+        if category is None or not any(plan.value == lead.payment_plan for plan in category.plans):
+            # The new course doesn't offer this plan. With nothing collected yet
+            # the plan is dropped so it can be picked again from the new price
+            # list; with money on it, dropping it would throw that record away.
+            if any(installment.paid for installment in lead.installments):
+                raise BadRequestError(
+                    f"{program.name} doesn't offer this lead's payment method, and payments are already "
+                    "recorded against it. Change the course and plan together from the lead's detail view."
+                )
+            lead.payment_plan = None
+            lead.installments = []
+            lead.payment_expected = None
+            return {**changes, "payment_plan": None}
+
+        fresh = build_installments(config, program.category, lead.payment_plan)
+        installments = []
+        for index, priced in enumerate(fresh):
+            prior = lead.installments[index] if index < len(lead.installments) else None
+            if prior is None:
+                installments.append(priced)
+            elif prior.paid:
+                installments.append(prior)
+            else:
+                installments.append(prior.model_copy(update={"amount": priced.amount}))
+        lead.installments = installments
+        lead.payment_expected = build_payment_expected_summary(config, program.category, lead.payment_plan)
+        return {**changes, "payment_expected": lead.payment_expected}
 
     # ------------------------------------------------------------------
     # Dated remarks
