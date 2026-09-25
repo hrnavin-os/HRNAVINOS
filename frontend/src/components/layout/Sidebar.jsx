@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { ChevronDown, GraduationCap, PanelLeftClose } from 'lucide-react'
+import { ChevronDown, GraduationCap, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { getVisibleNavItems } from '@/constants/navigation'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -137,33 +137,57 @@ function NavGroup({ item, collapsed = false, onExpandSidebar }) {
   )
 }
 
+const LOGO_MARK =
+  'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-brand-500 to-brand-700 text-white shadow-md ring-1 shadow-brand-600/25 ring-white/20 ring-inset'
+
 function Brand({ collapsed, onToggle }) {
+  // Both halves of the toggle live in this row, so opening and closing happen
+  // in the same place. Collapsed, the 64px rail has room for one square, so
+  // the logo itself is the expand button - it turns into the panel icon on
+  // hover, the way the close button looks when the sidebar is open.
+  if (collapsed) {
+    return (
+      <div className="flex h-14 shrink-0 items-center justify-center border-b border-slate-200 px-2">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label="Expand sidebar"
+          title="Expand sidebar"
+          className="group/expand relative flex h-9 w-9 items-center justify-center rounded-lg outline-none transition-colors hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-brand-500/40"
+        >
+          <span className={`${LOGO_MARK} transition-opacity group-hover/expand:opacity-0 group-focus-visible/expand:opacity-0`}>
+            <GraduationCap className="h-5 w-5" strokeWidth={2} />
+          </span>
+          <PanelLeftOpen
+            className="absolute h-4.5 w-4.5 text-slate-600 opacity-0 transition-opacity group-hover/expand:opacity-100 group-focus-visible/expand:opacity-100"
+            strokeWidth={1.75}
+            aria-hidden="true"
+          />
+        </button>
+      </div>
+    )
+  }
+
   return (
-    <div className={`flex h-14 shrink-0 items-center border-b border-slate-200 ${collapsed ? 'justify-center px-2' : 'gap-2.5 px-4'}`}>
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-brand-500 to-brand-700 text-white shadow-md ring-1 shadow-brand-600/25 ring-white/20 ring-inset">
+    <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-slate-200 px-4">
+      <span className={LOGO_MARK}>
         <GraduationCap className="h-5 w-5" strokeWidth={2} />
       </span>
-      {!collapsed && (
-        <>
-          <div className="flex min-w-0 items-center gap-1.5">
-            <span className="text-[15px] font-bold tracking-tight text-slate-900">HRNAVINOS</span>
-            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-slate-500">
-              ERP
-            </span>
-          </div>
-          {/* Only the close half lives here - once the rail is 64px wide the
-              brand row has no room for it, and the header button reopens it. */}
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-label="Collapse sidebar"
-            title="Collapse sidebar"
-            className="ml-auto -mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-          >
-            <PanelLeftClose className="h-[18px] w-[18px]" strokeWidth={1.75} aria-hidden="true" />
-          </button>
-        </>
-      )}
+      <div className="flex min-w-0 items-center gap-1.5">
+        <span className="text-[15px] font-bold tracking-tight text-slate-900">HRNAVINOS</span>
+        <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-slate-500">
+          ERP
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label="Collapse sidebar"
+        title="Collapse sidebar"
+        className="ml-auto -mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+      >
+        <PanelLeftClose className="h-4.5 w-4.5" strokeWidth={1.75} aria-hidden="true" />
+      </button>
     </div>
   )
 }

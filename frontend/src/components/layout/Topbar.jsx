@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { GraduationCap, LogOut, PanelLeftOpen } from 'lucide-react'
+import { GraduationCap, LogOut } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/Button'
 import { NAV_LEAF_ITEMS } from '@/constants/navigation'
@@ -26,7 +26,7 @@ function initials(firstName, lastName) {
 // No hamburger: on a phone the navigation lives in the bottom tab bar
 // (components/layout/BottomNav), within thumb reach, and the drawer behind
 // "More" is opened from there instead.
-export function Topbar({ showBrand = false, onOpenSidebar }) {
+export function Topbar({ showBrand = false }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const pageTitle = useCurrentPageTitle()
@@ -40,21 +40,6 @@ export function Topbar({ showBrand = false, onOpenSidebar }) {
     <>
       <header className="relative flex h-14 items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-2 sm:gap-4">
-          {/* Only passed while the sidebar is collapsed - the button that
-              closes it lives in the sidebar's own brand row, which is gone at
-              64px wide. Hidden below md for the same reason the sidebar is:
-              there, navigation is the bottom tab bar. */}
-          {onOpenSidebar && (
-            <button
-              type="button"
-              onClick={onOpenSidebar}
-              aria-label="Expand sidebar"
-              title="Expand sidebar"
-              className="-ml-1 hidden h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 md:flex"
-            >
-              <PanelLeftOpen className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden="true" />
-            </button>
-          )}
           {/* The logo normally lives at the top of the sidebar, so it moves here
               when there isn't one - otherwise the app loses its name entirely
               for a Section Admin. */}

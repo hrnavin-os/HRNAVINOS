@@ -54,12 +54,8 @@ export function DashboardLayout() {
     <div className="flex h-screen bg-slate-50">
       {!hideSidebar && <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Reopening is the header's job only while the sidebar is collapsed -
-            expanded, its own brand row carries the close button. */}
-        <Topbar
-          showBrand={hideSidebar}
-          onOpenSidebar={!hideSidebar && sidebarCollapsed ? toggleSidebar : undefined}
-        />
+        {/* Opening and closing the sidebar both happen in its own brand row. */}
+        <Topbar showBrand={hideSidebar} />
         {/* Tighter padding on a phone: 24px on each side of a 360px screen is
             13% of the width spent on margin. The extra bottom padding is the
             height of the fixed tab bar, which would otherwise sit on top of
