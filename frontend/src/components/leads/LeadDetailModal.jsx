@@ -44,6 +44,7 @@ import { formatCurrency, formatDate, formatDateTime, titleCase } from '@/utils/f
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { DetailPanel, InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
 import { MEDIA_BASE_URL } from '@/constants/config'
+import { DateTimePicker, isFutureDateTime } from '@/components/ui/DateTimePicker'
 
 // Financial Approval and Batch Confirmation are pipeline gates: each is only
 // reachable from the stage directly before it, Financial Approval also needs
@@ -1028,12 +1029,7 @@ function PaymentDetailsTab({ lead }) {
 function FollowUpTab({ followUpAt, setFollowUpAt, history, onSave, isSaving, onClose }) {
   return (
     <div className="space-y-4">
-      <Input
-        type="datetime-local"
-        label="Schedule next follow-up"
-        value={followUpAt}
-        onChange={(event) => setFollowUpAt(event.target.value)}
-      />
+      <DateTimePicker label="Schedule next follow-up" value={followUpAt} onChange={setFollowUpAt} />
 
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={onClose}>
@@ -1155,10 +1151,19 @@ export function LeadDetailModal({ lead, onClose }) {
   const [liveLead, setLiveLead] = useState(lead)
   const [savingInstallmentIndex, setSavingInstallmentIndex] = useState(null)
   const [savedInstallmentIndex, setSavedInstallmentIndex] = useState(null)
-  // A stage move that has to say why first: Quit, or a move back to an
-  // earlier stage. { status, kind: 'lost' | 'back' } while the prompt is open.
+  // A stage move that has to ask something first: why (Quit, or a move back to
+  // an earlier stage), and/or when (Follow up call, which is a call booked for
+  // a time). { status, kind: 'lost' | 'back' | 'followup', needsFollowUp }
+  // while the prompt is open.
   const [pendingStage, setPendingStage] = useState(null)
   const [stageReason, setStageReason] = useState('')
+  const [stageFollowUpAt, setStageFollowUpAt] = useState('')
+  // The prompt opens below the stage buttons, and with a calendar in it most
+  // of it lands under the fold - brought into view so it isn't missed.
+  const pendingStageRef = useRef(null)
+  useEffect(() => {
+    if (pendingStage) pendingStageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [pendingStage])
 
   function invalidateLeadQueries() {
     queryClient.invalidateQueries({ queryKey: ['leads'] })
@@ -1169,11 +1174,14 @@ export function LeadDetailModal({ lead, onClose }) {
   }
 
   const stageMutation = useMutation({
-    mutationFn: ({ status, lostReason, backReason }) =>
+    mutationFn: ({ status, lostReason, backReason, followUpAt: scheduledFor }) =>
       leadService.update(lead.id, {
         status,
         ...(lostReason ? { lost_reason: lostReason } : {}),
         ...(backReason ? { stage_change_reason: backReason } : {}),
+        // Same field the Follow-up tab writes, in the same request as the
+        // move, so a lead never sits in Follow up call with no call booked.
+        ...(scheduledFor ? { follow_up_at: new Date(scheduledFor).toISOString() } : {}),
       }),
     onSuccess: () => {
       invalidateLeadQueries()
@@ -1184,13 +1192,21 @@ export function LeadDetailModal({ lead, onClose }) {
   // Moving to Quit, or back to an earlier stage, needs a reason (the server
   // rejects either without one), so those route through a prompt instead of
   // firing immediately. The reason for a move back lands on the timeline.
+  //
+  // Moving into Follow up call asks when the call is, whichever direction it
+  // comes from - a move back to it asks both why and when.
   function selectStage(newStatus) {
+    const needsFollowUp = newStatus === 'pre_screening' && liveLead.status !== 'pre_screening'
     if (newStatus === 'lost') {
       setPendingStage({ status: 'lost', kind: 'lost' })
       return
     }
     if (isStageReversal(liveLead.status, newStatus)) {
-      setPendingStage({ status: newStatus, kind: 'back' })
+      setPendingStage({ status: newStatus, kind: 'back', needsFollowUp })
+      return
+    }
+    if (needsFollowUp) {
+      setPendingStage({ status: newStatus, kind: 'followup', needsFollowUp })
       return
     }
     stageMutation.mutate({ status: newStatus })
@@ -1199,16 +1215,29 @@ export function LeadDetailModal({ lead, onClose }) {
   function cancelPendingStage() {
     setPendingStage(null)
     setStageReason('')
+    setStageFollowUpAt('')
   }
 
   function confirmPendingStage() {
     const reason = stageReason.trim()
+    const followUp = pendingStage.needsFollowUp ? { followUpAt: stageFollowUpAt } : {}
     stageMutation.mutate(
       pendingStage.kind === 'lost'
         ? { status: 'lost', lostReason: reason }
-        : { status: pendingStage.status, backReason: reason },
+        : pendingStage.kind === 'back'
+          ? { status: pendingStage.status, backReason: reason, ...followUp }
+          : { status: pendingStage.status, ...followUp },
     )
   }
+
+  const pendingNeedsReason = pendingStage?.kind === 'lost' || pendingStage?.kind === 'back'
+  // A call booked for a time already gone is a reminder that fires the moment
+  // it is saved - refused here rather than stored.
+  const followUpInPast = Boolean(stageFollowUpAt) && !isFutureDateTime(stageFollowUpAt)
+  const canConfirmPendingStage =
+    Boolean(pendingStage) &&
+    (!pendingNeedsReason || Boolean(stageReason.trim())) &&
+    (!pendingStage.needsFollowUp || (Boolean(stageFollowUpAt) && !followUpInPast))
 
   // Stays open on success, unlike a stage change: the lead is back on the
   // board and the popup redraws as the active lead it now is - which is the
@@ -1350,32 +1379,54 @@ export function LeadDetailModal({ lead, onClose }) {
 
         {pendingStage && (
           <div
+            ref={pendingStageRef}
             className={`rounded-lg border p-4 ${
-              pendingStage.kind === 'lost' ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'
+              pendingStage.kind === 'lost'
+                ? 'border-red-200 bg-red-50'
+                : pendingStage.kind === 'back'
+                  ? 'border-amber-200 bg-amber-50'
+                  : 'border-brand-200 bg-brand-50/60'
             }`}
           >
-            <p
-              className={`mb-2 text-sm font-semibold ${
-                pendingStage.kind === 'lost' ? 'text-red-700' : 'text-amber-800'
-              }`}
-            >
-              {pendingStage.kind === 'lost'
-                ? 'Why is this lead being marked Quit?'
-                : `Why is this lead moving back to ${stageLabel(pendingStage.status)}?`}
-            </p>
-            <Input
-              autoFocus
-              maxLength={500}
-              placeholder={
-                pendingStage.kind === 'lost'
-                  ? 'e.g. Joined elsewhere, not interested, unreachable…'
-                  : 'e.g. Payment not received yet, student asked to call later…'
-              }
-              value={stageReason}
-              onChange={(event) => setStageReason(event.target.value)}
-            />
-            {pendingStage.kind === 'back' && (
-              <p className="mt-1.5 text-xs text-amber-700">Shown on the lead&rsquo;s timeline with the move.</p>
+            <ErrorMessage message={stageMutation.error ? getApiErrorMessage(stageMutation.error) : null} />
+            {pendingNeedsReason && (
+              <>
+                <p
+                  className={`mb-2 text-sm font-semibold ${
+                    pendingStage.kind === 'lost' ? 'text-red-700' : 'text-amber-800'
+                  }`}
+                >
+                  {pendingStage.kind === 'lost'
+                    ? 'Why is this lead being marked Quit?'
+                    : `Why is this lead moving back to ${stageLabel(pendingStage.status)}?`}
+                </p>
+                <Input
+                  autoFocus
+                  maxLength={500}
+                  placeholder={
+                    pendingStage.kind === 'lost'
+                      ? 'e.g. Joined elsewhere, not interested, unreachable…'
+                      : 'e.g. Payment not received yet, student asked to call later…'
+                  }
+                  value={stageReason}
+                  onChange={(event) => setStageReason(event.target.value)}
+                />
+                {pendingStage.kind === 'back' && (
+                  <p className="mt-1.5 text-xs text-amber-700">Shown on the lead&rsquo;s timeline with the move.</p>
+                )}
+              </>
+            )}
+            {pendingStage.needsFollowUp && (
+              <div className={pendingNeedsReason ? 'mt-4' : ''}>
+                <p className="mb-2 text-sm font-semibold text-brand-800">When is the follow-up call?</p>
+                <DateTimePicker label="Follow-up date and time" value={stageFollowUpAt} onChange={setStageFollowUpAt} />
+                {followUpInPast && (
+                  <p className="mt-1.5 text-xs font-medium text-red-600">That time has already passed - pick a later one.</p>
+                )}
+                <p className="mt-1.5 text-xs text-slate-500">
+                  Shown in the board&rsquo;s Follow-up column, and a reminder goes out when it comes round.
+                </p>
+              </div>
             )}
             <div className="mt-3 flex justify-end gap-2">
               <Button variant="secondary" onClick={cancelPendingStage}>
@@ -1383,14 +1434,16 @@ export function LeadDetailModal({ lead, onClose }) {
               </Button>
               <Button
                 variant={pendingStage.kind === 'lost' ? 'danger' : 'primary'}
-                disabled={!stageReason.trim() || stageMutation.isPending}
+                disabled={!canConfirmPendingStage || stageMutation.isPending}
                 onClick={confirmPendingStage}
               >
                 {stageMutation.isPending
                   ? 'Saving…'
                   : pendingStage.kind === 'lost'
                     ? 'Mark Quit'
-                    : `Move back to ${stageLabel(pendingStage.status)}`}
+                    : pendingStage.kind === 'back'
+                      ? `Move back to ${stageLabel(pendingStage.status)}`
+                      : `Move to ${stageLabel(pendingStage.status)}`}
               </Button>
             </div>
           </div>

@@ -928,6 +928,29 @@ function FoundationLeadsBoard() {
         )
       },
     },
+    // Next to Stage because it is what the Follow up call stage is waiting
+    // on: booked when a lead is moved there, and rebooked from the lead's
+    // Follow-up tab. Past due reads red - that call should have happened.
+    // Not on a quit student, where there is nothing left to follow up.
+    {
+      key: 'follow_up_at',
+      header: 'Follow-up',
+      align: 'center',
+      render: (row) => {
+        if (!row.follow_up_at || row.status === 'lost') return <span className="text-slate-400">—</span>
+        const when = new Date(row.follow_up_at)
+        const overdue = when.getTime() < Date.now()
+        return (
+          <div className={`whitespace-nowrap ${overdue ? 'text-red-600' : 'text-slate-900'}`}>
+            <p className="text-sm font-medium">{formatDate(when)}</p>
+            <p className={`text-xs ${overdue ? 'text-red-500' : 'text-slate-500'}`}>
+              {new Intl.DateTimeFormat('en-IN', { timeStyle: 'short' }).format(when)}
+              {overdue && ' · Overdue'}
+            </p>
+          </div>
+        )
+      },
+    },
     // Why and when they were lost - what the Quit Students tab is read for.
     ...(showLost
       ? [
