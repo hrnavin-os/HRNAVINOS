@@ -12,6 +12,7 @@ import {
   Hash,
   Mail,
   Phone,
+  QrCode,
   Wallet,
 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
@@ -56,6 +57,10 @@ function buildInfoItems(lead, summary) {
     },
     { icon: CreditCard, label: 'Payment Mode', value: summary.mode ? titleCase(summary.mode) : '—', tone: 'violet' },
   ]
+  // Which account the money went into - what Finance reconciles against.
+  if (summary.qrCode) {
+    items.push({ icon: QrCode, label: 'QR Code', value: summary.qrCode, tone: 'violet' })
+  }
   if (summary.mode) {
     const isUpi = summary.mode === 'upi'
     items.push({

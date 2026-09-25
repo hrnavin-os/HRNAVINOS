@@ -88,3 +88,32 @@ async def test_a_part_payment_is_enough_for_financial_approval(client, auth_head
     )
 
     assert response.status_code == 200, response.text
+
+
+async def test_the_qr_code_is_picked_with_the_payment(client, auth_headers, uploads):
+    """Picked in the payment card now, not the board - and mirrored onto the
+    lead, which is what the board's QR filter reads."""
+    lead_id = await single_shot_lead(client, auth_headers)
+
+    response = await pay(client, auth_headers, lead_id, received_amount="15000", qr_code="Chitra-Axis")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["installments"][0]["qr_code"] == "Chitra-Axis"
+    assert body["qr_code"] == "Chitra-Axis"
+    found = await client.get("/api/v1/leads", headers=auth_headers, params={"qr_code": "Chitra-Axis"})
+    assert [lead["id"] for lead in found.json()["items"]] == [lead_id]
+
+
+async def test_statistics_count_what_the_payment_card_recorded(client, auth_headers, uploads):
+    """With the board's Paying Amount column gone, what was collected comes
+    from the payments themselves - a part-payment counts what came in."""
+    lead_id = await single_shot_lead(client, auth_headers)
+    await pay(client, auth_headers, lead_id, received_amount="10000", scheduled_at="2026-09-27")
+
+    response = await client.get(
+        "/api/v1/leads/analytics", headers=auth_headers, params={"dimension": "course"}
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["items"][0]["collected"] == 10000

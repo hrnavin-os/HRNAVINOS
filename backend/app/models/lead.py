@@ -79,6 +79,9 @@ class PaymentInstallment(BaseModel):
     # None on installments saved before this existed: those were paid in full.
     received_amount: MongoDecimal | None = None
     mode: InstallmentPaymentMode | None = None
+    # Which QR code / account this payment went into. Lead.qr_code mirrors the
+    # latest one, which is what the board filters on.
+    qr_code: str | None = Field(default=None, max_length=100)
     transaction_id: str | None = Field(default=None, max_length=100)
     upi_id: str | None = Field(default=None, max_length=100)
     # The first proof, kept for the readers that only ever show one (Payments,

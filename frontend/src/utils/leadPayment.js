@@ -35,6 +35,9 @@ export function getLeadPaymentSummary(lead) {
       dueAmount: totalAmount - paidAmount,
       balanceDueAt,
       mode: latest?.mode ?? null,
+      // The account the latest payment went into; the lead's own field for
+      // payments recorded before it was asked with the payment.
+      qrCode: latest?.qr_code ?? lead.qr_code ?? null,
       transactionId: latest?.transaction_id ?? null,
       upiId: latest?.upi_id ?? null,
       proofUrl: latest?.proof_url ?? null,
@@ -50,6 +53,7 @@ export function getLeadPaymentSummary(lead) {
     dueAmount: null,
     balanceDueAt: null,
     mode: lead.payment_mode ?? null,
+    qrCode: lead.qr_code ?? null,
     transactionId: null,
     upiId: null,
     proofUrl: lead.payment_image_url ?? null,

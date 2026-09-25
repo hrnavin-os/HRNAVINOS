@@ -12,7 +12,7 @@ import { inductionFormConfigService } from '@/services/inductionFormConfigServic
 import { getApiErrorMessage } from '@/services/apiClient'
 import { LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
 import { PERMISSIONS } from '@/constants/permissions'
-import { formatCurrency, formatDate, titleCase } from '@/utils/formatters'
+import { formatDate, titleCase } from '@/utils/formatters'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
@@ -146,99 +146,11 @@ function TruncatedText({ text }) {
 // `displayByValue` is looked up before `options` so a value that's been
 // retired from the picker still renders its own label instead of falling
 // back to the "Select…" placeholder, which would read as empty data.
-// The amount someone actually paid, typed straight into the row.
-//
-// Not derived from the installments: this is the manual pair beside Payment
-// Remarks, filled in while a lead is still being chased on the phone and
-// before any structured collection has happened.
-//
-// Reads as text until you click it, so a column of amounts stays a column of
-// amounts rather than a wall of input boxes.
-function AmountCell({ lead, onError }) {
-  const queryClient = useQueryClient()
-  const [isEditing, setIsEditing] = useState(false)
-  const [value, setValue] = useState(lead.paying_amount ?? '')
-
-  const mutation = useMutation({
-    // Empty clears the field rather than sending "", which the decimal column
-    // would reject.
-    mutationFn: () => leadService.update(lead.id, { paying_amount: value === '' ? null : Number(value) }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['leads'] })
-      setIsEditing(false)
-    },
-    onError: (error) => onError(`Couldn't save the amount for ${lead.name}: ${getApiErrorMessage(error)}`),
-  })
-
-  function open(event) {
-    event.stopPropagation()
-    setValue(lead.paying_amount ?? '')
-    mutation.reset()
-    setIsEditing(true)
-  }
-
-  if (!isEditing) {
-    return (
-      <button
-        type="button"
-        onClick={open}
-        className="w-full rounded-md px-2 py-1 text-sm tabular-nums transition-colors hover:bg-slate-100"
-      >
-        {lead.paying_amount === null || lead.paying_amount === undefined ? (
-          <span className="text-slate-400">Add amount</span>
-        ) : (
-          <span className="font-medium text-slate-900">{formatCurrency(lead.paying_amount)}</span>
-        )}
-      </button>
-    )
-  }
-
-  return (
-    <div
-      className="flex items-center gap-1"
-      onClick={(event) => event.stopPropagation()}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') mutation.mutate()
-        if (event.key === 'Escape') setIsEditing(false)
-      }}
-    >
-      <input
-        autoFocus
-        type="number"
-        min="0"
-        step="0.01"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        placeholder="0"
-        className="w-24 rounded-md border border-slate-300 px-2 py-1 text-sm tabular-nums text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-      />
-      <button
-        type="button"
-        onClick={() => mutation.mutate()}
-        disabled={mutation.isPending}
-        aria-label="Save amount"
-        className="rounded p-1 text-emerald-600 transition-colors hover:bg-emerald-50 disabled:opacity-50"
-      >
-        <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        onClick={() => setIsEditing(false)}
-        disabled={mutation.isPending}
-        aria-label="Cancel"
-        className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50"
-      >
-        <X className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
-      </button>
-    </div>
-  )
-}
-
 // The batch the student is in. For a lead that came through Induction it is
 // the number entered on the Induction form and can't be changed here - that
 // form is the one source. Otherwise it is typed straight into the row (e.g.
 // "27"), the same `batch_number` Batch Confirmation writes. Reads as text
-// until clicked, like AmountCell.
+// until clicked.
 function BatchCell({ lead, onError }) {
   const queryClient = useQueryClient()
   const [isEditing, setIsEditing] = useState(false)
@@ -959,33 +871,9 @@ function FoundationLeadsBoard() {
         <PaymentPlanCell key={row.id} lead={row} pricing={pricingQuery.data} onError={setEditError} />
       ),
     },
-    // Between Payment Method and Payment Remarks: how much, through which
-    // account, then what the caller made of it.
-    {
-      key: 'paying_amount',
-      header: 'Paying Amount',
-      align: 'center',
-      render: (row) => <AmountCell key={row.id} lead={row} onError={setEditError} />,
-    },
-    {
-      key: 'qr_code',
-      header: 'QR-Code',
-      align: 'center',
-      render: (row) => (
-        <SelectBadgeCell
-          key={row.id}
-          lead={row}
-          field="qr_code"
-          options={qrCodeOptions}
-          placeholder="Select…"
-          allowAdd
-          // Plain text, not a badge - thirty accounts cannot each carry a
-          // meaningful colour, and colouring some would imply a grouping.
-          plain
-          onError={setEditError}
-        />
-      ),
-    },
+    // No Paying Amount or QR-Code columns: both are recorded with the payment
+    // itself, in the lead popup's Payment Collection - what was received, and
+    // which account it went into.
     // The day the student picked on the Foundation Form's "When will you make
     // the payment?" step - stored on the lead's raw form answers since
     // submission, just never shown on the board. Next to Payment Remarks

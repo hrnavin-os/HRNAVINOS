@@ -365,6 +365,8 @@ async def update_installment(
     # What was actually collected - can be less than the fee, leaving a balance.
     received_amount: str | None = Form(default=None),
     mode: InstallmentPaymentMode | None = Form(default=None),
+    # The QR code / account the money went into.
+    qr_code: str | None = Form(default=None, max_length=100),
     transaction_id: str | None = Form(default=None),
     upi_id: str | None = Form(default=None),
     scheduled_at: date | None = Form(default=None),
@@ -397,6 +399,7 @@ async def update_installment(
         file=file,
         amount=parsed_amount,
         received_amount=parsed_received,
+        qr_code=qr_code,
         mode=mode,
         transaction_id=transaction_id,
         upi_id=upi_id,

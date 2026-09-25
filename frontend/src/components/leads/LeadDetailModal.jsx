@@ -33,7 +33,7 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
 import { INSTALLMENT_MODE_OPTIONS, PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
-import { PAYMENT_PLAN_TONES } from '@/constants/paymentOptions'
+import { PAYMENT_PLAN_TONES, QR_CODE_OPTIONS } from '@/constants/paymentOptions'
 import { leadService } from '@/services/leadService'
 import { foundationFormService } from '@/services/foundationFormService'
 import { PaymentDetailContent } from '@/components/payments/PaymentDetailModal'
@@ -363,6 +363,29 @@ function ProofThumb({ href, title, isNew = false, onRemove }) {
   )
 }
 
+// The QR Code menu's "add a new one" entry - not a value anybody could name an
+// account.
+const ADD_QR_CODE = '__add_qr_code__'
+
+// The built-in accounts, then any added on leads since, then the one this
+// payment already carries if it's neither (a retired name still shows).
+// Shares its cache key with the board's QR filter, which reads the same list.
+function useQrCodeOptions(current) {
+  const added = useQuery({
+    queryKey: ['lead-field-options', 'qr_code'],
+    queryFn: () => leadService.getFieldOptions('qr_code'),
+  }).data ?? []
+  const names = QR_CODE_OPTIONS.map((option) => option.value)
+  const known = new Set(names.map((name) => name.toLowerCase()))
+  for (const name of [...added, current]) {
+    if (name && !known.has(name.toLowerCase())) {
+      names.push(name)
+      known.add(name.toLowerCase())
+    }
+  }
+  return names
+}
+
 function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved = false }) {
   const isTwoShotSecond = lead.payment_plan === 'two_shot' && index === 1
   const [showPaidFields, setShowPaidFields] = useState(!isTwoShotSecond || installment.paid || Boolean(installment.mode))
@@ -375,6 +398,11 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
   // is still the usual case.
   const [received, setReceived] = useState(installment.received_amount ?? installment.amount ?? '')
   const [mode, setMode] = useState(installment.mode ?? '')
+  // The account the money went into. Falls back to the lead's own QR code,
+  // which is where it was kept before it moved in here from the board.
+  const [qrCode, setQrCode] = useState(installment.qr_code ?? lead.qr_code ?? '')
+  const [isAddingQr, setIsAddingQr] = useState(false)
+  const qrOptions = useQrCodeOptions(qrCode)
   const [transactionId, setTransactionId] = useState(installment.transaction_id ?? '')
   const [upiId, setUpiId] = useState(installment.upi_id ?? '')
   const [scheduledAt, setScheduledAt] = useState(installment.scheduled_at ?? '')
@@ -431,6 +459,7 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
       remarks,
       receivedAmount: received,
       mode,
+      qrCode,
       transactionId,
       upiId,
       scheduledAt: balance > 0 ? scheduledAt : undefined,
@@ -533,6 +562,48 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
                   </option>
                 ))}
               </Select>
+              {/* Straight after the mode: which account it was paid into. The
+                  list is a roster that grows, so a new account can be typed. */}
+              <div className="sm:col-span-2">
+                {isAddingQr ? (
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <Input
+                        autoFocus
+                        label="QR Code"
+                        placeholder="New QR code / account name"
+                        maxLength={100}
+                        value={qrCode}
+                        onChange={(event) => setQrCode(event.target.value)}
+                      />
+                    </div>
+                    <Button variant="secondary" onClick={() => setIsAddingQr(false)}>
+                      Pick from list
+                    </Button>
+                  </div>
+                ) : (
+                  <Select
+                    label="QR Code"
+                    value={qrCode}
+                    onChange={(event) => {
+                      if (event.target.value === ADD_QR_CODE) {
+                        setQrCode('')
+                        setIsAddingQr(true)
+                      } else {
+                        setQrCode(event.target.value)
+                      }
+                    }}
+                  >
+                    <option value="">Select QR Code</option>
+                    {qrOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                    <option value={ADD_QR_CODE}>+ Add new…</option>
+                  </Select>
+                )}
+              </div>
               {/* Full width: alone in half a row it left a hole beside it. */}
               {(mode === 'card' || mode === 'netbanking') && (
                 <div className="sm:col-span-2">
@@ -1030,6 +1101,8 @@ export function LeadDetailModal({ lead, onClose }) {
     queryClient.invalidateQueries({ queryKey: ['leads'] })
     queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
     queryClient.invalidateQueries({ queryKey: ['lead-timeline', lead.id] })
+    // A QR code typed in on a payment joins the list offered everywhere else.
+    queryClient.invalidateQueries({ queryKey: ['lead-field-options', 'qr_code'] })
   }
 
   const stageMutation = useMutation({

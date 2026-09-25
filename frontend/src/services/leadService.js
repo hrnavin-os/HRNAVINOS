@@ -89,7 +89,7 @@ export const leadService = {
   updateInstallment: async (
     id,
     index,
-    { file, files, removeProofUrls, remarks, amount, receivedAmount, mode, transactionId, upiId, scheduledAt },
+    { file, files, removeProofUrls, remarks, amount, receivedAmount, mode, qrCode, transactionId, upiId, scheduledAt },
   ) => {
     const formData = new FormData()
     if (file) formData.append('file', file)
@@ -106,6 +106,7 @@ export const leadService = {
       formData.append('received_amount', receivedAmount)
     }
     if (mode) formData.append('mode', mode)
+    if (qrCode?.trim()) formData.append('qr_code', qrCode.trim())
     if (transactionId) formData.append('transaction_id', transactionId)
     if (upiId) formData.append('upi_id', upiId)
     if (scheduledAt) formData.append('scheduled_at', scheduledAt)

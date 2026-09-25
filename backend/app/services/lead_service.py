@@ -60,6 +60,37 @@ from app.utils.phone import normalize_phone
 # More than this on one installment is a mistake, not evidence.
 MAX_INSTALLMENT_PROOFS = 10
 
+# Money received across a lead's installments, in the database - the aggregate
+# form of PaymentInstallment.collected: a paid installment counts what was
+# received (the fee, on ones saved before part-payments), an unpaid one only a
+# part-payment recorded against it.
+_INSTALLMENTS_COLLECTED = {
+    "$reduce": {
+        "input": {"$ifNull": ["$installments", []]},
+        "initialValue": 0.0,
+        "in": {
+            "$add": [
+                "$$value",
+                {
+                    "$toDouble": {
+                        "$cond": [
+                            "$$this.paid",
+                            {"$ifNull": ["$$this.received_amount", {"$ifNull": ["$$this.amount", 0]}]},
+                            {
+                                "$cond": [
+                                    {"$ne": [{"$ifNull": ["$$this.mode", None]}, None]},
+                                    {"$ifNull": ["$$this.received_amount", 0]},
+                                    0,
+                                ]
+                            },
+                        ]
+                    }
+                },
+            ]
+        },
+    }
+}
+
 # What the Foundation board's search box matches against - the table and the
 # stat cards both, so they agree on who a search found.
 LEAD_SEARCH_FIELDS = ["name", "phone", "email", "course_interest"]
@@ -130,6 +161,7 @@ class LeadService:
                     amount=installment.amount,
                     received_amount=installment.received_amount,
                     mode=installment.mode,
+                    qr_code=installment.qr_code,
                     transaction_id=installment.transaction_id,
                     upi_id=installment.upi_id,
                     proof_url=installment.proof_url,
@@ -462,10 +494,24 @@ class LeadService:
         "confirmed": {"$sum": {"$cond": [{"$eq": ["$status", LeadStatus.BATCH_CONFIRMATION.value]}, 1, 0]}},
         "lost": {"$sum": {"$cond": [{"$eq": ["$status", LeadStatus.LOST.value]}, 1, 0]}},
         # Decimal128 out of Mongo doesn't add to an int, and this figure feeds a
-        # chart rather than an invoice, so it is summed as a double. A lead with
-        # no amount typed against it contributes nothing rather than breaking
-        # the sum.
-        "collected": {"$sum": {"$toDouble": {"$ifNull": ["$paying_amount", 0]}}},
+        # chart rather than an invoice, so it is summed as a double. What the
+        # lead's payment collection recorded, where it recorded anything; the
+        # board's old Paying Amount field otherwise, which is all the leads
+        # from before it went carry. A lead with neither contributes nothing.
+        "collected": {
+            "$sum": {
+                "$let": {
+                    "vars": {"recorded": _INSTALLMENTS_COLLECTED},
+                    "in": {
+                        "$cond": [
+                            {"$gt": ["$$recorded", 0]},
+                            "$$recorded",
+                            {"$toDouble": {"$ifNull": ["$paying_amount", 0]}},
+                        ]
+                    },
+                }
+            }
+        },
     }
 
     async def analytics(
@@ -1080,6 +1126,7 @@ class LeadService:
         amount: Decimal | None,
         mode: InstallmentPaymentMode | None,
         received_amount: Decimal | None = None,
+        qr_code: str | None = None,
         transaction_id: str | None,
         upi_id: str | None,
         scheduled_at: date | None,
@@ -1099,6 +1146,11 @@ class LeadService:
             installment.amount = amount
         if mode is not None:
             installment.mode = mode
+        if qr_code is not None and qr_code.strip():
+            installment.qr_code = qr_code.strip()[:100]
+            # The lead's own QR field is what the board filters and the sheet
+            # export read, so it follows the latest payment's account.
+            lead.qr_code = installment.qr_code
         if transaction_id is not None:
             installment.transaction_id = transaction_id
         if upi_id is not None:
