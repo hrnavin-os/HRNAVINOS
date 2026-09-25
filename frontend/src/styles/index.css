@@ -125,6 +125,17 @@ table {
   scrollbar-color: #e2e8f0 transparent;
 }
 
+/* The sidebar sits on the brand gradient, where the slate thumbs above would
+   read as grey smudges on blue. A translucent white one tints with whatever
+   stretch of the gradient is behind it. */
+.sidebar-scroll {
+  scrollbar-color: rgb(255 255 255 / 0.25) transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  box-shadow: inset 0 0 0 3px rgb(255 255 255 / 0.25);
+}
+
 /* Wide tables get a firmer version of the same bar - only the colour differs,
    the geometry above already applies. Horizontal scrolling is the easiest to
    miss, since nothing about a table's edge says it continues, so this one is

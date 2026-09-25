@@ -4,18 +4,18 @@ import { ChevronDown, GraduationCap, PanelLeftClose, PanelLeftOpen } from 'lucid
 import { getVisibleNavItems } from '@/constants/navigation'
 import { useAuth } from '@/hooks/useAuth'
 
-// Rows are a comfortable 36px target with a soft rounded tint on hover. The
-// active row is marked by a slim brand bar on the rail's edge plus a light
-// brand wash - one quiet signal, rather than the left border every row used
-// to carry (transparent on all but one) that read as a list of form fields.
+// The sidebar is a solid band of the theme gradient, so everything on it is
+// light. Rows are a comfortable 36px target with a soft white tint on hover;
+// the active row is a white pill carrying the brand colour back - the one
+// solid-white thing on the rail, so where you are is never in doubt.
 const LINK_BASE =
-  'group relative flex h-9 items-center gap-3 rounded-lg text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-brand-500/40'
-const LINK_ACTIVE = 'bg-brand-50 text-brand-700'
-const LINK_IDLE = 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+  'group relative flex h-9 items-center gap-3 rounded-lg text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-white/60'
+const LINK_ACTIVE = 'bg-white text-brand-700 shadow-sm shadow-brand-900/20'
+const LINK_IDLE = 'text-white/85 hover:bg-white/10 hover:text-white'
 
-const ICON_BASE = 'h-[18px] w-[18px] shrink-0 transition-colors'
+const ICON_BASE = 'h-4.5 w-4.5 shrink-0 transition-colors'
 const ICON_ACTIVE = 'text-brand-600'
-const ICON_IDLE = 'text-slate-400 group-hover:text-slate-600'
+const ICON_IDLE = 'text-white/70 group-hover:text-white'
 
 // The bar sits out at the rail's edge, in the nav's own padding, so it marks
 // the row without eating into it. `edge` is that padding, which differs
@@ -24,7 +24,7 @@ function ActiveBar({ edge }) {
   return (
     <span
       aria-hidden="true"
-      className={`absolute top-1.5 bottom-1.5 w-0.75 rounded-r-full bg-brand-600 ${edge}`}
+      className={`absolute top-1.5 bottom-1.5 w-0.75 rounded-r-full bg-white ${edge}`}
     />
   )
 }
@@ -115,7 +115,7 @@ function NavGroup({ item, collapsed = false, onExpandSidebar }) {
           <>
             <span className="truncate">{item.label}</span>
             <ChevronDown
-              className={`ml-auto h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 ${
+              className={`ml-auto h-4 w-4 shrink-0 text-white/60 transition-transform duration-200 ${
                 isOpen ? 'rotate-180' : ''
               }`}
               strokeWidth={2}
@@ -127,7 +127,7 @@ function NavGroup({ item, collapsed = false, onExpandSidebar }) {
       {/* Children hang off a guide line from the parent's icon, so the tree
           reads at a glance instead of by indentation alone. */}
       {isOpen && !collapsed && (
-        <div className="mt-1 ml-5.25 space-y-0.5 border-l border-slate-200 pl-2.5">
+        <div className="mt-1 ml-5.25 space-y-0.5 border-l border-white/20 pl-2.5">
           {item.children.map((child) => (
             <NavItemLink key={child.to} item={child} nested />
           ))}
@@ -137,8 +137,10 @@ function NavGroup({ item, collapsed = false, onExpandSidebar }) {
   )
 }
 
+// White on the gradient: the one tile that stays solid, so the mark reads
+// as the logo rather than as another row icon.
 const LOGO_MARK =
-  'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-brand-500 to-brand-700 text-white shadow-md ring-1 shadow-brand-600/25 ring-white/20 ring-inset'
+  'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-brand-600 shadow-md shadow-brand-900/25'
 
 function Brand({ collapsed, onToggle }) {
   // Both halves of the toggle live in this row, so opening and closing happen
@@ -147,19 +149,19 @@ function Brand({ collapsed, onToggle }) {
   // hover, the way the close button looks when the sidebar is open.
   if (collapsed) {
     return (
-      <div className="flex h-14 shrink-0 items-center justify-center border-b border-slate-200 px-2">
+      <div className="flex h-14 shrink-0 items-center justify-center border-b border-white/10 px-2">
         <button
           type="button"
           onClick={onToggle}
           aria-label="Expand sidebar"
           title="Expand sidebar"
-          className="group/expand relative flex h-9 w-9 items-center justify-center rounded-lg outline-none transition-colors hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-brand-500/40"
+          className="group/expand relative flex h-9 w-9 items-center justify-center rounded-lg outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/60"
         >
           <span className={`${LOGO_MARK} transition-opacity group-hover/expand:opacity-0 group-focus-visible/expand:opacity-0`}>
             <GraduationCap className="h-5 w-5" strokeWidth={2} />
           </span>
           <PanelLeftOpen
-            className="absolute h-4.5 w-4.5 text-slate-600 opacity-0 transition-opacity group-hover/expand:opacity-100 group-focus-visible/expand:opacity-100"
+            className="absolute h-4.5 w-4.5 text-white opacity-0 transition-opacity group-hover/expand:opacity-100 group-focus-visible/expand:opacity-100"
             strokeWidth={1.75}
             aria-hidden="true"
           />
@@ -169,13 +171,13 @@ function Brand({ collapsed, onToggle }) {
   }
 
   return (
-    <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-slate-200 px-4">
+    <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-white/10 px-4">
       <span className={LOGO_MARK}>
         <GraduationCap className="h-5 w-5" strokeWidth={2} />
       </span>
       <div className="flex min-w-0 items-center gap-1.5">
-        <span className="text-[15px] font-bold tracking-tight text-slate-900">HRNAVINOS</span>
-        <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-slate-500">
+        <span className="text-[15px] font-bold tracking-tight text-white">HRNAVINOS</span>
+        <span className="rounded-md bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-white">
           ERP
         </span>
       </div>
@@ -184,7 +186,7 @@ function Brand({ collapsed, onToggle }) {
         onClick={onToggle}
         aria-label="Collapse sidebar"
         title="Collapse sidebar"
-        className="ml-auto -mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+        className="ml-auto -mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white"
       >
         <PanelLeftClose className="h-4.5 w-4.5" strokeWidth={1.75} aria-hidden="true" />
       </button>
@@ -199,7 +201,7 @@ function SidebarNav({ collapsed, onExpandSidebar }) {
   const items = getVisibleNavItems({ user, hasPermission })
 
   return (
-    <nav className={`table-scroll flex-1 space-y-0.5 overflow-y-auto pt-4 pb-4 ${collapsed ? 'px-2' : 'px-3'}`}>
+    <nav className={`sidebar-scroll flex-1 space-y-0.5 overflow-y-auto pt-4 pb-4 ${collapsed ? 'px-2' : 'px-3'}`}>
       {items.map((item, index) => (
         <div key={item.to ?? item.label}>
           {item.group &&
@@ -207,9 +209,9 @@ function SidebarNav({ collapsed, onExpandSidebar }) {
               // The heading text doesn't fit, but the break between sections
               // still carries meaning - a rule keeps the grouping visible.
               // Not above the first group: there is nothing to divide it from.
-              index > 0 && <hr className="mx-2 my-3 border-slate-200" aria-hidden="true" />
+              index > 0 && <hr className="mx-2 my-3 border-white/15" aria-hidden="true" />
             ) : (
-              <h3 className="mt-6 mb-1.5 px-3 text-[10.5px] font-semibold tracking-[0.08em] text-slate-400 uppercase first:mt-0">
+              <h3 className="mt-6 mb-1.5 px-3 text-[10.5px] font-semibold tracking-[0.08em] text-brand-100/80 uppercase first:mt-0">
                 {item.group}
               </h3>
             ))}
@@ -227,7 +229,10 @@ function SidebarNav({ collapsed, onExpandSidebar }) {
 export function Sidebar({ collapsed = false, onToggle }) {
   return (
     <aside
-      className={`hidden shrink-0 border-r border-slate-200/80 bg-white transition-[width] duration-200 md:flex md:flex-col ${
+      // The theme gradient, top to bottom: lightest behind the logo, deepening
+      // down the rail so the long list of rows sits on the darkest, most
+      // readable part of it.
+      className={`hidden shrink-0 bg-linear-to-b from-brand-600 via-brand-700 to-brand-900 transition-[width] duration-200 md:flex md:flex-col ${
         collapsed ? 'w-16' : 'w-64'
       }`}
     >
