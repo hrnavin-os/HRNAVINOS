@@ -30,6 +30,15 @@ class SettingsService:
         )
         return settings
 
+    async def set_admin_lead_delete(self, enabled: bool, *, actor_id: uuid.UUID | None) -> AppSettings:
+        settings = await self.settings.get_or_create()
+        update_data = {"admin_lead_delete_enabled": enabled, "updated_by": actor_id}
+        await self.settings.update(settings, update_data)
+        await self.audit.record(
+            user_id=actor_id, action="UPDATE", entity_type="Settings", entity_id=str(settings.id), changes=update_data
+        )
+        return settings
+
     async def reset_leads(
         self,
         confirmation: str,

@@ -9,8 +9,10 @@ from app.core.security import TokenType, decode_token
 from app.exceptions.base import ForbiddenError, UnauthorizedError
 from app.models.role import Role
 from app.models.user import User
+from app.permissions.permission_codes import Permissions
 from app.repositories.permission_repository import PermissionRepository
 from app.repositories.role_repository import RoleRepository
+from app.repositories.settings_repository import SettingsRepository
 from app.repositories.user_repository import UserRepository
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
@@ -57,7 +59,23 @@ async def get_role_permission_codes(role: Role | None) -> set[str]:
     if not role or not role.permission_ids:
         return set()
     permissions = await PermissionRepository().get_by_ids(role.permission_ids)
-    return {permission.code for permission in permissions}
+    codes = {permission.code for permission in permissions}
+    # The Super Admin's "Admin can delete leads" switch in Settings. Granted
+    # here, the one place every permission check and /auth/me read from, so
+    # both delete endpoints and the delete option on both boards follow it
+    # without a check of their own.
+    #
+    # The Admin role is recognised by what it does - edits leads on every
+    # section - not by its name, which the role editor can change. That leaves
+    # out the Section Admins, who are scoped to one section.
+    if (
+        Permissions.LEADS_UPDATE in codes
+        and Permissions.LEADS_DELETE not in codes
+        and not role.scoped_section
+        and (await SettingsRepository().get_or_create()).admin_lead_delete_enabled
+    ):
+        codes.add(Permissions.LEADS_DELETE.value)
+    return codes
 
 
 async def get_actor_scope(user: User) -> str | None:

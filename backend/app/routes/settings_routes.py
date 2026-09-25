@@ -5,6 +5,7 @@ from app.core.dependencies import RequirePermissions, RequireRoles
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.settings_schema import (
+    LeadDeleteToggle,
     ResetLeadsRequest,
     ResetLeadsResponse,
     SettingsResponse,
@@ -28,6 +29,26 @@ async def update_settings(
     actor: User = Depends(RequirePermissions(Permissions.SETTINGS_UPDATE)),
 ) -> SettingsResponse:
     return SettingsResponse.model_validate(await SettingsService().update(payload, actor_id=actor.id))
+
+
+@router.get("/lead-delete", response_model=LeadDeleteToggle)
+async def get_lead_delete(actor: User = Depends(RequireRoles("Super Admin"))) -> LeadDeleteToggle:
+    settings = await SettingsService().get()
+    return LeadDeleteToggle(enabled=settings.admin_lead_delete_enabled)
+
+
+@router.put("/lead-delete", response_model=LeadDeleteToggle)
+async def set_lead_delete(
+    payload: LeadDeleteToggle,
+    # Role, not permission, for the reason reset-leads gives below: this hands
+    # out a destructive action, and must not itself be something a role can be
+    # granted by ticking a box.
+    actor: User = Depends(RequireRoles("Super Admin")),
+) -> LeadDeleteToggle:
+    """Turns the Admin role's delete option on every Induction and Foundation
+    lead on or off. Super Admin keeps delete either way."""
+    settings = await SettingsService().set_admin_lead_delete(payload.enabled, actor_id=actor.id)
+    return LeadDeleteToggle(enabled=settings.admin_lead_delete_enabled)
 
 
 @router.post("/reset-leads", response_model=ResetLeadsResponse)

@@ -32,6 +32,15 @@ class SettingsResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class LeadDeleteToggle(BaseModel):
+    """Whether the Admin role gets the delete option on every Induction and
+    Foundation lead. Its own schema rather than a field on SettingsUpdate:
+    that form is open to anyone with settings.update, and this switch is the
+    Super Admin's alone."""
+
+    enabled: bool
+
+
 class ResetScope(StrEnum):
     """Which board a reset clears.
 

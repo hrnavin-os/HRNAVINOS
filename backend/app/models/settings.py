@@ -16,6 +16,10 @@ class AppSettings(BaseDocument):
     timezone: str = Field(default="Asia/Kolkata", max_length=50)
     invoice_prefix: str = Field(default="INV", max_length=20)
     logo_url: str | None = Field(default=None, max_length=500)
+    # Super Admin's switch for the Admin role's delete option on the Induction
+    # and Foundation boards. Off by default: deleting a lead is not part of the
+    # role until somebody decides it should be. See get_role_permission_codes.
+    admin_lead_delete_enabled: bool = False
 
     class Settings:
         name = "settings"
