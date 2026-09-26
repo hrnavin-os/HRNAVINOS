@@ -20,6 +20,20 @@ class Permissions(StrEnum):
     USERS_UPDATE = "users.update"
     USERS_DELETE = "users.delete"
 
+    # ---------- Staffs (Employee > Staffs) ----------
+    # The staff directory: every member of staff with their full profile -
+    # personal, employment, ID, address and bank details. Its own code rather
+    # than riding on users.view, because a role that manages logins is not
+    # automatically one that should read everybody's bank account and Aadhaar
+    # number. Adding and editing staff is still the Users menu's job.
+    STAFFS_VIEW = "staffs.view"
+
+    # ---------- Departments (Employee > Departments) ----------
+    DEPARTMENTS_VIEW = "departments.view"
+    DEPARTMENTS_CREATE = "departments.create"
+    DEPARTMENTS_UPDATE = "departments.update"
+    DEPARTMENTS_DELETE = "departments.delete"
+
     # ---------- Roles ----------
     ROLES_VIEW = "roles.view"
     ROLES_CREATE = "roles.create"
@@ -201,6 +215,8 @@ OFFERED_MODULES: set[str] = {
     "whatsapp_links",
     "notifications",
     "payments",
+    "staffs",
+    "departments",
     "users",
     "roles",
     # Not a menu of its own: the role editor's own permission list is read

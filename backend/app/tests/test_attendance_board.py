@@ -3,6 +3,7 @@
 The board lists induction entries, so every test here seeds one. Distinct from
 the classroom attendance a Tutor marks against a batch.
 """
+from app.tests.staff_helpers import staff_fields
 
 INDUCTION_URL = "/api/v1/induction-entries"
 STUDENTS_URL = "/api/v1/induction-attendance/students"
@@ -464,6 +465,7 @@ async def section_admin_headers(client, auth_headers, section: str = "a") -> dic
             "first_name": "Section",
             "last_name": "Admin",
             "role_id": role["id"],
+            **(await staff_fields(client, auth_headers)),
         },
     )
     assert created.status_code == 201, created.text

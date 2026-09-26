@@ -9,6 +9,8 @@ import {
   Wallet,
   Users,
   UserCog,
+  Contact,
+  Building2,
   ShieldCheck,
   Settings,
   FileCheck2,
@@ -167,8 +169,13 @@ export const NAV_ITEMS = [
     icon: Users,
     group: 'Administration',
     children: [
-      { label: 'Users', to: '/users', permission: PERMISSIONS.USERS_VIEW, icon: UserCog },
+      // Staffs first - the directory of everybody the Users form has recorded -
+      // then Departments and Roles, since every user must be given one of
+      // each, and Users itself last.
+      { label: 'Staffs', to: '/staffs', permission: PERMISSIONS.STAFFS_VIEW, icon: Contact },
+      { label: 'Departments', to: '/departments', permission: PERMISSIONS.DEPARTMENTS_VIEW, icon: Building2 },
       { label: 'Roles', to: '/roles', permission: PERMISSIONS.ROLES_VIEW, icon: ShieldCheck },
+      { label: 'Users', to: '/users', permission: PERMISSIONS.USERS_VIEW, icon: UserCog },
     ],
   },
   { label: 'Settings', to: '/settings', permission: PERMISSIONS.SETTINGS_VIEW, icon: Settings },

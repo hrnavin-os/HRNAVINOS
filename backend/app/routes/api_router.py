@@ -12,6 +12,7 @@ from app.routes import (
     company_routes,
     course_routes,
     dashboard_routes,
+    department_routes,
     foundation_form_config_routes,
     foundation_form_routes,
     google_sheets_routes,
@@ -30,6 +31,7 @@ from app.routes import (
     role_routes,
     settings_routes,
     sheet_export_routes,
+    staff_routes,
     student_routes,
     ticket_routes,
     tutor_routes,
@@ -41,6 +43,8 @@ api_router = APIRouter()
 api_router.include_router(auth_routes.router)
 api_router.include_router(user_routes.router)
 api_router.include_router(role_routes.router)
+api_router.include_router(staff_routes.router)
+api_router.include_router(department_routes.router)
 api_router.include_router(permission_routes.router)
 api_router.include_router(audit_log_routes.router)
 api_router.include_router(dashboard_routes.router)

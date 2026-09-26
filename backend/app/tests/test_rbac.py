@@ -1,4 +1,5 @@
 """Tests for role-based access control enforcement."""
+from app.tests.staff_helpers import staff_fields
 
 
 async def _get_role_id(client, auth_headers, name: str) -> str:
@@ -17,6 +18,7 @@ async def _create_user_with_role(client, auth_headers, role_name: str, email: st
             "first_name": "Test",
             "last_name": "User",
             "role_id": role_id,
+            **(await staff_fields(client, auth_headers)),
         },
     )
     assert response.status_code == 201, response.text
@@ -249,6 +251,8 @@ async def test_every_sidebar_menu_has_a_permission_of_its_own(client, auth_heade
         "batch_confirmation",   # Batch Confirmation
         "whatsapp_links",       # WhatsApp Links
         "payments",             # Finance
+        "staffs",               # Employee > Staffs
+        "departments",          # Employee > Departments
         "users",                # Employee > Users
         "roles",                # Employee > Roles
         "settings",             # Settings

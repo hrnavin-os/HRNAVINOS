@@ -40,12 +40,22 @@ export const PERMISSION_MENUS = [
   { module: 'payments', group: 'Finance', label: 'Finance', actions: { create: 'Record payments', verify: 'Verify payments' } },
 
   {
-    module: 'users',
+    module: 'staffs',
     group: 'Administration',
-    label: 'Employee › Users',
+    label: 'Employee › Staffs',
+    hint: 'The staff directory, bank and ID details included. Adding and editing staff comes with Users.',
+  },
+  {
+    module: 'departments',
+    label: 'Employee › Departments',
     actions: { create: 'Add', update: 'Edit', delete: 'Delete' },
   },
   { module: 'roles', label: 'Employee › Roles', actions: { create: 'Add', update: 'Edit', delete: 'Delete' } },
+  {
+    module: 'users',
+    label: 'Employee › Users',
+    actions: { create: 'Add', update: 'Edit', delete: 'Delete' },
+  },
   {
     module: 'permissions',
     label: 'Permission list',

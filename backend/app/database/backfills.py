@@ -143,6 +143,13 @@ GRANDFATHERED_NAV_PERMISSIONS: dict[str, str] = {
     "form_collection.view": "leads.view",
     # WhatsApp Links rode on the Batch Confirmation board's.
     "whatsapp_links.view": "batch_confirmation.view",
+    # Not split out of anything, but new menus under Employee that whoever
+    # adds users now needs: the Users form asks for a department, and the
+    # Staffs directory is where the details it collects are read back. Keyed
+    # on users.create rather than users.view - reading the login list is not
+    # the same as reading everybody's bank and ID details.
+    "staffs.view": "users.create",
+    "departments.view": "users.create",
 }
 
 # Notifications had no permission at all: it was shown to any user whose role

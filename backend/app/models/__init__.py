@@ -7,6 +7,7 @@ from app.models.batch import Batch
 from app.models.batch_allocation import BatchAllocation
 from app.models.company import Company
 from app.models.course import Course
+from app.models.department import Department
 from app.models.finance_verification import FinanceVerification
 from app.models.foundation_form_config import FoundationFormConfig
 from app.models.google_sheet_connection import GoogleSheetConnection
@@ -40,6 +41,7 @@ ALL_DOCUMENTS = [
     BatchAllocation,
     Company,
     Course,
+    Department,
     FinanceVerification,
     FoundationFormConfig,
     GoogleSheetConnection,
@@ -76,6 +78,7 @@ __all__ = [
     "BatchAllocation",
     "Company",
     "Course",
+    "Department",
     "FinanceVerification",
     "FoundationFormConfig",
     "GoogleSheetConnection",

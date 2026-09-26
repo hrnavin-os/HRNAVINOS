@@ -1,6 +1,8 @@
 """Tests for the Batch Confirmation module (HR Coordinator)."""
 from datetime import date, timedelta
 
+from app.tests.staff_helpers import role_id, staff_fields
+
 BASE = "/api/v1/batch-confirmation"
 
 # The service refuses to confirm a roster smaller than this.
@@ -21,7 +23,14 @@ async def _make_tutor(client, auth_headers, *, email="tutor@hrnavinos.com"):
     user = await client.post(
         "/api/v1/users",
         headers=auth_headers,
-        json={"first_name": "Asha", "last_name": "Rao", "email": email, "password": "Password1"},
+        json={
+            "first_name": "Asha",
+            "last_name": "Rao",
+            "email": email,
+            "password": "Password1",
+            "role_id": await role_id(client, auth_headers, "Tutor"),
+            **(await staff_fields(client, auth_headers)),
+        },
     )
     assert user.status_code == 201, user.text
     tutor = await client.post(

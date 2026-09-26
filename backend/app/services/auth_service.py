@@ -36,7 +36,8 @@ class AuthService:
     ) -> TokenResponse:
         user = await self.users.get_by_email(email)
 
-        if not user or not verify_password(password, user.password_hash):
+        # A member of staff recorded without a login has no password to check.
+        if not user or not user.password_hash or not verify_password(password, user.password_hash):
             await self.login_history.create(
                 LoginHistory(
                     user_id=user.id if user else None,

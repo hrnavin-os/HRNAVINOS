@@ -3,6 +3,8 @@
 The destructive endpoint in the app, so what it does NOT do matters as much as
 what it does.
 """
+from app.tests.staff_helpers import staff_fields
+
 INDUCTION_URL = "/api/v1/public/induction-form/submit"
 FOUNDATION_URL = "/api/v1/public/foundation-form/submit"
 RESET_URL = "/api/v1/settings/reset-leads"
@@ -113,6 +115,7 @@ async def test_reset_requires_super_admin(client, seeded, auth_headers):
             "first_name": "Not",
             "last_name": "Super",
             "role_id": admin_role["id"],
+            **(await staff_fields(client, auth_headers)),
         },
     )
     assert created.status_code == 201, created.text

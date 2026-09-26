@@ -28,6 +28,8 @@ import { NotificationsPage } from '@/pages/notifications/NotificationsPage'
 import { ReportsPage } from '@/pages/reports/ReportsPage'
 import { UsersPage } from '@/pages/users/UsersPage'
 import { RolesPage } from '@/pages/roles/RolesPage'
+import { StaffsPage } from '@/pages/staffs/StaffsPage'
+import { DepartmentsPage } from '@/pages/departments/DepartmentsPage'
 import { SettingsPage } from '@/pages/settings/SettingsPage'
 import { SheetExportPage } from '@/pages/settings/SheetExportPage'
 import { NotFoundPage } from '@/pages/errors/NotFoundPage'
@@ -139,6 +141,12 @@ export function AppRoutes() {
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.ROLES_VIEW} />}>
             <Route path="/roles" element={<RolesPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={PERMISSIONS.STAFFS_VIEW} />}>
+            <Route path="/staffs" element={<StaffsPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={PERMISSIONS.DEPARTMENTS_VIEW} />}>
+            <Route path="/departments" element={<DepartmentsPage />} />
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.SETTINGS_VIEW} />}>
             <Route path="/settings" element={<SettingsPage />} />

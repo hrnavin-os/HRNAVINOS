@@ -9,6 +9,16 @@ export const PERMISSIONS = {
   USERS_UPDATE: 'users.update',
   USERS_DELETE: 'users.delete',
 
+  // Employee > Staffs: the staff directory with every profile section, bank
+  // and ID details included - its own code so reading those is not the same
+  // grant as reading the login list.
+  STAFFS_VIEW: 'staffs.view',
+
+  DEPARTMENTS_VIEW: 'departments.view',
+  DEPARTMENTS_CREATE: 'departments.create',
+  DEPARTMENTS_UPDATE: 'departments.update',
+  DEPARTMENTS_DELETE: 'departments.delete',
+
   BATCH_CONFIRMATION_VIEW: 'batch_confirmation.view',
   BATCH_CONFIRMATION_ALLOCATE: 'batch_confirmation.allocate',
   BATCH_CONFIRMATION_CONFIRM: 'batch_confirmation.confirm',
