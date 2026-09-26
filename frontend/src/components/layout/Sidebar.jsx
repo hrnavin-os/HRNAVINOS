@@ -237,10 +237,13 @@ function SidebarNav({ collapsed, onExpandSidebar }) {
 export function Sidebar({ collapsed = false, onToggle }) {
   return (
     <aside
-      // The theme gradient, top to bottom: lightest behind the logo, deepening
-      // down the rail so the long list of rows sits on the darkest, most
-      // readable part of it.
-      className={`hidden shrink-0 bg-linear-to-b from-brand-600 via-brand-700 to-brand-900 transition-[width] duration-200 md:flex md:flex-col ${
+      // A deep, quiet navy rather than the bright brand gradient it used to
+      // be: the rail frames the page, and at full brand saturation it was the
+      // loudest thing on screen, pulling the eye off the boards it sits beside.
+      // Only a slight deepening top to bottom, so it still reads as the theme
+      // colour without competing with it. The white text, icons and active
+      // pill are unchanged and read more easily on the darker ground.
+      className={`hidden shrink-0 bg-linear-to-b from-brand-900 to-[#172554] transition-[width] duration-200 md:flex md:flex-col ${
         collapsed ? 'w-16' : 'w-64'
       }`}
     >
