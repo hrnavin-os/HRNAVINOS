@@ -11,7 +11,12 @@ import { titleCase } from '@/utils/formatters'
 export const PERMISSION_MENUS = [
   { module: 'dashboard', group: 'Overview', label: 'Dashboard' },
 
-  { module: 'lead_analytics', group: 'Admin', label: 'Statistics', hint: 'Lead analysis and finance analysis.' },
+  { module: 'lead_analytics', group: 'Admin', label: 'Statistics', hint: 'The Induction and Foundation boards - the lead analysis.' },
+  {
+    module: 'finance_analytics',
+    label: 'Statistics › Finance',
+    hint: 'Collections, dues and overdue EMIs, and following repayments up: reminders to section admins, reporting non-payment to HR, marking Lost.',
+  },
   {
     module: 'leads',
     label: 'Lead Dashboard',

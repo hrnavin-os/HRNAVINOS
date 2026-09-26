@@ -41,6 +41,12 @@ export const leadService = {
   // Every course a lead can be moved onto - the live programs, plus any
   // value already in the data that is no longer one. Distinct from
   // getCourseOptions, which is what is in use and is what the filter wants.
+  // The Statistics Finance tab: every lead at Financial Approval or Batch
+  // Confirmation, unpaginated, for the tab to total.
+  getFinance: async (filters = {}) => {
+    const { data } = await apiClient.get('/leads/finance', { params: filters })
+    return data
+  },
   getCourseCatalog: async () => {
     const { data } = await apiClient.get('/leads/course-catalog')
     return data

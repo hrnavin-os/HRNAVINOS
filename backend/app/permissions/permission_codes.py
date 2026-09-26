@@ -63,6 +63,16 @@ class Permissions(StrEnum):
     # them, or the summary without the rows.
     LEAD_ANALYTICS_VIEW = "lead_analytics.view"
 
+    # ---------- Finance Analytics ----------
+    # The Finance tab of Statistics: what has been collected, what is owed and
+    # overdue, and the chasing that follows from it - reminding a section's
+    # admins about a repayment, reporting a non-payer to HR, marking a student
+    # Lost after two missed EMIs. Its own code because the chasing is an
+    # action, not a reading: being able to see the intake summary is not the
+    # same as being able to send people after a student's money. The Finance
+    # board itself is left with approvals.
+    FINANCE_ANALYTICS_VIEW = "finance_analytics.view"
+
     # ---------- Admissions ----------
     ADMISSIONS_VIEW = "admissions.view"
     ADMISSIONS_CREATE = "admissions.create"
@@ -208,6 +218,7 @@ OFFERED_MODULES: set[str] = {
     "dashboard",
     "leads",
     "lead_analytics",
+    "finance_analytics",
     "form_collection",
     "programs",
     "induction_attendance",

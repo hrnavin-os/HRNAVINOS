@@ -12,6 +12,7 @@ export function IncomeDetailModal({ lead, onClose }) {
     mutationFn: () => leadService.markLost(lead.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['overall-income'] })
+      queryClient.invalidateQueries({ queryKey: ['statistics', 'finance'] })
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       onClose()
@@ -27,8 +28,8 @@ export function IncomeDetailModal({ lead, onClose }) {
       error={markLostMutation.error ? getApiErrorMessage(markLostMutation.error) : null}
       onMarkLost={() => markLostMutation.mutate()}
       isMarkingLost={markLostMutation.isPending}
-      // Only Finance gets the reminder actions: a Section Admin looking at
-      // their own lead has nobody to forward it to.
+      // Opened from the Statistics Finance tab, which is where repayments are
+      // followed up: reminders to the section admins, non-payment to HR.
       showReminders
       footer={
         <Button variant="secondary" onClick={onClose}>

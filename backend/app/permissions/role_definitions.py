@@ -91,11 +91,12 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     "Attendance Coordinator": [
         P.INDUCTION_ATTENDANCE_VIEW, P.INDUCTION_ATTENDANCE_MARK, P.INDUCTION_ATTENDANCE_CONFIGURE,
     ],
-    # Reads the Statistics board and nothing else: its Induction half is the
-    # lead analysis, its Foundation half (collected, payment method, payment
-    # remarks) the finance analysis.
+    # The Statistics board: Induction and Foundation are the lead analysis, and
+    # its Finance tab the finance analysis - with the repayment chasing that
+    # used to sit on the Finance board (reminders to section admins, reporting
+    # a non-payer to HR).
     "Operation Coordinator": [
-        P.LEAD_ANALYTICS_VIEW,
+        P.LEAD_ANALYTICS_VIEW, P.FINANCE_ANALYTICS_VIEW,
     ],
     "Admin Executive": [
         P.DASHBOARD_VIEW,
@@ -191,7 +192,7 @@ ADMIN_TEAM_DESIGNATIONS: list[dict] = [
     {
         "key": "operation_coordinator",
         "name": "Operation Coordinator",
-        "description": "Statistics: lead analysis and finance analysis.",
+        "description": "Statistics: lead analysis, finance analysis and repayment reminders to section admins.",
         "permission_codes": DEFAULT_ROLE_PERMISSIONS["Operation Coordinator"],
         "section_scoped": False,
         "roles": ["Operation Coordinator"],

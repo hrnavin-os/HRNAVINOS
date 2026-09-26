@@ -61,7 +61,7 @@ async def test_each_admin_team_role_holds_exactly_its_menus(seeded):
     assert await _codes(await _role("Attendance Coordinator")) == {
         "induction_attendance.view", "induction_attendance.mark", "induction_attendance.configure",
     }
-    assert await _codes(await _role("Operation Coordinator")) == {"lead_analytics.view"}
+    assert await _codes(await _role("Operation Coordinator")) == {"lead_analytics.view", "finance_analytics.view"}
     # The old name for Admin Head is not seeded any more.
     assert await _role("Admin") is None
 
@@ -249,7 +249,7 @@ async def test_the_role_editor_offers_the_four_designations(client, auth_headers
     designations = {item["name"]: item for item in response.json()}
 
     assert list(designations) == ["Admin Head", "Section Admin", "Attendance Coordinator", "Operation Coordinator"]
-    assert designations["Operation Coordinator"]["permission_codes"] == ["lead_analytics.view"]
+    assert designations["Operation Coordinator"]["permission_codes"] == ["lead_analytics.view", "finance_analytics.view"]
     assert designations["Section Admin"]["section_scoped"] is True
     assert designations["Admin Head"]["section_scoped"] is False
     # Every code a designation ticks is one the editor actually offers, or the
@@ -266,7 +266,7 @@ async def test_the_role_editor_offers_the_four_designations(client, auth_headers
 
 async def test_admin_team_roles_are_described_by_their_designation(seeded):
     assert await describe_admin_team_roles() == 6
-    assert (await _role("Operation Coordinator")).description == "Statistics: lead analysis and finance analysis."
+    assert (await _role("Operation Coordinator")).description.startswith("Statistics: lead analysis, finance analysis")
     assert "own section" in (await _role("B-Section Admin")).description
 
     # A description somebody wrote stays theirs.
@@ -275,3 +275,45 @@ async def test_admin_team_roles_are_described_by_their_designation(seeded):
     await head.save()
     assert await describe_admin_team_roles() == 0
     assert (await _role("Admin Head")).description == "Runs the admin desk."
+
+
+# ---------------------------------------------------------------------------
+# The Statistics Finance tab, and the chasing it took over from Finance
+# ---------------------------------------------------------------------------
+
+
+async def test_the_finance_tab_lists_approved_and_pending_students(client, auth_headers):
+    await Lead(name="Approved", phone="9876500011", section="a", status=LeadStatus.BATCH_CONFIRMATION).insert()
+    await Lead(name="Pending", phone="9876500012", section="b", status=LeadStatus.FINANCIAL_APPROVAL).insert()
+    await Lead(name="Early", phone="9876500013", section="a", status=LeadStatus.NEW_LEAD).insert()
+    headers = await _login_as(client, "Operation Coordinator", "ops@example.com")
+
+    response = await client.get("/api/v1/leads/finance", headers=headers)
+    assert response.status_code == 200, response.text
+    assert {row["name"] for row in response.json()} == {"Approved", "Pending"}
+
+    only_a = (await client.get("/api/v1/leads/finance", headers=headers, params={"section": "a"})).json()
+    assert [row["name"] for row in only_a] == ["Approved"]
+
+
+async def test_the_finance_tab_is_its_own_grant(client, auth_headers):
+    # Admin Head reads Statistics but was not given its Finance tab.
+    headers = await _login_as(client, "Admin Head", "head@example.com")
+    assert (await client.get("/api/v1/leads/finance", headers=headers)).status_code == 403
+
+
+async def test_repayment_reminders_moved_from_finance_to_the_finance_tab(client, auth_headers):
+    lead = Lead(name="Owes", phone="9876500021", section="a", status=LeadStatus.BATCH_CONFIRMATION)
+    await lead.insert()
+    finance = await _login_as(client, "Finance", "finance@example.com")
+    operations = await _login_as(client, "Operation Coordinator", "ops@example.com")
+
+    # The Finance board approves; it no longer chases.
+    for path, body in (("payment-reminder", {"kind": "due"}), ("non-payment", {})):
+        refused = await client.post(f"/api/v1/leads/{lead.id}/{path}", headers=finance, json=body)
+        assert refused.status_code == 403, path
+
+    sent = await client.post(f"/api/v1/leads/{lead.id}/payment-reminder", headers=operations, json={"kind": "due"})
+    assert sent.status_code == 200, sent.text
+    reported = await client.post(f"/api/v1/leads/{lead.id}/non-payment", headers=operations, json={})
+    assert reported.status_code == 200, reported.text

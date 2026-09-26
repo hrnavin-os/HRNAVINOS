@@ -353,6 +353,30 @@ class LeadService:
         )
         return lead
 
+    async def finance_leads(
+        self,
+        *,
+        section: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> "list[Lead]":  # quoted: `list` is this class's own method here
+        """Everyone whose money Finance has approved or is still approving - the
+        population the Statistics Finance tab reads.
+
+        Unpaginated: the tab totals the lot, and a page of it would total a
+        page. It is the Foundation intake at two stages, which is hundreds, not
+        tens of thousands.
+        """
+        filters = {
+            "is_deleted": False,
+            "reviewed": {"$ne": False},
+            "status": {"$in": [LeadStatus.FINANCIAL_APPROVAL, LeadStatus.BATCH_CONFIRMATION]},
+            **self._board_filters(date_from=date_from, date_to=date_to),
+        }
+        if section:
+            filters["section"] = section
+        return await Lead.find(filters).sort("-created_at").to_list()
+
     @staticmethod
     def _board_filters(
         *,

@@ -51,6 +51,7 @@ export const PERMISSIONS = {
   // The Statistics board. Its own code rather than LEADS_VIEW, so the summary
   // and the rows it summarises can be granted apart.
   LEAD_ANALYTICS_VIEW: 'lead_analytics.view',
+  FINANCE_ANALYTICS_VIEW: 'finance_analytics.view',
 
   ADMISSIONS_VIEW: 'admissions.view',
   ADMISSIONS_CREATE: 'admissions.create',

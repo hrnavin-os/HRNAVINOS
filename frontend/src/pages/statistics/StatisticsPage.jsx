@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Crown, Wallet, X } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { Crown, IndianRupee, Wallet, X } from 'lucide-react'
+import { PERMISSIONS } from '@/constants/permissions'
+import { FinanceBoard } from '@/pages/statistics/FinanceBoard'
 import { inductionFormConfigService } from '@/services/inductionFormConfigService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
 import { leadService } from '@/services/leadService'
@@ -94,7 +97,7 @@ const sum = (rows, key) => rows.reduce((total, row) => total + (row[key] ?? 0), 
  * between the halves described in constants/statisticsBoards rather than
  * branched on here.
  */
-export function StatisticsPage() {
+function PopulationBoard({ boardTabs }) {
   const { user } = useAuth()
   // A Section Admin is pinned to their own section by their role, exactly as
   // on the board - so the filter isn't offered to them rather than offered
@@ -316,7 +319,7 @@ export function StatisticsPage() {
               keeps its own row-end position and Foundation keeps the violet it
               wears on the Lead Dashboard, so the two switches read as the same
               control in two places. */}
-          <TabStrip tabs={BOARDS} value={board.key} onChange={openBoard} />
+          <TabStrip tabs={boardTabs} value={board.key} onChange={openBoard} />
         </div>
 
         <div className="border-t border-slate-200 px-4 py-2.5">
@@ -487,4 +490,24 @@ export function StatisticsPage() {
       )}
     </div>
   )
+}
+
+// The third board: money rather than people, so it is a page of its own
+// rather than one more entry in statisticsBoards. Shown to whoever holds the
+// Finance tab's own permission - the Operation Coordinator.
+const FINANCE_TAB = { key: 'finance', label: 'Finance', icon: IndianRupee, active: 'bg-white text-emerald-700 shadow-sm' }
+
+export function StatisticsPage() {
+  const { hasPermission } = useAuth()
+  const [params] = useSearchParams()
+  // Writes ?board= like the Induction/Foundation switch always has; that hook
+  // only reads back the two lead boards, so Finance is read here.
+  const [, setBoard] = useLeadBoard()
+  const canReadFinance = hasPermission(PERMISSIONS.FINANCE_ANALYTICS_VIEW)
+  const boardTabs = canReadFinance ? [...BOARDS, FINANCE_TAB] : BOARDS
+
+  if (canReadFinance && params.get('board') === 'finance') {
+    return <FinanceBoard boardTabs={boardTabs} onOpenBoard={setBoard} />
+  }
+  return <PopulationBoard boardTabs={boardTabs} />
 }

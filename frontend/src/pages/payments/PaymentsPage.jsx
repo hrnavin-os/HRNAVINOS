@@ -1,14 +1,8 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowDownLeft, ArrowUpRight, BookOpen, CheckCheck } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight } from 'lucide-react'
 import { leadService } from '@/services/leadService'
-import { TabStrip } from '@/components/ui/TabStrip'
-import { getApiErrorMessage } from '@/services/apiClient'
 import { IncomeApprovalsTab } from '@/components/payments/IncomeApprovalsTab'
-import { OverallIncomeTab } from '@/components/payments/OverallIncomeTab'
-import { CashbookSummary } from '@/components/payments/CashbookSummary'
-import { CashbookFilters } from '@/components/payments/CashbookFilters'
-import { EMPTY_CASHBOOK_FILTERS, applyCashbookFilters } from '@/utils/cashbookFilters'
 
 // The money direction is the point of this control, so income and expense keep
 // their own accent rather than the neutral raised pill TabStrip uses.
@@ -21,11 +15,6 @@ const SPLIT_TAB_STYLES = {
   income: { icon: ArrowDownLeft, active: 'bg-green-100 text-emerald-600' },
   expense: { icon: ArrowUpRight, active: 'bg-red-50 text-red-600' },
 }
-
-const MAIN_TABS = [
-  { key: 'cashbook', label: 'Cashbook', icon: BookOpen },
-  { key: 'approvals', label: 'Approvals', icon: CheckCheck },
-]
 
 function SplitTabs({ tabs, active, onChange }) {
   return (
@@ -60,51 +49,6 @@ function ComingSoon({ label }) {
   )
 }
 
-function CashbookTab() {
-  const [cashbookTab, setCashbookTab] = useState('income')
-  const [filters, setFilters] = useState(EMPTY_CASHBOOK_FILTERS)
-
-  // Fetched once here rather than in each child, so the summary cards and the
-  // table are guaranteed to be describing the same rows - the cards say "for
-  // selected period", which was only true while nothing could filter them.
-  const query = useQuery({
-    queryKey: ['overall-income'],
-    queryFn: () => leadService.list({ status: 'batch_confirmation', page_size: 100 }),
-  })
-
-  const allLeads = query.data?.items ?? []
-  const leads = applyCashbookFilters(allLeads, filters)
-
-  return (
-    <div>
-      <CashbookSummary leads={leads} />
-      <CashbookFilters
-        filters={filters}
-        onChange={setFilters}
-        resultCount={leads.length}
-        totalCount={allLeads.length}
-      />
-      <SplitTabs
-        tabs={[
-          { key: 'income', label: `Overall Income (${leads.length})` },
-          { key: 'expense', label: 'Overall Expense (0)' },
-        ]}
-        active={cashbookTab}
-        onChange={setCashbookTab}
-      />
-      {cashbookTab === 'income' ? (
-        <OverallIncomeTab
-          leads={leads}
-          isLoading={query.isLoading}
-          error={query.error ? getApiErrorMessage(query.error) : null}
-        />
-      ) : (
-        <ComingSoon label="Overall Expense" />
-      )}
-    </div>
-  )
-}
-
 function ApprovalsTab() {
   const [approvalTab, setApprovalTab] = useState('income')
   const statsQuery = useQuery({ queryKey: ['leads-stats'], queryFn: leadService.getStats })
@@ -125,14 +69,10 @@ function ApprovalsTab() {
   )
 }
 
+// The Finance board approves payments, and that is all it does. What has been
+// collected and what is still owed - and the chasing that follows, reminders
+// to a section's admins and non-payment reports to HR - is the Statistics
+// Finance tab's (pages/statistics/FinanceBoard).
 export function PaymentsPage() {
-  const [mainTab, setMainTab] = useState('cashbook')
-
-  return (
-    <div>
-      <TabStrip tabs={MAIN_TABS} value={mainTab} onChange={setMainTab} className="mb-4" />
-
-      {mainTab === 'cashbook' ? <CashbookTab /> : <ApprovalsTab />}
-    </div>
-  )
+  return <ApprovalsTab />
 }

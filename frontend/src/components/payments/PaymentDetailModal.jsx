@@ -121,8 +121,8 @@ function buildReminderKinds(lead, summary) {
 }
 
 // Sends the lead's section admins a reminder to chase a payment. Rendered
-// only where a caller opts in (Finance's Cashbook popup), since a Section
-// Admin viewing their own lead has nobody to forward it to.
+// only where a caller opts in (the Statistics Finance tab's popup), since a
+// Section Admin viewing their own lead has nobody to forward it to.
 function PaymentReminders({ lead, summary }) {
   const [sent, setSent] = useState(null)
   // Which kinds have been sent from this popup. `mutation.isPending` only

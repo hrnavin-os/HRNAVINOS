@@ -184,6 +184,27 @@ async def list_field_options(
     return await LeadService().field_options(field)
 
 
+@router.get("/finance", response_model=list[LeadResponse])
+async def finance_leads(
+    date_from: date | None = None,
+    date_to: date | None = None,
+    section: str | None = None,
+    actor: User = Depends(RequirePermissions(Permissions.FINANCE_ANALYTICS_VIEW)),
+) -> list[LeadResponse]:
+    """The Statistics Finance tab's rows: every lead at Financial Approval or
+    Batch Confirmation, with their installments, for the tab to total.
+
+    Its own endpoint rather than the lead list with a status filter, because
+    that list is the Lead Dashboard's and is behind leads.view - which the
+    people reading this tab are not given. Declared before /{lead_id}, like the
+    other fixed segments.
+    """
+    service = LeadService()
+    scope = await get_actor_scope(actor)
+    leads = await service.finance_leads(section=scope or section, date_from=date_from, date_to=date_to)
+    return [await service.to_response(lead) for lead in leads]
+
+
 @router.get("/course-catalog", response_model=list[str])
 async def list_course_catalog(
     # Statistics reads it too, so its Courses tab can show a course nobody is
@@ -419,7 +440,9 @@ async def update_installment(
 @router.post("/{lead_id}/mark-lost", response_model=LeadResponse)
 async def mark_lead_lost(
     lead_id: uuid.UUID,
-    actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
+    # Also the Statistics Finance tab's, where two missed EMIs are chased -
+    # and whoever reads that tab has no leads.update.
+    actor: User = Depends(RequireAnyPermission(Permissions.LEADS_UPDATE, Permissions.FINANCE_ANALYTICS_VIEW)),
 ) -> LeadResponse:
     service = LeadService()
     scope = await get_actor_scope(actor)
@@ -445,9 +468,9 @@ async def rejoin_lead(
 async def send_payment_reminder(
     lead_id: uuid.UUID,
     payload: PaymentReminderRequest,
-    # Gated on PAYMENTS_VIEW rather than NOTIFICATIONS_CREATE: this is a
-    # Finance action taken from the Cashbook, and Finance holds that.
-    actor: User = Depends(RequirePermissions(Permissions.PAYMENTS_VIEW)),
+    # Sent from the Statistics Finance tab. It used to be a Finance action
+    # taken from the Cashbook; the Finance board now only approves.
+    actor: User = Depends(RequirePermissions(Permissions.FINANCE_ANALYTICS_VIEW)),
 ) -> PaymentReminderResponse:
     notified, already_pending = await LeadService().send_payment_reminder(
         lead_id, payload.kind, note=payload.note, actor_id=actor.id
@@ -481,9 +504,8 @@ async def send_payment_reminder(
 async def report_non_payment(
     lead_id: uuid.UUID,
     payload: NonPaymentReportRequest,
-    # Same gate as the payment reminder: this is a Finance judgement made from
-    # the Cashbook, and Finance holds PAYMENTS_VIEW.
-    actor: User = Depends(RequirePermissions(Permissions.PAYMENTS_VIEW)),
+    # Same gate as the payment reminder, and taken from the same tab.
+    actor: User = Depends(RequirePermissions(Permissions.FINANCE_ANALYTICS_VIEW)),
 ) -> PaymentReminderResponse:
     """Finance declares a student a non-payer, for HR to act on.
 
