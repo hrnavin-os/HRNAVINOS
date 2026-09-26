@@ -33,6 +33,7 @@ import { Toast } from '@/components/ui/Toast'
 import { FoundationGroupBadge } from '@/components/leads/FoundationGroupBadge'
 import { PollFollowUpModal } from '@/components/attendance/PollFollowUpModal'
 import { MeetSyncModal } from '@/components/attendance/MeetSyncModal'
+import { StudentAttendanceModal } from '@/components/attendance/StudentAttendanceModal'
 import { FOUNDATION_GROUP_OPTIONS } from '@/constants/foundationGroups'
 import { formatDate, formatDateTime, formatMinutes as minutes } from '@/utils/formatters'
 
@@ -150,6 +151,10 @@ export function InductionAttendancePage({ only }) {
   // The student whose follow-up popup is open.
   const [followingUp, setFollowingUp] = useState(null)
   const [meetOpen, setMeetOpen] = useState(false)
+  // The student whose row was clicked, for the detail popup. Kept as the row
+  // itself, and read back from the current page when it is still on it, so a
+  // mark made meanwhile shows in the popup too.
+  const [viewing, setViewing] = useState(null)
 
   // undefined rather than '' for an unset filter: the API treats a missing
   // param as "no filter", where an empty string would be a section nobody is
@@ -624,6 +629,10 @@ export function InductionAttendancePage({ only }) {
         <DataTable
           columns={columns}
           rows={query.items}
+          // The row opens the student's whole attendance: all four markers, who
+          // marked each and when, and the poll follow-ups - the details the
+          // table leaves out. Its buttons still act on their own.
+          onRowClick={setViewing}
           isLoading={query.isLoading}
           error={query.error}
           emptyMessage={
@@ -646,6 +655,15 @@ export function InductionAttendancePage({ only }) {
           pageSize={query.pageSize}
         />
       </TableCard>
+
+      {viewing && (
+        <StudentAttendanceModal
+          student={query.items?.find((item) => item.id === viewing.id) ?? viewing}
+          tabs={TABS}
+          current={marker}
+          onClose={() => setViewing(null)}
+        />
+      )}
 
       {meetOpen && (
         <MeetSyncModal
