@@ -10,6 +10,7 @@ import {
   GraduationCap,
   Hourglass,
   Wallet,
+  X,
 } from 'lucide-react'
 import { leadService } from '@/services/leadService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
@@ -200,6 +201,15 @@ function HealthList({ rows }) {
   )
 }
 
+// The four summary cards, each a filter over the students below it. `view` is
+// the follow-up table's tab that suits the card, opened along with it.
+const CARDS = {
+  collected: { label: 'Collected', view: 'ledger' },
+  outstanding: { label: 'Outstanding', view: 'owing' },
+  overdue: { label: 'Overdue', view: 'overdue' },
+  awaiting: { label: 'Awaiting approval', view: 'ledger' },
+}
+
 const CHASE_VIEWS = [
   { value: 'overdue', label: 'Overdue' },
   { value: 'owing', label: 'All dues' },
@@ -281,6 +291,16 @@ export function FinanceBoard({ boardTabs, onOpenBoard }) {
   const [section, setSection] = useState('')
   const [view, setView] = useState('overdue')
   const [viewing, setViewing] = useState(null)
+  // The summary card clicked, if any (a CARDS key). Every panel, the foot
+  // strip and the follow-up table below the cards then read only the students
+  // that card counts.
+  const [card, setCard] = useState(null)
+
+  function toggleCard(key) {
+    const next = card === key ? null : key
+    setCard(next)
+    if (next) setView(CARDS[next].view)
+  }
 
   const filters = {
     date_from: dateRange?.from || undefined,
@@ -304,12 +324,24 @@ export function FinanceBoard({ boardTabs, onOpenBoard }) {
   const outstanding = sum(approved, 'due')
   const late = approved.filter((row) => row.status === 'overdue' || row.status === 'missed_twice')
   const owing = approved.filter((row) => row.due > 0)
-  const afterPlacement = approved.filter((row) => row.afterPlacement)
+
+  // The students the board below the cards is about. The approved students by
+  // default - the cards themselves always count those, so they keep their own
+  // figures while one of them is narrowing everything else.
+  const scope =
+    {
+      collected: approved.filter((row) => row.paid > 0),
+      outstanding: owing,
+      overdue: late,
+      awaiting: pending,
+    }[card] ?? approved
+  const cardLabel = card ? CARDS[card].label : null
+  const titled = (title) => (cardLabel ? `${title} · ${cardLabel}` : title)
 
   const chaseRows = {
-    overdue: late,
-    owing,
-    after_placement: afterPlacement,
+    overdue: scope.filter((row) => row.status === 'overdue' || row.status === 'missed_twice'),
+    owing: scope.filter((row) => row.due > 0),
+    after_placement: scope.filter((row) => row.afterPlacement),
   }[view]
   const sortedChase = [...(chaseRows ?? [])].sort(
     (a, b) => STATUSES[a.status].rank - STATUSES[b.status].rank || b.due - a.due,
@@ -345,8 +377,22 @@ export function FinanceBoard({ boardTabs, onOpenBoard }) {
               />
             </div>
           )}
+          {card && (
+            // The clicked card, named beside the other filters so it is clear
+            // why the panels below have shrunk, and droppable from here too.
+            <button
+              type="button"
+              onClick={() => setCard(null)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-brand-300 bg-brand-50 px-2.5 py-1.5 text-xs font-bold text-brand-700 transition-colors hover:bg-brand-100"
+            >
+              Only: {cardLabel}
+              <X className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
+            </button>
+          )}
           <span className="ml-auto rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
-            {approved.length} approved student{approved.length === 1 ? '' : 's'} in scope
+            {card
+              ? `${scope.length} student${scope.length === 1 ? '' : 's'} shown`
+              : `${approved.length} approved student${approved.length === 1 ? '' : 's'} in scope`}
           </span>
         </div>
       </div>
@@ -365,6 +411,8 @@ export function FinanceBoard({ boardTabs, onOpenBoard }) {
               deltaLabel={`of ${formatCurrency(collected + outstanding)} billed`}
               icon={BadgeIndianRupee}
               tone="emerald"
+              onClick={() => toggleCard('collected')}
+              active={card === 'collected'}
             />
             <StatTile
               label="Outstanding"
@@ -372,6 +420,8 @@ export function FinanceBoard({ boardTabs, onOpenBoard }) {
               deltaLabel={`${owing.length} student${owing.length === 1 ? '' : 's'} still owe`}
               icon={CircleDollarSign}
               tone="amber"
+              onClick={() => toggleCard('outstanding')}
+              active={card === 'outstanding'}
             />
             <StatTile
               label="Overdue"
@@ -380,6 +430,8 @@ export function FinanceBoard({ boardTabs, onOpenBoard }) {
               deltaLabel="students past a due date"
               icon={AlertTriangle}
               tone="red"
+              onClick={() => toggleCard('overdue')}
+              active={card === 'overdue'}
             />
             <StatTile
               label="Awaiting approval"
@@ -387,31 +439,37 @@ export function FinanceBoard({ boardTabs, onOpenBoard }) {
               deltaLabel={`${formatCurrency(sum(pending, 'paid'))} paid, not yet verified`}
               icon={Hourglass}
               tone="slate"
+              onClick={() => toggleCard('awaiting')}
+              active={card === 'awaiting'}
             />
           </div>
 
           <div className="grid gap-3 lg:grid-cols-2">
             <Panel
-              title="Collection by payment plan"
+              title={titled('Collection by payment plan')}
               subtitle="Collected against billed, per plan"
               hint="Billed is what the plan's installments add up to; the track behind each bar is what is still owed."
             >
               <CollectionBars
-                groups={rollUp(approved, (row) => row.lead.payment_plan, (key) => PAYMENT_PLAN_LABELS[key] ?? titleCase(key))}
+                groups={rollUp(scope, (row) => row.lead.payment_plan, (key) => PAYMENT_PLAN_LABELS[key] ?? titleCase(key))}
               />
             </Panel>
-            <Panel title="Collection by section" subtitle="Collected against billed, per section">
-              <CollectionBars groups={rollUp(approved, (row) => row.lead.section, sectionLabel)} />
+            <Panel title={titled('Collection by section')} subtitle="Collected against billed, per section">
+              <CollectionBars groups={rollUp(scope, (row) => row.lead.section, sectionLabel)} />
             </Panel>
             <Panel
-              title="Repayment health"
-              subtitle="Where each approved student stands, and what they owe"
+              title={titled('Repayment health')}
+              subtitle={
+                card === 'awaiting'
+                  ? 'Where each student awaiting approval stands, and what they owe'
+                  : 'Where each approved student stands, and what they owe'
+              }
               hint="Overdue: a due date has passed with the balance unpaid. 2 EMIs missed: two EMI dates in a row have passed unpaid - the student can be marked Lost from their popup."
             >
-              <HealthList rows={approved} />
+              <HealthList rows={scope} />
             </Panel>
-            <Panel title="Collected by payment mode" subtitle="How the money came in">
-              <ModeBars rows={approved} />
+            <Panel title={titled('Collected by payment mode')} subtitle="How the money came in">
+              <ModeBars rows={scope} />
             </Panel>
           </div>
 
@@ -419,19 +477,22 @@ export function FinanceBoard({ boardTabs, onOpenBoard }) {
             items={[
               {
                 label: 'Due within 7 days',
-                value: formatCurrency(sum(approved.filter((row) => row.status === 'due_soon'), 'due')),
+                value: formatCurrency(sum(scope.filter((row) => row.status === 'due_soon'), 'due')),
                 icon: Clock,
                 tone: 'amber',
               },
               {
                 label: 'After placement receivable',
-                value: `${afterPlacement.length} student${afterPlacement.length === 1 ? '' : 's'}`,
+                value: (() => {
+                  const count = scope.filter((row) => row.afterPlacement).length
+                  return `${count} student${count === 1 ? '' : 's'}`
+                })(),
                 icon: GraduationCap,
                 tone: 'brand',
               },
               {
                 label: 'Average collected per student',
-                value: formatCurrency(approved.length ? collected / approved.length : 0),
+                value: formatCurrency(scope.length ? sum(scope, 'paid') / scope.length : 0),
                 icon: Wallet,
                 tone: 'emerald',
               },
@@ -439,12 +500,12 @@ export function FinanceBoard({ boardTabs, onOpenBoard }) {
           />
 
           <Panel
-            title="Repayments to follow up"
+            title={titled('Repayments to follow up')}
             subtitle="Open a student to remind their section admins, report non-payment to HR, or mark them Lost"
             action={<SegmentedToggle label="Which students" options={CHASE_VIEWS} value={view} onChange={setView} />}
           >
             {view === 'ledger' ? (
-              <OverallIncomeTab leads={approved.map((row) => row.lead)} isLoading={query.isLoading} />
+              <OverallIncomeTab leads={scope.map((row) => row.lead)} isLoading={query.isLoading} />
             ) : (
               <DataTable
                 columns={chaseColumns}

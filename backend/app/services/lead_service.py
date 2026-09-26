@@ -486,14 +486,24 @@ class LeadService:
         "payment_call_remarks": "$payment_call_remarks",
     }
 
-    def _analytics_match(self, section: str | None, date_from: date | None, date_to: date | None) -> dict:
+    def _analytics_match(
+        self, section: str | None, date_from: date | None, date_to: date | None, outcome: str | None = None
+    ) -> dict:
         """The one population every Foundation view on the canvas is drawn from.
 
         Unreviewed imports are held out, exactly as they are on the board: a row
         still waiting in Form Check isn't a lead yet, and counting it here would
         make the board disagree with the board.
+
+        `outcome` is a clicked summary card - Batch confirmed, Quit, or
+        Collected - and narrows the population to the leads that card counts.
         """
         match: dict = {"is_deleted": False, "reviewed": {"$ne": False}}
+        if outcome is not None:
+            outcome_match = self._OUTCOME_MATCH.get(outcome)
+            if outcome_match is None:
+                raise BadRequestError(f"Unknown outcome '{outcome}'.")
+            match.update(outcome_match)
         if section:
             match["section"] = section
         window: dict = {}
@@ -538,6 +548,16 @@ class LeadService:
         },
     }
 
+    # The outcomes a Statistics summary card narrows the board to, as $match
+    # filters counting exactly what the measures above count - so clicking a
+    # card shows the same leads its figure was made of.
+    _OUTCOME_MATCH = {
+        "confirmed": {"status": LeadStatus.BATCH_CONFIRMATION.value},
+        "lost": {"status": LeadStatus.LOST.value},
+        # Any money in at all, by the same reading the Collected figure sums.
+        "paid": {"$expr": {"$gt": [_ANALYTICS_MEASURES["collected"]["$sum"], 0]}},
+    }
+
     async def analytics(
         self,
         dimension: str,
@@ -545,6 +565,7 @@ class LeadService:
         section: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
+        outcome: str | None = None,
     ) -> dict:
         """Counts per distinct value of one Foundation field, with how many of
         each reached Batch Confirmation, how many were lost, and how much has
@@ -560,7 +581,7 @@ class LeadService:
         thousand rows.
         """
         if dimension == "batch":
-            return await self._batch_analytics(section=section, date_from=date_from, date_to=date_to)
+            return await self._batch_analytics(section=section, date_from=date_from, date_to=date_to, outcome=outcome)
 
         field = self._ANALYTICS_FIELDS.get(dimension)
         if field is None:
@@ -568,7 +589,7 @@ class LeadService:
 
         rows = await Lead.aggregate(
             [
-                {"$match": self._analytics_match(section, date_from, date_to)},
+                {"$match": self._analytics_match(section, date_from, date_to, outcome)},
                 {"$group": {"_id": field, **self._ANALYTICS_MEASURES}},
                 {"$sort": {"count": -1}},
             ]
@@ -589,10 +610,11 @@ class LeadService:
             section=section,
             date_from=date_from,
             date_to=date_to,
+            outcome=outcome,
         )
 
     async def _batch_analytics(
-        self, *, section: str | None, date_from: date | None, date_to: date | None
+        self, *, section: str | None, date_from: date | None, date_to: date | None, outcome: str | None = None
     ) -> dict:
         """Leads per batch - the batch number entered on the Induction form.
 
@@ -606,7 +628,7 @@ class LeadService:
         """
         rows = await Lead.aggregate(
             [
-                {"$match": self._analytics_match(section, date_from, date_to)},
+                {"$match": self._analytics_match(section, date_from, date_to, outcome)},
                 {
                     "$lookup": {
                         "from": InductionEntry.Settings.name,
@@ -650,7 +672,7 @@ class LeadService:
         # open. The chronological views sort on `order` themselves.
         items.sort(key=lambda item: item["count"], reverse=True)
         return await self._analytics_response(
-            "batch", items, section=section, date_from=date_from, date_to=date_to
+            "batch", items, section=section, date_from=date_from, date_to=date_to, outcome=outcome
         )
 
     async def _analytics_response(
@@ -663,8 +685,9 @@ class LeadService:
         section: str | None,
         date_from: date | None,
         date_to: date | None,
+        outcome: str | None = None,
     ) -> dict:
-        current, comparison = await self._period_comparison(section, date_from, date_to)
+        current, comparison = await self._period_comparison(section, date_from, date_to, outcome)
         return {
             "dimension": dimension,
             "total": sum(item["count"] for item in items),
@@ -674,7 +697,7 @@ class LeadService:
         }
 
     async def _period_comparison(
-        self, section: str | None, date_from: date | None, date_to: date | None
+        self, section: str | None, date_from: date | None, date_to: date | None, outcome: str | None = None
     ) -> tuple[dict, dict] | tuple[None, None]:
         """This period's headline figures and the previous period's.
 
@@ -702,16 +725,16 @@ class LeadService:
         earlier = (current[0] - timedelta(days=span), current[0] - timedelta(days=1))
 
         return (
-            {"label": label, **await self._headline(section, *current)},
-            {"label": label, **await self._headline(section, *earlier)},
+            {"label": label, **await self._headline(section, *current, outcome=outcome)},
+            {"label": label, **await self._headline(section, *earlier, outcome=outcome)},
         )
 
-    async def _headline(self, section: str | None, start: date, end: date) -> dict:
+    async def _headline(self, section: str | None, start: date, end: date, *, outcome: str | None = None) -> dict:
         """Total, confirmed and lost over one window - the figures the period
         arrows compare, counted the same way the breakdown counts them."""
         rows = await Lead.aggregate(
             [
-                {"$match": self._analytics_match(section, start, end)},
+                {"$match": self._analytics_match(section, start, end, outcome)},
                 {
                     "$group": {
                         "_id": None,

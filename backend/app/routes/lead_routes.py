@@ -139,6 +139,9 @@ async def analytics(
     date_from: date | None = None,
     date_to: date | None = None,
     section: str | None = None,
+    # A clicked summary card: narrows every figure to the leads that reached
+    # Batch Confirmation, the ones lost, or the ones with money collected.
+    outcome: Literal["confirmed", "lost", "paid"] | None = None,
     # The Statistics board's own permission, matching the Induction half's
     # endpoint: one board, one grant, or a role given the page would get half
     # its tabs and a 403 on the rest.
@@ -158,7 +161,7 @@ async def analytics(
     """
     scope = await get_actor_scope(actor)
     data = await LeadService().analytics(
-        dimension, section=scope or section, date_from=date_from, date_to=date_to
+        dimension, section=scope or section, date_from=date_from, date_to=date_to, outcome=outcome
     )
     return LeadAnalyticsResponse(**data)
 

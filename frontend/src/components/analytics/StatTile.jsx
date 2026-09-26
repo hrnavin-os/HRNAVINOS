@@ -6,15 +6,36 @@ import { TrendingDown, TrendingUp } from 'lucide-react'
 // colour is the tile's identity, repeated at a size you can see from across
 // the room, which a 32px icon chip alone cannot do.
 const TONES = {
-  brand: { plate: 'bg-brand-50 text-brand-600', pill: 'bg-brand-50 text-brand-700', rail: 'bg-brand-500' },
+  brand: {
+    plate: 'bg-brand-50 text-brand-600',
+    pill: 'bg-brand-50 text-brand-700',
+    rail: 'bg-brand-500',
+    ring: 'ring-brand-500 bg-brand-50/40',
+  },
   emerald: {
     plate: 'bg-emerald-50 text-emerald-600',
     pill: 'bg-emerald-50 text-emerald-700',
     rail: 'bg-emerald-500',
+    ring: 'ring-emerald-500 bg-emerald-50/40',
   },
-  red: { plate: 'bg-red-50 text-red-600', pill: 'bg-red-50 text-red-700', rail: 'bg-red-500' },
-  amber: { plate: 'bg-amber-50 text-amber-600', pill: 'bg-amber-50 text-amber-700', rail: 'bg-amber-500' },
-  slate: { plate: 'bg-slate-100 text-slate-500', pill: 'bg-slate-100 text-slate-600', rail: 'bg-slate-300' },
+  red: {
+    plate: 'bg-red-50 text-red-600',
+    pill: 'bg-red-50 text-red-700',
+    rail: 'bg-red-500',
+    ring: 'ring-red-500 bg-red-50/40',
+  },
+  amber: {
+    plate: 'bg-amber-50 text-amber-600',
+    pill: 'bg-amber-50 text-amber-700',
+    rail: 'bg-amber-500',
+    ring: 'ring-amber-500 bg-amber-50/40',
+  },
+  slate: {
+    plate: 'bg-slate-100 text-slate-500',
+    pill: 'bg-slate-100 text-slate-600',
+    rail: 'bg-slate-300',
+    ring: 'ring-slate-400 bg-slate-50',
+  },
 }
 
 /**
@@ -32,8 +53,23 @@ const TONES = {
  * can check. `invert` is for figures where up is the bad direction - more
  * candidates quitting is not good news, and colouring it green because it rose
  * would be a chart telling a lie.
+ *
+ * `onClick` makes the tile a filter: clicking it narrows the board below to
+ * the figure it shows. `active` marks the one currently doing so, with a ring
+ * in the tile's own colour.
  */
-export function StatTile({ label, value, share, delta, deltaLabel, invert = false, icon: Icon, tone = 'brand' }) {
+export function StatTile({
+  label,
+  value,
+  share,
+  delta,
+  deltaLabel,
+  invert = false,
+  icon: Icon,
+  tone = 'brand',
+  onClick,
+  active = false,
+}) {
   const style = TONES[tone] ?? TONES.brand
   // A count gets the big numeral; a name gets a readable size instead. Set at
   // 2xl, "Referral - existing student" wraps to three lines and the tile grows
@@ -43,20 +79,34 @@ export function StatTile({ label, value, share, delta, deltaLabel, invert = fals
   const good = invert ? !rising : rising
   const Arrow = rising ? TrendingUp : TrendingDown
 
+  // A real button when it filters, so it is reachable by keyboard and says
+  // whether it is pressed; a plain box otherwise.
+  const Tag = onClick ? 'button' : 'div'
+  const interactive = onClick
+    ? `w-full cursor-pointer text-left hover:border-slate-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+        active ? `ring-2 ${style.ring}` : 'bg-white'
+      }`
+    : 'bg-white hover:shadow'
+
+  // Spans styled as blocks rather than <p>/<div>: a <button> may only hold
+  // phrasing content, and the same markup has to serve both.
   return (
-    <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-white pl-4 pr-3.5 py-3 shadow-sm transition-shadow hover:shadow">
+    <Tag
+      {...(onClick ? { type: 'button', onClick, 'aria-pressed': active } : {})}
+      className={`relative block overflow-hidden rounded-lg border border-slate-200 pl-4 pr-3.5 py-3 shadow-sm transition-shadow ${interactive}`}
+    >
       <span className={`absolute inset-y-0 left-0 w-1 ${style.rail}`} aria-hidden="true" />
-      <div className="flex items-start justify-between gap-2">
-        <p className="min-w-0 text-[10px] font-semibold uppercase leading-tight tracking-wider text-slate-500">
+      <span className="flex items-start justify-between gap-2">
+        <span className="min-w-0 text-[10px] font-semibold uppercase leading-tight tracking-wider text-slate-500">
           {label}
-        </p>
+        </span>
         {Icon && (
           <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${style.plate}`}>
             <Icon className="h-4 w-4" strokeWidth={2.2} aria-hidden="true" />
           </span>
         )}
-      </div>
-      <p className="mt-1.5 flex flex-wrap items-baseline gap-1.5">
+      </span>
+      <span className="mt-1.5 flex flex-wrap items-baseline gap-1.5">
         <span
           className={`font-bold leading-none tracking-tight text-slate-900 ${
             isName ? 'line-clamp-2 text-base leading-snug' : 'text-2xl'
@@ -68,9 +118,9 @@ export function StatTile({ label, value, share, delta, deltaLabel, invert = fals
         {share && (
           <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${style.pill}`}>{share}</span>
         )}
-      </p>
+      </span>
       {typeof delta === 'number' ? (
-        <p className="mt-2 flex items-center gap-1.5 text-[11px]">
+        <span className="mt-2 flex items-center gap-1.5 text-[11px]">
           {/* The movement in its own tinted chip rather than as loose coloured
               text: it is a second, smaller reading of the same figure, and the
               chip is what keeps it from competing with the number above. */}
@@ -83,11 +133,11 @@ export function StatTile({ label, value, share, delta, deltaLabel, invert = fals
             {Math.abs(delta)}%
           </span>
           <span className="truncate text-slate-400">{deltaLabel}</span>
-        </p>
+        </span>
       ) : (
-        deltaLabel && <p className="mt-2 truncate text-[11px] text-slate-400">{deltaLabel}</p>
+        deltaLabel && <span className="mt-2 block truncate text-[11px] text-slate-400">{deltaLabel}</span>
       )}
-    </div>
+    </Tag>
   )
 }
 

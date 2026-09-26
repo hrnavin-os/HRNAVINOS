@@ -495,6 +495,38 @@ async def test_foundation_analytics_sums_what_was_collected(client, auth_headers
     assert data["items"][0]["collected"] == 15500.5
 
 
+async def test_a_clicked_summary_card_narrows_the_foundation_breakdown(client, auth_headers):
+    """Clicking Batch confirmed, Quit or Collected on the Statistics board
+    redraws everything below it for just the leads that card counts."""
+    await make_lead(client, auth_headers, name="Arun", phone="9000000101", status="batch_confirmation")
+    await make_lead(client, auth_headers, name="Bala", phone="9000000102", status="lost")
+    await make_lead(
+        client,
+        auth_headers,
+        name="Chitra",
+        phone="9000000103",
+        course_interest="Full Stack",
+        paying_amount=Decimal("2000"),
+    )
+
+    lost = await analytics(client, auth_headers, "course", outcome="lost")
+    assert lost["total"] == 1
+    assert [(item["value"], item["lost"]) for item in lost["items"]] == [("Data Science", 1)]
+
+    paid = await analytics(client, auth_headers, "course", outcome="paid")
+    assert paid["total"] == 1
+    assert paid["items"][0]["value"] == "Full Stack"
+
+    # The batch tab takes its own path through the service; it narrows too.
+    confirmed = await analytics(client, auth_headers, "batch", outcome="confirmed")
+    assert confirmed["total"] == 1
+
+    refused = await client.get(
+        ANALYTICS_URL, headers=auth_headers, params={"dimension": "course", "outcome": "moved"}
+    )
+    assert refused.status_code == 422
+
+
 async def test_foundation_analytics_names_the_leads_with_no_value(client, auth_headers):
     """How much of the data is missing is itself a finding, so those leads are
     a named row rather than quietly dropped."""

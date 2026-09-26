@@ -206,6 +206,9 @@ async def analytics(
     date_from: date | None = None,
     date_to: date | None = None,
     section: str | None = None,
+    # A clicked summary card: narrows every figure to the candidates who moved
+    # to Foundation, or the ones who quit.
+    outcome: Literal["moved", "quit"] | None = None,
     # The Statistics board's own permission, not leads.view: it is a menu of
     # its own, so withholding it in the role editor has to actually withhold
     # the numbers rather than only hide the link to them.
@@ -226,7 +229,7 @@ async def analytics(
     """
     scope = await get_actor_scope(actor)
     data = await InductionEntryService().analytics(
-        dimension, section=scope or section, date_from=date_from, date_to=date_to
+        dimension, section=scope or section, date_from=date_from, date_to=date_to, outcome=outcome
     )
     return InductionAnalyticsResponse(**data)
 

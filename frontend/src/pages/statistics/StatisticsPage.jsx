@@ -122,6 +122,11 @@ function PopulationBoard({ boardTabs }) {
   // rather than a per-panel selection: the whole point of a dashboard is that
   // the panels are looking at the same thing.
   const [selected, setSelected] = useState(null)
+  // The summary card clicked, if any: an outcome key (moved, quit, confirmed,
+  // lost) or `paid` for the Collected card. It narrows every figure below the
+  // cards to the rows that card counts - the charts, the table, the foot strip
+  // and the largest-value card are all redrawn from the server for just them.
+  const [outcome, setOutcome] = useState(null)
 
   const dimension =
     board.dimensions.find((item) => item.key === tabs[board.key]) ?? board.dimensions[0]
@@ -136,19 +141,37 @@ function PopulationBoard({ boardTabs }) {
   function openBoard(key) {
     setBoardKey(key)
     setSelected(null)
+    // The outcomes are the board's own - Quit on Induction is not Quit on
+    // Foundation - so the card filter clears with the board.
+    setOutcome(null)
   }
+
+  // Clicking the card that is already on turns it off; the total card is
+  // "everybody", so it always turns the filter off.
+  const toggleOutcome = (key) => setOutcome((current) => (current === key ? null : key))
 
   const filters = {
     date_from: dateRange?.from || undefined,
     date_to: dateRange?.to || undefined,
     section: section || undefined,
   }
+  const narrowed = outcome ? { ...filters, outcome } : filters
 
-  const query = useQuery({
+  // Two readings of the same filters: the whole population, which the summary
+  // cards show so they keep their own figures and still work as a switch, and
+  // the population the clicked card narrows to, which everything below them is
+  // drawn from. With no card clicked the two keys are identical, so React
+  // Query fetches once.
+  const baseQuery = useQuery({
     queryKey: ['statistics', board.key, dimension.key, filters],
     queryFn: () => board.load(dimension.key, filters),
     // Holds the previous breakdown while the next loads, so switching tabs or
     // moving a filter doesn't collapse the page to a spinner and back.
+    placeholderData: (previous) => previous,
+  })
+  const query = useQuery({
+    queryKey: ['statistics', board.key, dimension.key, narrowed],
+    queryFn: () => board.load(dimension.key, narrowed),
     placeholderData: (previous) => previous,
   })
 
@@ -193,12 +216,25 @@ function PopulationBoard({ boardTabs }) {
     ...(board.money ? { [board.money.key]: 0 } : {}),
   }
   const expected = dimension.expected?.({ inductionOptions, courses: courseQuery.data ?? [] }) ?? []
-  const rows = withExpectedValues(items, expected, zero).map((row) =>
-    // Stored values are enum keys on some dimensions ("emi_6_weeks"); the
-    // wording belongs to the constants every other surface names them from,
-    // so it is mapped here rather than sent down from the API.
-    dimension.labelOf ? { ...row, value: dimension.labelOf(row.value) } : row,
-  )
+  const toRows = (source) =>
+    withExpectedValues(source, expected, zero).map((row) =>
+      // Stored values are enum keys on some dimensions ("emi_6_weeks"); the
+      // wording belongs to the constants every other surface names them from,
+      // so it is mapped here rather than sent down from the API.
+      dimension.labelOf ? { ...row, value: dimension.labelOf(row.value) } : row,
+    )
+  const rows = toRows(items)
+
+  // The whole population, for the summary cards.
+  const baseData = baseQuery.data
+  const baseRows = toRows(baseData?.items ?? [])
+  const baseTotal = baseData?.total ?? 0
+
+  // What the clicked card is called, for the chip that says it is on.
+  const outcomeLabel =
+    outcome === 'paid'
+      ? board.money?.label
+      : board.outcomes.find((item) => item.key === outcome)?.label
   // The call-remark chart is a level up from its table: nineteen wordings roll
   // into the six outcomes they belong to.
   const chartRows = dimension.grouped ? groupRemarks(items, Object.keys(zero)) : rows
@@ -210,9 +246,10 @@ function PopulationBoard({ boardTabs }) {
   // What the period arrows compare. Not always the headline figures: with no
   // window set the board totals everything, and there is no period before all
   // time - so the server measures the last thirty days against the thirty
-  // before and says so in the label.
-  const now = data?.current
-  const before = data?.comparison
+  // before and says so in the label. Read off the whole population, since the
+  // cards they sit on are.
+  const now = baseData?.current
+  const before = baseData?.comparison
 
   // The canvas's colour assignment, read back so the ranking and the table can
   // wear it too. The same entity keeps the same colour in every view, which is
@@ -229,9 +266,14 @@ function PopulationBoard({ boardTabs }) {
   const pick = (value) => setSelected((current) => (current === value ? null : value))
 
   // With something picked, the tiles answer for it rather than for everyone -
-  // which is the question that was just asked by clicking on it.
-  const focus = selected ? rows.filter((row) => isRowSelected(row)) : rows
+  // which is the question that was just asked by clicking on it. Over the
+  // whole population: a card that shrank to what another card had narrowed to
+  // would stop being a way back to everyone.
+  const focus = selected ? baseRows.filter((row) => isRowSelected(row)) : baseRows
   const focusCount = sum(focus, 'count')
+  // The same highlight counted inside the narrowed population, for the pill.
+  const highlightedCount = sum(selected ? rows.filter((row) => isRowSelected(row)) : rows, 'count')
+  const largestLabel = largest ? dimension.labelOf?.(largest.value) ?? largest.value : null
 
   // Which chart types this dimension can honestly be drawn as. Every one of
   // them is drawn, so this is a filter rather than a picker: a trend belongs on
@@ -346,6 +388,19 @@ function PopulationBoard({ boardTabs }) {
               />
             </div>
           )}
+          {outcome && (
+            // The clicked card, named in the row with the other filters so it
+            // is clear why the charts below have shrunk - and droppable from
+            // here as well as by clicking the card again.
+            <button
+              type="button"
+              onClick={() => setOutcome(null)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-brand-300 bg-brand-50 px-2.5 py-1.5 text-xs font-bold text-brand-700 transition-colors hover:bg-brand-100"
+            >
+              Only: {outcomeLabel}
+              <X className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
+            </button>
+          )}
           {selected && (
             // The highlight is a filter you set by clicking a chart, so it
             // says so in the same row as the ones you set from a menu - and
@@ -364,12 +419,20 @@ function PopulationBoard({ boardTabs }) {
               a pill rather than loose text: it is a reading of the current
               filters, not a caption on them. */}
           <span className="ml-auto rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
-            {selected ? `${focusCount} of ${total} highlighted` : board.scopeLabel(total)}
+            {selected
+              ? `${highlightedCount} of ${total} highlighted`
+              : outcome
+                ? `${total} of ${baseTotal} ${board.unit.toLowerCase()} shown`
+                : board.scopeLabel(total)}
           </span>
         </div>
       </div>
 
-      <ErrorMessage message={query.error ? getApiErrorMessage(query.error) : null} />
+      <ErrorMessage
+        message={
+          query.error || baseQuery.error ? getApiErrorMessage(query.error ?? baseQuery.error) : null
+        }
+      />
 
       {query.isLoading && !data ? (
         <LoadingSpinner />
@@ -380,27 +443,38 @@ function PopulationBoard({ boardTabs }) {
           <div
             className={`mb-3 grid gap-3 sm:grid-cols-2 ${board.money ? 'xl:grid-cols-5' : 'xl:grid-cols-4'}`}
           >
+            {/* Every card is a filter. The total is "everybody" and turns any
+                card filter off; each outcome card narrows the board to the
+                rows it counts; the largest-value card highlights that value on
+                every chart, as clicking it in a chart would. */}
             <StatTile
               label={selected ? board.highlightLabel : board.totalLabel}
               value={focusCount}
-              share={selected ? percent(focusCount, total) : null}
+              share={selected ? percent(focusCount, baseTotal) : null}
               delta={selected ? undefined : change(now?.total, before?.total)}
-              deltaLabel={selected ? `of ${total} in scope` : before?.label}
+              deltaLabel={selected ? `of ${baseTotal} in scope` : before?.label}
               icon={board.icon}
+              onClick={() => {
+                setOutcome(null)
+                setSelected(null)
+              }}
+              active={!outcome}
             />
-            {board.outcomes.map((outcome) => (
+            {board.outcomes.map((item) => (
               <StatTile
-                key={outcome.key}
-                label={outcome.label}
-                value={sum(focus, outcome.key)}
-                share={percent(sum(focus, outcome.key), focusCount)}
-                delta={selected ? undefined : change(now?.[outcome.key], before?.[outcome.key])}
+                key={item.key}
+                label={item.label}
+                value={sum(focus, item.key)}
+                share={percent(sum(focus, item.key), focusCount)}
+                delta={selected ? undefined : change(now?.[item.key], before?.[item.key])}
                 deltaLabel={selected ? null : before?.label}
                 // Some figures are bad news when they rise - more people
                 // quitting is not good news, whichever way the arrow points.
-                invert={outcome.invert}
-                icon={outcome.icon}
-                tone={outcome.tone}
+                invert={item.invert}
+                icon={item.icon}
+                tone={item.tone}
+                onClick={() => toggleOutcome(item.key)}
+                active={outcome === item.key}
               />
             ))}
             {board.money && (
@@ -413,21 +487,28 @@ function PopulationBoard({ boardTabs }) {
                 deltaLabel={`across ${focusCount} ${board.unit.toLowerCase()}`}
                 icon={Wallet}
                 tone="amber"
+                // Narrows to the leads with any money in at all.
+                onClick={() => toggleOutcome('paid')}
+                active={outcome === 'paid'}
               />
             )}
+            {/* Read off the narrowed population, so with Quit clicked it names
+                the category most of the quitters came from. */}
             <StatTile
               label={dimension.leader}
-              value={largest ? dimension.labelOf?.(largest.value) ?? largest.value : '—'}
+              value={largestLabel ?? '—'}
               share={largest ? percent(largest.count, total) : null}
               deltaLabel={largest ? `${largest.count} ${board.unit.toLowerCase()}` : null}
               icon={Crown}
+              onClick={largestLabel ? () => pick(largestLabel) : undefined}
+              active={Boolean(largestLabel) && selected === largestLabel}
             />
           </div>
 
           <div className="mb-3">
             <Panel
               className="min-w-0"
-              title={dimension.title}
+              title={outcome ? `${dimension.title} · ${outcomeLabel}` : dimension.title}
               subtitle={dimension.subtitle}
               hint={dimension.hint}
               action={
@@ -476,7 +557,7 @@ function PopulationBoard({ boardTabs }) {
           {/* The table view: the same numbers without relying on colour or bar
               length, plus the rates the marks don't carry. */}
           <Panel
-            title={`Conversion by ${dimension.noun}`}
+            title={`Conversion by ${dimension.noun}${outcome ? ` · ${outcomeLabel}` : ''}`}
             subtitle="Every value, including the ones nobody has been filed under."
           >
             <DataTable

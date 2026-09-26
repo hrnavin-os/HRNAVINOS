@@ -631,6 +631,32 @@ async def test_category_analytics_counts_conversions_and_quits(client, auth_head
     assert by_value["Job Switch"]["count"] == 1
 
 
+async def test_a_clicked_summary_card_narrows_the_induction_breakdown(client, auth_headers):
+    """Clicking Moved to Foundation or Quit on the Statistics board redraws
+    everything below it for just the candidates that card counts."""
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload(category="Fresher"))
+    await client.post(
+        INDUCTION_URL, json=induction_payload(name="Bala", phone="9000000001", category="Fresher")
+    )
+    await client.post(
+        INDUCTION_URL, json=induction_payload(name="Chitra", phone="9000000002", category="Job Switch")
+    )
+    await client.post(FOUNDATION_URL, json=foundation_payload())
+    rows = (await client.get("/api/v1/induction-entries?page_size=100", headers=auth_headers)).json()["items"]
+    chitra = next(r["id"] for r in rows if r["name"] == "Chitra")
+    await set_remark(client, auth_headers, chitra, "Quit - After Foundation Session")
+
+    url = "/api/v1/induction-entries/analytics?dimension=category"
+    quit_only = (await client.get(f"{url}&outcome=quit", headers=auth_headers)).json()
+    assert quit_only["total"] == 1
+    assert [item["value"] for item in quit_only["items"]] == ["Job Switch"]
+
+    moved_only = (await client.get(f"{url}&outcome=moved", headers=auth_headers)).json()
+    assert moved_only["total"] == 1
+    assert moved_only["items"][0] == {"value": "Fresher", "count": 1, "moved": 1, "quit": 0}
+
+
 async def test_analytics_names_the_entries_with_no_value(client, auth_headers):
     """How much of the data is missing is itself a finding, so those entries
     are a named row rather than quietly dropped."""

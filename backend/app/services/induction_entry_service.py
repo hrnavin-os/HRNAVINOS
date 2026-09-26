@@ -355,6 +355,21 @@ class InductionEntryService:
         "lead_source": "$lead_source",
     }
 
+    # The outcomes a Statistics summary card narrows the board to. The same two
+    # rules the per-row `moved` and `quit` figures count by, as $match filters.
+    _OUTCOME_MATCH = {
+        "moved": {"foundation_lead_id": {"$ne": None}},
+        "quit": {"call_remark": {"$regex": "quit", "$options": "i"}},
+    }
+
+    def _outcome_match(self, outcome: str | None) -> dict:
+        if outcome is None:
+            return {}
+        match = self._OUTCOME_MATCH.get(outcome)
+        if match is None:
+            raise BadRequestError(f"Unknown outcome '{outcome}'.")
+        return match
+
     async def analytics(
         self,
         dimension: str,
@@ -362,6 +377,7 @@ class InductionEntryService:
         section: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
+        outcome: str | None = None,
     ) -> dict:
         """Counts per distinct value of one field, with how many of each went on
         to Foundation and how many quit.
@@ -377,12 +393,16 @@ class InductionEntryService:
         The window and the section are the dashboard's filter rail. Applied
         here, inside the one $match every view on the canvas is built on, so
         two panels on the same screen cannot end up counting different people.
+
+        `outcome` is a clicked summary card - Moved to Foundation, or Quit -
+        and narrows every figure to the candidates it counts, in that same
+        $match.
         """
         field = self._ANALYTICS_FIELDS.get(dimension)
         if field is None:
             raise BadRequestError(f"Unknown analytics dimension '{dimension}'.")
 
-        match: dict = {"is_deleted": False}
+        match: dict = {"is_deleted": False, **self._outcome_match(outcome)}
         if section:
             match["section"] = section
         # Registration dates are stored as midnight datetimes, and a pipeline
@@ -418,7 +438,7 @@ class InductionEntryService:
             ]
         ).to_list()
 
-        current, comparison = await self._period_comparison(section, date_from, date_to)
+        current, comparison = await self._period_comparison(section, date_from, date_to, outcome)
 
         return {
             "dimension": dimension,
@@ -441,7 +461,7 @@ class InductionEntryService:
         }
 
     async def _period_comparison(
-        self, section: str | None, date_from: date | None, date_to: date | None
+        self, section: str | None, date_from: date | None, date_to: date | None, outcome: str | None = None
     ) -> tuple[dict, dict] | tuple[None, None]:
         """This period's three headline figures and the previous period's.
 
@@ -469,15 +489,16 @@ class InductionEntryService:
         earlier = (current[0] - timedelta(days=span), current[0] - timedelta(days=1))
 
         return (
-            {"label": label, **await self._headline(section, *current)},
-            {"label": label, **await self._headline(section, *earlier)},
+            {"label": label, **await self._headline(section, *current, outcome=outcome)},
+            {"label": label, **await self._headline(section, *earlier, outcome=outcome)},
         )
 
-    async def _headline(self, section: str | None, start: date, end: date) -> dict:
+    async def _headline(self, section: str | None, start: date, end: date, *, outcome: str | None = None) -> dict:
         """How many registered in a window, how many of them moved, how many
         quit. The same three numbers the stat tiles lead with."""
         match: dict = {
             "is_deleted": False,
+            **self._outcome_match(outcome),
             "registration_date": {
                 "$gte": datetime.combine(start, time.min),
                 "$lte": datetime.combine(end, time.min),
