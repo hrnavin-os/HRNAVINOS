@@ -6,7 +6,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 
-from app.core.dependencies import RequirePermissions, get_actor_scope
+from app.core.dependencies import RequireAnyPermission, RequirePermissions, get_actor_scope
 from app.exceptions.base import BadRequestError
 from app.models.enums import (
     InstallmentPaymentMode,
@@ -186,7 +186,9 @@ async def list_field_options(
 
 @router.get("/course-catalog", response_model=list[str])
 async def list_course_catalog(
-    actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
+    # Statistics reads it too, so its Courses tab can show a course nobody is
+    # on yet at zero - and a role given only Statistics has no leads.view.
+    actor: User = Depends(RequireAnyPermission(Permissions.LEADS_VIEW, Permissions.LEAD_ANALYTICS_VIEW)),
 ) -> list[str]:
     """Every course a lead can be moved onto, for the board's Course dropdown.
 

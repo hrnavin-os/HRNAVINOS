@@ -152,7 +152,7 @@ async def test_the_course_catalog_is_the_programs_and_only_the_programs(client, 
     assert in_use == ["Data Science"]
 
 
-async def test_admin_keeps_the_programs_tab_on_an_existing_database(client, auth_headers):
+async def test_admin_head_keeps_the_programs_tab_on_an_existing_database(client, auth_headers):
     """DEFAULT_ROLE_PERMISSIONS is a seed, not a migration: adding a permission
     to a role there changes what a fresh database gets and leaves every
     existing one as it was. The startup backfill closes that gap, which is the
@@ -162,7 +162,7 @@ async def test_admin_keeps_the_programs_tab_on_an_existing_database(client, auth
     from app.models.permission import Permission
     from app.models.role import Role
 
-    admin = await Role.find_one({"name": "Admin", "is_deleted": False})
+    admin = await Role.find_one({"name": "Admin Head", "is_deleted": False})
     programs_view = await Permission.find_one({"code": "programs.view"})
     # Put the role back to before it was granted the permission.
     admin.permission_ids = [pid for pid in admin.permission_ids if pid != programs_view.id]
@@ -171,7 +171,7 @@ async def test_admin_keeps_the_programs_tab_on_an_existing_database(client, auth
     granted = await backfill_role_permissions()
 
     assert granted >= 1
-    restored = await Role.find_one({"name": "Admin", "is_deleted": False})
+    restored = await Role.find_one({"name": "Admin Head", "is_deleted": False})
     assert programs_view.id in restored.permission_ids
 
 

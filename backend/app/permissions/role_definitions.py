@@ -5,12 +5,35 @@ Super Admin is granted every permission implicitly by `RequirePermissions`
 """
 from app.permissions.permission_codes import Permissions as P
 
+# One list for all three Section Admin roles - they differ only in which
+# section Role.scoped_section pins them to.
+SECTION_ADMIN_PERMISSIONS: list[str] = [
+    # LEADS_CREATE is the walk-in and phone-enquiry case, which is theirs more
+    # than anybody's: they are the ones on the call. It doesn't widen their
+    # reach - LeadService.create forces the new lead into their own section
+    # from Role.scoped_section, whatever the client sends.
+    P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE,
+    # Their Polls menu: the attendance board's poll marker, narrowed to their
+    # own section by the routes and limited to that one marker (see
+    # SCOPED_MARKERS). Not CONFIGURE - the terms wording is shared by every
+    # section.
+    P.INDUCTION_ATTENDANCE_VIEW, P.INDUCTION_ATTENDANCE_MARK,
+    # Batch Confirmation's Group Onboarding and Lost Students tabs, on their
+    # own section's students only. Not CONFIRM, and the classroom-allocation
+    # endpoints refuse a scoped actor outright - a batch's roster spans every
+    # section.
+    P.BATCH_CONFIRMATION_VIEW, P.BATCH_CONFIRMATION_ALLOCATE,
+    # Their own section's group link, and no other section's.
+    P.WHATSAPP_LINKS_VIEW,
+    # Not Notifications: Finance's payment reminders still reach them through
+    # the header bell, which every role has.
+]
+
 DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     "Super Admin": [p.value for p in P],
     # The institute overview is the landing page for every role that isn't
-    # scoped to a single board of its own. Admin, Finance, the HR Coordinator
-    # and the Section Admins work one board each and land there instead, so
-    # they aren't granted it.
+    # scoped to boards of its own. The Admin team, Finance and the HR
+    # Coordinator land on their own boards instead, so they aren't granted it.
     "Sales Head": [
         P.DASHBOARD_VIEW,
         P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.LEADS_DELETE, P.LEADS_ASSIGN,
@@ -19,52 +42,13 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         P.LEAD_ANALYTICS_VIEW, P.FORM_COLLECTION_VIEW,
         P.ADMISSIONS_VIEW, P.USERS_VIEW, P.REPORTS_VIEW,
     ],
-    "Admin": [
-        P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE,
-        P.LEAD_ANALYTICS_VIEW, P.FORM_COLLECTION_VIEW, P.FORM_COLLECTION_CONFIGURE,
-        # The induction Attendance board: this role is the one that chases
-        # signed terms and marks who turned up, so it also owns the wording
-        # being signed.
-        P.INDUCTION_ATTENDANCE_VIEW, P.INDUCTION_ATTENDANCE_MARK, P.INDUCTION_ATTENDANCE_CONFIGURE,
-        # Programs drive the public form's program dropdown, which is the same
-        # surface FORM_COLLECTION_CONFIGURE already lets this role shape.
-        P.PROGRAMS_VIEW, P.PROGRAMS_CREATE, P.PROGRAMS_UPDATE, P.PROGRAMS_DELETE,
-        # The Settings menu under Programs: the spreadsheet the Induction and
-        # Foundation boards are mirrored into. This role owns both boards, so
-        # it owns the copy of them that leaves the app.
-        P.SHEET_EXPORT_VIEW, P.SHEET_EXPORT_UPDATE,
-    ],
-    # Form Collection Section Admins: manage leads within their own section
-    # only (enforced via Role.scoped_section below), no rights to edit the
-    # shared form/pricing structure itself - that's Admin/Super Admin only.
-    # NOTIFICATIONS_VIEW is the Notifications menu, which is theirs alone -
-    # Finance's payment reminders are addressed to a lead's own section admins.
-    # It was previously shown to any scoped user with no permission behind it;
-    # now it is a grant like every other menu.
-    # LEADS_CREATE is the walk-in and phone-enquiry case, which is theirs more
-    # than anybody's: they are the ones on the call. It doesn't widen their
-    # reach - LeadService.create forces the new lead into their own section
-    # from Role.scoped_section, whatever the client sends, so a Section Admin
-    # can only ever create onto the board they can already see.
-    # FORM_COLLECTION_VIEW shows them their own section's Foundation form and
-    # its public link - the page narrows itself to that one card for a scoped
-    # user. Viewing only: editing the shared form stays with Admin.
-    # INDUCTION_ATTENDANCE_VIEW/MARK are their Polls menu: the attendance
-    # board's poll marker, narrowed to their own section by the routes and
-    # limited to that one marker (see SCOPED_MARKERS). Not CONFIGURE - the
-    # terms wording is shared by every section.
-    "A-Section Admin": [
-        P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW, P.FORM_COLLECTION_VIEW,
-        P.INDUCTION_ATTENDANCE_VIEW, P.INDUCTION_ATTENDANCE_MARK,
-    ],
-    "B-Section Admin": [
-        P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW, P.FORM_COLLECTION_VIEW,
-        P.INDUCTION_ATTENDANCE_VIEW, P.INDUCTION_ATTENDANCE_MARK,
-    ],
-    "C-Section Admin": [
-        P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.NOTIFICATIONS_VIEW, P.FORM_COLLECTION_VIEW,
-        P.INDUCTION_ATTENDANCE_VIEW, P.INDUCTION_ATTENDANCE_MARK,
-    ],
+    # Section Admins (Admin team): Lead Dashboard | Polls | Batch Confirmation
+    # | WhatsApp Links, each narrowed to their own section by
+    # Role.scoped_section below - the routes read the section off the role, so
+    # there is no parameter that could widen it. See SECTION_ADMIN_PERMISSIONS.
+    "A-Section Admin": SECTION_ADMIN_PERMISSIONS,
+    "B-Section Admin": SECTION_ADMIN_PERMISSIONS,
+    "C-Section Admin": SECTION_ADMIN_PERMISSIONS,
     # Owns the hand-off from CRM to classroom: allocates leads that reached the
     # Batch Confirmation stage into batches, then confirms the roster (which
     # creates the Student and Admission records) once the batch is ready.
@@ -84,14 +68,34 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         P.DASHBOARD_VIEW,
         P.STUDENTS_VIEW, P.STUDENTS_UPDATE, P.TICKETS_VIEW, P.TICKETS_UPDATE, P.NOTIFICATIONS_VIEW,
     ],
+    # Leads the Admin team: the whole Admin group of the sidebar - Statistics,
+    # Lead Dashboard, Form Collection, Attendance, Programs and its Settings
+    # (the Google Sheets export). What the "Admin" role held before the team's
+    # roles were aligned (see RETIRED_ADMIN_ROLE below).
     "Admin Head": [
-        P.DASHBOARD_VIEW,
-        P.ADMISSIONS_VIEW, P.ADMISSIONS_CREATE, P.ADMISSIONS_UPDATE, P.ADMISSIONS_DELETE,
-        P.STUDENTS_VIEW, P.STUDENTS_CREATE, P.STUDENTS_UPDATE, P.STUDENTS_DELETE,
-        P.COURSES_VIEW, P.COURSES_CREATE, P.COURSES_UPDATE, P.COURSES_DELETE,
-        P.BATCHES_VIEW, P.BATCHES_CREATE, P.BATCHES_UPDATE, P.BATCHES_DELETE,
-        P.TUTORS_VIEW, P.TUTORS_CREATE, P.TUTORS_UPDATE, P.TUTORS_DELETE,
-        P.USERS_VIEW, P.REPORTS_VIEW, P.SETTINGS_VIEW, P.SETTINGS_UPDATE,
+        P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE,
+        P.LEAD_ANALYTICS_VIEW, P.FORM_COLLECTION_VIEW, P.FORM_COLLECTION_CONFIGURE,
+        # The whole induction Attendance board, including the terms wording.
+        P.INDUCTION_ATTENDANCE_VIEW, P.INDUCTION_ATTENDANCE_MARK, P.INDUCTION_ATTENDANCE_CONFIGURE,
+        # Programs drive the public form's program dropdown, which is the same
+        # surface FORM_COLLECTION_CONFIGURE already lets this role shape.
+        P.PROGRAMS_VIEW, P.PROGRAMS_CREATE, P.PROGRAMS_UPDATE, P.PROGRAMS_DELETE,
+        # The Settings menu under Programs: the spreadsheet the Induction and
+        # Foundation boards are mirrored into. This role owns both boards, so
+        # it owns the copy of them that leaves the app.
+        P.SHEET_EXPORT_VIEW, P.SHEET_EXPORT_UPDATE,
+    ],
+    # Works the Attendance board across every section: Terms & Conditions,
+    # Polls, Success Meet and Foundation Class. Owns the terms wording too,
+    # since chasing the signatures on it is this role's job.
+    "Attendance Coordinator": [
+        P.INDUCTION_ATTENDANCE_VIEW, P.INDUCTION_ATTENDANCE_MARK, P.INDUCTION_ATTENDANCE_CONFIGURE,
+    ],
+    # Reads the Statistics board and nothing else: its Induction half is the
+    # lead analysis, its Foundation half (collected, payment method, payment
+    # remarks) the finance analysis.
+    "Operation Coordinator": [
+        P.LEAD_ANALYTICS_VIEW,
     ],
     "Admin Executive": [
         P.DASHBOARD_VIEW,
@@ -126,6 +130,22 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
 }
 
 SYSTEM_ROLES = {"Super Admin"}
+
+# The Admin team. Their definitions above are exact rather than a floor: the
+# one-time alignment in app/database/backfills.py sets each live role to
+# precisely its list, taking away what the old designations carried.
+ADMIN_TEAM_ROLES = [
+    "Admin Head",
+    "A-Section Admin",
+    "B-Section Admin",
+    "C-Section Admin",
+    "Attendance Coordinator",
+    "Operation Coordinator",
+]
+
+# Folded into Admin Head by that alignment: its members move across and the
+# role itself is retired.
+RETIRED_ADMIN_ROLE = "Admin"
 
 # Which Form Collection section (if any) a role's members are restricted to -
 # an open-ended section code (not a closed enum; admins can add new sections

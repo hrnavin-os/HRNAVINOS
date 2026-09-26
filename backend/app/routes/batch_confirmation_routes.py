@@ -3,7 +3,8 @@ import uuid
 
 from fastapi import APIRouter, Depends, Query, status
 
-from app.core.dependencies import RequireAnyPermission, RequirePermissions
+from app.core.dependencies import RequireAnyPermission, RequirePermissions, get_actor_scope, get_current_user
+from app.exceptions.base import ForbiddenError, NotFoundError
 from app.models.enums import AllocationStatus, WhatsAppGroupStatus
 from app.models.induction_entry import lead_batch_label
 from app.models.user import User
@@ -40,21 +41,54 @@ from app.services.whatsapp_service import WhatsAppService
 router = APIRouter(prefix="/batch-confirmation", tags=["Batch Confirmation"])
 
 
-@router.get("/summary", response_model=CoordinatorSummaryResponse)
+# ---------------------------------------------------------------------------
+# Section scope
+#
+# A Section Admin works this board for their own section only: the onboarding
+# queue, the Lost tab and the WhatsApp link are narrowed to it, and every write
+# on a single candidate checks the candidate is theirs first. The section comes
+# off their role (get_actor_scope), never off the request.
+#
+# The classroom-allocation half - batches, seats, rosters, confirmation - is
+# refused to them outright rather than narrowed: a batch's roster is drawn from
+# every section, so there is no "their part" of it to show.
+# ---------------------------------------------------------------------------
+
+
+async def _whole_institute(actor: User = Depends(get_current_user)) -> None:
+    if await get_actor_scope(actor) is not None:
+        raise ForbiddenError("Batch allocation covers every section, so it isn't open to a Section Admin.")
+
+
+WHOLE_INSTITUTE = [Depends(_whole_institute)]
+
+
+async def _scope_for_lead(service: BatchConfirmationService, lead_id: uuid.UUID, actor: User) -> str | None:
+    """The actor's section, having checked this lead is in it."""
+    scope = await get_actor_scope(actor)
+    if scope is not None:
+        lead = await service.leads.get_by_id(lead_id)
+        if not lead:
+            raise NotFoundError("Lead not found.")
+        service.check_section(lead, scope)
+    return scope
+
+
+@router.get("/summary", response_model=CoordinatorSummaryResponse, dependencies=WHOLE_INSTITUTE)
 async def get_summary(
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
 ) -> CoordinatorSummaryResponse:
     return await BatchConfirmationService().summary()
 
 
-@router.get("/options", response_model=BatchFormOptionsResponse)
+@router.get("/options", response_model=BatchFormOptionsResponse, dependencies=WHOLE_INSTITUTE)
 async def get_form_options(
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
 ) -> BatchFormOptionsResponse:
     return await BatchConfirmationService().form_options()
 
 
-@router.post("/batches", response_model=BatchResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/batches", response_model=BatchResponse, status_code=status.HTTP_201_CREATED, dependencies=WHOLE_INSTITUTE)
 async def create_batch_group(
     payload: BatchCreate,
     actor: User = Depends(RequirePermissions(Permissions.BATCHES_CREATE)),
@@ -64,14 +98,14 @@ async def create_batch_group(
     return BatchResponse.model_validate(batch)
 
 
-@router.get("/pending-leads", response_model=list[PendingLeadResponse])
+@router.get("/pending-leads", response_model=list[PendingLeadResponse], dependencies=WHOLE_INSTITUTE)
 async def list_pending_leads(
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
 ) -> list[PendingLeadResponse]:
     return await BatchConfirmationService().list_pending_leads()
 
 
-@router.get("/allocations", response_model=list[AllocationRowResponse])
+@router.get("/allocations", response_model=list[AllocationRowResponse], dependencies=WHOLE_INSTITUTE)
 async def list_allocations(
     status_filter: AllocationStatus | None = Query(default=None, alias="status"),
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
@@ -79,7 +113,7 @@ async def list_allocations(
     return await BatchConfirmationService().list_allocations(status=status_filter)
 
 
-@router.post("/leads/{lead_id}/mark", response_model=MessageResponse)
+@router.post("/leads/{lead_id}/mark", response_model=MessageResponse, dependencies=WHOLE_INSTITUTE)
 async def mark_lead(
     lead_id: uuid.UUID,
     payload: MarkRequest,
@@ -89,14 +123,14 @@ async def mark_lead(
     return MessageResponse(message="Lead marked." if payload.marked else "Mark cleared.")
 
 
-@router.get("/batches", response_model=list[BatchReadinessResponse])
+@router.get("/batches", response_model=list[BatchReadinessResponse], dependencies=WHOLE_INSTITUTE)
 async def list_batches(
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
 ) -> list[BatchReadinessResponse]:
     return await BatchConfirmationService().list_batches()
 
 
-@router.get("/batches/{batch_id}", response_model=BatchReadinessDetailResponse)
+@router.get("/batches/{batch_id}", response_model=BatchReadinessDetailResponse, dependencies=WHOLE_INSTITUTE)
 async def get_batch(
     batch_id: uuid.UUID,
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
@@ -104,7 +138,7 @@ async def get_batch(
     return await BatchConfirmationService().get_batch(batch_id)
 
 
-@router.post("/allocations", response_model=MessageResponse)
+@router.post("/allocations", response_model=MessageResponse, dependencies=WHOLE_INSTITUTE)
 async def allocate_lead(
     payload: AllocateRequest,
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_ALLOCATE)),
@@ -115,7 +149,7 @@ async def allocate_lead(
     return MessageResponse(message="Lead allocated to batch.")
 
 
-@router.post("/allocations/{allocation_id}/withdraw", response_model=MessageResponse)
+@router.post("/allocations/{allocation_id}/withdraw", response_model=MessageResponse, dependencies=WHOLE_INSTITUTE)
 async def withdraw_allocation(
     allocation_id: uuid.UUID,
     payload: WithdrawRequest,
@@ -125,7 +159,7 @@ async def withdraw_allocation(
     return MessageResponse(message="Seat withdrawn; the lead is back in the allocation queue.")
 
 
-@router.post("/batches/{batch_id}/confirm", response_model=ConfirmBatchResponse)
+@router.post("/batches/{batch_id}/confirm", response_model=ConfirmBatchResponse, dependencies=WHOLE_INSTITUTE)
 async def confirm_batch(
     batch_id: uuid.UUID,
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_CONFIRM)),
@@ -148,9 +182,12 @@ async def list_whatsapp_links(
     ),
 ) -> list[WhatsAppGroupLinkResponse]:
     sections = await FoundationFormConfigService().list_whatsapp_links()
+    # A Section Admin sees their own section's link and no other.
+    scope = await get_actor_scope(actor)
     return [
         WhatsAppGroupLinkResponse(code=s.code, label=s.label, whatsapp_group_url=s.whatsapp_group_url)
         for s in sections
+        if scope is None or s.code == scope
     ]
 
 
@@ -160,6 +197,9 @@ async def update_whatsapp_link(
     payload: WhatsAppGroupLinkUpdate,
     actor: User = Depends(RequirePermissions(Permissions.WHATSAPP_LINKS_VIEW)),
 ) -> WhatsAppGroupLinkResponse:
+    scope = await get_actor_scope(actor)
+    if scope is not None and code != scope:
+        raise ForbiddenError("Section Admins can only set their own section's WhatsApp link.")
     section = await FoundationFormConfigService().set_whatsapp_link(
         code, payload.whatsapp_group_url, actor_id=actor.id
     )
@@ -216,7 +256,7 @@ async def list_hr_students(
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
 ) -> list[HRStudentResponse]:
     service = BatchConfirmationService()
-    leads = await service.list_hr_students(tab)
+    leads = await service.list_hr_students(tab, section=await get_actor_scope(actor))
     # Resolved for the whole page in one query rather than per row.
     batches = await service.batches_for(leads)
     handlers = await _handler_names(service, leads)
@@ -249,7 +289,7 @@ async def list_whatsapp_queue(
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
 ) -> list[HRStudentResponse]:
     service = BatchConfirmationService()
-    leads = await service.list_whatsapp_queue(status_filter)
+    leads = await service.list_whatsapp_queue(status_filter, section=await get_actor_scope(actor))
     batches = await service.batches_for(leads)
     handlers = await _handler_names(service, leads)
     return [
@@ -271,7 +311,8 @@ async def whatsapp_config(
 async def whatsapp_counts(
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
 ) -> WhatsAppCountsResponse:
-    return WhatsAppCountsResponse(**await BatchConfirmationService().whatsapp_counts())
+    counts = await BatchConfirmationService().whatsapp_counts(section=await get_actor_scope(actor))
+    return WhatsAppCountsResponse(**counts)
 
 
 @router.post("/whatsapp/invite/bulk", response_model=BulkGroupAssignResponse)
@@ -282,7 +323,7 @@ async def bulk_send_whatsapp_invite(
     """Sends the invite to a selection. Declared before the /{lead_id} routes
     so the dynamic segment doesn't swallow "invite"."""
     sent, skipped = await BatchConfirmationService().send_whatsapp_invite_bulk(
-        payload.lead_ids, actor_id=actor.id
+        payload.lead_ids, actor_id=actor.id, section=await get_actor_scope(actor)
     )
     message = f"Invite sent to {sent} candidate{'' if sent == 1 else 's'}."
     if skipped:
@@ -304,7 +345,9 @@ async def send_whatsapp_invite(
     the board opens a pre-written wa.me message instead - so the button works
     either way and the coordinator can see which happened.
     """
-    lead, delivered = await BatchConfirmationService().send_whatsapp_invite(lead_id, actor_id=actor.id)
+    service = BatchConfirmationService()
+    await _scope_for_lead(service, lead_id, actor)
+    lead, delivered = await service.send_whatsapp_invite(lead_id, actor_id=actor.id)
     return WhatsAppInviteResponse(student=_to_hr_student(lead), delivered=delivered)
 
 
@@ -313,7 +356,9 @@ async def mark_whatsapp_joined(
     lead_id: uuid.UUID,
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_ALLOCATE)),
 ) -> HRStudentResponse:
-    lead = await BatchConfirmationService().mark_whatsapp_joined(lead_id, actor_id=actor.id)
+    service = BatchConfirmationService()
+    await _scope_for_lead(service, lead_id, actor)
+    lead = await service.mark_whatsapp_joined(lead_id, actor_id=actor.id)
     return _to_hr_student(lead)
 
 
@@ -322,7 +367,9 @@ async def log_whatsapp_follow_up(
     lead_id: uuid.UUID,
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_ALLOCATE)),
 ) -> HRStudentResponse:
-    lead = await BatchConfirmationService().log_whatsapp_follow_up(lead_id, actor_id=actor.id)
+    service = BatchConfirmationService()
+    await _scope_for_lead(service, lead_id, actor)
+    lead = await service.log_whatsapp_follow_up(lead_id, actor_id=actor.id)
     return _to_hr_student(lead)
 
 
@@ -338,9 +385,9 @@ async def remove_from_group(
     still has to remove them inside WhatsApp itself; nothing here can do that,
     and this records that it was done.
     """
-    lead = await BatchConfirmationService().remove_from_group(
-        lead_id, reason=payload.reason if payload else None, actor_id=actor.id
-    )
+    service = BatchConfirmationService()
+    await _scope_for_lead(service, lead_id, actor)
+    lead = await service.remove_from_group(lead_id, reason=payload.reason if payload else None, actor_id=actor.id)
     return _to_hr_student(lead)
 
 
@@ -349,7 +396,9 @@ async def whatsapp_history(
     lead_id: uuid.UUID,
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_VIEW)),
 ) -> list[WhatsAppHistoryEntry]:
-    history = await BatchConfirmationService().whatsapp_history(lead_id)
+    service = BatchConfirmationService()
+    await _scope_for_lead(service, lead_id, actor)
+    history = await service.whatsapp_history(lead_id)
     return [
         WhatsAppHistoryEntry(action=action, user_name=user_name, created_at=created_at)
         for action, user_name, created_at in history
@@ -362,9 +411,9 @@ async def set_batch_number(
     payload: BatchNumberRequest,
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_ALLOCATE)),
 ) -> HRStudentResponse:
-    lead = await BatchConfirmationService().set_batch_number(
-        lead_id, batch_number=payload.batch_number, actor_id=actor.id
-    )
+    service = BatchConfirmationService()
+    await _scope_for_lead(service, lead_id, actor)
+    lead = await service.set_batch_number(lead_id, batch_number=payload.batch_number, actor_id=actor.id)
     return _to_hr_student(lead)
 
 
@@ -374,9 +423,9 @@ async def mark_group_assigned(
     payload: GroupAssignRequest | None = None,
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_ALLOCATE)),
 ) -> HRStudentResponse:
-    lead = await BatchConfirmationService().set_group_assigned(
-        lead_id, assigned=payload.assigned if payload else True, actor_id=actor.id
-    )
+    service = BatchConfirmationService()
+    await _scope_for_lead(service, lead_id, actor)
+    lead = await service.set_group_assigned(lead_id, assigned=payload.assigned if payload else True, actor_id=actor.id)
     return _to_hr_student(lead)
 
 
@@ -386,7 +435,13 @@ async def set_hr_stage(
     payload: HRStageRequest,
     actor: User = Depends(RequirePermissions(Permissions.BATCH_CONFIRMATION_ALLOCATE)),
 ) -> HRStudentResponse:
+    # Scoped inside: the move goes through LeadService, which checks the
+    # section the same way it does for the Lead Dashboard.
     lead = await BatchConfirmationService().set_hr_stage(
-        lead_id, status=payload.status, lost_reason=payload.lost_reason, actor_id=actor.id
+        lead_id,
+        status=payload.status,
+        lost_reason=payload.lost_reason,
+        actor_id=actor.id,
+        section=await get_actor_scope(actor),
     )
     return _to_hr_student(lead)

@@ -13,7 +13,7 @@ import uuid
 from datetime import date
 
 from app.database.base import utcnow
-from app.exceptions.base import BadRequestError, ConflictError, NotFoundError, ValidationAppError
+from app.exceptions.base import BadRequestError, ConflictError, ForbiddenError, NotFoundError, ValidationAppError
 from app.models.admission import Admission
 from app.models.batch import Batch
 from app.models.batch_allocation import BatchAllocation
@@ -193,7 +193,7 @@ class BatchConfirmationService:
 
     # ---------- HR student tabs ----------
 
-    async def list_hr_students(self, tab: str) -> list[Lead]:
+    async def list_hr_students(self, tab: str, *, section: str | None = None) -> list[Lead]:
         """The four HR Coordinator tabs, each a plain query over Lead.
 
         `pending_hr` is everything Finance has approved but not yet released
@@ -206,8 +206,10 @@ class BatchConfirmationService:
         timestamp - they were in the group, that happened - but a lost student
         listed as an active group member appeared in two tabs at once and was
         counted twice on the cards above them.
+
+        `section` narrows every tab to one section - a Section Admin's scope.
         """
-        base: dict = {"is_deleted": False, "reviewed": {"$ne": False}}
+        base: dict = {"is_deleted": False, "reviewed": {"$ne": False}, **self._section_filter(section)}
         queries = {
             "pending_hr": {**base, "status": LeadStatus.FINANCIAL_APPROVAL},
             "approved": {**base, "status": LeadStatus.BATCH_CONFIRMATION, "group_assigned_at": None},
@@ -245,7 +247,21 @@ class BatchConfirmationService:
         # INVITE_SENT: invited, still inside the waiting period.
         return {"group_assigned_at": {"$eq": None}, "whatsapp_invite_sent_at": {"$ne": None, "$gt": cutoff}}
 
-    async def list_whatsapp_queue(self, status: WhatsAppGroupStatus | None = None) -> list[Lead]:
+    @staticmethod
+    def _section_filter(section: str | None) -> dict:
+        """A Section Admin's scope as a query clause; nothing for everyone else."""
+        return {"section": section} if section is not None else {}
+
+    @staticmethod
+    def check_section(lead: Lead, section: str | None) -> None:
+        """Refuses a lead outside the actor's section - the same answer
+        LeadService.get gives on the Lead Dashboard."""
+        if section is not None and lead.section != section:
+            raise ForbiddenError("This lead belongs to a different section.")
+
+    async def list_whatsapp_queue(
+        self, status: WhatsAppGroupStatus | None = None, *, section: str | None = None
+    ) -> list[Lead]:
         """The group-onboarding board: every candidate at the batch stage, or
         one status of them.
 
@@ -257,12 +273,13 @@ class BatchConfirmationService:
             "is_deleted": False,
             "reviewed": {"$ne": False},
             "status": LeadStatus.BATCH_CONFIRMATION,
+            **self._section_filter(section),
         }
         if status is not None:
             query.update(self.whatsapp_status_query(status))
         return await Lead.find(query).sort("+created_at").to_list()
 
-    async def whatsapp_counts(self) -> dict[str, int]:
+    async def whatsapp_counts(self, *, section: str | None = None) -> dict[str, int]:
         """One count per status, for the filter chips."""
         counts = {}
         for status in WhatsAppGroupStatus:
@@ -271,6 +288,7 @@ class BatchConfirmationService:
                     "is_deleted": False,
                     "reviewed": {"$ne": False},
                     "status": LeadStatus.BATCH_CONFIRMATION,
+                    **self._section_filter(section),
                     **self.whatsapp_status_query(status),
                 }
             ).count()
@@ -532,7 +550,7 @@ class BatchConfirmationService:
         return history
 
     async def send_whatsapp_invite_bulk(
-        self, lead_ids: list[uuid.UUID], *, actor_id: uuid.UUID | None
+        self, lead_ids: list[uuid.UUID], *, actor_id: uuid.UUID | None, section: str | None = None
     ) -> tuple[int, list[str]]:
         """Sends the group invite to a whole selection.
 
@@ -543,12 +561,15 @@ class BatchConfirmationService:
         Returns (sent, skipped_names). Skipping is reported rather than raised:
         one candidate who has already joined shouldn't discard the rest of a
         selection the coordinator has just worked through.
+
+        A lead outside `section` is passed over as if it didn't exist, so a
+        Section Admin's selection can't reach into another section.
         """
         sent = 0
         skipped: list[str] = []
         for lead_id in lead_ids:
             lead = await self.leads.get_by_id(lead_id)
-            if not lead:
+            if not lead or (section is not None and lead.section != section):
                 continue
             if lead.status != LeadStatus.BATCH_CONFIRMATION or lead.group_assigned_at is not None:
                 skipped.append(lead.name)
@@ -571,6 +592,7 @@ class BatchConfirmationService:
         status: LeadStatus,
         lost_reason: str | None,
         actor_id: uuid.UUID | None,
+        section: str | None = None,
     ) -> Lead:
         """Stage moves made from the coordinator's own tabs.
 
@@ -585,7 +607,7 @@ class BatchConfirmationService:
         from app.services.lead_service import LeadService
 
         return await LeadService().update(
-            lead_id, LeadUpdate(status=status, lost_reason=lost_reason), actor_id=actor_id
+            lead_id, LeadUpdate(status=status, lost_reason=lost_reason), actor_id=actor_id, scope=section
         )
 
     async def _tutor_name(self, tutor_id: uuid.UUID | None) -> str | None:

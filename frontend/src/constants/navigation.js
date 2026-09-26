@@ -142,12 +142,15 @@ export const NAV_ITEMS = [
     hiddenForScopedUsers: true,
   },
   {
+    // Worked by the HR Coordinator across every section and by each Section
+    // Admin for their own (the API narrows it), so the heading names the work
+    // rather than either role.
     label: 'Batch Confirmation',
     shortLabel: 'Batches',
     to: '/batch-confirmation',
     permission: PERMISSIONS.BATCH_CONFIRMATION_VIEW,
     icon: ClipboardCheck,
-    group: 'HR Coordinator',
+    group: 'Onboarding',
   },
   {
     label: 'WhatsApp Links',

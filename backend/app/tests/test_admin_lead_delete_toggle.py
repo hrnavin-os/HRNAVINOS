@@ -45,7 +45,7 @@ async def _permissions(client, headers) -> list[str]:
 
 
 async def test_admin_deletes_leads_on_both_boards_only_while_the_toggle_is_on(client, auth_headers):
-    admin = await _login_as(client, "Admin", "admin.head@example.com")
+    admin = await _login_as(client, "Admin Head", "admin.head@example.com")
 
     # Off by default: no delete option, and the endpoints refuse.
     assert (await client.get(TOGGLE_URL, headers=auth_headers)).json() == {"enabled": False}
@@ -86,8 +86,8 @@ async def test_super_admin_deletes_with_the_toggle_off(client, auth_headers):
 
 
 async def test_only_super_admin_can_flip_the_toggle(client, auth_headers):
-    # Admin Head holds settings.update, which is what the general settings form
-    # needs - and still must not be able to reach this switch.
+    # Admin Head is the role the switch is about, and must not be able to flip
+    # it for itself.
     admin_head = await _login_as(client, "Admin Head", "admin.head.role@example.com")
 
     assert (await client.get(TOGGLE_URL, headers=admin_head)).status_code == 403

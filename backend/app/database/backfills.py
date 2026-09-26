@@ -9,13 +9,19 @@ import logging
 
 from pymongo import UpdateOne
 
-from app.database.base import BaseDocument
+from app.database.base import BaseDocument, utcnow
 from app.models.induction_entry import InductionEntry
 from app.models.lead import Lead
 from app.models.permission import Permission
 from app.models.role import Role
+from app.models.user import User
 from app.permissions.permission_codes import all_permission_definitions
-from app.permissions.role_definitions import DEFAULT_ROLE_PERMISSIONS, ROLE_SCOPED_SECTION
+from app.permissions.role_definitions import (
+    ADMIN_TEAM_ROLES,
+    DEFAULT_ROLE_PERMISSIONS,
+    RETIRED_ADMIN_ROLE,
+    ROLE_SCOPED_SECTION,
+)
 from app.utils.phone import normalize_phone
 
 logger = logging.getLogger(__name__)
@@ -247,6 +253,63 @@ async def backfill_role_permissions() -> int:
     return granted
 
 
+ADMIN_TEAM_MIGRATION = "align_admin_team_roles"
+
+
+async def align_admin_team_roles() -> bool:
+    """Sets the Admin team's live roles to exactly what their designations
+    are: Admin Head, the Section Admins, the Attendance Coordinator and the
+    Operation Coordinator (ADMIN_TEAM_ROLES).
+
+    Unlike backfill_role_permissions this takes permissions away, because the
+    point is that each role matches its designation and nothing more - Admin
+    Head had been carrying a dozen modules nothing links to, and the Section
+    Admins had menus that are no longer theirs. Roles missing entirely are
+    created, and the old "Admin" role, which was Admin Head's job under
+    another name, is folded into it: its members move across and the role is
+    retired with the reason written against it.
+
+    Runs once, recorded in the `migrations` collection. After that the roles
+    are the Super Admin's to edit in Roles & Permissions again, and a boot has
+    no business undoing what they chose.
+    """
+    migrations = Role.get_motor_collection().database["migrations"]
+    if await migrations.find_one({"_id": ADMIN_TEAM_MIGRATION}):
+        return False
+
+    permissions = {permission.code: permission.id for permission in await Permission.find({}).to_list()}
+
+    for name in ADMIN_TEAM_ROLES:
+        wanted = [permissions[code] for code in DEFAULT_ROLE_PERMISSIONS[name] if code in permissions]
+        roles = await _roles_for_definition(name)
+        # Created only when the name is free: a role of that name that was
+        # deleted on purpose stays deleted.
+        if not roles and not await Role.find_one({"name": name}):
+            await Role(name=name, permission_ids=wanted, scoped_section=ROLE_SCOPED_SECTION.get(name)).insert()
+            logger.info("Created the %s role.", name)
+        for role in roles:
+            role.permission_ids = wanted
+            role.touch()
+            await role.save()
+            logger.info("Aligned the %s role with its designation.", role.name)
+
+    head = next(iter(await _roles_for_definition("Admin Head")), None)
+    retired = await Role.find_one({"name": RETIRED_ADMIN_ROLE, "is_deleted": False})
+    if head is not None and retired is not None:
+        members = await User.find({"role_id": retired.id}).to_list()
+        for user in members:
+            user.role_id = head.id
+            user.touch()
+            await user.save()
+        retired.soft_delete(reason="Folded into Admin Head when the Admin team's roles were aligned.")
+        retired.touch()
+        await retired.save()
+        logger.info("Moved %d user(s) from %s to Admin Head and retired it.", len(members), RETIRED_ADMIN_ROLE)
+
+    await migrations.insert_one({"_id": ADMIN_TEAM_MIGRATION, "applied_at": utcnow()})
+    return True
+
+
 async def run_startup_backfills() -> None:
     for model in (Lead, InductionEntry):
         updated = await backfill_phone_normalized(model)
@@ -265,4 +328,8 @@ async def run_startup_backfills() -> None:
     # Then the roles that could already reach a newly split-out menu keep it,
     # before the seeded defaults are topped up on top.
     await backfill_navigation_permissions(new_codes)
+    # The Admin team is set to its designations once, after the catalogue has
+    # every code in it and before the additive top-up, which then finds
+    # nothing missing on the roles it just set.
+    await align_admin_team_roles()
     await backfill_role_permissions()
