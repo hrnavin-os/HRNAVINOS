@@ -57,14 +57,25 @@ class Marker:
     query: Callable[[bool], dict]
 
 
+def _stored_mark(mark: AttendanceMark) -> MarkResponse:
+    """A mark somebody - or the Google Meet sync - actually wrote."""
+    if mark.origin == "meet":
+        return MarkResponse(
+            marked=bool(mark.marked),
+            source="meet",
+            at=mark.at,
+            meet_joined_at=mark.meet_joined_at,
+            meet_left_at=mark.meet_left_at,
+            meet_duration_seconds=mark.meet_duration_seconds,
+        )
+    return MarkResponse(marked=bool(mark.marked), source="manual", at=mark.at, by_name=mark.by_name)
+
+
 def _plain_mark(entry: InductionEntry, attribute: str) -> MarkResponse:
     mark: AttendanceMark = getattr(entry.attendance, attribute)
-    return MarkResponse(
-        marked=bool(mark.marked),
-        source="manual" if mark.marked is not None else "none",
-        at=mark.at,
-        by_name=mark.by_name,
-    )
+    if mark.marked is None:
+        return MarkResponse(marked=False, source="none")
+    return _stored_mark(mark)
 
 
 def _write_plain(
@@ -84,6 +95,9 @@ def _write_plain(
             at=utcnow() if value is not None else None,
             by=actor_id if value is not None else None,
             by_name=actor_name if value is not None else None,
+            # A hand-set answer is a correction the Google Meet sync must
+            # never overwrite. Clearing it hands the row back to the sync.
+            origin="manual" if value is not None else None,
         ),
     )
 
@@ -133,7 +147,7 @@ def _foundation_mark(entry: InductionEntry) -> MarkResponse:
     """
     mark = entry.attendance.foundation_class_attended
     if mark.marked is not None:
-        return MarkResponse(marked=mark.marked, source="manual", at=mark.at, by_name=mark.by_name)
+        return _stored_mark(mark)
     linked = entry.foundation_lead_id is not None
     return MarkResponse(marked=linked, source="auto" if linked else "none", at=entry.converted_at)
 

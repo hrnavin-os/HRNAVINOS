@@ -6,6 +6,7 @@ Batch is typed on the form as a bare number and stored as `batch_number`;
 import re
 import uuid
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 from pymongo import IndexModel
@@ -79,6 +80,17 @@ class AttendanceMark(BaseModel):
     # The marker's name snapshotted at write time, so a page of rows renders
     # without a user lookup each.
     by_name: str | None = Field(default=None, max_length=150)
+    # Who gave the answer: "manual" (somebody ticked it) or "meet" (read from
+    # the Google Meet audit log). None on marks written before this existed,
+    # which were all manual - so the Meet sync treats an answer with no origin
+    # as manual too, and never overwrites either kind.
+    origin: Literal["manual", "meet"] | None = None
+    # From Google Meet, when origin is "meet": the linked meeting it came from
+    # (MeetSession), first join, last leave, and total time in the call.
+    meet_session_id: uuid.UUID | None = None
+    meet_joined_at: datetime | None = None
+    meet_left_at: datetime | None = None
+    meet_duration_seconds: int | None = None
 
 
 class FollowUpRemark(BaseModel):

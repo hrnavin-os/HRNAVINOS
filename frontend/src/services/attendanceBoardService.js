@@ -43,6 +43,34 @@ export const attendanceBoardService = {
   },
   // Why a student didn't select the poll, from a section admin's follow-up
   // call. Added to the student's history rather than replacing it.
+  // Google Meet meetings linked to the Success Meet / Foundation Class pages,
+  // whose attendance is read from the Workspace Meet audit log.
+  meetStatus: async () => {
+    const { data } = await apiClient.get('/induction-attendance/meet-sessions/status')
+    return data
+  },
+  meetSessions: async (marker) => {
+    const { data } = await apiClient.get('/induction-attendance/meet-sessions', { params: { marker } })
+    return data
+  },
+  linkMeetSession: async (payload) => {
+    const { data } = await apiClient.post('/induction-attendance/meet-sessions', payload)
+    return data
+  },
+  syncMeetSession: async (id) => {
+    const { data } = await apiClient.post(`/induction-attendance/meet-sessions/${id}/sync`)
+    return data
+  },
+  unlinkMeetSession: async (id) => {
+    const { data } = await apiClient.delete(`/induction-attendance/meet-sessions/${id}`)
+    return data
+  },
+  meetParticipants: async (id, matched) => {
+    const { data } = await apiClient.get(`/induction-attendance/meet-sessions/${id}/participants`, {
+      params: { matched },
+    })
+    return data
+  },
   addPollFollowUp: async (id, remark) => {
     const { data } = await apiClient.post(`/induction-attendance/students/${id}/poll-follow-ups`, { remark })
     return data

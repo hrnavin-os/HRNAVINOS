@@ -19,7 +19,8 @@ MarkerState = Literal["all", "yes", "no"]
 # Where a mark's value came from. "auto" is a marker the data already answers
 # (a foundation class attended by anyone who reached the Foundation Form);
 # "manual" is somebody's tick, which overrides it; "none" is nobody has said.
-MarkSource = Literal["manual", "auto", "none"]
+# "meet": read from the Google Meet audit log (see meet_attendance_service).
+MarkSource = Literal["manual", "auto", "meet", "none"]
 
 # On the Polls tab's "Not selected" side: the students nobody has followed up
 # yet, or the ones somebody has.
@@ -50,6 +51,10 @@ class MarkResponse(BaseModel):
     source: MarkSource
     at: datetime | None = None
     by_name: str | None = None
+    # Set when source is "meet".
+    meet_joined_at: datetime | None = None
+    meet_left_at: datetime | None = None
+    meet_duration_seconds: int | None = None
 
 
 class FollowUpRemarkResponse(BaseModel):

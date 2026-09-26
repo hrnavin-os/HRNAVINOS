@@ -19,6 +19,7 @@ from app.middleware.rate_limiter import limiter
 from app.middleware.request_context import RequestContextMiddleware
 from app.routes.api_router import api_router
 from app.services.lead_sheet_sync_service import run_forever as run_lead_sheet_sync
+from app.services.meet_attendance_service import run_forever as run_meet_sync
 from app.services.sheet_export_service import run_forever as run_sheet_export
 
 
@@ -34,6 +35,9 @@ async def lifespan(app: FastAPI):
         # spreadsheet, and that link lives in this database - so the loop can
         # start anywhere and simply find nothing to do.
         asyncio.create_task(run_sheet_export()),
+        # Idles until GOOGLE_MEET_ADMIN_EMAIL and a service account are set; a
+        # lease lets one worker read the Meet audit log per interval.
+        asyncio.create_task(run_meet_sync()),
     ]
     yield
     for task in background:

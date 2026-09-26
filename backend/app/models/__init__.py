@@ -17,6 +17,7 @@ from app.models.invoice import Invoice
 from app.models.lead import Lead
 from app.models.lead_sheet_sync import LeadSheetSyncRow, LeadSheetSyncState
 from app.models.login_history import LoginHistory
+from app.models.meet_session import MeetParticipant, MeetSession
 from app.models.notification import Notification
 from app.models.payment import Payment
 from app.models.permission import Permission
@@ -52,6 +53,8 @@ ALL_DOCUMENTS = [
     LeadSheetSyncRow,
     LeadSheetSyncState,
     LoginHistory,
+    MeetParticipant,
+    MeetSession,
     Notification,
     Payment,
     Permission,
@@ -89,6 +92,8 @@ __all__ = [
     "LeadSheetSyncRow",
     "LeadSheetSyncState",
     "LoginHistory",
+    "MeetParticipant",
+    "MeetSession",
     "Notification",
     "Payment",
     "Permission",

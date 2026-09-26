@@ -11,6 +11,7 @@ import {
   Sparkles,
   Undo2,
   Users,
+  Video,
   X,
   XCircle,
   Zap,
@@ -31,8 +32,9 @@ import { TableCard } from '@/components/ui/TableCard'
 import { Toast } from '@/components/ui/Toast'
 import { FoundationGroupBadge } from '@/components/leads/FoundationGroupBadge'
 import { PollFollowUpModal } from '@/components/attendance/PollFollowUpModal'
+import { MeetSyncModal } from '@/components/attendance/MeetSyncModal'
 import { FOUNDATION_GROUP_OPTIONS } from '@/constants/foundationGroups'
-import { formatDate, formatDateTime } from '@/utils/formatters'
+import { formatDate, formatDateTime, formatMinutes as minutes } from '@/utils/formatters'
 
 // The four markers, in the order they happen to a student: they sign the
 // terms, they are picked in the poll, they come to the success meet, they come
@@ -89,6 +91,10 @@ const TABS = [
 
 const TAB_BY_KEY = Object.fromEntries(TABS.map((tab) => [tab.key, tab]))
 
+// Attendance read from a Google Meet call (MeetSyncModal). Only these two are
+// meetings.
+const MEET_MARKERS = new Set(['success_meet', 'foundation_class'])
+
 // Which side of the open marker the table is showing. All is first because it
 // is the roll; the other two are that same list split, and their counts add
 // back up to it.
@@ -143,6 +149,7 @@ export function InductionAttendancePage({ only }) {
   const [followUp, setFollowUp] = useState('')
   // The student whose follow-up popup is open.
   const [followingUp, setFollowingUp] = useState(null)
+  const [meetOpen, setMeetOpen] = useState(false)
 
   // undefined rather than '' for an unset filter: the API treats a missing
   // param as "no filter", where an empty string would be a section nobody is
@@ -214,6 +221,18 @@ export function InductionAttendancePage({ only }) {
               <span className="inline-flex items-center gap-0.5">
                 <Zap className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
                 Automatic
+              </span>
+            ) : mark.source === 'meet' ? (
+              <span
+                className="inline-flex items-center gap-0.5"
+                title={
+                  mark.meet_joined_at
+                    ? `Joined ${formatDateTime(mark.meet_joined_at)} · left ${formatDateTime(mark.meet_left_at)}`
+                    : undefined
+                }
+              >
+                <Video className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
+                Google Meet · {minutes(mark.meet_duration_seconds)}
               </span>
             ) : (
               <>
@@ -317,6 +336,11 @@ export function InductionAttendancePage({ only }) {
         if (!canMark) return null
         const mark = row.marks?.[marker]
         const isYes = Boolean(mark?.marked)
+        // Answered by the data - the Foundation link, or a Google Meet call -
+        // rather than by a person. Undoing it is a correction to an explicit
+        // no, which the next sync must leave alone; clearing it would only
+        // hand the row straight back to the data.
+        const fromData = mark?.source === 'auto' || mark?.source === 'meet'
         const markButton = (
           <Button
             variant={isYes ? 'ghost' : 'success'}
@@ -326,17 +350,17 @@ export function InductionAttendancePage({ only }) {
             // is cleared back to nothing. Undoing a tick and contradicting the
             // data are different acts, and this is the one button for both.
             onClick={() =>
-              setMark.mutate({ id: row.id, marked: isYes ? (mark.source === 'auto' ? false : null) : true })
+              setMark.mutate({ id: row.id, marked: isYes ? (fromData ? false : null) : true })
             }
           >
             {isYes ? (
               <>
-                {mark.source === 'auto' ? (
+                {fromData ? (
                   <X className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
                 ) : (
                   <Undo2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
                 )}
-                {mark.source === 'auto' ? `Mark ${active.no.toLowerCase()}` : 'Undo'}
+                {fromData ? `Mark ${active.no.toLowerCase()}` : 'Undo'}
               </>
             ) : (
               <>
@@ -422,9 +446,20 @@ export function InductionAttendancePage({ only }) {
               </p>
             </div>
           </div>
-          <span className="rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
-            {query.total} {query.total === 1 ? 'student' : 'students'}
-          </span>
+          <div className="flex items-center gap-2">
+            {/* The meetings this page's attendance is read from. Beside the
+                count rather than in the toolbar: it is where the marks come
+                from, not a way of narrowing the table. */}
+            {only && MEET_MARKERS.has(only) && canMark && (
+              <Button variant="secondary" className="px-2.5! py-1! text-xs" onClick={() => setMeetOpen(true)}>
+                <Video className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                Google Meet
+              </Button>
+            )}
+            <span className="rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
+              {query.total} {query.total === 1 ? 'student' : 'students'}
+            </span>
+          </div>
         </div>
 
         {/* The four markers as cards rather than a tab strip: each one is a
@@ -633,6 +668,16 @@ export function InductionAttendancePage({ only }) {
           pageSize={query.pageSize}
         />
       </TableCard>
+
+      {meetOpen && (
+        <MeetSyncModal
+          marker={only}
+          label={TAB_BY_KEY[only].label}
+          onClose={() => setMeetOpen(false)}
+          // A sync moves marks, so the cards and the table re-read.
+          onSynced={refresh}
+        />
+      )}
 
       {followingUp && (
         <PollFollowUpModal student={followingUp} onClose={() => setFollowingUp(null)} onSaved={refresh} />

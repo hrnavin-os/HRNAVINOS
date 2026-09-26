@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from app.routes import (
     admission_routes,
     attendance_board_routes,
+    meet_routes,
     attendance_routes,
     audit_log_routes,
     auth_routes,
@@ -65,6 +66,7 @@ api_router.include_router(batch_confirmation_routes.router)
 api_router.include_router(tutor_routes.router)
 api_router.include_router(attendance_routes.router)
 api_router.include_router(attendance_board_routes.router)
+api_router.include_router(meet_routes.router)
 api_router.include_router(payment_routes.router)
 api_router.include_router(invoice_routes.router)
 api_router.include_router(placement_routes.router)

@@ -19,3 +19,8 @@ export function titleCase(value) {
   if (!value) return ''
   return value.replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase())
 }
+
+// A stay in a call, from seconds: "45 min".
+export function formatMinutes(seconds) {
+  return `${Math.round(Number(seconds ?? 0) / 60)} min`
+}

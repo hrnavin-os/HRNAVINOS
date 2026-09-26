@@ -96,6 +96,33 @@ class Settings(BaseSettings):
     def whatsapp_configured(self) -> bool:
         return bool(self.WHATSAPP_PHONE_NUMBER_ID and self.WHATSAPP_ACCESS_TOKEN and self.WHATSAPP_TEMPLATE_NAME)
 
+    # ---------- Google Meet attendance (Admin SDK Reports API) ----------
+    # Success Meet and Foundation Class attendance is read from the Workspace
+    # Meet audit log: its `call_ended` events carry each participant's email
+    # (or phone), the meeting code and how long they stayed. The Meet REST API
+    # was not used because it names participants by a user id, not an email.
+    #
+    # Reuses the service account above, which must have domain-wide delegation
+    # for the scope https://www.googleapis.com/auth/admin.reports.audit.readonly
+    # (Admin console > Security > API controls). The Reports API only answers
+    # an administrator, so the account acts as GOOGLE_MEET_ADMIN_EMAIL - a
+    # Workspace admin allowed to read reports. Unset, nothing syncs and the
+    # pages are marked by hand as before.
+    GOOGLE_MEET_ADMIN_EMAIL: str | None = None
+    MEET_SYNC_INTERVAL_MINUTES: int = Field(default=15, ge=5)
+    # How many days after the day it was held a linked meeting keeps being
+    # re-read automatically. "Sync now" still works after that, for as long as
+    # Google keeps the audit log (6 months).
+    MEET_AUTO_SYNC_DAYS: int = Field(default=3, ge=1)
+    # The day a meeting is held on, in the institute's time zone.
+    MEET_UTC_OFFSET_MINUTES: int = 330
+
+    @property
+    def meet_sync_configured(self) -> bool:
+        return bool(
+            self.GOOGLE_MEET_ADMIN_EMAIL and (self.GOOGLE_SERVICE_ACCOUNT_JSON or self.GOOGLE_SERVICE_ACCOUNT_FILE)
+        )
+
     # ---------- Rate Limiting ----------
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_DEFAULT: str = "100/minute"
