@@ -15,18 +15,21 @@ import { foundationFormConfigService } from '@/services/foundationFormConfigServ
 import { getApiErrorMessage } from '@/services/apiClient'
 import { useAuth } from '@/hooks/useAuth'
 import { PERMISSIONS } from '@/constants/permissions'
-import { titleCase } from '@/utils/formatters'
+import { actionLabel, groupPermissions } from '@/constants/permissionLabels'
 
-function PermissionGroup({ module, permissions, selected, onToggle, onToggleAll }) {
+function PermissionGroup({ menu, permissions, selected, onToggle, onToggleAll }) {
   const allSelected = permissions.every((p) => selected.has(p.id))
   return (
     <div className="rounded-md border border-slate-200 p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{titleCase(module)}</p>
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-800">{menu.label}</p>
+          {menu.hint && <p className="mt-0.5 text-xs text-slate-500">{menu.hint}</p>}
+        </div>
         <button
           type="button"
           onClick={() => onToggleAll(permissions, !allSelected)}
-          className="text-xs font-medium text-brand-600 hover:text-brand-700"
+          className="shrink-0 text-xs font-medium text-brand-600 hover:text-brand-700"
         >
           {allSelected ? 'Clear' : 'Select all'}
         </button>
@@ -35,7 +38,7 @@ function PermissionGroup({ module, permissions, selected, onToggle, onToggleAll 
         {permissions.map((permission) => (
           <label key={permission.id} className="flex items-center gap-1.5 text-sm text-slate-700">
             <input type="checkbox" checked={selected.has(permission.id)} onChange={() => onToggle(permission.id)} />
-            {permission.action}
+            {actionLabel(permission)}
           </label>
         ))}
       </div>
@@ -49,7 +52,7 @@ function PermissionGroup({ module, permissions, selected, onToggle, onToggleAll 
 export function RoleFormModal({ role, onClose, onSaved }) {
   const isEdit = Boolean(role)
   const [selected, setSelected] = useState(() => new Set((role?.permissions ?? []).map((p) => p.id)))
-  const { register, handleSubmit, formState: { errors } } = useForm({
+  const { register, handleSubmit, watch, setValue, getValues, formState: { errors } } = useForm({
     defaultValues: {
       name: role?.name ?? '',
       description: role?.description ?? '',
@@ -62,6 +65,7 @@ export function RoleFormModal({ role, onClose, onSaved }) {
     queryFn: () => permissionService.list({ page_size: 100, sort_by: 'module', sort_order: 'asc' }),
   })
   const configQuery = useQuery({ queryKey: ['foundation-form-config'], queryFn: foundationFormConfigService.get })
+  const designationsQuery = useQuery({ queryKey: ['roles', 'designations'], queryFn: roleService.designations })
 
   // The editor offers the modules the app actually surfaces; the endpoint
   // decides which those are (OFFERED_MODULES on the backend). Anything else a
@@ -74,15 +78,39 @@ export function RoleFormModal({ role, onClose, onSaved }) {
   )
   const hiddenCount = [...selected].filter((id) => !visibleIds.has(id)).length
 
-  const groups = useMemo(() => {
-    const items = permissionsQuery.data?.items ?? []
-    const byModule = new Map()
-    for (const permission of items) {
-      if (!byModule.has(permission.module)) byModule.set(permission.module, [])
-      byModule.get(permission.module).push(permission)
-    }
-    return [...byModule.entries()]
-  }, [permissionsQuery.data])
+  const groups = useMemo(() => groupPermissions(permissionsQuery.data?.items ?? []), [permissionsQuery.data])
+
+  // Each designation's codes as the ids this picker ticks.
+  const designations = useMemo(() => {
+    const idByCode = Object.fromEntries((permissionsQuery.data?.items ?? []).map((p) => [p.code, p.id]))
+    return (designationsQuery.data ?? []).map((designation) => ({
+      ...designation,
+      ids: new Set(designation.permission_codes.map((code) => idByCode[code]).filter(Boolean)),
+    }))
+  }, [designationsQuery.data, permissionsQuery.data])
+
+  // Which designation this role is, read off what is ticked rather than held
+  // as a choice of its own: tick one box more and it is honestly Custom, and a
+  // role opened for editing shows its designation without anybody saying so.
+  const designation = designations.find(
+    (item) => item.ids.size === selected.size && [...item.ids].every((id) => selected.has(id)),
+  )
+  const scopedSection = watch('scoped_section')
+  const needsSection = Boolean(designation?.section_scoped && !scopedSection)
+
+  function applyDesignation(key) {
+    const chosen = designations.find((item) => item.key === key)
+    // Custom leaves the boxes as they are, to be adjusted by hand.
+    if (!chosen) return
+    // Exactly the designation's permissions - that is what aligning a role
+    // with its designation means - so anything else ticked is cleared.
+    setSelected(new Set(chosen.ids))
+    if (!getValues('name').trim()) setValue('name', chosen.name, { shouldValidate: true })
+    if (!getValues('description').trim()) setValue('description', chosen.description)
+    // Only a Section Admin is restricted to a section; the others see every
+    // section's students.
+    if (!chosen.section_scoped) setValue('scoped_section', '')
+  }
 
   function toggle(id) {
     setSelected((current) => {
@@ -124,15 +152,40 @@ export function RoleFormModal({ role, onClose, onSaved }) {
     },
   })
 
-  const isLoading = permissionsQuery.isLoading || configQuery.isLoading
+  const isLoading = permissionsQuery.isLoading || configQuery.isLoading || designationsQuery.isLoading
 
   return (
     <Modal title={isEdit ? `Edit ${role.name}` : 'New Role'} isOpen onClose={onClose} maxWidth="max-w-2xl">
       {isLoading ? (
         <LoadingSpinner />
       ) : (
-        <form className="space-y-4" onSubmit={handleSubmit((values) => saveMutation.mutate(values))}>
+        <form
+          className="space-y-4"
+          onSubmit={handleSubmit((values) => {
+            if (!needsSection) saveMutation.mutate(values)
+          })}
+        >
           <ErrorMessage message={saveMutation.error ? getApiErrorMessage(saveMutation.error) : null} />
+
+          <div>
+            <Select
+              label="Designation"
+              value={designation?.key ?? ''}
+              onChange={(event) => applyDesignation(event.target.value)}
+            >
+              <option value="">Custom - choose permissions below</option>
+              {designations.map((item) => (
+                <option key={item.key} value={item.key}>
+                  {item.name}
+                </option>
+              ))}
+            </Select>
+            <p className="mt-1 text-xs text-slate-500">
+              {designation
+                ? designation.description
+                : 'Pick a designation to tick exactly its permissions, or tick them yourself.'}
+            </p>
+          </div>
 
           <Input
             label="Role Name"
@@ -142,8 +195,13 @@ export function RoleFormModal({ role, onClose, onSaved }) {
           />
           <Textarea label="Description" {...register('description')} />
 
-          <Select label="Restrict to Form Collection Section (optional)" {...register('scoped_section')}>
-            <option value="">No restriction - sees every lead</option>
+          <Select
+            label={designation?.section_scoped ? 'Section' : 'Restrict to a Section (optional)'}
+            required={designation?.section_scoped}
+            error={needsSection ? 'A Section Admin works one section - choose which.' : undefined}
+            {...register('scoped_section')}
+          >
+            <option value="">No restriction - sees every section</option>
             {(configQuery.data?.sections ?? []).map((section) => (
               <option key={section.code} value={section.code}>
                 {section.label}
@@ -161,16 +219,23 @@ export function RoleFormModal({ role, onClose, onSaved }) {
                 the app doesn't currently link to. They are kept as they are.
               </p>
             )}
-            <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
-              {groups.map(([module, permissions]) => (
-                <PermissionGroup
-                  key={module}
-                  module={module}
-                  permissions={permissions}
-                  selected={selected}
-                  onToggle={toggle}
-                  onToggleAll={toggleAll}
-                />
+            {/* Grouped under the sidebar's own headings, so the list reads
+                like the menus the role will end up seeing. */}
+            <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
+              {groups.map(([group, menus]) => (
+                <section key={group} className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{group}</p>
+                  {menus.map(([menu, permissions]) => (
+                    <PermissionGroup
+                      key={menu.module}
+                      menu={menu}
+                      permissions={permissions}
+                      selected={selected}
+                      onToggle={toggle}
+                      onToggleAll={toggleAll}
+                    />
+                  ))}
+                </section>
               ))}
             </div>
           </div>

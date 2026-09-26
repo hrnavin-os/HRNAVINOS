@@ -54,3 +54,14 @@ class RoleSummaryResponse(BaseModel):
     is_system: bool
 
     model_config = {"from_attributes": True}
+
+
+class DesignationResponse(BaseModel):
+    """One Admin team designation the role editor can fill a role from."""
+
+    key: str
+    name: str
+    description: str
+    permission_codes: list[str]
+    # True for Section Admin: the role must also be restricted to a section.
+    section_scoped: bool

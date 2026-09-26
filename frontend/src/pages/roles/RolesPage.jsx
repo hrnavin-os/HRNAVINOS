@@ -6,6 +6,7 @@ import { roleService } from '@/services/roleService'
 import { Badge } from '@/components/ui/Badge'
 import { AddRoleAction, RoleFormModal } from '@/components/roles/AddRoleAction'
 import { PERMISSIONS } from '@/constants/permissions'
+import { describePermission, menuFor } from '@/constants/permissionLabels'
 import { formatDate, formatDateTime } from '@/utils/formatters'
 
 const sectionBadge = (row) =>
@@ -80,14 +81,17 @@ export function RolesPage() {
               value: (row) =>
                 row.permissions.length ? (
                   <div className="flex flex-wrap gap-1">
-                    {row.permissions.map((permission) => (
-                      <span
-                        key={permission.id}
-                        className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600"
-                      >
-                        {permission.code}
-                      </span>
-                    ))}
+                    {[...row.permissions]
+                      .sort((a, b) => menuFor(a.module).order - menuFor(b.module).order)
+                      .map((permission) => (
+                        <span
+                          key={permission.id}
+                          title={permission.code}
+                          className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600"
+                        >
+                          {describePermission(permission)}
+                        </span>
+                      ))}
                   </div>
                 ) : null,
             },

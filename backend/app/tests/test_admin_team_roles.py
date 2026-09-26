@@ -3,7 +3,7 @@ Coordinator and the Operation Coordinator - what each is given, the one-time
 alignment of a live database to that, and the Section Admins' own-section view
 of Batch Confirmation and WhatsApp Links."""
 from app.core.security import hash_password
-from app.database.backfills import ADMIN_TEAM_MIGRATION, align_admin_team_roles
+from app.database.backfills import ADMIN_TEAM_MIGRATION, align_admin_team_roles, describe_admin_team_roles
 from app.models.enums import LeadStatus
 from app.models.lead import Lead
 from app.models.permission import Permission
@@ -236,3 +236,42 @@ async def test_batch_allocation_is_not_open_to_a_section_admin(client, auth_head
         assert response.status_code == 403, path
     # The HR Coordinator still has all of it.
     assert (await client.get("/api/v1/batch-confirmation/summary", headers=auth_headers)).status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# The role editor
+# ---------------------------------------------------------------------------
+
+
+async def test_the_role_editor_offers_the_four_designations(client, auth_headers):
+    response = await client.get("/api/v1/roles/designations", headers=auth_headers)
+    assert response.status_code == 200, response.text
+    designations = {item["name"]: item for item in response.json()}
+
+    assert list(designations) == ["Admin Head", "Section Admin", "Attendance Coordinator", "Operation Coordinator"]
+    assert designations["Operation Coordinator"]["permission_codes"] == ["lead_analytics.view"]
+    assert designations["Section Admin"]["section_scoped"] is True
+    assert designations["Admin Head"]["section_scoped"] is False
+    # Every code a designation ticks is one the editor actually offers, or the
+    # picker would tick boxes nobody can see.
+    offered = {
+        p["code"]
+        for p in (await client.get("/api/v1/permissions", headers=auth_headers, params={"page_size": 100})).json()[
+            "items"
+        ]
+    }
+    for designation in designations.values():
+        assert set(designation["permission_codes"]) <= offered, designation["name"]
+
+
+async def test_admin_team_roles_are_described_by_their_designation(seeded):
+    assert await describe_admin_team_roles() == 6
+    assert (await _role("Operation Coordinator")).description == "Statistics: lead analysis and finance analysis."
+    assert "own section" in (await _role("B-Section Admin")).description
+
+    # A description somebody wrote stays theirs.
+    head = await _role("Admin Head")
+    head.description = "Runs the admin desk."
+    await head.save()
+    assert await describe_admin_team_roles() == 0
+    assert (await _role("Admin Head")).description == "Runs the admin desk."

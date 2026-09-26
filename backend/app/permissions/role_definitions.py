@@ -156,3 +156,44 @@ ROLE_SCOPED_SECTION: dict[str, str] = {
     "B-Section Admin": "b",
     "C-Section Admin": "c",
 }
+
+
+# The Admin team's designations, as the role editor offers them: pick one and
+# its permissions are ticked for you. Section Admin is one designation behind
+# three roles - which section is the role's own choice, so the editor asks for
+# it. `roles` names the seeded roles that carry each designation, which is also
+# what gives those roles their description.
+ADMIN_TEAM_DESIGNATIONS: list[dict] = [
+    {
+        "key": "admin_head",
+        "name": "Admin Head",
+        "description": "Statistics, Lead Dashboard, Form Collection, Attendance, Programs and Settings.",
+        "permission_codes": DEFAULT_ROLE_PERMISSIONS["Admin Head"],
+        "section_scoped": False,
+        "roles": ["Admin Head"],
+    },
+    {
+        "key": "section_admin",
+        "name": "Section Admin",
+        "description": "Lead Dashboard, Polls, Batch Confirmation and WhatsApp Links - for their own section only.",
+        "permission_codes": SECTION_ADMIN_PERMISSIONS,
+        "section_scoped": True,
+        "roles": ["A-Section Admin", "B-Section Admin", "C-Section Admin"],
+    },
+    {
+        "key": "attendance_coordinator",
+        "name": "Attendance Coordinator",
+        "description": "Attendance: Terms & Conditions, Polls, Success Meet and Foundation Class.",
+        "permission_codes": DEFAULT_ROLE_PERMISSIONS["Attendance Coordinator"],
+        "section_scoped": False,
+        "roles": ["Attendance Coordinator"],
+    },
+    {
+        "key": "operation_coordinator",
+        "name": "Operation Coordinator",
+        "description": "Statistics: lead analysis and finance analysis.",
+        "permission_codes": DEFAULT_ROLE_PERMISSIONS["Operation Coordinator"],
+        "section_scoped": False,
+        "roles": ["Operation Coordinator"],
+    },
+]

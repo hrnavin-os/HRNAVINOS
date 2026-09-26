@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, Query, status
 from app.core.dependencies import RequirePermissions
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
+from app.permissions.role_definitions import ADMIN_TEAM_DESIGNATIONS
 from app.schemas.common import MessageResponse, PaginatedResponse, PaginationParams
-from app.schemas.role_schema import RoleCreate, RoleDelete, RoleResponse, RoleUpdate
+from app.schemas.role_schema import DesignationResponse, RoleCreate, RoleDelete, RoleResponse, RoleUpdate
 from app.services.role_service import RoleService
 
 router = APIRouter(prefix="/roles", tags=["Role Management"])
@@ -35,6 +36,18 @@ async def list_roles(
     params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)
     result = await RoleService().list(params, deleted=deleted)
     return PaginatedResponse[RoleResponse].build(result.items, result.total, result.page, result.page_size)
+
+
+@router.get("/designations", response_model=list[DesignationResponse])
+async def list_designations(
+    actor: User = Depends(RequirePermissions(Permissions.ROLES_VIEW)),
+) -> list[DesignationResponse]:
+    """The Admin team's designations, for the role editor's picker. Declared
+    before /{role_id} so the dynamic segment doesn't swallow it."""
+    return [
+        DesignationResponse(**{key: value for key, value in designation.items() if key != "roles"})
+        for designation in ADMIN_TEAM_DESIGNATIONS
+    ]
 
 
 @router.get("/{role_id}", response_model=RoleResponse)

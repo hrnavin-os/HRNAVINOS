@@ -17,6 +17,7 @@ from app.models.role import Role
 from app.models.user import User
 from app.permissions.permission_codes import all_permission_definitions
 from app.permissions.role_definitions import (
+    ADMIN_TEAM_DESIGNATIONS,
     ADMIN_TEAM_ROLES,
     DEFAULT_ROLE_PERMISSIONS,
     RETIRED_ADMIN_ROLE,
@@ -310,6 +311,26 @@ async def align_admin_team_roles() -> bool:
     return True
 
 
+async def describe_admin_team_roles() -> int:
+    """Gives each Admin team role its designation's description, so the Roles
+    list says what each one is for.
+
+    Only where the role has none: a description somebody wrote in the role
+    editor is theirs, and a boot doesn't overwrite it.
+    """
+    described = 0
+    for designation in ADMIN_TEAM_DESIGNATIONS:
+        for name in designation["roles"]:
+            for role in await _roles_for_definition(name):
+                if role.description:
+                    continue
+                role.description = designation["description"]
+                role.touch()
+                await role.save()
+                described += 1
+    return described
+
+
 async def run_startup_backfills() -> None:
     for model in (Lead, InductionEntry):
         updated = await backfill_phone_normalized(model)
@@ -332,4 +353,5 @@ async def run_startup_backfills() -> None:
     # every code in it and before the additive top-up, which then finds
     # nothing missing on the roles it just set.
     await align_admin_team_roles()
+    await describe_admin_team_roles()
     await backfill_role_permissions()
