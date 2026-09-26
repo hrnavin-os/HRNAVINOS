@@ -75,6 +75,10 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     "Admin Head": [
         P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE,
         P.LEAD_ANALYTICS_VIEW, P.FORM_COLLECTION_VIEW, P.FORM_COLLECTION_CONFIGURE,
+        # Statistics' Finance tab too - the collections and dues, and the
+        # repayment reminders to section admins - beside the Operation
+        # Coordinator, who reads it all day.
+        P.FINANCE_ANALYTICS_VIEW,
         # The whole induction Attendance board, including the terms wording.
         P.INDUCTION_ATTENDANCE_VIEW, P.INDUCTION_ATTENDANCE_MARK, P.INDUCTION_ATTENDANCE_CONFIGURE,
         # Programs drive the public form's program dropdown, which is the same
@@ -168,7 +172,7 @@ ADMIN_TEAM_DESIGNATIONS: list[dict] = [
     {
         "key": "admin_head",
         "name": "Admin Head",
-        "description": "Statistics, Lead Dashboard, Form Collection, Attendance, Programs and Settings.",
+        "description": "Statistics (with Finance), Lead Dashboard, Form Collection, Attendance, Programs and Settings.",
         "permission_codes": DEFAULT_ROLE_PERMISSIONS["Admin Head"],
         "section_scoped": False,
         "roles": ["Admin Head"],

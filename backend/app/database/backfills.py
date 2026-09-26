@@ -338,6 +338,39 @@ async def describe_admin_team_roles() -> int:
     return described
 
 
+FINANCE_TAB_MIGRATION = "finance_tab_for_admin"
+
+
+async def grant_finance_tab_to_admin() -> int:
+    """Gives the Statistics Finance tab to the admin roles, once.
+
+    Admin Head gains it through its definition, which backfill_role_permissions
+    tops up on every boot. A role still called "Admin" - the old name, which a
+    database can carry again after the alignment retired it - has no definition
+    any more, so nothing else would reach it. Once, recorded in `migrations`:
+    after that it is the Super Admin's to take away in the role editor.
+    """
+    migrations = Role.get_motor_collection().database["migrations"]
+    if await migrations.find_one({"_id": FINANCE_TAB_MIGRATION}):
+        return 0
+    finance_tab = await Permission.find_one({"code": "finance_analytics.view"})
+    granted = 0
+    if finance_tab is not None:
+        roles = await Role.find(
+            {"name": {"$in": [RETIRED_ADMIN_ROLE, "Admin Head"]}, "is_deleted": False, "scoped_section": None}
+        ).to_list()
+        for role in roles:
+            if finance_tab.id in role.permission_ids:
+                continue
+            role.permission_ids = [*role.permission_ids, finance_tab.id]
+            role.touch()
+            await role.save()
+            granted += 1
+            logger.info("Gave the %s role the Statistics Finance tab.", role.name)
+    await migrations.insert_one({"_id": FINANCE_TAB_MIGRATION, "applied_at": utcnow()})
+    return granted
+
+
 async def run_startup_backfills() -> None:
     for model in (Lead, InductionEntry):
         updated = await backfill_phone_normalized(model)
@@ -361,4 +394,5 @@ async def run_startup_backfills() -> None:
     # nothing missing on the roles it just set.
     await align_admin_team_roles()
     await describe_admin_team_roles()
+    await grant_finance_tab_to_admin()
     await backfill_role_permissions()

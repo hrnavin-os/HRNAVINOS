@@ -45,7 +45,7 @@ async def _login_as(client, role_name: str, email: str) -> dict:
 async def test_each_admin_team_role_holds_exactly_its_menus(seeded):
     assert await _codes(await _role("Admin Head")) == {
         "leads.view", "leads.create", "leads.update",
-        "lead_analytics.view",
+        "lead_analytics.view", "finance_analytics.view",
         "form_collection.view", "form_collection.configure",
         "induction_attendance.view", "induction_attendance.mark", "induction_attendance.configure",
         "programs.view", "programs.create", "programs.update", "programs.delete",
@@ -297,9 +297,31 @@ async def test_the_finance_tab_lists_approved_and_pending_students(client, auth_
 
 
 async def test_the_finance_tab_is_its_own_grant(client, auth_headers):
-    # Admin Head reads Statistics but was not given its Finance tab.
-    headers = await _login_as(client, "Admin Head", "head@example.com")
+    # Sales Head reads Statistics but was not given its Finance tab.
+    headers = await _login_as(client, "Sales Head", "sales@example.com")
     assert (await client.get("/api/v1/leads/finance", headers=headers)).status_code == 403
+    # Admin Head was.
+    head = await _login_as(client, "Admin Head", "head@example.com")
+    assert (await client.get("/api/v1/leads/finance", headers=head)).status_code == 200
+
+
+async def test_a_role_still_called_admin_gets_the_finance_tab_once(seeded):
+    from app.database.backfills import grant_finance_tab_to_admin
+
+    statistics = await Permission.find_one({"code": "lead_analytics.view"})
+    finance_tab = await Permission.find_one({"code": "finance_analytics.view"})
+    admin = Role(name="Admin", permission_ids=[statistics.id])
+    await admin.insert()
+
+    assert await grant_finance_tab_to_admin() == 1
+    assert finance_tab.id in (await Role.get(admin.id)).permission_ids
+
+    # Once: taken away in the role editor afterwards, it stays away.
+    admin = await Role.get(admin.id)
+    admin.permission_ids = [statistics.id]
+    await admin.save()
+    assert await grant_finance_tab_to_admin() == 0
+    assert finance_tab.id not in (await Role.get(admin.id)).permission_ids
 
 
 async def test_repayment_reminders_moved_from_finance_to_the_finance_tab(client, auth_headers):
