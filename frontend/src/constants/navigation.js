@@ -10,8 +10,10 @@ import {
   Users,
   Settings,
   FileCheck2,
-  ClipboardList,
+  FileSignature,
   ListChecks,
+  School,
+  Sparkles,
 } from 'lucide-react'
 import { PERMISSIONS } from '@/constants/permissions'
 import { EMPLOYEE_TABS } from '@/constants/employeeTabs'
@@ -103,26 +105,6 @@ export const NAV_ITEMS = [
     // section's Foundation form (FormCollectionPage).
   },
   {
-    // Sits with the other Admin boards rather than under Administration: it is
-    // worked daily by whoever is chasing signed forms and marking who turned
-    // up, not configured once.
-    label: 'Attendance',
-    to: '/induction-attendance',
-    permission: PERMISSIONS.INDUCTION_ATTENDANCE_VIEW,
-    icon: ClipboardList,
-    hiddenForScopedUsers: true,
-  },
-  {
-    // Section Admins' view of the Attendance board above: the poll marker
-    // only, on their own section's students (the API narrows both). Shares
-    // the board's permission because it is the same board, not a new one.
-    label: 'Polls',
-    to: '/polls',
-    permission: PERMISSIONS.INDUCTION_ATTENDANCE_VIEW,
-    icon: ListChecks,
-    scopedUsersOnly: true,
-  },
-  {
     label: 'Programs',
     to: '/programs',
     permission: PERMISSIONS.PROGRAMS_VIEW,
@@ -143,6 +125,48 @@ export const NAV_ITEMS = [
     hiddenForRoles: ['Finance'],
     hiddenForScopedUsers: true,
   },
+
+  // The induction Attendance board, one menu per marker, in the order they
+  // happen to a student: they sign the terms, are picked in the poll, come to
+  // the success meet, come to the foundation class. Each is the same board
+  // fixed to its marker (InductionAttendancePage `only`), with that marker's
+  // own summary and breakdown - worked daily, so its own heading rather than
+  // four more rows under Admin.
+  {
+    label: 'Terms & Conditions',
+    shortLabel: 'Terms',
+    to: '/induction-attendance/terms',
+    permission: PERMISSIONS.INDUCTION_ATTENDANCE_VIEW,
+    icon: FileSignature,
+    group: 'Attendance',
+    // Every section's roll - not a Section Admin's to see.
+    hiddenForScopedUsers: true,
+  },
+  {
+    // The one marker a Section Admin works too, on their own section's
+    // students - the API narrows both the list and the marking.
+    label: 'Polls',
+    to: '/polls',
+    permission: PERMISSIONS.INDUCTION_ATTENDANCE_VIEW,
+    icon: ListChecks,
+  },
+  {
+    label: 'Success Meet',
+    shortLabel: 'Meet',
+    to: '/induction-attendance/success-meet',
+    permission: PERMISSIONS.INDUCTION_ATTENDANCE_VIEW,
+    icon: Sparkles,
+    hiddenForScopedUsers: true,
+  },
+  {
+    label: 'Foundation Class',
+    shortLabel: 'Class',
+    to: '/induction-attendance/foundation-class',
+    permission: PERMISSIONS.INDUCTION_ATTENDANCE_VIEW,
+    icon: School,
+    hiddenForScopedUsers: true,
+  },
+
   {
     // Worked by the HR Coordinator across every section and by each Section
     // Admin for their own (the API narrows it), so the heading names the work

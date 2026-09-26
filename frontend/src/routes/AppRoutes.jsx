@@ -95,12 +95,26 @@ export function AppRoutes() {
               section's induction roll, which is not a Section Admin's to see.
               The path is its own rather than /attendance, which is the
               classroom register a Tutor marks. */}
+          {/* One page per marker, each the board fixed to it. Keyed so moving
+              between two of them starts the second fresh rather than carrying
+              the first one's filters and page across. */}
           <Route element={<ProtectedRoute permission={PERMISSIONS.INDUCTION_ATTENDANCE_VIEW} blockScoped />}>
-            <Route path="/induction-attendance" element={<InductionAttendancePage />} />
+            {/* The combined board's old address, for bookmarks. */}
+            <Route path="/induction-attendance" element={<Navigate to="/induction-attendance/terms" replace />} />
+            <Route path="/induction-attendance/terms" element={<InductionAttendancePage key="terms" only="terms" />} />
+            <Route
+              path="/induction-attendance/success-meet"
+              element={<InductionAttendancePage key="success_meet" only="success_meet" />}
+            />
+            <Route
+              path="/induction-attendance/foundation-class"
+              element={<InductionAttendancePage key="foundation_class" only="foundation_class" />}
+            />
           </Route>
-          {/* The same board for Section Admins, fixed to the poll marker. */}
-          <Route element={<ProtectedRoute permission={PERMISSIONS.INDUCTION_ATTENDANCE_VIEW} scopedOnly />}>
-            <Route path="/polls" element={<InductionAttendancePage only="polls" />} />
+          {/* Polls for everyone who works the board - a Section Admin sees
+              their own section's students, which the API enforces. */}
+          <Route element={<ProtectedRoute permission={PERMISSIONS.INDUCTION_ATTENDANCE_VIEW} />}>
+            <Route path="/polls" element={<InductionAttendancePage key="polls" only="polls" />} />
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.COURSES_VIEW} />}>
             <Route path="/courses" element={<CoursesPage />} />
