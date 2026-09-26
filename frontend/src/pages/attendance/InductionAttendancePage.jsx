@@ -215,11 +215,8 @@ export function InductionAttendancePage({ only }) {
     return (
       <div className="min-w-0">
         <Badge tone={mark.marked ? 'emerald' : 'amber'}>{mark.marked ? tab.yes : tab.no}</Badge>
-        {mark.source !== 'none' && (
-          <p
-            className="mx-auto mt-0.5 max-w-44 truncate text-[11px] text-slate-400"
-            title={mark.source === 'manual' ? [mark.at && formatDateTime(mark.at), mark.by_name].filter(Boolean).join(' · ') : undefined}
-          >
+        {(mark.source === 'auto' || mark.source === 'meet') && (
+          <p className="mx-auto mt-0.5 max-w-44 truncate text-[11px] text-slate-400">
             {mark.source === 'auto' ? (
               <span className="inline-flex items-center gap-0.5">
                 <Zap className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
@@ -237,12 +234,7 @@ export function InductionAttendancePage({ only }) {
                 <Video className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
                 Google Meet · {minutes(mark.meet_duration_seconds)}
               </span>
-            ) : (
-              <>
-                {mark.at ? formatDateTime(mark.at) : ''}
-                {mark.by_name ? ` · ${mark.by_name}` : ''}
-              </>
-            )}
+            ) : null}
           </p>
         )}
       </div>
@@ -301,38 +293,6 @@ export function InductionAttendancePage({ only }) {
       align: 'center',
       render: (row) => markCell(row, active),
     },
-    // Polls only: what the student said when a section admin rang to ask why
-    // they hadn't selected - the latest call, with how many came before it.
-    ...(isPolls
-      ? [
-          {
-            key: 'follow_up',
-            header: 'Follow-up',
-            render: (row) => {
-              const [latest, ...earlier] = row.poll_follow_ups ?? []
-              if (!latest) {
-                return row.marks?.polls?.marked ? (
-                  <span className="text-slate-400">—</span>
-                ) : (
-                  <span className="text-xs font-medium text-amber-700">Not followed up yet</span>
-                )
-              }
-              return (
-                <div className="min-w-0 max-w-64">
-                  <p className="line-clamp-2 text-sm text-slate-800" title={latest.remark}>
-                    {latest.remark}
-                  </p>
-                  <p className="mt-0.5 truncate text-[11px] text-slate-400">
-                    {formatDateTime(latest.at)}
-                    {latest.by_name ? ` · ${latest.by_name}` : ''}
-                    {earlier.length ? ` · +${earlier.length} earlier` : ''}
-                  </p>
-                </div>
-              )
-            },
-          },
-        ]
-      : []),
     {
       key: 'action',
       header: '',
@@ -381,13 +341,26 @@ export function InductionAttendancePage({ only }) {
         if (!isPolls || isYes) return markButton
         return (
           <div className="flex items-center justify-center gap-1.5">
+            {/* Icon only; the remarks themselves are in the popup it opens. The
+                count says how many calls there have been, so a student already
+                rung is told apart from one nobody has. */}
             <Button
               variant="secondary"
-              className="whitespace-nowrap px-2.5! py-1! text-xs"
+              className="relative px-2! py-1!"
               onClick={() => setFollowingUp(row)}
+              title={
+                row.poll_follow_ups?.length
+                  ? `Follow up · ${row.poll_follow_ups.length} earlier`
+                  : 'Follow up · not followed up yet'
+              }
+              aria-label="Follow up"
             >
-              <MessageSquarePlus className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-              Follow up
+              <MessageSquarePlus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+              {row.poll_follow_ups?.length > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-bold leading-none text-white">
+                  {row.poll_follow_ups.length}
+                </span>
+              )}
             </Button>
             {markButton}
           </div>
