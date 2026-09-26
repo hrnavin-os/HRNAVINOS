@@ -48,7 +48,7 @@ const deletedColumns = [
 ]
 
 const TABS = [
-  { key: 'active', label: 'Users', icon: Users },
+  { key: 'active', label: 'Active', icon: Users },
   { key: 'deleted', label: 'Deleted', icon: Trash2 },
 ]
 

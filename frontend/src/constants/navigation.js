@@ -8,16 +8,13 @@ import {
   MessageCircle,
   Wallet,
   Users,
-  UserCog,
-  Contact,
-  Building2,
-  ShieldCheck,
   Settings,
   FileCheck2,
   ClipboardList,
   ListChecks,
 } from 'lucide-react'
 import { PERMISSIONS } from '@/constants/permissions'
+import { EMPLOYEE_TABS } from '@/constants/employeeTabs'
 
 // shortLabel: what the mobile bottom bar shows. A tab is about 70px wide, so
 // anything longer than one word truncates to nothing useful there ("Batch
@@ -29,6 +26,9 @@ import { PERMISSIONS } from '@/constants/permissions'
 // backend/app/permissions/permission_codes.py, or the role editor will have no
 // checkbox to grant it with. (null is still honoured, and means "visible to
 // any authenticated user" - nothing uses it.)
+// anyPermission: instead of `permission`, a list of codes of which any one
+// opens the entry - for a page made of tabs that are each granted on their own
+// (Employee), which should show when at least one of them would.
 // hiddenForRoles: role names that should never see this item, regardless of permission
 // hiddenForScopedUsers: hide this item for any user whose role carries a scoped_section
 // (Section Admins) - section names/roles are open-ended, so this can't be a hiddenForRoles list.
@@ -165,18 +165,14 @@ export const NAV_ITEMS = [
   { label: 'Finance', to: '/payments', permission: PERMISSIONS.PAYMENTS_VIEW, icon: Wallet, group: 'Finance' },
 
   {
+    // One page, with Staffs, Departments, Roles and Users as tabs across the
+    // top rather than four links nested under a collapsible parent. Each tab
+    // is still granted on its own; see EMPLOYEE_TABS.
     label: 'Employee',
+    to: '/employee',
+    anyPermission: EMPLOYEE_TABS.map((tab) => tab.permission),
     icon: Users,
     group: 'Administration',
-    children: [
-      // Staffs first - the directory of everybody the Users form has recorded -
-      // then Departments and Roles, since every user must be given one of
-      // each, and Users itself last.
-      { label: 'Staffs', to: '/staffs', permission: PERMISSIONS.STAFFS_VIEW, icon: Contact },
-      { label: 'Departments', to: '/departments', permission: PERMISSIONS.DEPARTMENTS_VIEW, icon: Building2 },
-      { label: 'Roles', to: '/roles', permission: PERMISSIONS.ROLES_VIEW, icon: ShieldCheck },
-      { label: 'Users', to: '/users', permission: PERMISSIONS.USERS_VIEW, icon: UserCog },
-    ],
   },
   { label: 'Settings', to: '/settings', permission: PERMISSIONS.SETTINGS_VIEW, icon: Settings },
 ]
@@ -192,6 +188,7 @@ export const NAV_LEAF_ITEMS = NAV_ITEMS.flatMap((item) => item.children ?? [item
 export function isNavItemVisible(item, { user, hasPermission }) {
   return (
     (!item.permission || hasPermission(item.permission)) &&
+    (!item.anyPermission || item.anyPermission.some((code) => hasPermission(code))) &&
     !item.hiddenForRoles?.includes(user?.role) &&
     !(item.hiddenForScopedUsers && user?.scoped_section) &&
     // The inverse of hiddenForScopedUsers: shown ONLY to a user whose role

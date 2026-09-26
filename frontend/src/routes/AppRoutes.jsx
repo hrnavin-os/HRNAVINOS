@@ -26,10 +26,7 @@ import { CompaniesPage } from '@/pages/companies/CompaniesPage'
 import { TicketsPage } from '@/pages/tickets/TicketsPage'
 import { NotificationsPage } from '@/pages/notifications/NotificationsPage'
 import { ReportsPage } from '@/pages/reports/ReportsPage'
-import { UsersPage } from '@/pages/users/UsersPage'
-import { RolesPage } from '@/pages/roles/RolesPage'
-import { StaffsPage } from '@/pages/staffs/StaffsPage'
-import { DepartmentsPage } from '@/pages/departments/DepartmentsPage'
+import { EmployeePage } from '@/pages/employee/EmployeePage'
 import { SettingsPage } from '@/pages/settings/SettingsPage'
 import { SheetExportPage } from '@/pages/settings/SheetExportPage'
 import { NotFoundPage } from '@/pages/errors/NotFoundPage'
@@ -136,18 +133,18 @@ export function AppRoutes() {
           <Route element={<ProtectedRoute permission={PERMISSIONS.REPORTS_VIEW} />}>
             <Route path="/reports" element={<ReportsPage />} />
           </Route>
-          <Route element={<ProtectedRoute permission={PERMISSIONS.USERS_VIEW} />}>
-            <Route path="/users" element={<UsersPage />} />
+          {/* Staffs, Departments, Roles and Users are tabs of this one page,
+              each gated by its own permission inside it - so the route only
+              asks for a login, and the page sends away anybody who can open
+              none of its tabs. */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/employee" element={<EmployeePage />} />
           </Route>
-          <Route element={<ProtectedRoute permission={PERMISSIONS.ROLES_VIEW} />}>
-            <Route path="/roles" element={<RolesPage />} />
-          </Route>
-          <Route element={<ProtectedRoute permission={PERMISSIONS.STAFFS_VIEW} />}>
-            <Route path="/staffs" element={<StaffsPage />} />
-          </Route>
-          <Route element={<ProtectedRoute permission={PERMISSIONS.DEPARTMENTS_VIEW} />}>
-            <Route path="/departments" element={<DepartmentsPage />} />
-          </Route>
+          {/* Where these four used to live, kept so old links and bookmarks
+              land on the right tab. */}
+          {['staffs', 'departments', 'roles', 'users'].map((tab) => (
+            <Route key={tab} path={`/${tab}`} element={<Navigate to={`/employee?tab=${tab}`} replace />} />
+          ))}
           <Route element={<ProtectedRoute permission={PERMISSIONS.SETTINGS_VIEW} />}>
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
