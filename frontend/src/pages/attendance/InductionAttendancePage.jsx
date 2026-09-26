@@ -31,6 +31,7 @@ import { TableCard } from '@/components/ui/TableCard'
 import { Toast } from '@/components/ui/Toast'
 import { FoundationGroupBadge } from '@/components/leads/FoundationGroupBadge'
 import { PollFollowUpModal } from '@/components/attendance/PollFollowUpModal'
+import { MarkerBreakdown } from '@/components/attendance/MarkerBreakdown'
 import { FOUNDATION_GROUP_OPTIONS } from '@/constants/foundationGroups'
 import { formatDate, formatDateTime } from '@/utils/formatters'
 
@@ -44,7 +45,8 @@ const TABS = [
   {
     key: 'terms',
     tone: 'brand',
-    label: 'Terms & Condition',
+    label: 'Terms & Conditions',
+    caption: 'Who has signed the terms & conditions',
     icon: FileSignature,
     yes: 'Signed',
     no: 'Not signed',
@@ -54,6 +56,7 @@ const TABS = [
     key: 'polls',
     tone: 'violet',
     label: 'Polls',
+    caption: 'Who was selected in the polls, and why the rest were not',
     icon: ListChecks,
     yes: 'Selected',
     no: 'Not selected',
@@ -63,6 +66,7 @@ const TABS = [
     key: 'success_meet',
     tone: 'amber',
     label: 'Success Meet',
+    caption: 'Who came to the success meet',
     icon: Sparkles,
     yes: 'Attended',
     no: 'Not attended',
@@ -72,6 +76,7 @@ const TABS = [
     key: 'foundation_class',
     tone: 'emerald',
     label: 'Foundation Class',
+    caption: 'Who came to the foundation class',
     icon: GraduationCap,
     yes: 'Attended',
     no: 'Not attended',
@@ -120,7 +125,7 @@ const FOLLOW_UP_FILTERS = [
 // `only` fixes the board to one marker - the Section Admins' Polls menu is
 // this page with only="polls".
 export function InductionAttendancePage({ only }) {
-  const { hasPermission } = useAuth()
+  const { hasPermission, user } = useAuth()
   const queryClient = useQueryClient()
   const canMark = hasPermission(PERMISSIONS.INDUCTION_ATTENDANCE_MARK)
 
@@ -413,7 +418,7 @@ export function InductionAttendancePage({ only }) {
               </h1>
               <p className="text-[11px] font-medium text-amber-600">
                 {only
-                  ? `Who was selected in the ${TAB_BY_KEY[only].label.toLowerCase()}, across your section's induction list`
+                  ? `${TAB_BY_KEY[only].caption}, across ${user?.scoped_section ? "your section's" : 'the'} induction list`
                   : 'Terms, polls, success meet and foundation class across the induction list'}
               </p>
             </div>
@@ -602,6 +607,19 @@ export function InductionAttendancePage({ only }) {
           </p>
         )}
       </div>
+
+      {/* One marker's page reads it in detail: where each section and batch
+          stands on it, each row a filter for the table below. */}
+      {only && (
+        <MarkerBreakdown
+          tab={active}
+          filters={{ section, batch, group }}
+          sectionOptions={sectionOptions}
+          batchOptions={batchOptions}
+          onSection={setSection}
+          onBatch={setBatch}
+        />
+      )}
 
       <TableCard>
         <DataTable
