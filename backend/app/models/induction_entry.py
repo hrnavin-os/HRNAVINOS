@@ -81,6 +81,20 @@ class AttendanceMark(BaseModel):
     by_name: str | None = Field(default=None, max_length=150)
 
 
+class FollowUpRemark(BaseModel):
+    """One follow-up call on a student who hasn't done something yet - why
+    they said they didn't select the poll, typed by the section admin who
+    rang them. Kept as a history rather than one overwritten note: a second
+    call a week later is a second answer, and the first still matters."""
+
+    remark: str = Field(max_length=1000)
+    at: datetime
+    by: uuid.UUID | None = None
+    # Snapshotted like AttendanceMark.by_name, so a page of rows renders
+    # without a user lookup each.
+    by_name: str | None = Field(default=None, max_length=150)
+
+
 class InductionAttendance(BaseModel):
     """The induction programme's attendance markers, other than the terms
     signature - which predates this and stays where the update form's fourth
@@ -91,6 +105,9 @@ class InductionAttendance(BaseModel):
     """
 
     polls_selected: AttendanceMark = Field(default_factory=AttendanceMark)
+    # Why a student didn't select the poll, one entry per follow-up call, oldest
+    # first. Written by the section admins from their Polls menu.
+    polls_follow_ups: list[FollowUpRemark] = Field(default_factory=list)
     success_meet_attended: AttendanceMark = Field(default_factory=AttendanceMark)
     # Has an automatic answer as well as a manual one: an entry linked to a
     # Foundation Form submission attended the foundation class by definition.

@@ -21,6 +21,10 @@ MarkerState = Literal["all", "yes", "no"]
 # "manual" is somebody's tick, which overrides it; "none" is nobody has said.
 MarkSource = Literal["manual", "auto", "none"]
 
+# On the Polls tab's "Not selected" side: the students nobody has followed up
+# yet, or the ones somebody has.
+FollowUpState = Literal["pending", "done"]
+
 
 class TermsDocumentResponse(BaseModel):
     title: str
@@ -46,6 +50,18 @@ class MarkResponse(BaseModel):
     source: MarkSource
     at: datetime | None = None
     by_name: str | None = None
+
+
+class FollowUpRemarkResponse(BaseModel):
+    remark: str
+    at: datetime
+    by_name: str | None = None
+
+
+class PollFollowUpCreate(BaseModel):
+    """Why a student said they didn't select the poll."""
+
+    remark: str = Field(min_length=2, max_length=1000)
 
 
 class AttendanceStudentResponse(BaseModel):
@@ -77,6 +93,9 @@ class AttendanceStudentResponse(BaseModel):
     # one: chasing a signature from somebody who quit is wasted effort.
     status: str
     marks: dict[str, MarkResponse]
+    # The section admins' follow-up calls on a student who hasn't selected the
+    # poll, newest first.
+    poll_follow_ups: list[FollowUpRemarkResponse] = Field(default_factory=list)
 
 
 class MarkerStatsResponse(BaseModel):
@@ -90,3 +109,6 @@ class AttendanceStatsResponse(BaseModel):
     # {marker key: its split}. All four in one response so every tab can show
     # its own count without a request each.
     markers: dict[str, MarkerStatsResponse]
+    # Of the students not selected in the poll, how many a section admin has
+    # followed up at least once.
+    polls_followed_up: int = 0

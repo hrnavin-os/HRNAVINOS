@@ -16,9 +16,11 @@ from app.permissions.permission_codes import Permissions
 from app.schemas.attendance_board_schema import (
     AttendanceStatsResponse,
     AttendanceStudentResponse,
+    FollowUpState,
     MarkerKey,
     MarkerState,
     MarkUpdate,
+    PollFollowUpCreate,
     TermsDocumentResponse,
     TermsDocumentUpdate,
 )
@@ -71,6 +73,9 @@ async def list_students(
     # a reading of its registration date, so it cuts across batches freely -
     # a student moved into Group 2 keeps the batch they registered in.
     group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
+    # Polls only: of the students listed, those nobody has followed up yet
+    # (pending) or those somebody has (done).
+    follow_up: FollowUpState | None = None,
     sort_by: str = "registration_date",
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     actor: User = Depends(RequirePermissions(Permissions.INDUCTION_ATTENDANCE_VIEW)),
@@ -80,7 +85,13 @@ async def list_students(
     scope = await get_actor_scope(actor)
     params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)
     return await AttendanceBoardService().list_students(
-        params, marker_key=marker, state=state, section=scope or section, batch=batch, group=group
+        params,
+        marker_key=marker,
+        state=state,
+        section=scope or section,
+        batch=batch,
+        group=group,
+        follow_up=follow_up,
     )
 
 
@@ -128,4 +139,20 @@ async def set_mark(
     if scope is not None and marker not in SCOPED_MARKERS:
         raise ForbiddenError("Section Admins can only mark polls.")
     entry = await service.set_mark(entry_id, marker, marked=payload.marked, actor_id=actor.id, section=scope)
+    return service.to_response(entry)
+
+
+@router.post("/students/{entry_id}/poll-follow-ups", response_model=AttendanceStudentResponse)
+async def add_poll_follow_up(
+    entry_id: uuid.UUID,
+    payload: PollFollowUpCreate,
+    actor: User = Depends(RequirePermissions(Permissions.INDUCTION_ATTENDANCE_MARK)),
+) -> AttendanceStudentResponse:
+    """Records why a student didn't select the poll, from the section admin's
+    follow-up call. On the same permission as marking the poll, since it is the
+    same job - chasing the students who haven't - and scoped the same way: a
+    Section Admin can only write on their own section's students."""
+    service = AttendanceBoardService()
+    scope = await get_actor_scope(actor)
+    entry = await service.add_poll_follow_up(entry_id, payload.remark, actor_id=actor.id, section=scope)
     return service.to_response(entry)

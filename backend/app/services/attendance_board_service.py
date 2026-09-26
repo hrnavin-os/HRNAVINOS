@@ -17,7 +17,7 @@ from typing import Callable
 
 from app.database.base import utcnow
 from app.exceptions.base import BadRequestError, NotFoundError
-from app.models.induction_entry import AttendanceMark, InductionEntry, batch_label, parse_batch
+from app.models.induction_entry import AttendanceMark, FollowUpRemark, InductionEntry, batch_label, parse_batch
 from app.models.terms_document import TermsDocument
 from app.repositories.induction_entry_repository import InductionEntryRepository
 from app.repositories.user_repository import UserRepository
@@ -25,6 +25,8 @@ from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.attendance_board_schema import (
     AttendanceStatsResponse,
     AttendanceStudentResponse,
+    FollowUpRemarkResponse,
+    FollowUpState,
     MarkerState,
     MarkerStatsResponse,
     MarkResponse,
@@ -187,6 +189,11 @@ MARKERS: dict[str, Marker] = {
 # first, with email for the cases where that is what was quoted.
 SEARCH_FIELDS = ["name", "phone", "email"]
 
+# Present exactly when a student has at least one poll follow-up remark: the
+# first element of the list exists. Matches entries from before the field
+# existed as "not followed up", which they haven't been.
+FOLLOWED_UP = "attendance.polls_follow_ups.0"
+
 
 class AttendanceBoardService:
     def __init__(self) -> None:
@@ -261,6 +268,10 @@ class AttendanceBoardService:
             registration_date=entry.registration_date,
             status=entry.status.value,
             marks={key: marker.read(entry) for key, marker in MARKERS.items()},
+            poll_follow_ups=[
+                FollowUpRemarkResponse(remark=item.remark, at=item.at, by_name=item.by_name)
+                for item in reversed(entry.attendance.polls_follow_ups)
+            ],
         )
 
     def _query(
@@ -271,9 +282,13 @@ class AttendanceBoardService:
         section: str | None,
         batch: str | None = None,
         group: int | None = None,
+        follow_up: FollowUpState | None = None,
     ) -> dict:
         """The stored-field query for one tab, narrowed to a section if the
         caller is pinned to one.
+
+        `follow_up` splits the Polls tab by whether a section admin has rung
+        the student yet - pending is nobody has, done is somebody has.
 
         Note what is *not* here: the induction board's status tabs. This board
         covers everyone who came through induction, whether they are still in
@@ -289,6 +304,8 @@ class AttendanceBoardService:
         conditions: list[dict] = []
         if state != "all":
             conditions.append(self.marker(marker_key).query(state == "yes"))
+        if follow_up and marker_key == "polls":
+            conditions.append({FOLLOWED_UP: {"$exists": follow_up == "done"}})
         # Which foundation class group. A stored field since the group became
         # something the office decides rather than something the registration
         # date implies, so this is an equality match and no longer has to be
@@ -316,6 +333,7 @@ class AttendanceBoardService:
         section: str | None = None,
         batch: str | None = None,
         group: int | None = None,
+        follow_up: FollowUpState | None = None,
     ) -> PaginatedResponse[AttendanceStudentResponse]:
         items, total = await self.entries.list(
             page=params.page,
@@ -325,7 +343,12 @@ class AttendanceBoardService:
             sort_by=params.sort_by,
             sort_order=params.sort_order,
             filters=self._query(
-                marker_key=marker_key, state=state, section=section, batch=batch, group=group
+                marker_key=marker_key,
+                state=state,
+                section=section,
+                batch=batch,
+                group=group,
+                follow_up=follow_up,
             ),
         )
         return PaginatedResponse[AttendanceStudentResponse].build(
@@ -359,7 +382,18 @@ class AttendanceBoardService:
             narrowed = {**base, "$and": [*base.get("$and", []), marker.query(True)]}
             yes = await InductionEntry.find(narrowed).count()
             markers[key] = MarkerStatsResponse(total=total, yes=yes, no=total - yes)
-        return AttendanceStatsResponse(total=total, markers=markers)
+
+        # Of the students not selected in the poll, how many a section admin has
+        # already rung - the Not selected card's "followed up / to call" split.
+        not_selected_called = {
+            **base,
+            "$and": [*base.get("$and", []), MARKERS["polls"].query(False), {FOLLOWED_UP: {"$exists": True}}],
+        }
+        return AttendanceStatsResponse(
+            total=total,
+            markers=markers,
+            polls_followed_up=await InductionEntry.find(not_selected_called).count(),
+        )
 
     async def filter_options(self, *, section: str | None = None) -> dict:
         """The sections and batches actually present on the roll.
@@ -382,6 +416,57 @@ class AttendanceBoardService:
         ]
         return {"sections": sections, "batches": batches}
 
+    async def _entry_in_scope(self, entry_id: uuid.UUID, section: str | None) -> InductionEntry:
+        entry = await self.entries.get_by_id(entry_id)
+        if not entry or entry.is_deleted:
+            raise NotFoundError("That student is no longer on the induction list.")
+        # A Section Admin's scope: a student in another section is not one
+        # they can see, so it is reported as missing rather than forbidden.
+        if section is not None and entry.section != section:
+            raise NotFoundError("That student is no longer on the induction list.")
+        return entry
+
+    async def add_poll_follow_up(
+        self,
+        entry_id: uuid.UUID,
+        remark: str,
+        *,
+        actor_id: uuid.UUID | None,
+        section: str | None = None,
+    ) -> InductionEntry:
+        """Records one follow-up call on a student who hasn't selected the
+        poll: what they said when the section admin asked why.
+
+        Refused once the student is selected - there is nothing left to chase,
+        and a remark written then would read as a reason for something that
+        didn't happen. Earlier remarks stay on the record either way.
+        """
+        note = remark.strip()
+        if len(note) < 2:
+            raise BadRequestError("Write down what the student said.")
+        entry = await self._entry_in_scope(entry_id, section)
+        if entry.attendance.polls_selected.marked:
+            raise BadRequestError("This student is already selected in the poll - there is nothing to follow up.")
+
+        entry.attendance.polls_follow_ups.append(
+            FollowUpRemark(
+                remark=note,
+                at=utcnow(),
+                by=actor_id,
+                by_name=await self.induction.actor_name(actor_id),
+            )
+        )
+        entry.updated_by = actor_id
+        entry.touch(actor_id)
+        await entry.save()
+        await self.audit.record(
+            user_id=actor_id,
+            action="POLL_FOLLOW_UP",
+            entity_type="InductionEntry",
+            entity_id=str(entry.id),
+        )
+        return entry
+
     async def set_mark(
         self,
         entry_id: uuid.UUID,
@@ -398,13 +483,7 @@ class AttendanceBoardService:
         link says, which is the only way to undo a correction.
         """
         marker = self.marker(marker_key)
-        entry = await self.entries.get_by_id(entry_id)
-        if not entry or entry.is_deleted:
-            raise NotFoundError("That student is no longer on the induction list.")
-        # A Section Admin's scope: a student in another section is not one
-        # they can see, so it is reported as missing rather than forbidden.
-        if section is not None and entry.section != section:
-            raise NotFoundError("That student is no longer on the induction list.")
+        entry = await self._entry_in_scope(entry_id, section)
 
         marker.write(entry, marked, actor_id, await self.induction.actor_name(actor_id))
         entry.updated_by = actor_id

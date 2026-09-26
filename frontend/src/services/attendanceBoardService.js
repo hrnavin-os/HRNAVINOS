@@ -41,4 +41,10 @@ export const attendanceBoardService = {
     const { data } = await apiClient.put(`/induction-attendance/students/${id}/marks/${marker}`, { marked })
     return data
   },
+  // Why a student didn't select the poll, from a section admin's follow-up
+  // call. Added to the student's history rather than replacing it.
+  addPollFollowUp: async (id, remark) => {
+    const { data } = await apiClient.post(`/induction-attendance/students/${id}/poll-follow-ups`, { remark })
+    return data
+  },
 }

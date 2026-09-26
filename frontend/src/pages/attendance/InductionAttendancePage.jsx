@@ -2,13 +2,17 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Check,
+  CheckCircle2,
   FileSignature,
   GraduationCap,
   ListChecks,
+  MessageSquarePlus,
   Search,
   Sparkles,
   Undo2,
+  Users,
   X,
+  XCircle,
   Zap,
 } from 'lucide-react'
 import { usePaginatedQuery } from '@/hooks/usePaginatedQuery'
@@ -26,6 +30,7 @@ import { StatCard } from '@/components/ui/StatCard'
 import { TableCard } from '@/components/ui/TableCard'
 import { Toast } from '@/components/ui/Toast'
 import { FoundationGroupBadge } from '@/components/leads/FoundationGroupBadge'
+import { PollFollowUpModal } from '@/components/attendance/PollFollowUpModal'
 import { FOUNDATION_GROUP_OPTIONS } from '@/constants/foundationGroups'
 import { formatDate, formatDateTime } from '@/utils/formatters'
 
@@ -91,6 +96,14 @@ const STATES = ['all', 'yes', 'no']
 
 const stateLabel = (key, tab) => (key === 'all' ? 'All students' : key === 'yes' ? tab.yes : tab.no)
 
+// The Polls tab's not-selected side, split by whether a section admin has rung
+// the student yet. Values are the API's `follow_up` param.
+const FOLLOW_UP_FILTERS = [
+  { value: '', label: 'All' },
+  { value: 'pending', label: 'To follow up' },
+  { value: 'done', label: 'Followed up' },
+]
+
 // Admin > Attendance: the induction programme's four markers against the
 // induction roll.
 //
@@ -121,16 +134,23 @@ export function InductionAttendancePage({ only }) {
   // the Batch filter and is read from the same registration date.
   const [group, setGroup] = useState('')
   const [error, setError] = useState(null)
+  // Polls, "Not selected" side only: everyone not selected, only those nobody
+  // has followed up yet, or only those somebody has.
+  const [followUp, setFollowUp] = useState('')
+  // The student whose follow-up popup is open.
+  const [followingUp, setFollowingUp] = useState(null)
 
   // undefined rather than '' for an unset filter: the API treats a missing
   // param as "no filter", where an empty string would be a section nobody is
   // in and return nothing.
   const filters = { section: section || undefined, batch: batch || undefined, group: group || undefined }
+  const isPolls = marker === 'polls'
 
   const query = usePaginatedQuery('induction-attendance', attendanceBoardService, {
     marker,
     state,
     ...filters,
+    follow_up: isPolls && state === 'no' && followUp ? followUp : undefined,
   })
   // A page number belongs to the view it was set on - page 3 of the whole roll
   // is not page 3 of the four people still pending in B Section - which
@@ -162,15 +182,17 @@ export function InductionAttendancePage({ only }) {
   const active = TAB_BY_KEY[marker]
   const activeStats = stats?.markers?.[marker]
 
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['induction-attendance'] })
+    queryClient.invalidateQueries({ queryKey: ['induction-attendance-stats'] })
+  }
+
   const setMark = useMutation({
     mutationFn: ({ id, marked }) => attendanceBoardService.setMark(id, marker, marked),
-    onSuccess: () => {
-      // Both sides of the split change when a student is marked, and so does
-      // every count - including the other tabs', since one row can move on
-      // more than one marker over a session.
-      queryClient.invalidateQueries({ queryKey: ['induction-attendance'] })
-      queryClient.invalidateQueries({ queryKey: ['induction-attendance-stats'] })
-    },
+    // Both sides of the split change when a student is marked, and so does
+    // every count - including the other tabs', since one row can move on more
+    // than one marker over a session.
+    onSuccess: refresh,
     onError: (mutationError) => setError(`Couldn't save the mark: ${getApiErrorMessage(mutationError)}`),
   })
 
@@ -251,6 +273,38 @@ export function InductionAttendancePage({ only }) {
       align: 'center',
       render: (row) => markCell(row, active),
     },
+    // Polls only: what the student said when a section admin rang to ask why
+    // they hadn't selected - the latest call, with how many came before it.
+    ...(isPolls
+      ? [
+          {
+            key: 'follow_up',
+            header: 'Follow-up',
+            render: (row) => {
+              const [latest, ...earlier] = row.poll_follow_ups ?? []
+              if (!latest) {
+                return row.marks?.polls?.marked ? (
+                  <span className="text-slate-400">—</span>
+                ) : (
+                  <span className="text-xs font-medium text-amber-700">Not followed up yet</span>
+                )
+              }
+              return (
+                <div className="min-w-0 max-w-64">
+                  <p className="line-clamp-2 text-sm text-slate-800" title={latest.remark}>
+                    {latest.remark}
+                  </p>
+                  <p className="mt-0.5 truncate text-[11px] text-slate-400">
+                    {formatDateTime(latest.at)}
+                    {latest.by_name ? ` · ${latest.by_name}` : ''}
+                    {earlier.length ? ` · +${earlier.length} earlier` : ''}
+                  </p>
+                </div>
+              )
+            },
+          },
+        ]
+      : []),
     {
       key: 'action',
       header: '',
@@ -259,7 +313,7 @@ export function InductionAttendancePage({ only }) {
         if (!canMark) return null
         const mark = row.marks?.[marker]
         const isYes = Boolean(mark?.marked)
-        return (
+        const markButton = (
           <Button
             variant={isYes ? 'ghost' : 'success'}
             className="whitespace-nowrap px-2.5! py-1! text-xs"
@@ -288,9 +342,64 @@ export function InductionAttendancePage({ only }) {
             )}
           </Button>
         )
+        // A student not selected in the poll is one to ring and ask why -
+        // the follow-up sits beside the tick, so both outcomes of the call are
+        // one click away.
+        if (!isPolls || isYes) return markButton
+        return (
+          <div className="flex items-center justify-center gap-1.5">
+            <Button
+              variant="secondary"
+              className="whitespace-nowrap px-2.5! py-1! text-xs"
+              onClick={() => setFollowingUp(row)}
+            >
+              <MessageSquarePlus className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+              Follow up
+            </Button>
+            {markButton}
+          </div>
+        )
       },
     },
   ]
+
+  // A marker board fixed to one marker (the Section Admins' Polls menu) has
+  // no marker to choose, so its cards are the marker's own split instead:
+  // everyone, the ones done, the ones not. They replace the segmented control
+  // that does the same job on the full board.
+  const followedUp = stats?.polls_followed_up ?? 0
+  const splitCards = activeStats
+    ? [
+        {
+          key: 'all',
+          label: 'All students',
+          value: activeStats.total,
+          hint: 'on the induction list',
+          tone: 'brand',
+          icon: Users,
+        },
+        {
+          key: 'yes',
+          label: active.yes,
+          value: activeStats.yes,
+          hint: activeStats.total ? `${Math.round((activeStats.yes / activeStats.total) * 100)}% of students` : null,
+          tone: 'emerald',
+          icon: CheckCircle2,
+        },
+        {
+          key: 'no',
+          label: active.no,
+          value: activeStats.no,
+          hint: isPolls
+            ? `${followedUp} followed up · ${Math.max(activeStats.no - followedUp, 0)} to call`
+            : activeStats.total
+              ? `${Math.round((activeStats.no / activeStats.total) * 100)}% of students`
+              : null,
+          tone: 'amber',
+          icon: XCircle,
+        },
+      ]
+    : []
 
   return (
     <div>
@@ -320,21 +429,37 @@ export function InductionAttendancePage({ only }) {
             brackets after a label. The open one fills solid, the way the
             induction and section card rows select. */}
         <div className="flex flex-wrap gap-3 border-t border-slate-200 bg-slate-50/70 px-4 py-3">
-          {tabs.map((tab) => {
-            const split = stats?.markers?.[tab.key]
-            return (
-              <StatCard
-                key={tab.key}
-                label={tab.label}
-                value={split ? split.yes : '—'}
-                hint={split ? `of ${split.total} students` : null}
-                toneName={tab.tone}
-                icon={tab.icon}
-                isActive={marker === tab.key}
-                onClick={() => setMarker(tab.key)}
-              />
-            )
-          })}
+          {only
+            ? splitCards.map((card) => (
+                <StatCard
+                  key={card.key}
+                  label={card.label}
+                  value={card.value}
+                  hint={card.hint}
+                  toneName={card.tone}
+                  icon={card.icon}
+                  isActive={state === card.key}
+                  onClick={() => {
+                    setState(card.key)
+                    setFollowUp('')
+                  }}
+                />
+              ))
+            : tabs.map((tab) => {
+                const split = stats?.markers?.[tab.key]
+                return (
+                  <StatCard
+                    key={tab.key}
+                    label={tab.label}
+                    value={split ? split.yes : '—'}
+                    hint={split ? `of ${split.total} students` : null}
+                    toneName={tab.tone}
+                    icon={tab.icon}
+                    isActive={marker === tab.key}
+                    onClick={() => setMarker(tab.key)}
+                  />
+                )
+              })}
         </div>
 
         {/* The toolbar. One 36px control height across the segmented control,
@@ -343,7 +468,10 @@ export function InductionAttendancePage({ only }) {
             that happen to sit on the same line. */}
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 bg-white px-4 py-2.5">
           {/* The split of the open marker. A segmented control rather than a
-              second card row, so the two levels don't read as equals. */}
+              second card row, so the two levels don't read as equals. On a
+              one-marker board the cards above are that split, so it isn't
+              repeated here. */}
+          {!only && (
           <div
             role="group"
             aria-label="Filter by mark"
@@ -379,10 +507,41 @@ export function InductionAttendancePage({ only }) {
               )
             })}
           </div>
+          )}
+
+          {/* Polls, not-selected side: who still needs ringing. The students a
+              section admin follows up are exactly these, so the split is
+              offered here rather than as another card. */}
+          {isPolls && state === 'no' && (
+            <div
+              role="group"
+              aria-label="Filter by follow-up"
+              className="inline-flex h-9 items-center rounded-md border border-slate-300 bg-white p-0.5 shadow-sm"
+            >
+              {FOLLOW_UP_FILTERS.map((option) => {
+                const isActive = followUp === option.value
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setFollowUp(option.value)}
+                    aria-pressed={isActive}
+                    className={`flex h-8 items-center rounded px-3 text-sm font-medium transition-colors ${
+                      isActive ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
 
           {/* Divider: what the table is showing on the left of it, what
               narrows the roll on the right. */}
-          <span className="mx-0.5 hidden h-6 w-px bg-slate-200 sm:block" aria-hidden="true" />
+          {(!only || (isPolls && state === 'no')) && (
+            <span className="mx-0.5 hidden h-6 w-px bg-slate-200 sm:block" aria-hidden="true" />
+          )}
 
           {sectionOptions.length > 1 && (
             <FilterDropdown label="Section" value={section} options={sectionOptions} onChange={setSection} />
@@ -451,7 +610,11 @@ export function InductionAttendancePage({ only }) {
           isLoading={query.isLoading}
           error={query.error}
           emptyMessage={
-            state === 'yes'
+            isPolls && state === 'no' && followUp === 'pending'
+              ? 'Every student not selected has been followed up.'
+              : isPolls && state === 'no' && followUp === 'done'
+                ? 'Nobody has been followed up yet.'
+                : state === 'yes'
               ? `Nobody is marked as ${active.yes.toLowerCase()} yet.`
               : state === 'no'
                 ? `Everyone on the induction list is ${active.yes.toLowerCase()}.`
@@ -466,6 +629,10 @@ export function InductionAttendancePage({ only }) {
           pageSize={query.pageSize}
         />
       </TableCard>
+
+      {followingUp && (
+        <PollFollowUpModal student={followingUp} onClose={() => setFollowingUp(null)} onSaved={refresh} />
+      )}
 
       <Toast message={error} onDismiss={() => setError(null)} />
     </div>

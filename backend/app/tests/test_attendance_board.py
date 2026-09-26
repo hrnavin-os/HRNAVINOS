@@ -508,3 +508,68 @@ async def test_a_section_admin_cannot_mark_another_section_or_another_marker(cli
 
     assert (await mark(client, headers, bala, "polls", True)).status_code == 404
     assert (await mark(client, headers, arun, "terms", True)).status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Polls: following up the students who didn't select
+# ---------------------------------------------------------------------------
+
+
+async def follow_up(client, headers, entry_id: str, remark: str):
+    return await client.post(
+        f"{STUDENTS_URL}/{entry_id}/poll-follow-ups", headers=headers, json={"remark": remark}
+    )
+
+
+async def test_a_section_admin_records_why_a_student_did_not_select_the_poll(client, auth_headers):
+    arun = await add_student(client, auth_headers, name="Arun", phone="9876543210")
+    await set_section("Arun", "a")
+    headers = await section_admin_headers(client, auth_headers, "a")
+
+    first = await follow_up(client, headers, arun, "Did not see the poll in the group")
+    assert first.status_code == 200, first.text
+    second = await follow_up(client, headers, arun, "  Will select it tonight  ")
+    assert second.status_code == 200, second.text
+
+    # Kept as a history, newest first, each with who wrote it.
+    remarks = second.json()["poll_follow_ups"]
+    assert [item["remark"] for item in remarks] == ["Will select it tonight", "Did not see the poll in the group"]
+    assert remarks[0]["by_name"] == "Section Admin"
+
+
+async def test_follow_up_counts_and_filter_split_the_not_selected_side(client, auth_headers):
+    arun = await add_student(client, auth_headers, name="Arun", phone="9876543210")
+    await add_student(client, auth_headers, name="Bala", phone="9876511111")
+    chitra = await add_student(client, auth_headers, name="Chitra", phone="9876522222")
+    await mark(client, auth_headers, chitra, "polls", True)
+    await follow_up(client, auth_headers, arun, "Busy this week")
+
+    stats = (await client.get(STATS_URL, headers=auth_headers)).json()
+    polls = stats["markers"]["polls"]
+    assert (polls["yes"], polls["no"], stats["polls_followed_up"]) == (1, 2, 1)
+
+    def names(params):
+        return client.get(STUDENTS_URL, headers=auth_headers, params={"marker": "polls", "state": "no", **params})
+
+    pending = (await names({"follow_up": "pending"})).json()["items"]
+    done = (await names({"follow_up": "done"})).json()["items"]
+    assert [row["name"] for row in pending] == ["Bala"]
+    assert [row["name"] for row in done] == ["Arun"]
+
+
+async def test_a_selected_student_has_nothing_to_follow_up(client, auth_headers):
+    arun = await add_student(client, auth_headers)
+    await mark(client, auth_headers, arun, "polls", True)
+    assert (await follow_up(client, auth_headers, arun, "Why though")).status_code == 400
+
+
+async def test_a_blank_follow_up_is_refused(client, auth_headers):
+    arun = await add_student(client, auth_headers)
+    assert (await follow_up(client, auth_headers, arun, "   ")).status_code == 400
+
+
+async def test_a_section_admin_cannot_follow_up_another_sections_student(client, auth_headers):
+    bala = await add_student(client, auth_headers, name="Bala", phone="9876511111")
+    await set_section("Bala", "b")
+    headers = await section_admin_headers(client, auth_headers, "a")
+    assert (await follow_up(client, headers, bala, "Not reachable")).status_code == 404
