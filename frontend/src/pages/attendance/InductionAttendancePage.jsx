@@ -31,7 +31,6 @@ import { TableCard } from '@/components/ui/TableCard'
 import { Toast } from '@/components/ui/Toast'
 import { FoundationGroupBadge } from '@/components/leads/FoundationGroupBadge'
 import { PollFollowUpModal } from '@/components/attendance/PollFollowUpModal'
-import { MarkerBreakdown } from '@/components/attendance/MarkerBreakdown'
 import { FOUNDATION_GROUP_OPTIONS } from '@/constants/foundationGroups'
 import { formatDate, formatDateTime } from '@/utils/formatters'
 
@@ -607,19 +606,6 @@ export function InductionAttendancePage({ only }) {
           </p>
         )}
       </div>
-
-      {/* One marker's page reads it in detail: where each section and batch
-          stands on it, each row a filter for the table below. */}
-      {only && (
-        <MarkerBreakdown
-          tab={active}
-          filters={{ section, batch, group }}
-          sectionOptions={sectionOptions}
-          batchOptions={batchOptions}
-          onSection={setSection}
-          onBatch={setBatch}
-        />
-      )}
 
       <TableCard>
         <DataTable
