@@ -216,7 +216,10 @@ export function InductionAttendancePage({ only }) {
       <div className="min-w-0">
         <Badge tone={mark.marked ? 'emerald' : 'amber'}>{mark.marked ? tab.yes : tab.no}</Badge>
         {mark.source !== 'none' && (
-          <p className="mt-0.5 truncate text-[11px] text-slate-400">
+          <p
+            className="mx-auto mt-0.5 max-w-44 truncate text-[11px] text-slate-400"
+            title={mark.source === 'manual' ? [mark.at && formatDateTime(mark.at), mark.by_name].filter(Boolean).join(' · ') : undefined}
+          >
             {mark.source === 'auto' ? (
               <span className="inline-flex items-center gap-0.5">
                 <Zap className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
@@ -268,17 +271,19 @@ export function InductionAttendancePage({ only }) {
           <span className="text-slate-400">—</span>
         ),
     },
-    { key: 'batch', header: 'Batch', align: 'center', render: (row) => row.batch ?? '—' },
-    // Beside Batch, not beside the Foundation Class marker: batch and group
-    // are read as a pair - "Group 2 of Batch-28" - and only do so next to each
-    // other. Read-only here; the group is set on the Induction board and on
-    // Foundation, and this board's business is the markers.
+    // Batch and group in one cell, stacked like the student's name and phone:
+    // they are read as a pair - "Group 2 of Batch-28" - and two columns for
+    // them pushed the table wider than the screen. Read-only here; the group
+    // is set on the Induction board and on Foundation.
     {
-      key: 'foundation_group',
-      header: 'Group',
+      key: 'batch',
+      header: 'Batch · Group',
       align: 'center',
       render: (row) => (
-        <FoundationGroupBadge group={row.foundation_group} history={row.foundation_group_history} />
+        <div className="flex flex-col items-center gap-1">
+          <span>{row.batch ?? '—'}</span>
+          <FoundationGroupBadge group={row.foundation_group} history={row.foundation_group_history} />
+        </div>
       ),
     },
     {
