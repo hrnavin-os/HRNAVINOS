@@ -124,8 +124,8 @@ function PopulationBoard({ boardTabs }) {
   const [selected, setSelected] = useState(null)
   // The summary card clicked, if any: an outcome key (moved, quit, confirmed,
   // lost) or `paid` for the Collected card. It narrows every figure below the
-  // cards to the rows that card counts - the charts, the table, the foot strip
-  // and the largest-value card are all redrawn from the server for just them.
+  // cards to the rows that card counts - the charts, the table and the foot
+  // strip are all redrawn from the server for just them.
   const [outcome, setOutcome] = useState(null)
 
   const dimension =
@@ -146,9 +146,14 @@ function PopulationBoard({ boardTabs }) {
     setOutcome(null)
   }
 
-  // Clicking the card that is already on turns it off; the total card is
-  // "everybody", so it always turns the filter off.
-  const toggleOutcome = (key) => setOutcome((current) => (current === key ? null : key))
+  // The summary cards are one switch: exactly one is on at a time, so clicking
+  // a card turns off whichever was on before - the largest-value card's
+  // highlight included. Clicking the card that is already on goes back to the
+  // total card, which is "everybody".
+  const toggleOutcome = (key) => {
+    setOutcome((current) => (current === key ? null : key))
+    setSelected(null)
+  }
 
   const filters = {
     date_from: dateRange?.from || undefined,
@@ -240,8 +245,10 @@ function PopulationBoard({ boardTabs }) {
   const chartRows = dimension.grouped ? groupRemarks(items, Object.keys(zero)) : rows
 
   // The API returns rows biggest-first, so the head is the largest group. Read
-  // rather than re-sorted, so the tile and the table can't disagree.
-  const largest = items[0] ?? null
+  // rather than re-sorted, so the tile and the table can't disagree. Off the
+  // whole population, like every other card: clicking it switches the other
+  // cards off, and the value it names must not change as they go.
+  const largest = baseData?.items?.[0] ?? null
 
   // What the period arrows compare. Not always the headline figures: with no
   // window set the board totals everything, and there is no period before all
@@ -274,6 +281,16 @@ function PopulationBoard({ boardTabs }) {
   // The same highlight counted inside the narrowed population, for the pill.
   const highlightedCount = sum(selected ? rows.filter((row) => isRowSelected(row)) : rows, 'count')
   const largestLabel = largest ? dimension.labelOf?.(largest.value) ?? largest.value : null
+
+  // The one card that is on. An outcome card wins; the largest-value card is
+  // on while its value is the highlight; otherwise the total card - which,
+  // with a value picked on a chart, is counting that value.
+  const activeCard = outcome ?? (largestLabel && selected === largestLabel ? 'largest' : 'total')
+  function toggleLargest() {
+    const on = activeCard === 'largest'
+    setOutcome(null)
+    setSelected(on ? null : largestLabel)
+  }
 
   // Which chart types this dimension can honestly be drawn as. Every one of
   // them is drawn, so this is a filter rather than a picker: a trend belongs on
@@ -443,10 +460,11 @@ function PopulationBoard({ boardTabs }) {
           <div
             className={`mb-3 grid gap-3 sm:grid-cols-2 ${board.money ? 'xl:grid-cols-5' : 'xl:grid-cols-4'}`}
           >
-            {/* Every card is a filter. The total is "everybody" and turns any
-                card filter off; each outcome card narrows the board to the
-                rows it counts; the largest-value card highlights that value on
-                every chart, as clicking it in a chart would. */}
+            {/* Every card is a filter, and only one is on at a time. The total
+                is "everybody" and turns any card filter off; each outcome card
+                narrows the board to the rows it counts; the largest-value card
+                highlights that value on every chart, as clicking it in a chart
+                would. */}
             <StatTile
               label={selected ? board.highlightLabel : board.totalLabel}
               value={focusCount}
@@ -458,7 +476,7 @@ function PopulationBoard({ boardTabs }) {
                 setOutcome(null)
                 setSelected(null)
               }}
-              active={!outcome}
+              active={activeCard === 'total'}
             />
             {board.outcomes.map((item) => (
               <StatTile
@@ -474,7 +492,7 @@ function PopulationBoard({ boardTabs }) {
                 icon={item.icon}
                 tone={item.tone}
                 onClick={() => toggleOutcome(item.key)}
-                active={outcome === item.key}
+                active={activeCard === item.key}
               />
             ))}
             {board.money && (
@@ -489,19 +507,17 @@ function PopulationBoard({ boardTabs }) {
                 tone="amber"
                 // Narrows to the leads with any money in at all.
                 onClick={() => toggleOutcome('paid')}
-                active={outcome === 'paid'}
+                active={activeCard === 'paid'}
               />
             )}
-            {/* Read off the narrowed population, so with Quit clicked it names
-                the category most of the quitters came from. */}
             <StatTile
               label={dimension.leader}
               value={largestLabel ?? '—'}
-              share={largest ? percent(largest.count, total) : null}
+              share={largest ? percent(largest.count, baseTotal) : null}
               deltaLabel={largest ? `${largest.count} ${board.unit.toLowerCase()}` : null}
               icon={Crown}
-              onClick={largestLabel ? () => pick(largestLabel) : undefined}
-              active={Boolean(largestLabel) && selected === largestLabel}
+              onClick={largestLabel ? toggleLargest : undefined}
+              active={activeCard === 'largest'}
             />
           </div>
 
