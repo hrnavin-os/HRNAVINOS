@@ -9,6 +9,7 @@ import {
   Clock,
   GraduationCap,
   Hourglass,
+  Search,
   Wallet,
   X,
 } from 'lucide-react'
@@ -21,6 +22,7 @@ import { DateFilter } from '@/components/ui/DateFilter'
 import { FilterDropdown } from '@/components/ui/FilterDropdown'
 import { TabStrip } from '@/components/ui/TabStrip'
 import { Badge } from '@/components/ui/Badge'
+import { Input } from '@/components/ui/Input'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { EmptyNote, Panel, SegmentedToggle } from '@/components/analytics/Panel'
@@ -217,6 +219,15 @@ const CHASE_VIEWS = [
   { value: 'ledger', label: 'All income' },
 ]
 
+// Name or email by text, phone by its digits - so "98765 43210" finds a number
+// stored as "+919876543210".
+function matchesSearch(lead, needle) {
+  if (!needle) return true
+  if ([lead.name, lead.email].some((value) => value?.toLowerCase().includes(needle))) return true
+  const digits = needle.replace(/\D/g, '')
+  return /^[\d\s+()-]+$/.test(needle) && digits.length > 0 && String(lead.phone ?? '').replace(/\D/g, '').includes(digits)
+}
+
 const chaseColumns = [
   {
     key: 'name',
@@ -291,6 +302,8 @@ export function FinanceBoard({ boardTabs, onOpenBoard }) {
   const [section, setSection] = useState('')
   const [view, setView] = useState('overdue')
   const [viewing, setViewing] = useState(null)
+  const [search, setSearch] = useState('')
+  const needle = search.trim().toLowerCase()
   // The summary card clicked, if any (a CARDS key). Every panel, the foot
   // strip and the follow-up table below the cards then read only the students
   // that card counts.
@@ -343,7 +356,7 @@ export function FinanceBoard({ boardTabs, onOpenBoard }) {
     owing: scope.filter((row) => row.due > 0),
     after_placement: scope.filter((row) => row.afterPlacement),
   }[view]
-  const sortedChase = [...(chaseRows ?? [])].sort(
+  const sortedChase = (chaseRows ?? []).filter((row) => matchesSearch(row.lead, needle)).sort(
     (a, b) => STATUSES[a.status].rank - STATUSES[b.status].rank || b.due - a.due,
   )
 
@@ -502,17 +515,44 @@ export function FinanceBoard({ boardTabs, onOpenBoard }) {
           <Panel
             title={titled('Repayments to follow up')}
             subtitle="Open a student to remind their section admins, report non-payment to HR, or mark them Lost"
-            action={<SegmentedToggle label="Which students" options={CHASE_VIEWS} value={view} onChange={setView} />}
+            action={
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative w-60">
+                  {/* z-10: Input wraps its field in a positioned span, which
+                      would otherwise paint over this icon. */}
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400"
+                    aria-hidden="true"
+                  />
+                  <Input
+                    type="search"
+                    className="pl-9"
+                    placeholder="Search name, phone, email…"
+                    aria-label="Search students"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
+                </div>
+                <SegmentedToggle label="Which students" options={CHASE_VIEWS} value={view} onChange={setView} />
+              </div>
+            }
           >
             {view === 'ledger' ? (
-              <OverallIncomeTab leads={scope.map((row) => row.lead)} isLoading={query.isLoading} />
+              <OverallIncomeTab
+                leads={scope.filter((row) => matchesSearch(row.lead, needle)).map((row) => row.lead)}
+                isLoading={query.isLoading}
+              />
             ) : (
               <DataTable
                 columns={chaseColumns}
                 rows={sortedChase}
                 isLoading={query.isLoading}
                 emptyMessage={
-                  view === 'overdue' ? 'Nobody is past a due date in this window.' : 'Nobody to follow up in this window.'
+                  needle
+                    ? `No student here matches "${search.trim()}".`
+                    : view === 'overdue'
+                      ? 'Nobody is past a due date in this window.'
+                      : 'Nobody to follow up in this window.'
                 }
                 onRowClick={(row) => setViewing(row.lead)}
               />
