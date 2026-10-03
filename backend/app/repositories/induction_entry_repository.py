@@ -124,6 +124,16 @@ class InductionEntryRepository(BaseRepository[InductionEntry]):
             for status in InductionStatus
         }
 
+    async def count_whatsapp_added_by_status(
+        self, *, search: str | None = None, filters: dict | None = None
+    ) -> dict[str, int]:
+        """How many of each tab are ticked as added to the WhatsApp group,
+        under the same filters as count_by_status - so "added" and the tab's
+        total count the same rows, and "not added" is their difference."""
+        return await self.count_by_status(
+            search=search, filters={**(filters or {}), "other_details.whatsapp_group_added": True}
+        )
+
     async def find_unconverted_by_phone(self, phone_normalized: str) -> InductionEntry | None:
         """The induction entry a Foundation Form submission with this number
         should link to, if there is one.

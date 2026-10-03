@@ -17,6 +17,7 @@ import { InductionScheduleCell } from '@/components/leads/InductionScheduleCell'
 import { InductionCategoryCell } from '@/components/leads/InductionCategoryCell'
 import { InductionGroupCell } from '@/components/leads/FoundationGroupCell'
 import { InductionQuitReasonCell } from '@/components/leads/InductionQuitReasonCell'
+import { InductionWhatsAppCell, WhatsAppColumnHeader } from '@/components/leads/WhatsAppGroupCell'
 import { InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
 import { InductionUpdateModal } from '@/components/leads/InductionUpdateModal'
 import { useAuth } from '@/hooks/useAuth'
@@ -174,9 +175,12 @@ function insertBefore(columnList, key, column) {
 
 // A row's post-call details are "started" once any one of the four pages has
 // an answer - used to label the Update button so you can see at a glance which
-// entries still need working.
+// entries still need working. The WhatsApp tick doesn't count: it is set from
+// its own column, not from the form this button opens.
 function hasDetails(entry) {
-  return [entry.qualification, entry.placement, entry.remarks, entry.other_details].some((group) =>
+  // Underscored: destructured only to drop it from the rest.
+  const { whatsapp_group_added: _whatsapp, ...otherDetails } = entry.other_details ?? {}
+  return [entry.qualification, entry.placement, entry.remarks, otherDetails].some((group) =>
     Object.values(group ?? {}).some((value) => value !== null && value !== undefined && value !== ''),
   )
 }
@@ -321,6 +325,13 @@ export function InductionLeadsBoard() {
       : FOUNDATION_GROUP_LABELS
 
   const byStatus = statsQuery.data?.by_status ?? {}
+  // For the open tab only - the header sits over that tab's rows. Undefined
+  // until the stats arrive, so the header shows a dash rather than a 0.
+  const whatsappAdded = statsQuery.data?.whatsapp_added_by_status?.[status]
+  const whatsappCounts =
+    whatsappAdded === undefined
+      ? undefined
+      : { added: whatsappAdded, notAdded: Math.max((byStatus[status] ?? 0) - whatsappAdded, 0) }
 
   // Built here rather than at module scope because the cells need somewhere to
   // report a failed save - an inline edit has no form to hang an error on, and
@@ -330,6 +341,15 @@ export function InductionLeadsBoard() {
     key: 'call_remark',
     header: 'Induction Call Remarks',
     render: (row) => <InductionCallRemarkCell entry={row} onError={setError} />,
+  }
+  // Straight after the remark, with the count of added and not added for the
+  // rows on screen in its heading. Replaces the Yes/No that was on the fourth
+  // page of the Update modal.
+  const whatsappColumn = {
+    key: 'whatsapp_group_added',
+    header: <WhatsAppColumnHeader counts={whatsappCounts} />,
+    align: 'center',
+    render: (row) => <InductionWhatsAppCell entry={row} onError={setError} />,
   }
   const categoryColumn = {
     key: 'category',
@@ -369,29 +389,37 @@ export function InductionLeadsBoard() {
     insertBefore(
       insertBefore(
         insertBefore(
-          // A Section Admin only ever sees their own section's entries, so
-          // every row would name them - a column of one repeated value.
-          scopedSection ? columns.filter((column) => column.key !== 'assigned_to') : columns,
-          'registration_date',
-          groupColumn,
+          insertBefore(
+            // A Section Admin only ever sees their own section's entries, so
+            // every row would name them - a column of one repeated value.
+            scopedSection ? columns.filter((column) => column.key !== 'assigned_to') : columns,
+            'registration_date',
+            groupColumn,
+          ),
+          'assigned_to',
+          categoryColumn,
         ),
         'assigned_to',
-        categoryColumn,
+        scheduleColumn,
       ),
       'assigned_to',
-      scheduleColumn,
+      remarkColumn,
     ),
     'assigned_to',
-    remarkColumn,
+    whatsappColumn,
   )
   // The Moved tab gets it too, and editable there as well: a student who has
   // crossed to Foundation is still sitting in a class, and the attendance roll
   // reads the group off this record whichever board it was set from.
   const movedColumns = insertBefore(
     insertBefore(
-      insertBefore(MOVED_COLUMNS, 'foundation_status', scheduleColumn),
+      insertBefore(
+        insertBefore(MOVED_COLUMNS, 'foundation_status', scheduleColumn),
+        'foundation_status',
+        remarkColumn,
+      ),
       'foundation_status',
-      remarkColumn,
+      whatsappColumn,
     ),
     'foundation_status',
     groupColumn,

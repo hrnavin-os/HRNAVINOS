@@ -83,15 +83,21 @@ export function InductionUpdateModal({ entry, onClose }) {
   // Seeded from what's already saved, so reopening the form shows previous
   // answers rather than a blank slate.
   //
-  // The call date and time are held out on purpose. They are edited in the
-  // board's schedule column now, and this form posts whatever is in its state:
-  // left in, opening the modal would capture the value at open time and write
-  // it back on save, silently undoing an edit made in the column meanwhile.
-  // The server merges each page with exclude_unset, so a key never sent is a
-  // key left exactly as the column set it.
+  // The call date and time are held out on purpose, and so is the WhatsApp
+  // tick. They are edited in the board's own columns now, and this form posts
+  // whatever is in its state: left in, opening the modal would capture the
+  // value at open time and write it back on save, silently undoing an edit
+  // made in the column meanwhile. The server merges each page with
+  // exclude_unset, so a key never sent is a key left exactly as the column
+  // set it.
   const [form, setForm] = useState(() => {
     // Underscored: destructured only to drop them from the rest.
-    const { induction_call_date: _date, scheduled_time: _time, ...otherDetails } = entry.other_details ?? {}
+    const {
+      induction_call_date: _date,
+      scheduled_time: _time,
+      whatsapp_group_added: _whatsapp,
+      ...otherDetails
+    } = entry.other_details ?? {}
     return {
       qualification: { ...entry.qualification },
       placement: { ...entry.placement },
@@ -230,17 +236,13 @@ export function InductionUpdateModal({ entry, onClose }) {
                 bad at. The fields stay on the record and this form still leaves
                 them alone: update_details merges per page with exclude_unset,
                 so saving this page without them keeps whatever the column
-                set. */}
+                set. The WhatsApp Group Added answer went the same way, to
+                the board's WhatsApp column. */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <YesNoSelect
                 label="Terms & Condition Form Signed"
                 value={form.other_details.terms_form_signed}
                 onChange={(value) => set('other_details', 'terms_form_signed', value)}
-              />
-              <YesNoSelect
-                label="WhatsApp Group Added"
-                value={form.other_details.whatsapp_group_added}
-                onChange={(value) => set('other_details', 'whatsapp_group_added', value)}
               />
             </div>
 

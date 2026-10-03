@@ -339,6 +339,11 @@ class InductionEntryService:
             "total": await self.entries.count_all(status, search=search, filters=filters),
             "by_section": await self.entries.count_by_section_all(status, search=search, filters=filters),
             "by_status": await self.entries.count_by_status(search=search, filters=filters),
+            # Read beside by_status: the WhatsApp column's header says how many
+            # of the open tab are in the group, and the rest of it are not.
+            "whatsapp_added_by_status": await self.entries.count_whatsapp_added_by_status(
+                search=search, filters=filters
+            ),
         }
 
     # The two dimensions the analytics dashboard breaks entries down by. A

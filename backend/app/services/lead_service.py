@@ -470,6 +470,44 @@ class LeadService:
             by_induction_match=await self.leads.count_by_induction_match(),
         )
 
+    async def whatsapp_counts(
+        self,
+        *,
+        section: str | None = None,
+        status: str | None = None,
+        course_interest: str | None = None,
+        payment_plan: str | None = None,
+        payment_call_remarks: str | None = None,
+        qr_code: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        foundation_group: int | None = None,
+        search: str | None = None,
+    ) -> dict[str, int]:
+        """Of the rows the Foundation table matches, how many have joined the
+        WhatsApp group and how many haven't.
+
+        Takes the table's own parameters, stage included, rather than the stat
+        cards': the count sits in the column's header, so it has to describe
+        the rows under that header.
+        """
+        narrow = self._board_filters(
+            status=status,
+            course_interest=course_interest,
+            payment_plan=payment_plan,
+            payment_call_remarks=payment_call_remarks,
+            qr_code=qr_code,
+            date_from=date_from,
+            date_to=date_to,
+            foundation_group=foundation_group,
+            search=search,
+        )
+        total = await self.leads.count_total(section=section, narrow=narrow)
+        added = await self.leads.count_total(
+            section=section, narrow={**narrow, "group_assigned_at": {"$ne": None}}
+        )
+        return {"added": added, "not_added": total - added}
+
     # The four dimensions the Foundation half of the Statistics board breaks
     # leads down by. A closed map rather than a field name taken from the query
     # string: the value is interpolated straight into a $group _id, so anything
@@ -828,6 +866,14 @@ class LeadService:
         # matching on the number it actually has.
         if update_data.get("phone"):
             update_data["phone_normalized"] = normalize_phone(update_data["phone"])
+        # The board's WhatsApp tick writes the same join the HR WhatsApp board
+        # records, so the two can't disagree about who is in the group. Ticking
+        # a student already in keeps the time they joined.
+        if "whatsapp_group_added" in update_data:
+            added = bool(update_data.pop("whatsapp_group_added"))
+            if added != (lead.group_assigned_at is not None):
+                update_data["group_assigned_at"] = utcnow() if added else None
+                update_data["whatsapp_handled_by"] = actor_id
         update_data["updated_by"] = actor_id
         # Losing a lead has to say why - otherwise the Lost list records that
         # it happened with no way to tell churn reasons apart afterwards.

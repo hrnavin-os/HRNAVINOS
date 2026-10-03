@@ -30,6 +30,7 @@ from app.schemas.lead_schema import (
     LeadStatsResponse,
     LeadTimelineEntryResponse,
     LeadUpdate,
+    LeadWhatsAppCountsResponse,
 )
 from app.schemas.notification_schema import (
     NonPaymentReportRequest,
@@ -128,6 +129,41 @@ async def lead_stats(
         date_from=date_from,
         date_to=date_to,
         foundation_group=foundation_group,
+    )
+
+
+@router.get("/whatsapp-counts", response_model=LeadWhatsAppCountsResponse)
+async def whatsapp_counts(
+    # The table's own parameters, stage included - the count sits in the
+    # WhatsApp column's header, so it describes the rows under it.
+    section: str | None = None,
+    search: str | None = None,
+    status_filter: str | None = Query(default=None, alias="status"),
+    course_interest: str | None = None,
+    payment_plan: PaymentPlanOption | None = None,
+    payment_call_remarks: str | None = None,
+    qr_code: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    foundation_group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
+) -> LeadWhatsAppCountsResponse:
+    # Declared before /{lead_id}, or that route would try to parse
+    # "whatsapp-counts" as a UUID. Scoped from the role, like the list.
+    scope = await get_actor_scope(actor)
+    return LeadWhatsAppCountsResponse(
+        **await LeadService().whatsapp_counts(
+            section=scope or section,
+            search=search,
+            status=status_filter,
+            course_interest=course_interest,
+            payment_plan=payment_plan,
+            payment_call_remarks=payment_call_remarks,
+            qr_code=qr_code,
+            date_from=date_from,
+            date_to=date_to,
+            foundation_group=foundation_group,
+        )
     )
 
 

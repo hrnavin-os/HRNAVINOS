@@ -30,6 +30,7 @@ import { LeadDetailModal } from '@/components/leads/LeadDetailModal'
 import { CreateLeadModal } from '@/components/leads/CreateLeadModal'
 import { LeadRemarksCell } from '@/components/leads/LeadRemarksCell'
 import { LeadGroupCell } from '@/components/leads/FoundationGroupCell'
+import { LeadWhatsAppCell, WhatsAppColumnHeader } from '@/components/leads/WhatsAppGroupCell'
 import { InductionLeadsBoard } from '@/components/leads/InductionLeadsBoard'
 import { RowActions } from '@/components/resource/RowActions'
 import { ConfirmDeleteModal } from '@/components/resource/ConfirmDeleteModal'
@@ -734,16 +735,30 @@ function FoundationLeadsBoard() {
   // `total` from the stat cards counts every section (and every stage, for a
   // Section Admin); this one is how many rows the table actually matched,
   // which is what the footer should report.
+  const tableFilters = {
+    ...boardFilters,
+    section: effectiveSectionFilter || undefined,
+    status: showLost ? 'lost' : statusFilter || undefined,
+  }
   const {
     items, page, setPage, search, setSearch, isLoading, error, totalPages,
     total: filteredTotal,
     pageSize,
-  } = usePaginatedQuery('leads', leadService, {
-    ...boardFilters,
-    section: effectiveSectionFilter || undefined,
-    status: showLost ? 'lost' : statusFilter || undefined,
-    sort_order: sortOrder,
+  } = usePaginatedQuery('leads', leadService, { ...tableFilters, sort_order: sortOrder })
+
+  // The WhatsApp column header's added / not added. Asked with the table's
+  // own filters, stage and search included, so it counts the rows under it -
+  // not the stat cards' population, which leaves the stage out for a Section
+  // Admin. Keyed under 'leads' so a tick, which invalidates that, refreshes it.
+  const whatsappFilters = { ...tableFilters, search: search || undefined }
+  const whatsappCountsQuery = useQuery({
+    queryKey: ['leads', 'whatsapp-counts', whatsappFilters],
+    queryFn: () => leadService.getWhatsAppCounts(whatsappFilters),
+    placeholderData: (previousData) => previousData,
   })
+  const whatsappCounts = whatsappCountsQuery.data
+    ? { added: whatsappCountsQuery.data.added, notAdded: whatsappCountsQuery.data.not_added }
+    : undefined
 
   // Scoped to the user's own section for a Section Admin (so this becomes
   // that section's stage breakdown), but NOT to whichever tab an Admin/Super
@@ -950,6 +965,15 @@ function FoundationLeadsBoard() {
           </div>
         )
       },
+    },
+    // Straight after Follow-up: ticked once the student is in the WhatsApp
+    // group. The same join the HR WhatsApp board records, so either board can
+    // set it and both show it.
+    {
+      key: 'whatsapp_group_added',
+      header: <WhatsAppColumnHeader counts={whatsappCounts} />,
+      align: 'center',
+      render: (row) => <LeadWhatsAppCell key={row.id} lead={row} onError={setEditError} />,
     },
     // Why and when they were lost - what the Quit Students tab is read for.
     ...(showLost

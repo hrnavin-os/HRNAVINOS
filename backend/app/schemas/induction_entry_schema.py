@@ -43,6 +43,9 @@ class InductionEntryStatsResponse(BaseModel):
     # opened. Not scoped by section: it labels the tabs, which sit above the
     # section cards rather than inside one.
     by_status: dict[str, int] = {}
+    # Per tab, how many are ticked as added to the WhatsApp group. The rest of
+    # that tab's by_status count are the ones not added yet.
+    whatsapp_added_by_status: dict[str, int] = {}
 
 
 class InductionAnalyticsItem(BaseModel):

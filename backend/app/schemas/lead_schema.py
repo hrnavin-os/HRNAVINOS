@@ -83,6 +83,9 @@ class LeadUpdate(BaseModel):
     # With a group change: True when the student belongs in the new group
     # outright rather than being moved there, so no "moved from" is shown.
     foundation_group_direct: bool | None = None
+    # The Foundation board's WhatsApp tick. Not stored under this name: it
+    # sets or clears group_assigned_at, the join the HR WhatsApp board records.
+    whatsapp_group_added: bool | None = None
     # Required by LeadService.update whenever status moves to Lost.
     lost_reason: str | None = Field(default=None, max_length=500)
     # Required whenever status moves back to an earlier stage. Kept on the
@@ -229,6 +232,15 @@ class LeadStatsResponse(BaseModel):
     # {"matched": n, "unmatched": n} over Foundation Form leads only - how many
     # came across from an induction call versus arrived cold through the form.
     by_induction_match: dict[str, int] = {}
+
+
+class LeadWhatsAppCountsResponse(BaseModel):
+    """The Foundation board's WhatsApp column header: of the rows the table
+    matches, how many have joined the section's WhatsApp group and how many
+    haven't."""
+
+    added: int
+    not_added: int
 
 
 class LeadAnalyticsItem(BaseModel):

@@ -15,6 +15,13 @@ export const leadService = {
     })
     return data
   },
+  // How many of the rows the table matches have joined the WhatsApp group, and
+  // how many haven't - { added, not_added }. Takes the table's own params,
+  // stage included, since the count sits in that table's column header.
+  getWhatsAppCounts: async (params = {}) => {
+    const { data } = await apiClient.get('/leads/whatsapp-counts', { params })
+    return data
+  },
   // Counts per distinct course, batch, payment method or payment remark, for
   // the Foundation half of the Statistics board. The Induction half is
   // inductionEntryService.getAnalytics, and the two answer in the same shape
