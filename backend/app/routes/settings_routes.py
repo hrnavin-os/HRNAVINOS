@@ -59,7 +59,11 @@ async def reset_leads(
     # whole product is about - it should not become reachable by ticking a box
     # on some role's permission list. Super Admin bypasses permission checks
     # anyway, so a code would not have restricted it any further.
-    actor: User = Depends(RequireRoles("Super Admin")),
+    #
+    # Admin Head as well: that role owns both boards, and the same Danger zone
+    # sits on its own Settings page (the Admin group's, beside the Google
+    # Sheets export).
+    actor: User = Depends(RequireRoles("Super Admin", "Admin Head")),
 ) -> ResetLeadsResponse:
     """Clears the Induction board, the Foundation board, or both.
 

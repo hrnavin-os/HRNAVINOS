@@ -21,6 +21,7 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { formatDateTime } from '@/utils/formatters'
 import { useAuth } from '@/hooks/useAuth'
 import { PERMISSIONS } from '@/constants/permissions'
+import { ResetLeadsCard } from '@/components/settings/ResetLeadsCard'
 
 const QUERY_KEY = ['sheet-export']
 
@@ -96,7 +97,28 @@ function TabCard({ tab }) {
   )
 }
 
+// The Admin portal's Settings page: the Google Sheets export, then the same
+// Danger zone that sits under Administration > Settings.
+//
+// The Danger zone is outside the export's own panel so it still shows when
+// the export fails to load - a broken spreadsheet link must not also take the
+// reset away.
 export function SheetExportPage() {
+  const { user } = useAuth()
+  // Matched to the reset endpoint's own role gate rather than a permission
+  // code, as Administration > Settings does - showing a button that always
+  // 403s is worse than not showing it.
+  const canReset = ['Super Admin', 'Admin Head'].includes(user?.role)
+
+  return (
+    <div className="max-w-3xl">
+      <SheetExportPanel />
+      {canReset && <ResetLeadsCard className="mt-6" />}
+    </div>
+  )
+}
+
+function SheetExportPanel() {
   const { hasPermission } = useAuth()
   const canUpdate = hasPermission(PERMISSIONS.SHEET_EXPORT_UPDATE)
   const queryClient = useQueryClient()

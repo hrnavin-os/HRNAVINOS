@@ -1,9 +1,10 @@
-"""Tests for the Super Admin "reset leads" action in Settings.
+"""Tests for the "reset leads" action in Settings - Super Admin's, and the
+Admin Head's on the Admin portal's own Settings page.
 
 The destructive endpoint in the app, so what it does NOT do matters as much as
 what it does.
 """
-from app.tests.staff_helpers import staff_fields
+from app.tests.staff_helpers import role_id, staff_fields
 
 INDUCTION_URL = "/api/v1/public/induction-form/submit"
 FOUNDATION_URL = "/api/v1/public/foundation-form/submit"
@@ -100,33 +101,45 @@ async def test_reset_refuses_without_the_exact_phrase(client, auth_headers):
     assert (await client.get("/api/v1/leads", headers=auth_headers)).json()["total"] == 1
 
 
-async def test_reset_requires_super_admin(client, seeded, auth_headers):
-    """Gated on the role rather than a permission code, so it cannot be handed
-    out by ticking a box on some other role."""
-    roles = (await client.get("/api/v1/roles", headers=auth_headers)).json()
-    admin_role = next(r for r in roles["items"] if r["name"] != "Super Admin")
-
+async def login_as(client, auth_headers, role_name: str, email: str) -> dict:
+    """Headers for a fresh user holding `role_name`."""
     created = await client.post(
         "/api/v1/users",
         headers=auth_headers,
         json={
-            "email": "not.super@hrnavinos.com",
+            "email": email,
             "password": "AnotherPass123!",
             "first_name": "Not",
             "last_name": "Super",
-            "role_id": admin_role["id"],
+            "role_id": await role_id(client, auth_headers, role_name),
             **(await staff_fields(client, auth_headers)),
         },
     )
     assert created.status_code == 201, created.text
 
-    login = await client.post(
-        "/api/v1/auth/login",
-        json={"email": "not.super@hrnavinos.com", "password": "AnotherPass123!"},
-    )
-    other = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    login = await client.post("/api/v1/auth/login", json={"email": email, "password": "AnotherPass123!"})
+    return {"Authorization": f"Bearer {login.json()['access_token']}"}
 
-    assert (await client.post(RESET_URL, json=CONFIRM, headers=other)).status_code == 403
+
+async def test_reset_requires_super_admin_or_admin_head(client, seeded, auth_headers):
+    """Gated on the role rather than a permission code, so it cannot be handed
+    out by ticking a box on some other role - not even one that can already
+    edit every lead."""
+    for role_name, email in (("Sales Head", "sales.head@hrnavinos.com"), ("B-Section Admin", "sec.b@hrnavinos.com")):
+        other = await login_as(client, auth_headers, role_name, email)
+        assert (await client.post(RESET_URL, json=CONFIRM, headers=other)).status_code == 403, role_name
+
+
+async def test_admin_head_can_reset_from_the_admin_settings(client, seeded, auth_headers):
+    """The Admin portal's Settings page carries the same Danger zone."""
+    await seed_programs(client)
+    await client.post(FOUNDATION_URL, json=foundation_payload())
+    admin_head = await login_as(client, auth_headers, "Admin Head", "admin.head@hrnavinos.com")
+
+    response = await client.post(RESET_URL, json=CONFIRM, headers=admin_head)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["leads_deleted"] == 1
 
 
 # --------------------------------------------------------------------------

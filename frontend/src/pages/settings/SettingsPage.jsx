@@ -75,7 +75,8 @@ export function SettingsPage() {
 
       {/* Super Admin only, matched to the endpoint's own gate rather than a
           permission code - showing a button that always 403s is worse than not
-          showing it. */}
+          showing it. The Admin Head resets from the Admin portal's own
+          Settings page (SheetExportPage), which carries the same card. */}
       {user?.role === 'Super Admin' && (
         <>
           <LeadDeleteToggleCard />

@@ -93,7 +93,10 @@ function summarise(counts) {
 // form, because it is not a setting: the form saves values, this destroys
 // records, and a destructive control sitting at the end of a row of text
 // inputs is one somebody eventually presses by accident.
-export function ResetLeadsCard() {
+//
+// `className` sets its spacing and width: narrow under the institute settings
+// form, the full column on the Admin portal's Settings page.
+export function ResetLeadsCard({ className = 'mt-6 max-w-xl' }) {
   const queryClient = useQueryClient()
   // Which reset is being confirmed, or null for none. One dialog rather than
   // three: only one can be open, and three copies of the same form is three
@@ -132,7 +135,7 @@ export function ResetLeadsCard() {
 
   return (
     <>
-      <section className="mt-6 max-w-xl overflow-hidden rounded-lg border border-red-200 bg-white shadow-sm">
+      <section className={`${className} overflow-hidden rounded-lg border border-red-200 bg-white shadow-sm`}>
         <div className="flex items-center gap-2 border-b border-red-100 bg-red-50/60 px-6 py-3">
           <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" strokeWidth={2} aria-hidden="true" />
           <h2 className="text-sm font-semibold text-red-700">Danger zone</h2>
