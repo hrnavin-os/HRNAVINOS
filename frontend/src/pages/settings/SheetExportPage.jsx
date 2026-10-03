@@ -105,10 +105,10 @@ function TabCard({ tab }) {
 // reset away.
 export function SheetExportPage() {
   const { user } = useAuth()
-  // Matched to the reset endpoint's own role gate rather than a permission
-  // code, as Administration > Settings does - showing a button that always
-  // 403s is worse than not showing it.
-  const canReset = ['Super Admin', 'Admin Head'].includes(user?.role)
+  // Told by the server, from the same role list the reset endpoint checks -
+  // showing a button that always 403s is worse than not showing it, and a
+  // copy of the list here is what hid it from a role still named "Admin".
+  const canReset = Boolean(user?.can_reset_leads)
 
   return (
     <div className="max-w-3xl">

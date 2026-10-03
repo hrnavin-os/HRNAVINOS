@@ -142,6 +142,26 @@ async def test_admin_head_can_reset_from_the_admin_settings(client, seeded, auth
     assert response.json()["leads_deleted"] == 1
 
 
+async def test_a_role_still_named_admin_can_reset_too(client, seeded, auth_headers):
+    """The reported bug: the Admin portal's user sat on a role carrying the old
+    name "Admin", so the Danger zone never showed for them."""
+    from app.models.role import Role
+
+    await Role(name="Admin").insert()
+    admin = await login_as(client, auth_headers, "Admin", "portal.admin@hrnavinos.com")
+
+    assert (await client.get("/api/v1/auth/me", headers=admin)).json()["can_reset_leads"] is True
+    assert (await client.post(RESET_URL, json=CONFIRM, headers=admin)).status_code == 200
+
+
+async def test_the_page_is_told_who_can_reset(client, seeded, auth_headers):
+    """/auth/me carries the endpoint's own answer, so the page shows the Danger
+    zone exactly to the roles the endpoint lets through."""
+    assert (await client.get("/api/v1/auth/me", headers=auth_headers)).json()["can_reset_leads"] is True
+    sales = await login_as(client, auth_headers, "Sales Head", "sales.head@hrnavinos.com")
+    assert (await client.get("/api/v1/auth/me", headers=sales)).json()["can_reset_leads"] is False
+
+
 # --------------------------------------------------------------------------
 # Scoped resets: one board at a time.
 #

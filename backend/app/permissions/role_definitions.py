@@ -152,6 +152,12 @@ ADMIN_TEAM_ROLES = [
 # role itself is retired.
 RETIRED_ADMIN_ROLE = "Admin"
 
+# Who may reset the lead boards (Settings > Danger zone). By role name, not a
+# permission code, so it can't be handed to another role from the role editor.
+# The Admin portal's role is Admin Head, but a database can carry it under the
+# old name "Admin" again (see grant_finance_tab_to_admin), so both are named.
+LEAD_RESET_ROLES = ("Super Admin", "Admin Head", RETIRED_ADMIN_ROLE)
+
 # Which Form Collection section (if any) a role's members are restricted to -
 # an open-ended section code (not a closed enum; admins can add new sections
 # from the Form Collection page). Absent/None for every other role = unscoped,

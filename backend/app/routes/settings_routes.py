@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from app.core.dependencies import RequirePermissions, RequireRoles
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
+from app.permissions.role_definitions import LEAD_RESET_ROLES
 from app.schemas.settings_schema import (
     LeadDeleteToggle,
     ResetLeadsRequest,
@@ -60,10 +61,10 @@ async def reset_leads(
     # on some role's permission list. Super Admin bypasses permission checks
     # anyway, so a code would not have restricted it any further.
     #
-    # Admin Head as well: that role owns both boards, and the same Danger zone
-    # sits on its own Settings page (the Admin group's, beside the Google
-    # Sheets export).
-    actor: User = Depends(RequireRoles("Super Admin", "Admin Head")),
+    # The Admin portal's role as well: it owns both boards, and the same Danger
+    # zone sits on its own Settings page (the Admin group's, beside the Google
+    # Sheets export). See LEAD_RESET_ROLES.
+    actor: User = Depends(RequireRoles(*LEAD_RESET_ROLES)),
 ) -> ResetLeadsResponse:
     """Clears the Induction board, the Foundation board, or both.
 

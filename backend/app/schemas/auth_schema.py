@@ -56,6 +56,11 @@ class CurrentUserResponse(BaseModel):
     # to - lets the frontend branch generically on "is this a Section Admin"
     # without hardcoding role names, since sections/roles are open-ended.
     scoped_section: str | None = None
+    # Whether Settings shows the Danger zone. Decided here from the same list
+    # the reset endpoint checks (LEAD_RESET_ROLES), so the page can't show the
+    # buttons to someone the endpoint refuses, or hide them from someone it
+    # would let through.
+    can_reset_leads: bool = False
     is_active: bool
     is_verified: bool
 
