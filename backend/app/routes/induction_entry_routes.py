@@ -30,6 +30,10 @@ from app.utils.foundation_groups import MAX_FOUNDATION_GROUP
 
 router = APIRouter(prefix="/induction-entries", tags=["Induction Call Form"])
 
+# What the Call Remarks filter sends for "no remark yet". A sentinel rather than
+# an empty value, because empty is how every filter says "not filtering".
+NO_REMARK = "__none__"
+
 
 def _date_window(*ranges: tuple[date, date] | tuple[date | None, date | None] | None) -> dict:
     """The overlap of every given (start, end) pair, as a Mongo range.
@@ -72,6 +76,8 @@ class BoardFilters:
         category: str | None = None,
         assigned_to: uuid.UUID | None = None,
         batch: str | None = None,
+        # One exact remark, or NO_REMARK for the entries nobody has set one on.
+        call_remark: str | None = None,
         # Which foundation class group. A stored field now rather than a rule
         # read off the registration date, so this is a plain equality match.
         foundation_group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
@@ -88,6 +94,7 @@ class BoardFilters:
         self.category = category
         self.assigned_to = assigned_to
         self.batch = batch
+        self.call_remark = call_remark
         self.foundation_group = foundation_group
         self.date_from = date_from
         self.date_to = date_to
@@ -117,6 +124,12 @@ class BoardFilters:
         number = parse_batch(self.batch)
         if number is not None:
             filters["batch_number"] = number
+        if self.call_remark:
+            # Under $and rather than as a plain key: the tab is itself a
+            # condition on call_remark (quit or not), and the two merged into
+            # one dict would leave only whichever was written last.
+            remark = {"$in": [None, ""]} if self.call_remark == NO_REMARK else self.call_remark
+            filters["$and"] = [{"call_remark": remark}]
         window = _date_window((self.date_from, self.date_to))
         if window:
             filters["registration_date"] = window

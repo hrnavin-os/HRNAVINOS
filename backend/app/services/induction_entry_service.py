@@ -289,7 +289,9 @@ class InductionEntryService:
         newest-first.
         """
         entries = await self.entries.list_all_for_options(section=section, status=status)
-        distinct = {field: set() for field in ("sales_person", "lead_source", "payment_mode", "category")}
+        distinct = {
+            field: set() for field in ("sales_person", "lead_source", "payment_mode", "category", "call_remark")
+        }
         batches: set[int] = set()
         assignees: dict[str, str] = {}
 

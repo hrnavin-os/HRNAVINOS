@@ -24,6 +24,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { PERMISSIONS } from '@/constants/permissions'
 import { LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
 import { FOUNDATION_GROUP_LABELS, FOUNDATION_GROUP_OPTIONS } from '@/constants/foundationGroups'
+import { REMARK_GROUPS } from '@/constants/inductionCallRemarks'
 import { formatDate, formatDateTime } from '@/utils/formatters'
 
 const dash = <span className="text-slate-400">—</span>
@@ -199,6 +200,27 @@ const editFields = [
   { name: 'category', label: 'Category' },
 ]
 
+// What the Call Remarks filter sends for "no remark yet" - NO_REMARK in the
+// backend's induction_entry_routes.py. Empty can't say it: empty is how every
+// filter says "not filtering".
+const NO_REMARK = '__none__'
+
+// The remark cell's own order, so the filter reads like the menu it filters
+// on: completed, scheduled, not attended, not reached, moved, quit.
+const REMARK_ORDER = REMARK_GROUPS.flatMap((group) => group.options)
+
+// The remarks the open tab actually holds, in that order, with any typed by
+// hand after them alphabetically (the server already sorted those). "No
+// remark" leads, except on the Quit tab, where a remark is what put every row
+// there.
+function remarkFilterOptions(values, { includeBlank }) {
+  const rank = (value) => (REMARK_ORDER.includes(value) ? REMARK_ORDER.indexOf(value) : REMARK_ORDER.length)
+  const sorted = [...(values ?? [])].sort((a, b) => rank(a) - rank(b))
+  return [
+    ...(includeBlank ? [{ value: NO_REMARK, label: 'No remark' }] : []),
+    ...sorted.map((value) => ({ value, label: value })),
+  ]
+}
 
 const EMPTY_FILTERS = {
   batch: '',
@@ -207,6 +229,7 @@ const EMPTY_FILTERS = {
   lead_source: '',
   payment_mode: '',
   category: '',
+  call_remark: '',
   assigned_to: '',
 }
 
@@ -505,7 +528,7 @@ export function InductionLeadsBoard() {
                   each dropdown shows an X once it holds a value, and the date
                   filter's own "All" is the whole-range option. */}
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
               <FilterDropdown
                 grow
                 label="Batch"
@@ -550,6 +573,20 @@ export function InductionLeadsBoard() {
                 value={filters.category}
                 options={asOptions(options.category)}
                 onChange={(value) => setFilter('category', value)}
+              />
+              {/* Wider menu than the rest: remarks run to sixty characters,
+                  and the default width cuts the quit ones off mid-word. */}
+              <FilterDropdown
+                grow
+                label="Call Remarks"
+                value={filters.call_remark}
+                // Kept on the Quit tab while it is the selection, or the
+                // filters surviving a tab switch would show the raw sentinel.
+                options={remarkFilterOptions(options.call_remark, {
+                  includeBlank: !quit || filters.call_remark === NO_REMARK,
+                })}
+                onChange={(value) => setFilter('call_remark', value)}
+                menuWidth={380}
               />
             </div>
           </div>

@@ -111,7 +111,7 @@ export function FilterShell({ label, activeLabel, onClear, grow = false, menuWid
 // A filter-row button that opens a dropdown - click to pick a value,
 // "All <Label>s" clears it. Lives next to the search bar rather than in a
 // column header. Shared by the Foundation and Induction boards.
-export function FilterDropdown({ label, value, options, onChange, grow = false }) {
+export function FilterDropdown({ label, value, options, onChange, grow = false, menuWidth }) {
   // Falls back to the raw value for a selection the option list doesn't cover.
   // The lists are built from the data behind the open tab, so a filter that
   // survives a tab switch can hold a value the new tab has never seen - and
@@ -120,7 +120,13 @@ export function FilterDropdown({ label, value, options, onChange, grow = false }
   const selectedLabel = options.find((option) => option.value === value)?.label ?? value
 
   return (
-    <FilterShell label={label} activeLabel={value ? selectedLabel : null} onClear={() => onChange('')} grow={grow}>
+    <FilterShell
+      label={label}
+      activeLabel={value ? selectedLabel : null}
+      onClear={() => onChange('')}
+      grow={grow}
+      menuWidth={menuWidth}
+    >
       {({ close }) => (
         <>
           {/* Pluralised only when the label isn't already plural, or a filter
