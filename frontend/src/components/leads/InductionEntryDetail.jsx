@@ -6,6 +6,7 @@ import {
   CreditCard,
   ExternalLink,
   GraduationCap,
+  History,
   Layers,
   Mail,
   Megaphone,
@@ -249,6 +250,30 @@ export function InductionEntryDetail({ entry, hideAssignee = false }) {
         <DetailTile icon={CreditCard} label="Payment Mode" value={entry.payment_mode} tone="violet" />
         <DetailTile icon={Tag} label="Category" value={entry.category} tone="emerald" />
       </div>
+
+      {/* Every change of batch and the reason given for it. The board prints
+          only the last under the batch; this is the whole story, oldest
+          first, in the same timeline shape as the group changes below. */}
+      {entry.batch_history?.length > 0 && (
+        <DetailSection title="Batch Changes" icon={History} tone="cyan" entries={[]}>
+          <ol className="space-y-2">
+            {entry.batch_history.map((change) => (
+              <li key={change.at} className="text-sm">
+                <div className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="font-medium text-slate-800">
+                    Batch-{change.from_batch} → {change.to_batch ? `Batch-${change.to_batch}` : 'no batch'}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    {formatDateTime(change.at)}
+                    {change.by_name ? ` · ${change.by_name}` : ''}
+                  </span>
+                </div>
+                <p className="break-words text-slate-600">{change.reason}</p>
+              </li>
+            ))}
+          </ol>
+        </DetailSection>
+      )}
 
       {/* Every move between groups, when there has been one. The column on the
           board says only the last of them, which is the right amount there and

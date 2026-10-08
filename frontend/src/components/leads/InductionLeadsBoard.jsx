@@ -107,13 +107,8 @@ const columns = [
       </div>
     ),
   },
-  {
-    // The number typed on the Induction form, shown as "Batch-20".
-    key: 'batch',
-    header: 'Batch',
-    align: 'center',
-    render: (row) => (row.batch ? <Badge tone="blue">{row.batch}</Badge> : dash),
-  },
+  // The number typed on the Induction form, shown as "Batch-20".
+  batchColumn,
   {
     key: 'registration_date',
     header: 'Registration',
@@ -177,12 +172,7 @@ const MOVED_COLUMNS = [
     align: 'center',
     render: (row) => (row.converted_at ? formatDateTime(row.converted_at) : dash),
   },
-  {
-    key: 'batch',
-    header: 'Batch',
-    align: 'center',
-    render: (row) => (row.batch ? <Badge tone="blue">{row.batch}</Badge> : dash),
-  },
+  batchColumn,
   {
     // The linked lead's pipeline stage, resolved server-side for the page.
     // Falls back to a plain dash rather than an empty cell if the lead has
@@ -219,6 +209,16 @@ function hasDetails(entry) {
   )
 }
 
+// Whether the edit form has changed a batch the student already had. Filling
+// in a blank batch isn't a change and asks nothing - the same rule the API
+// applies - and clearing the field sends no batch at all, so it isn't one
+// either.
+function batchChanged(values, defaults) {
+  const was = defaults.batch_number
+  const now = values.batch_number
+  return was !== '' && was != null && now !== '' && now != null && Number(now) !== Number(was)
+}
+
 const editFields = [
   { name: 'name', label: 'Name', required: true },
   { name: 'email', label: 'Email', type: 'email' },
@@ -227,6 +227,19 @@ const editFields = [
   { name: 'paid_date', label: 'Paid Date', type: 'date' },
   // The number alone; the board shows it as "Batch-20".
   { name: 'batch_number', label: 'Batch Number', type: 'number' },
+  // Straight under the batch, and only once it has been changed. Printed
+  // under the batch on the board afterwards.
+  {
+    name: 'batch_change_reason',
+    label: 'Reason for changing the batch',
+    type: 'textarea',
+    required: true,
+    placeholder: 'Why is this student moving to another batch?',
+    showWhen: batchChanged,
+    // The API refuses a reason of only spaces, so the form does too rather
+    // than letting it through to fail on save.
+    validation: { validate: (value) => value.trim() !== '' || 'Reason for changing the batch is required' },
+  },
   { name: 'sales_person', label: 'Sales Person' },
   { name: 'lead_source', label: 'Lead Source' },
   { name: 'payment_mode', label: 'Payment Mode' },
