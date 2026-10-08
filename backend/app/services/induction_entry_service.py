@@ -9,6 +9,7 @@ from app.models.enums import InductionStatus
 from app.models.lead import Lead
 from app.models.foundation_group import pop_group_move
 from app.models.induction_entry import (
+    BatchChange,
     InductionEntry,
     InductionOtherDetails,
     InductionPlacement,
@@ -57,6 +58,30 @@ def _resolve_quit_reason(entry: InductionEntry, update_data: dict) -> None:
     if not reason:
         raise BadRequestError("A quit remark needs a reason. Say why this candidate quit.")
     update_data["quit_reason"] = reason
+
+
+def _pending_batch_change(entry: InductionEntry, update_data: dict) -> dict | None:
+    """The batch change this update makes, with its reason - `{"from": 30,
+    "to": 31, "reason": "..."}` - or None if it doesn't make one.
+
+    A batch that replaces one the entry already had has to say why, so the
+    change is refused without a reason. Putting a batch on an entry that had
+    none is filling in a blank, not a change, and needs nothing.
+
+    The reason is taken out of `update_data` whatever happens: it describes
+    the change rather than being a field of its own, and the edit form sends
+    it only when the batch moved, but a stray one must not reach the audit log
+    as if it had been written somewhere.
+    """
+    reason = (update_data.pop("batch_change_reason", None) or "").strip()
+    if "batch_number" not in update_data:
+        return None
+    was, now = entry.batch_number, update_data["batch_number"]
+    if was is None or now == was:
+        return None
+    if not reason:
+        raise BadRequestError(f"Changing the batch needs a reason. Say why this student is leaving {batch_label(was)}.")
+    return {"from": was, "to": now, "reason": reason}
 
 
 def stamp_terms_signature(
@@ -542,6 +567,21 @@ class InductionEntryService:
         if update_data.get("phone"):
             update_data["phone_normalized"] = normalize_phone(update_data["phone"])
         _resolve_quit_reason(entry, update_data)
+        # Checked before anything is written onto the entry, so a change
+        # refused for want of a reason leaves nothing half-applied.
+        batch_change = _pending_batch_change(entry, update_data)
+        if batch_change:
+            # Appended to the document the repository is about to save whole,
+            # the same way a group move is.
+            entry.batch_history.append(
+                BatchChange(
+                    from_batch=batch_change["from"],
+                    to_batch=batch_change["to"],
+                    reason=batch_change["reason"],
+                    by=actor_id,
+                    by_name=await self.actor_name(actor_id),
+                )
+            )
         # Moving a student between groups is the one edit this board has to be
         # able to show afterwards, so it is recorded rather than just written.
         # The name lookup is guarded because it costs a query and almost no
@@ -568,7 +608,11 @@ class InductionEntryService:
             # The move goes in beside the plain field writes rather than into
             # them: what the log wants is where the student went, not the whole
             # history it was appended to.
-            changes={**update_data, **({"foundation_group": moved} if moved else {})},
+            changes={
+                **update_data,
+                **({"foundation_group": moved} if moved else {}),
+                **({"batch_number": batch_change} if batch_change else {}),
+            },
         )
         return entry
 

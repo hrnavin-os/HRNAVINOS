@@ -14,12 +14,22 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage'
 // backed by a <datalist>, so the browser offers the options while leaving the
 // field free text. A plain <select> can't do that, and it's what the Induction
 // Call Form's Sales Person / Lead Source / Payment Mode / Category need.
+//
+// showWhen(values, defaultValues) -> bool makes a field appear only once the
+// rest of the form calls for it - the Induction board's "why is the batch
+// changing" appears when the batch is edited. A hidden field is unregistered,
+// so it is neither validated nor sent.
 export function ResourceForm({ fields, defaultValues = {}, onSubmit, onCancel, submitLabel = 'Save', submitError }) {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm({ defaultValues })
+
+  // Watched only when some field depends on the others, so a form with none
+  // doesn't re-render on every keystroke.
+  const values = fields.some((field) => field.showWhen) ? watch() : null
 
   // Untouched optional fields submit as "" from the DOM; treat that the same
   // as "not provided" instead of sending an empty string (which fails e.g.
@@ -35,7 +45,14 @@ export function ResourceForm({ fields, defaultValues = {}, onSubmit, onCancel, s
     <form className="space-y-4" onSubmit={handleSubmit(handleValidSubmit)}>
       <ErrorMessage message={submitError} />
       {fields.map((field) => {
-        const validation = { required: field.required ? `${field.label} is required` : false, ...field.validation }
+        if (field.showWhen && !field.showWhen(values, defaultValues)) return null
+        const validation = {
+          required: field.required ? `${field.label} is required` : false,
+          // Drops the value when the field hides again - a reason typed and
+          // then made moot by putting the batch back must not still be sent.
+          ...(field.showWhen ? { shouldUnregister: true } : {}),
+          ...field.validation,
+        }
 
         if (field.type === 'select') {
           return (

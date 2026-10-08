@@ -30,6 +30,39 @@ import { formatDate, formatDateTime } from '@/utils/formatters'
 const dash = <span className="text-slate-400">—</span>
 const orDash = (value) => value || dash
 
+// The batch, with its last change written underneath - where the student came
+// from and the reason given when they were moved. On the row rather than in
+// the record behind it: somebody reading Batch-31 on a student they had down
+// as Batch-30 needs the why where they are looking. Every change is in the
+// View popup; one is the right amount for a cell.
+function BatchCell({ row }) {
+  if (!row.batch) return dash
+  const change = row.batch_history?.at(-1)
+  return (
+    <div className="mx-auto flex max-w-52 flex-col items-center gap-1">
+      <Badge tone="blue">{row.batch}</Badge>
+      {change && (
+        <p
+          className="line-clamp-2 text-center text-[11px] leading-snug text-slate-500"
+          title={`${change.reason}\n${formatDateTime(change.at)}${change.by_name ? ` · ${change.by_name}` : ''}`}
+        >
+          <span className="font-medium text-amber-700">From Batch-{change.from_batch}:</span> {change.reason}
+        </p>
+      )}
+    </div>
+  )
+}
+
+// The column itself, shared by the working tabs and the Moved tab. Wraps so
+// the reason can take a second line instead of stretching the table.
+const batchColumn = {
+  key: 'batch',
+  header: 'Batch',
+  align: 'center',
+  wrap: true,
+  render: (row) => <BatchCell row={row} />,
+}
+
 // Mirrors InductionStatus on the backend, which derives these from the call
 // remark and whether the entry carries a foundation_lead_id.
 const INDUCTION_STATUS = {
