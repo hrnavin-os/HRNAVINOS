@@ -21,6 +21,12 @@ CONVERTED = {"foundation_lead_id": {"$ne": None}}
 QUIT_REMARK = {"call_remark": {"$regex": "quit", "$options": "i"}}
 NOT_QUIT = {"call_remark": {"$not": {"$regex": "quit", "$options": "i"}}}
 
+# The induction call has happened: the Completed group of remarks ("Induction
+# Call Completed - Gmeet", "... - Phone Call"). On the phrase rather than the
+# two options for the same reason as QUIT_REMARK - a hand-typed "Induction call
+# completed - WhatsApp" is a completed call too.
+COMPLETED_REMARK = {"call_remark": {"$regex": "induction call completed", "$options": "i"}}
+
 
 def status_query(status: InductionStatus) -> dict:
     """The stored-field query behind a derived InductionStatus.

@@ -53,6 +53,10 @@ const TABS = [
     yes: 'Signed',
     no: 'Not signed',
     action: 'Mark signed',
+    // Who the board covers, when it is not the whole induction list - the
+    // terms come after the induction call, so the API lists only students
+    // whose call remark says it was completed (the marker's `roll`).
+    roll: 'who completed the induction call',
   },
   {
     key: 'polls',
@@ -197,6 +201,9 @@ export function InductionAttendancePage({ only }) {
   const batchOptions = (optionsQuery.data?.batches ?? []).map((value) => ({ value, label: value }))
   const active = TAB_BY_KEY[marker]
   const activeStats = stats?.markers?.[marker]
+  // How the open board names the students on it, in the header, the All card
+  // and the empty table alike.
+  const roll = active.roll ?? 'on the induction list'
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['induction-attendance'] })
@@ -385,7 +392,7 @@ export function InductionAttendancePage({ only }) {
           key: 'all',
           label: 'All students',
           value: activeStats.total,
-          hint: 'on the induction list',
+          hint: roll,
           tone: 'brand',
           icon: Users,
         },
@@ -423,9 +430,11 @@ export function InductionAttendancePage({ only }) {
                 {only ? TAB_BY_KEY[only].label : 'Attendance'}
               </h1>
               <p className="text-[11px] font-medium text-amber-600">
-                {only
-                  ? `${TAB_BY_KEY[only].caption}, across ${user?.scoped_section ? "your section's" : 'the'} induction list`
-                  : 'Terms, polls, success meet and foundation class across the induction list'}
+                {only && TAB_BY_KEY[only].roll
+                  ? `${TAB_BY_KEY[only].caption}, among students ${TAB_BY_KEY[only].roll}`
+                  : only
+                    ? `${TAB_BY_KEY[only].caption}, across ${user?.scoped_section ? "your section's" : 'the'} induction list`
+                    : 'Terms, polls, success meet and foundation class across the induction list'}
               </p>
             </div>
           </div>
@@ -643,8 +652,8 @@ export function InductionAttendancePage({ only }) {
                 : state === 'yes'
               ? `Nobody is marked as ${active.yes.toLowerCase()} yet.`
               : state === 'no'
-                ? `Everyone on the induction list is ${active.yes.toLowerCase()}.`
-                : 'No students on the induction list yet.'
+                ? `Everyone ${roll} is ${active.yes.toLowerCase()}.`
+                : `No students ${roll} yet.`
           }
         />
         <Pagination

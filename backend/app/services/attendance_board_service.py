@@ -19,7 +19,7 @@ from app.database.base import utcnow
 from app.exceptions.base import BadRequestError, NotFoundError
 from app.models.induction_entry import AttendanceMark, FollowUpRemark, InductionEntry, batch_label, parse_batch
 from app.models.terms_document import TermsDocument
-from app.repositories.induction_entry_repository import InductionEntryRepository
+from app.repositories.induction_entry_repository import COMPLETED_REMARK, InductionEntryRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.attendance_board_schema import (
@@ -55,6 +55,10 @@ class Marker:
     read: Callable[[InductionEntry], MarkResponse]
     write: Callable[[InductionEntry, bool | None, uuid.UUID | None, str | None], None]
     query: Callable[[bool], dict]
+    # Who the marker is asked of, when that is not the whole induction list.
+    # Applied to the tab's rows and its counts alike, on every side of the
+    # split, so "not signed" never counts somebody nobody was meant to ask.
+    roll: dict | None = None
 
 
 def _stored_mark(mark: AttendanceMark) -> MarkResponse:
@@ -168,6 +172,11 @@ MARKERS: dict[str, Marker] = {
         read=_terms_mark,
         write=_write_terms,
         query=_terms_query,
+        # The terms are signed once the induction call is done, so only those
+        # students are on this board. Somebody still waiting for their call -
+        # or who quit before it - is not missing a signature yet, and listing
+        # them under "Not signed" buried the ones who were.
+        roll=COMPLETED_REMARK,
     ),
     "polls": Marker(
         key="polls",
@@ -291,7 +300,7 @@ class AttendanceBoardService:
     def _query(
         self,
         *,
-        marker_key: str,
+        marker_key: str | None,
         state: MarkerState,
         section: str | None,
         batch: str | None = None,
@@ -299,16 +308,17 @@ class AttendanceBoardService:
         follow_up: FollowUpState | None = None,
     ) -> dict:
         """The stored-field query for one tab, narrowed to a section if the
-        caller is pinned to one.
+        caller is pinned to one. With no marker, the filters alone - the whole
+        roll they describe, which is what the stats count each marker within.
 
         `follow_up` splits the Polls tab by whether a section admin has rung
         the student yet - pending is nobody has, done is somebody has.
 
         Note what is *not* here: the induction board's status tabs. This board
         covers everyone who came through induction, whether they are still in
-        it, have moved to Foundation or have quit - all of them were asked to
-        sign and to turn up, and hiding the ones who moved on is how a missing
-        signature goes unnoticed.
+        it, have moved to Foundation or have quit - hiding the ones who moved
+        on is how a missing mark goes unnoticed. A marker asked of fewer people
+        than that says so with its own `roll` (the terms: completed calls only).
 
         The marker's own filter is wrapped in `$and` because two of them use
         `$or` at the top level, and the repository's search puts its own `$or`
@@ -316,8 +326,11 @@ class AttendanceBoardService:
         """
         query: dict = {}
         conditions: list[dict] = []
-        if state != "all":
-            conditions.append(self.marker(marker_key).query(state == "yes"))
+        marker = self.marker(marker_key) if marker_key else None
+        if marker and marker.roll:
+            conditions.append(marker.roll)
+        if marker and state != "all":
+            conditions.append(marker.query(state == "yes"))
         if follow_up and marker_key == "polls":
             conditions.append({FOLLOWED_UP: {"$exists": follow_up == "done"}})
         # Which foundation class group. A stored field since the group became
@@ -385,24 +398,27 @@ class AttendanceBoardService:
         """
         base = {
             "is_deleted": False,
-            **self._query(marker_key="terms", state="all", section=section, batch=batch, group=group),
+            **self._query(marker_key=None, state="all", section=section, batch=batch, group=group),
         }
         total = await InductionEntry.find(base).count()
 
-        markers = {}
-        for key, marker in MARKERS.items():
+        def within(marker: Marker, *conditions: dict) -> dict:
             # Appended to whatever the filters already put in `$and` (a group
             # narrowing lives there) rather than assigned over it.
-            narrowed = {**base, "$and": [*base.get("$and", []), marker.query(True)]}
-            yes = await InductionEntry.find(narrowed).count()
-            markers[key] = MarkerStatsResponse(total=total, yes=yes, no=total - yes)
+            roll = [marker.roll] if marker.roll else []
+            return {**base, "$and": [*base.get("$and", []), *roll, *conditions]}
+
+        markers = {}
+        for key, marker in MARKERS.items():
+            # Each marker's own total: the terms are counted among completed
+            # calls only, so their split can't be out of the whole roll.
+            asked = await InductionEntry.find(within(marker)).count() if marker.roll else total
+            yes = await InductionEntry.find(within(marker, marker.query(True))).count()
+            markers[key] = MarkerStatsResponse(total=asked, yes=yes, no=asked - yes)
 
         # Of the students not selected in the poll, how many a section admin has
         # already rung - the Not selected card's "followed up / to call" split.
-        not_selected_called = {
-            **base,
-            "$and": [*base.get("$and", []), MARKERS["polls"].query(False), {FOLLOWED_UP: {"$exists": True}}],
-        }
+        not_selected_called = within(MARKERS["polls"], MARKERS["polls"].query(False), {FOLLOWED_UP: {"$exists": True}})
         return AttendanceStatsResponse(
             total=total,
             markers=markers,

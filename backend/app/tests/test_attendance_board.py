@@ -12,9 +12,26 @@ DOCUMENT_URL = "/api/v1/induction-attendance/terms-document"
 
 FOUNDATION_URL = "/api/v1/public/foundation-form/submit"
 
+# The default for a seeded student: their induction call is done, which is
+# what puts them on the Terms board as well as the other three.
+COMPLETED = "Induction Call Completed - Gmeet"
+
+
+async def set_remark(client, auth_headers, entry_id: str, remark: str | None) -> None:
+    if remark is None:
+        return
+    response = await client.put(f"{INDUCTION_URL}/{entry_id}", headers=auth_headers, json={"call_remark": remark})
+    assert response.status_code == 200, response.text
+
 
 async def add_student(
-    client, auth_headers, *, name: str = "Arun", phone: str = "9876543210", batch: int = 28
+    client,
+    auth_headers,
+    *,
+    name: str = "Arun",
+    phone: str = "9876543210",
+    batch: int = 28,
+    remark: str | None = COMPLETED,
 ) -> str:
     response = await client.post(
         INDUCTION_URL,
@@ -29,7 +46,9 @@ async def add_student(
         },
     )
     assert response.status_code in (200, 201), response.text
-    return response.json()["id"]
+    entry_id = response.json()["id"]
+    await set_remark(client, auth_headers, entry_id, remark)
+    return entry_id
 
 
 async def mark(client, auth_headers, entry_id: str, marker: str, marked):
@@ -159,6 +178,67 @@ async def test_stats_cover_every_marker(client, auth_headers):
     # Every marker's two sides add back up to the roll.
     for split in stats["markers"].values():
         assert split["yes"] + split["no"] == split["total"] == 2
+
+
+async def test_the_terms_board_lists_only_completed_induction_calls(client, auth_headers):
+    """The terms are signed after the induction call, so a student whose call
+    hasn't happened - not yet called, only scheduled, quit before it - is not
+    on the Terms board. The other markers still cover everyone."""
+    await add_student(client, auth_headers, name="Arun", phone="9876543210")
+    await add_student(
+        client, auth_headers, name="Bala", phone="9876511111", remark="Induction Call Completed - Phone Call"
+    )
+    await add_student(client, auth_headers, name="Chitra", phone="9876522222", remark=None)
+    await add_student(
+        client, auth_headers, name="Divya", phone="9876500000", remark="Induction Call Scheduled - Today"
+    )
+    await add_student(client, auth_headers, name="Eswar", phone="9876533333", remark="Didn't Pick Up - Attempt 1")
+
+    for state in ("all", "no"):
+        terms = await client.get(STUDENTS_URL, headers=auth_headers, params={"marker": "terms", "state": state})
+        assert sorted(row["name"] for row in terms.json()["items"]) == ["Arun", "Bala"], state
+
+    polls = await client.get(STUDENTS_URL, headers=auth_headers, params={"marker": "polls"})
+    assert polls.json()["total"] == 5
+
+
+async def test_the_terms_counts_are_out_of_completed_calls_only(client, auth_headers):
+    arun = await add_student(client, auth_headers, name="Arun", phone="9876543210")
+    await add_student(client, auth_headers, name="Bala", phone="9876511111")
+    await add_student(client, auth_headers, name="Chitra", phone="9876522222", remark=None)
+    await mark(client, auth_headers, arun, "terms", True)
+
+    stats = (await client.get(STATS_URL, headers=auth_headers)).json()
+    assert stats["total"] == 3
+    assert stats["markers"]["terms"] == {"total": 2, "yes": 1, "no": 1}
+    assert stats["markers"]["polls"] == {"total": 3, "yes": 0, "no": 3}
+
+
+async def test_a_signed_student_whose_call_is_no_longer_completed_leaves_the_terms_board(client, auth_headers):
+    """The board follows the remark: a signature is kept on the record, but the
+    row and its count go with the remark that put them there."""
+    arun = await add_student(client, auth_headers)
+    await mark(client, auth_headers, arun, "terms", True)
+
+    # A quit remark needs a reason, so set_remark can't set it.
+    quit = await client.put(
+        f"{INDUCTION_URL}/{arun}",
+        headers=auth_headers,
+        json={"call_remark": "Quit - After Foundation Session", "quit_reason": "Moved city"},
+    )
+    assert quit.status_code == 200, quit.text
+
+    signed = await client.get(STUDENTS_URL, headers=auth_headers, params={"marker": "terms", "state": "yes"})
+    assert signed.json()["total"] == 0
+    stats = (await client.get(STATS_URL, headers=auth_headers)).json()
+    assert stats["markers"]["terms"] == {"total": 0, "yes": 0, "no": 0}
+
+
+async def test_a_typed_completed_remark_counts_whatever_its_case(client, auth_headers):
+    await add_student(client, auth_headers, remark="induction call completed - WhatsApp")
+
+    terms = await client.get(STUDENTS_URL, headers=auth_headers, params={"marker": "terms"})
+    assert terms.json()["total"] == 1
 
 
 async def test_the_induction_update_form_and_the_terms_tab_write_the_same_field(client, auth_headers):
@@ -312,6 +392,7 @@ async def add_student_on(
     registration_date: str,
     group: str | None = None,
     batch: int = 28,
+    remark: str | None = COMPLETED,
 ) -> str:
     response = await client.post(
         INDUCTION_URL,
@@ -327,7 +408,9 @@ async def add_student_on(
         },
     )
     assert response.status_code in (200, 201), response.text
-    return response.json()["id"]
+    entry_id = response.json()["id"]
+    await set_remark(client, auth_headers, entry_id, remark)
+    return entry_id
 
 
 async def test_the_roll_shows_the_group_the_form_put_them_in(client, auth_headers):
