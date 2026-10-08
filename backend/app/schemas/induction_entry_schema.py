@@ -130,6 +130,22 @@ class InductionDetailsUpdate(BaseModel):
     other_details: InductionOtherDetailsSchema | None = None
 
 
+class BatchChangeSchema(BaseModel):
+    """One change of batch, as the board prints it under the batch.
+
+    `by` - the changer's id - is left off for the reason it is on a group move:
+    the name is snapshotted beside it, and the id is no use to a table cell.
+    The response is built from model_dump(), so these arrive as dicts and no
+    model-to-model conversion is involved.
+    """
+
+    from_batch: int | None = None
+    to_batch: int | None = None
+    reason: str
+    at: datetime
+    by_name: str | None = None
+
+
 class InductionEntryUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=150)
     email: str | None = Field(default=None, max_length=255)
@@ -141,6 +157,10 @@ class InductionEntryUpdate(BaseModel):
     payment_mode: str | None = Field(default=None, max_length=150)
     category: str | None = Field(default=None, max_length=150)
     batch_number: int | None = Field(default=None, ge=1, le=999999)
+    # Required with a batch_number that replaces a batch the entry already
+    # had - the service refuses the change without one. Ignored otherwise, so
+    # an edit form that always sends it does no harm.
+    batch_change_reason: str | None = Field(default=None, max_length=500)
     call_remark: str | None = Field(default=None, max_length=100)
     # Sent alongside call_remark when the remark says quit - the service
     # refuses a quit remark that arrives without one, and clears the stored
@@ -163,6 +183,9 @@ class InductionEntryResponse(BaseModel):
     # "Batch-20", built from the stored batch_number; None when none was entered.
     batch: str | None = None
     batch_number: int | None = None
+    # Every change of batch with its reason, oldest first. Sent with each row
+    # because the board prints the last one under the batch.
+    batch_history: list[BatchChangeSchema] = Field(default_factory=list)
     registration_date: date
     paid_date: date | None
     sales_person: str | None

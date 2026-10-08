@@ -52,12 +52,13 @@ export function AppRoutes() {
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
           <Route path="/" element={<HomeRoute />} />
-          {/* Section Admins only - they're who Finance's payment reminders
-              are addressed to. Gated on the route as well as the sidebar so
-              it isn't reachable by typing the URL. */}
-          <Route element={<ProtectedRoute permission={PERMISSIONS.NOTIFICATIONS_VIEW} scopedOnly />}>
-            <Route path="/notifications" element={<NotificationsPage />} />
-          </Route>
+          {/* Only a login, like the bell: the bell is on every page for every
+              role, and its "View all notifications" leads here. The page lists
+              nobody's notifications but the caller's own, which the API needs
+              only a login for too. The sidebar entry keeps NOTIFICATIONS_VIEW -
+              that decides whether it is a menu item, not whether you may read
+              your own history. */}
+          <Route path="/notifications" element={<NotificationsPage />} />
 
           <Route element={<ProtectedRoute permission={PERMISSIONS.LEADS_VIEW} />}>
             <Route path="/leads" element={<LeadsPage />} />

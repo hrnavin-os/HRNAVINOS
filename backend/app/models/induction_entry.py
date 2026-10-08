@@ -11,7 +11,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 from pymongo import IndexModel
 
-from app.database.base import BaseDocument
+from app.database.base import BaseDocument, utcnow
 from app.models.enums import InductionStatus
 from app.models.foundation_group import FoundationGroupMove
 
@@ -127,6 +127,25 @@ class InductionAttendance(BaseModel):
     foundation_class_attended: AttendanceMark = Field(default_factory=AttendanceMark)
 
 
+class BatchChange(BaseModel):
+    """One change of a student's batch, with the reason somebody gave for it.
+
+    Kept on the record rather than left to the audit log for the same reason
+    the group moves are (see FoundationGroupMove): the board prints the last
+    one under the batch, and a student who is suddenly in Batch-31 instead of
+    Batch-30 has to say why where the batch is read, not in a log nobody opens.
+    """
+
+    from_batch: int | None = None
+    to_batch: int | None = None
+    reason: str = Field(max_length=500)
+    at: datetime = Field(default_factory=utcnow)
+    by: uuid.UUID | None = None
+    # Snapshotted like AttendanceMark.by_name, so a page of rows renders
+    # without a user lookup each.
+    by_name: str | None = Field(default=None, max_length=150)
+
+
 def batch_label(number: int | None) -> str | None:
     """"Batch-20" for a stored 20, or None when no batch was entered."""
     return f"Batch-{number}" if number is not None else None
@@ -194,6 +213,10 @@ class InductionEntry(BaseDocument):
     # registration month, which is what it used to be: the batch is decided by
     # the team, not by the calendar. None on rows keyed in before the field.
     batch_number: int | None = None
+    # Every time an existing batch was changed, oldest first, each with the
+    # reason it had to be given. Setting a batch on an entry that had none is
+    # not a change and is not in here. See InductionEntryService.update.
+    batch_history: list[BatchChange] = Field(default_factory=list)
     # Where this candidate stands after the induction call - set from a
     # dropdown on the board. Open text rather than an enum for the same reason
     # the fields above are: the list is long, entirely operational, and gets
