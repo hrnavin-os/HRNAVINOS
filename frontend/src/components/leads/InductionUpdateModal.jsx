@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Check, GraduationCap, Briefcase, MessageSquare, ClipboardList, ExternalLink } from 'lucide-react'
+import { Check, GraduationCap, Briefcase, MessageSquare, ClipboardList } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/Button'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { inductionEntryService } from '@/services/inductionEntryService'
 import { getApiErrorMessage } from '@/services/apiClient'
-import { MEDIA_BASE_URL } from '@/constants/config'
 
 const STEPS = [
   { key: 'qualification', label: 'Qualification', icon: GraduationCap },
@@ -83,8 +82,9 @@ export function InductionUpdateModal({ entry, onClose }) {
   // Seeded from what's already saved, so reopening the form shows previous
   // answers rather than a blank slate.
   //
-  // The call date and time are held out on purpose, and so is the WhatsApp
-  // tick. They are edited in the board's own columns now, and this form posts
+  // The call date and time are held out on purpose, and so are the WhatsApp
+  // tick and the recording link. They are edited in the board's own columns
+  // now, and this form posts
   // whatever is in its state: left in, opening the modal would capture the
   // value at open time and write it back on save, silently undoing an edit
   // made in the column meanwhile. The server merges each page with
@@ -96,6 +96,7 @@ export function InductionUpdateModal({ entry, onClose }) {
       induction_call_date: _date,
       scheduled_time: _time,
       whatsapp_group_added: _whatsapp,
+      call_recording_url: _recording,
       ...otherDetails
     } = entry.other_details ?? {}
     return {
@@ -124,16 +125,6 @@ export function InductionUpdateModal({ entry, onClose }) {
 
   const confidence = form.other_details.confidence
   const legacyConfidence = confidence && !CONFIDENCE_OPTIONS.includes(confidence) ? confidence : null
-
-  // Recordings uploaded before this became a Drive link are stored as a server
-  // path, so they still open through the media host. Anything absolute is a
-  // link someone pasted and is used as given.
-  const storedRecording = form.other_details.call_recording_url
-  const recordingHref = !storedRecording
-    ? null
-    : /^https?:\/\//i.test(storedRecording)
-      ? storedRecording
-      : `${MEDIA_BASE_URL}${storedRecording}`
 
   return (
     <Modal title={`Update — ${entry.name}`} isOpen onClose={onClose} maxWidth="max-w-2xl">
@@ -237,7 +228,8 @@ export function InductionUpdateModal({ entry, onClose }) {
                 them alone: update_details merges per page with exclude_unset,
                 so saving this page without them keeps whatever the column
                 set. The WhatsApp Group Added answer went the same way, to
-                the board's WhatsApp column. */}
+                the board's WhatsApp column, and the screen recording's Drive
+                link to the Call Recording column beside it. */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <YesNoSelect
                 label="Terms & Condition Form Signed"
@@ -262,30 +254,6 @@ export function InductionUpdateModal({ entry, onClose }) {
                   would render blank and quietly rewrite it to null on save. */}
               {legacyConfidence && <option value={legacyConfidence}>{legacyConfidence} (previously recorded)</option>}
             </Select>
-
-            <div>
-              <Input
-                type="url"
-                label="Induction Call Screen Recording"
-                placeholder="https://drive.google.com/..."
-                value={form.other_details.call_recording_url ?? ''}
-                onChange={(e) => set('other_details', 'call_recording_url', e.target.value || null)}
-              />
-              <p className="mt-1 text-xs text-slate-500">
-                Paste the Drive link to the recording. Make sure anyone with the link can view it.
-              </p>
-              {recordingHref && (
-                <a
-                  href={recordingHref}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-                  Open recording
-                </a>
-              )}
-            </div>
           </div>
         )}
 

@@ -18,6 +18,7 @@ import { InductionCategoryCell } from '@/components/leads/InductionCategoryCell'
 import { InductionGroupCell } from '@/components/leads/FoundationGroupCell'
 import { InductionQuitReasonCell } from '@/components/leads/InductionQuitReasonCell'
 import { InductionWhatsAppCell, WhatsAppColumnHeader } from '@/components/leads/WhatsAppGroupCell'
+import { InductionRecordingCell } from '@/components/leads/InductionRecordingCell'
 import { InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
 import { InductionUpdateModal } from '@/components/leads/InductionUpdateModal'
 import { useAuth } from '@/hooks/useAuth'
@@ -199,11 +200,15 @@ function insertBefore(columnList, key, column) {
 
 // A row's post-call details are "started" once any one of the four pages has
 // an answer - used to label the Update button so you can see at a glance which
-// entries still need working. The WhatsApp tick doesn't count: it is set from
-// its own column, not from the form this button opens.
+// entries still need working. The WhatsApp tick and the recording link don't
+// count: each is set from its own column, not from the form this button opens.
 function hasDetails(entry) {
-  // Underscored: destructured only to drop it from the rest.
-  const { whatsapp_group_added: _whatsapp, ...otherDetails } = entry.other_details ?? {}
+  // Underscored: destructured only to drop them from the rest.
+  const {
+    whatsapp_group_added: _whatsapp,
+    call_recording_url: _recording,
+    ...otherDetails
+  } = entry.other_details ?? {}
   return [entry.qualification, entry.placement, entry.remarks, otherDetails].some((group) =>
     Object.values(group ?? {}).some((value) => value !== null && value !== undefined && value !== ''),
   )
@@ -420,6 +425,13 @@ export function InductionLeadsBoard() {
     align: 'center',
     render: (row) => <InductionWhatsAppCell entry={row} onError={setError} />,
   }
+  // Straight after WhatsApp. Was the last field on the fourth page of the
+  // Update modal - opening a four-step form to see whether a call was recorded.
+  const recordingColumn = {
+    key: 'call_recording_url',
+    header: 'Call Recording',
+    render: (row) => <InductionRecordingCell entry={row} onError={setError} />,
+  }
   const categoryColumn = {
     key: 'category',
     header: 'Category',
@@ -459,23 +471,27 @@ export function InductionLeadsBoard() {
       insertBefore(
         insertBefore(
           insertBefore(
-            // A Section Admin only ever sees their own section's entries, so
-            // every row would name them - a column of one repeated value.
-            scopedSection ? columns.filter((column) => column.key !== 'assigned_to') : columns,
-            'registration_date',
-            groupColumn,
+            insertBefore(
+              // A Section Admin only ever sees their own section's entries, so
+              // every row would name them - a column of one repeated value.
+              scopedSection ? columns.filter((column) => column.key !== 'assigned_to') : columns,
+              'registration_date',
+              groupColumn,
+            ),
+            'assigned_to',
+            categoryColumn,
           ),
           'assigned_to',
-          categoryColumn,
+          scheduleColumn,
         ),
         'assigned_to',
-        scheduleColumn,
+        remarkColumn,
       ),
       'assigned_to',
-      remarkColumn,
+      whatsappColumn,
     ),
     'assigned_to',
-    whatsappColumn,
+    recordingColumn,
   )
   // The Moved tab gets it too, and editable there as well: a student who has
   // crossed to Foundation is still sitting in a class, and the attendance roll
@@ -483,12 +499,16 @@ export function InductionLeadsBoard() {
   const movedColumns = insertBefore(
     insertBefore(
       insertBefore(
-        insertBefore(MOVED_COLUMNS, 'foundation_status', scheduleColumn),
+        insertBefore(
+          insertBefore(MOVED_COLUMNS, 'foundation_status', scheduleColumn),
+          'foundation_status',
+          remarkColumn,
+        ),
         'foundation_status',
-        remarkColumn,
+        whatsappColumn,
       ),
       'foundation_status',
-      whatsappColumn,
+      recordingColumn,
     ),
     'foundation_status',
     groupColumn,
