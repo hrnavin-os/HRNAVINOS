@@ -126,8 +126,6 @@ export function InductionUpdateModal({ entry, onClose }) {
 
   const confidence = form.other_details.confidence
   const legacyConfidence = confidence && !CONFIDENCE_OPTIONS.includes(confidence) ? confidence : null
-  const details = form.remarks.details
-  const legacyDetails = details && !DETAILS_VALUES.includes(details) ? details : null
 
   return (
     <Modal title={`Update — ${entry.name}`} isOpen onClose={onClose} maxWidth="max-w-2xl">
@@ -207,22 +205,26 @@ export function InductionUpdateModal({ entry, onClose }) {
               onChange={(e) => set('remarks', 'requirements', e.target.value)}
             />
             {/* Shown on the board in its own column after the call remark,
-                and filterable there. */}
+                and filterable there. The two answers and nothing else: the
+                placeholder is hidden from the list, so it reads "Select…"
+                until one is picked but can't be picked itself.
+
+                Free text typed before this was a choice shows as the
+                placeholder too, and stays stored until somebody picks one
+                of the two - onChange is the only thing that writes here. */}
             <Select
               label="Details"
-              value={form.remarks.details ?? ''}
-              onChange={(e) => set('remarks', 'details', e.target.value || null)}
+              value={DETAILS_VALUES.includes(form.remarks.details) ? form.remarks.details : ''}
+              onChange={(e) => set('remarks', 'details', e.target.value)}
             >
-              <option value="">Not recorded</option>
+              <option value="" disabled hidden>
+                Select…
+              </option>
               {DETAILS_VALUES.map((option) => (
                 <option key={option} value={option}>
                   {option}
                 </option>
               ))}
-              {/* Free text typed before this was a choice. Carried for the
-                  same reason as the Confidence select's: dropped, the select
-                  would show blank and save it away as null. */}
-              {legacyDetails && <option value={legacyDetails}>{legacyDetails} (previously recorded)</option>}
             </Select>
             <Textarea
               label="Doubts Clarified"
