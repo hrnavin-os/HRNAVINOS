@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { inductionEntryService } from '@/services/inductionEntryService'
 import { getApiErrorMessage } from '@/services/apiClient'
-import { DETAILS_VALUES } from '@/constants/inductionDetails'
+import { DETAILS_OTHER, DETAILS_VALUES } from '@/constants/inductionDetails'
 
 const STEPS = [
   { key: 'qualification', label: 'Qualification', icon: GraduationCap },
@@ -17,6 +17,9 @@ const STEPS = [
   { key: 'remarks', label: 'Remarks', icon: MessageSquare },
   { key: 'other_details', label: 'Other Details', icon: ClipboardList },
 ]
+
+// Where the Details answer is, for sending you back to it.
+const REMARKS_STEP = STEPS.findIndex((step) => step.key === 'remarks')
 
 // A percentage rather than High/Medium/Low: "medium" means something different
 // to every caller, where 50% is the same number to all of them and can be
@@ -111,15 +114,56 @@ export function InductionUpdateModal({ entry, onClose }) {
   const set = (group, key, value) =>
     setForm((current) => ({ ...current, [group]: { ...current[group], [key]: value } }))
 
+  // Which choice the Details dropdown shows, and the text typed under
+  // "Others". Held apart from form.remarks.details because Others with
+  // nothing typed yet has nothing to store, and still has to stay selected
+  // while the box under it is filled in. Free text saved before Details was a
+  // choice opens as Others with that text in the box.
+  const storedDetails = entry.remarks?.details || ''
+  const storedIsOther = Boolean(storedDetails) && !DETAILS_VALUES.includes(storedDetails)
+  const [detailsChoice, setDetailsChoice] = useState(storedIsOther ? DETAILS_OTHER : storedDetails)
+  const [detailsText, setDetailsText] = useState(storedIsOther ? storedDetails : '')
+  // Shown once a save or Next is refused for it, not while still typing.
+  const [detailsError, setDetailsError] = useState(null)
+  const detailsMissing = detailsChoice === DETAILS_OTHER && !detailsText.trim()
+
+  // Nothing picked leaves whatever is stored alone.
+  const payload = () => ({
+    ...form,
+    remarks: {
+      ...form.remarks,
+      details: detailsChoice === DETAILS_OTHER ? detailsText.trim() : detailsChoice || form.remarks.details,
+    },
+  })
+
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['induction-entries'] })
 
   const saveMutation = useMutation({
-    mutationFn: () => inductionEntryService.updateDetails(entry.id, form),
+    mutationFn: () => inductionEntryService.updateDetails(entry.id, payload()),
     onSuccess: () => {
       invalidate()
       onClose()
     },
   })
+
+  // Others needs its text, from Save on any page or Next off the Remarks
+  // page. A refused Save takes you to the box rather than leaving the error
+  // on a page you can't see.
+  function refuseMissingDetails() {
+    if (!detailsMissing) return false
+    setStep(REMARKS_STEP)
+    setDetailsError('Type the details for Others')
+    return true
+  }
+
+  function save() {
+    if (!refuseMissingDetails()) saveMutation.mutate()
+  }
+
+  function next() {
+    if (step === REMARKS_STEP && refuseMissingDetails()) return
+    setStep((s) => s + 1)
+  }
 
   const isLast = step === STEPS.length - 1
   const error = saveMutation.error
@@ -205,27 +249,41 @@ export function InductionUpdateModal({ entry, onClose }) {
               onChange={(e) => set('remarks', 'requirements', e.target.value)}
             />
             {/* Shown on the board in its own column after the call remark,
-                and filterable there. The two answers and nothing else: the
-                placeholder is hidden from the list, so it reads "Select…"
-                until one is picked but can't be picked itself.
-
-                Free text typed before this was a choice shows as the
-                placeholder too, and stays stored until somebody picks one
-                of the two - onChange is the only thing that writes here. */}
+                and filterable there. The two answers or Others, nothing else:
+                the placeholder is hidden from the list, so it reads "Select…"
+                until one is picked but can't be picked itself. */}
             <Select
               label="Details"
-              value={DETAILS_VALUES.includes(form.remarks.details) ? form.remarks.details : ''}
-              onChange={(e) => set('remarks', 'details', e.target.value)}
+              value={detailsChoice}
+              onChange={(e) => {
+                setDetailsChoice(e.target.value)
+                setDetailsError(null)
+              }}
             >
               <option value="" disabled hidden>
                 Select…
               </option>
-              {DETAILS_VALUES.map((option) => (
+              {[...DETAILS_VALUES, DETAILS_OTHER].map((option) => (
                 <option key={option} value={option}>
                   {option}
                 </option>
               ))}
             </Select>
+            {detailsChoice === DETAILS_OTHER && (
+              <Textarea
+                label="Other Details"
+                required
+                rows={2}
+                maxLength={1000}
+                placeholder="Type the details"
+                value={detailsText}
+                onChange={(e) => {
+                  setDetailsText(e.target.value)
+                  setDetailsError(null)
+                }}
+                error={detailsError}
+              />
+            )}
             <Textarea
               label="Doubts Clarified"
               rows={3}
@@ -285,10 +343,10 @@ export function InductionUpdateModal({ entry, onClose }) {
             {/* Save is available on every step, not just the last: the call
                 may end before all four pages are filled, and what's typed so
                 far is worth keeping. */}
-            <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+            <Button onClick={save} disabled={saveMutation.isPending}>
               {saveMutation.isPending ? 'Saving…' : 'Save'}
             </Button>
-            {!isLast && <Button onClick={() => setStep((s) => s + 1)}>Next</Button>}
+            {!isLast && <Button onClick={next}>Next</Button>}
           </div>
         </div>
       </div>

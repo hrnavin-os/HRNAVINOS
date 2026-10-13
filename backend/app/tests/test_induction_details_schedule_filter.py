@@ -1,12 +1,12 @@
 """Tests for the Details and Call Schedule filters on the Induction board.
 
-Details is the Remarks page's "Will attend" / "Will not attend" answer; Call
-Schedule is the induction call date set from the board's schedule column.
+Details is the Remarks page's "Will attend" / "Will not attend" answer, or
+for "Others" the text typed under it; Call Schedule is the induction call
+date set from the board's schedule column.
 """
 from app.tests.test_induction_section_field import STATS_URL, entry_for, make_section_admin, seed_board
 
 LIST_URL = "/api/v1/induction-entries"
-OPTIONS_URL = "/api/v1/induction-entries/filter-options"
 
 
 async def update_details(client, auth_headers, name, payload) -> None:
@@ -16,8 +16,8 @@ async def update_details(client, auth_headers, name, payload) -> None:
 
 
 async def seed(client, auth_headers) -> None:
-    """Six entries: two will attend, one won't, one free-text answer from
-    before the field was a choice, two with nothing; four calls booked across
+    """Six entries: two will attend, one won't, one Others answer, two with
+    nothing; four calls booked across
     three days, two not booked."""
     await make_section_admin("a", "sec.a@hrnavinos.com")
     await make_section_admin("b", "sec.b@hrnavinos.com")
@@ -59,12 +59,14 @@ async def test_no_answer_finds_the_entries_nobody_has_answered(client, seeded, a
     assert await names(client, auth_headers, details="__none__") == {"Eswar", "Farida"}
 
 
-async def test_the_options_carry_free_text_answers_from_before(client, seeded, auth_headers):
+async def test_others_finds_every_typed_answer(client, seeded, auth_headers):
+    """An Others answer is stored as its text, so the filter matches anything
+    set that isn't one of the two named answers - free text saved before
+    Details was a choice included."""
     await seed(client, auth_headers)
+    await update_details(client, auth_headers, "Farida", {"remarks": {"details": "Joining next batch"}})
 
-    options = (await client.get(OPTIONS_URL, headers=auth_headers)).json()
-
-    assert options["details"] == ["Will attend", "Will attend Sunday class", "Will not attend"]
+    assert await names(client, auth_headers, details="__other__") == {"Divya", "Farida"}
 
 
 async def test_a_schedule_window_narrows_to_calls_inside_it(client, seeded, auth_headers):

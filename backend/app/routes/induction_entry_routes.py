@@ -34,6 +34,15 @@ router = APIRouter(prefix="/induction-entries", tags=["Induction Call Form"])
 # an empty value, because empty is how every filter says "not filtering".
 NO_REMARK = "__none__"
 
+# The Details answers the Update form offers by name. Its third choice,
+# "Others", stores the text typed under it instead, so an Others answer is any
+# value that is set and isn't one of these - which also takes in the free text
+# saved before Details was a choice. Mirrors DETAILS_VALUES in the frontend's
+# constants/inductionDetails.js.
+DETAILS_ANSWERS = ("Will attend", "Will not attend")
+# What the Details filter sends for "Others".
+OTHER_DETAILS = "__other__"
+
 
 def _date_window(*ranges: tuple[date, date] | tuple[date | None, date | None] | None) -> dict:
     """The overlap of every given (start, end) pair, as a Mongo range.
@@ -90,8 +99,9 @@ class BoardFilters:
         # optional: "everything since March" is as real a question as a range.
         date_from: date | None = None,
         date_to: date | None = None,
-        # The Details answer on the Update form's Remarks page - "Will attend"
-        # or "Will not attend" - or NO_REMARK for the entries with none yet.
+        # The Details answer on the Update form's Remarks page - one of
+        # DETAILS_ANSWERS, OTHER_DETAILS for every typed answer, or NO_REMARK
+        # for the entries with none yet.
         details: str | None = None,
         # The induction call date behind the board's Call Schedule filter,
         # either end optional like the registration window. `scheduled=false`
@@ -151,8 +161,12 @@ class BoardFilters:
         window = _date_window((self.date_from, self.date_to))
         if window:
             filters["registration_date"] = window
-        if self.details:
-            filters["remarks.details"] = {"$in": [None, ""]} if self.details == NO_REMARK else self.details
+        if self.details == NO_REMARK:
+            filters["remarks.details"] = {"$in": [None, ""]}
+        elif self.details == OTHER_DETAILS:
+            filters["remarks.details"] = {"$nin": [None, "", *DETAILS_ANSWERS]}
+        elif self.details:
+            filters["remarks.details"] = self.details
         # "Not scheduled" wins over a window sent with it: no entry can be both
         # unbooked and booked inside a range, so combining them would only ever
         # answer "nothing".

@@ -27,7 +27,7 @@ import { PERMISSIONS } from '@/constants/permissions'
 import { LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
 import { FOUNDATION_GROUP_LABELS, FOUNDATION_GROUP_OPTIONS } from '@/constants/foundationGroups'
 import { REMARK_GROUPS } from '@/constants/inductionCallRemarks'
-import { DETAILS_OPTIONS, DETAILS_VALUES } from '@/constants/inductionDetails'
+import { DETAILS_OPTIONS, DETAILS_OTHER, DETAILS_OTHER_FILTER, DETAILS_VALUES } from '@/constants/inductionDetails'
 import { formatDate, formatDateTime } from '@/utils/formatters'
 import { UPCOMING_PRESETS } from '@/utils/datePresets'
 
@@ -35,8 +35,8 @@ const dash = <span className="text-slate-400">—</span>
 const orDash = (value) => value || dash
 
 // The Update form's Details answer - will they attend or not. Set from the
-// form rather than here, so the cell only reads it. A free-text answer from
-// before it was a choice prints as it was typed, clipped to the column.
+// form rather than here, so the cell only reads it. An Others answer is the
+// text typed under it, printed as typed and clipped to the column.
 function DetailsCell({ value }) {
   if (!value) return dash
   const option = DETAILS_OPTIONS.find((item) => item.value === value)
@@ -299,16 +299,14 @@ function remarkFilterOptions(values, { includeBlank }) {
   ]
 }
 
-// The two answers first, then anything typed as free text before Details was
-// a choice, so those entries can still be found. "Not recorded" leads, as "No
-// remark" does on the remark filter, and sends the same sentinel.
-function detailsFilterOptions(values) {
-  const legacy = (values ?? []).filter((value) => !DETAILS_VALUES.includes(value))
-  return [
-    { value: NO_REMARK, label: 'Not recorded' },
-    ...[...DETAILS_VALUES, ...legacy].map((value) => ({ value, label: value })),
-  ]
-}
+// The dropdown's own choices, with every typed Others answer under one
+// option rather than one per sentence. "Not recorded" leads, as "No remark"
+// does on the remark filter, and sends the same sentinel.
+const DETAILS_FILTER_OPTIONS = [
+  { value: NO_REMARK, label: 'Not recorded' },
+  ...DETAILS_VALUES.map((value) => ({ value, label: value })),
+  { value: DETAILS_OTHER_FILTER, label: DETAILS_OTHER },
+]
 
 // The Call Schedule filter's ranges: the upcoming ones, plus the entries with
 // no call booked at all - the list somebody works through to book them.
@@ -585,7 +583,7 @@ export function InductionLeadsBoard() {
       grow
       label="Details"
       value={filters.details}
-      options={detailsFilterOptions(options.details)}
+      options={DETAILS_FILTER_OPTIONS}
       onChange={(value) => setFilter('details', value)}
     />
   )
