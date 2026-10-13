@@ -679,12 +679,14 @@ export function InductionLeadsBoard() {
             {/* Seven filters for a Section Admin, nine for everyone else. One
                 line once each still fits "Payment Mode" untruncated (about
                 144px apiece), and even rows below that rather than a lone
-                straggler. */}
+                straggler. The breakpoints are in rem like the named ones on
+                purpose: Tailwind writes px ones out ahead of rem ones, so
+                "1060px: seven" came before "42rem: four" and always lost. */}
             <div
               className={`grid grid-cols-2 gap-2 ${
                 scopedSection
-                  ? '@2xl:grid-cols-4 @min-[1060px]:grid-cols-7'
-                  : '@xl:grid-cols-3 @4xl:grid-cols-5 @min-[1360px]:grid-cols-9'
+                  ? '@2xl:grid-cols-4 @min-[66rem]:grid-cols-7'
+                  : '@xl:grid-cols-3 @4xl:grid-cols-5 @min-[85rem]:grid-cols-9'
               }`}
             >
               <FilterDropdown
