@@ -571,6 +571,25 @@ export function InductionLeadsBoard() {
     groupColumn,
   )
 
+  // Built once, placed by role: a Section Admin's first line has room for
+  // them where Section and Assignee would be, and everyone else's grid takes
+  // them instead. See the toolbar below.
+  //
+  // The induction call date set in the Call Schedule column - today's and
+  // tomorrow's calls, or the ones not booked yet.
+  const scheduleFilter = (
+    <DateFilter grow label="Call Schedule" value={schedule} onChange={setSchedule} presets={SCHEDULE_PRESETS} />
+  )
+  const detailsFilter = (
+    <FilterDropdown
+      grow
+      label="Details"
+      value={filters.details}
+      options={detailsFilterOptions(options.details)}
+      onChange={(value) => setFilter('details', value)}
+    />
+  )
+
   return (
     <>
       {/* The cards are the view selector, replacing both the tab strip and the
@@ -597,10 +616,12 @@ export function InductionLeadsBoard() {
       </div>
       <ResourceListPage
         // Two rows: the first is how you find and order the list (search, date,
-        // sort, section); the second is the per-field dropdowns.
+        // sort, section); the second is the per-field dropdowns. Sized off the
+        // toolbar's own width rather than the screen's, since the sidebar and
+        // browser zoom decide how much of the screen it actually gets.
         onSearchChange={setSearch}
         renderToolbar={({ searchInput }) => (
-          <div className="space-y-2">
+          <div className="@container space-y-2">
             {/* Every control grows, so the row spans the full width the way the
                 grid below it does; they wrap rather than squeeze when narrow. */}
             <div className="flex flex-wrap items-center gap-2">
@@ -645,16 +666,27 @@ export function InductionLeadsBoard() {
                   />
                 </div>
               )}
+              {/* In the room the two above leave, so a Section Admin's grid
+                  is seven filters and the toolbar stays at two lines. */}
+              {scopedSection && <div className="min-w-36 flex-1">{scheduleFilter}</div>}
+              {scopedSection && <div className="min-w-36 flex-1">{detailsFilter}</div>}
               {/* No "Clear all" button. It appeared as a second row the
                   moment anything was selected, pushing the table down, and
                   every control it would have reset already clears itself -
                   each dropdown shows an X once it holds a value, and the date
                   filter's own "All" is the whole-range option. */}
             </div>
-            {/* Nine filters: one row only on a wide screen, where each still
-                fits "Payment Mode" untruncated, and an even 3x3 or 5+4 below
-                that rather than a lone straggler. */}
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 min-[1700px]:grid-cols-9">
+            {/* Seven filters for a Section Admin, nine for everyone else. One
+                line once each still fits "Payment Mode" untruncated (about
+                144px apiece), and even rows below that rather than a lone
+                straggler. */}
+            <div
+              className={`grid grid-cols-2 gap-2 ${
+                scopedSection
+                  ? '@2xl:grid-cols-4 @min-[1060px]:grid-cols-7'
+                  : '@xl:grid-cols-3 @4xl:grid-cols-5 @min-[1360px]:grid-cols-9'
+              }`}
+            >
               <FilterDropdown
                 grow
                 label="Batch"
@@ -700,15 +732,7 @@ export function InductionLeadsBoard() {
                 options={asOptions(options.category)}
                 onChange={(value) => setFilter('category', value)}
               />
-              {/* The induction call date set in the Call Schedule column -
-                  today's and tomorrow's calls, or the ones not booked yet. */}
-              <DateFilter
-                grow
-                label="Call Schedule"
-                value={schedule}
-                onChange={setSchedule}
-                presets={SCHEDULE_PRESETS}
-              />
+              {!scopedSection && scheduleFilter}
               {/* Wider menu than the rest: remarks run to sixty characters,
                   and the default width cuts the quit ones off mid-word. */}
               <FilterDropdown
@@ -723,13 +747,7 @@ export function InductionLeadsBoard() {
                 onChange={(value) => setFilter('call_remark', value)}
                 menuWidth={380}
               />
-              <FilterDropdown
-                grow
-                label="Details"
-                value={filters.details}
-                options={detailsFilterOptions(options.details)}
-                onChange={(value) => setFilter('details', value)}
-              />
+              {!scopedSection && detailsFilter}
             </div>
           </div>
         )}
