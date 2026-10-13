@@ -6,7 +6,7 @@ the rows are lead-intake records. Reusing them means nobody has to re-grant
 permissions to existing roles before the tab works.
 """
 import uuid
-from datetime import date
+from datetime import date, datetime, time
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, status
@@ -40,15 +40,20 @@ def _date_window(*ranges: tuple[date, date] | tuple[date | None, date | None] | 
 
     The tightest bound on each side wins. Either end of any range may be missing, and an
     empty result means nothing was asked for, so no clause is added at all.
+
+    Bounds go out as midnight datetimes, which is how a stored date reads back.
+    A bare date works for find(), where Beanie encodes the query, but the stat
+    cards run the same filters through an aggregation that it doesn't encode,
+    and pymongo refuses a date there.
     """
     bounds = [pair for pair in ranges if pair]
     lower = [start for start, _ in bounds if start]
     upper = [end for _, end in bounds if end]
     query: dict = {}
     if lower:
-        query["$gte"] = max(lower)
+        query["$gte"] = datetime.combine(max(lower), time.min)
     if upper:
-        query["$lte"] = min(upper)
+        query["$lte"] = datetime.combine(min(upper), time.min)
     return query
 
 
@@ -85,6 +90,15 @@ class BoardFilters:
         # optional: "everything since March" is as real a question as a range.
         date_from: date | None = None,
         date_to: date | None = None,
+        # The Details answer on the Update form's Remarks page - "Will attend"
+        # or "Will not attend" - or NO_REMARK for the entries with none yet.
+        details: str | None = None,
+        # The induction call date behind the board's Call Schedule filter,
+        # either end optional like the registration window. `scheduled=false`
+        # is "no call booked yet" instead, which a window can't say.
+        schedule_from: date | None = None,
+        schedule_to: date | None = None,
+        scheduled: bool | None = None,
     ) -> None:
         self.search = search
         self.section = section
@@ -98,6 +112,10 @@ class BoardFilters:
         self.foundation_group = foundation_group
         self.date_from = date_from
         self.date_to = date_to
+        self.details = details
+        self.schedule_from = schedule_from
+        self.schedule_to = schedule_to
+        self.scheduled = scheduled
 
     def query(self, *, scope: str | None) -> dict:
         """The stored-field filters, with a Section Admin's scope forced on.
@@ -133,6 +151,19 @@ class BoardFilters:
         window = _date_window((self.date_from, self.date_to))
         if window:
             filters["registration_date"] = window
+        if self.details:
+            filters["remarks.details"] = {"$in": [None, ""]} if self.details == NO_REMARK else self.details
+        # "Not scheduled" wins over a window sent with it: no entry can be both
+        # unbooked and booked inside a range, so combining them would only ever
+        # answer "nothing".
+        if self.scheduled is False:
+            filters["other_details.induction_call_date"] = {"$eq": None}
+        else:
+            schedule = _date_window((self.schedule_from, self.schedule_to))
+            if schedule:
+                filters["other_details.induction_call_date"] = schedule
+            elif self.scheduled:
+                filters["other_details.induction_call_date"] = {"$ne": None}
         return filters
 
 

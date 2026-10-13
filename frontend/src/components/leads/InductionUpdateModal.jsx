@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { inductionEntryService } from '@/services/inductionEntryService'
 import { getApiErrorMessage } from '@/services/apiClient'
+import { DETAILS_VALUES } from '@/constants/inductionDetails'
 
 const STEPS = [
   { key: 'qualification', label: 'Qualification', icon: GraduationCap },
@@ -125,6 +126,8 @@ export function InductionUpdateModal({ entry, onClose }) {
 
   const confidence = form.other_details.confidence
   const legacyConfidence = confidence && !CONFIDENCE_OPTIONS.includes(confidence) ? confidence : null
+  const details = form.remarks.details
+  const legacyDetails = details && !DETAILS_VALUES.includes(details) ? details : null
 
   return (
     <Modal title={`Update — ${entry.name}`} isOpen onClose={onClose} maxWidth="max-w-2xl">
@@ -203,12 +206,24 @@ export function InductionUpdateModal({ entry, onClose }) {
               value={form.remarks.requirements ?? ''}
               onChange={(e) => set('remarks', 'requirements', e.target.value)}
             />
-            <Textarea
+            {/* Shown on the board in its own column after the call remark,
+                and filterable there. */}
+            <Select
               label="Details"
-              rows={3}
               value={form.remarks.details ?? ''}
-              onChange={(e) => set('remarks', 'details', e.target.value)}
-            />
+              onChange={(e) => set('remarks', 'details', e.target.value || null)}
+            >
+              <option value="">Not recorded</option>
+              {DETAILS_VALUES.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+              {/* Free text typed before this was a choice. Carried for the
+                  same reason as the Confidence select's: dropped, the select
+                  would show blank and save it away as null. */}
+              {legacyDetails && <option value={legacyDetails}>{legacyDetails} (previously recorded)</option>}
+            </Select>
             <Textarea
               label="Doubts Clarified"
               rows={3}

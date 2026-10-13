@@ -1,5 +1,6 @@
 import { FilterShell, MenuOption } from '@/components/ui/FilterDropdown'
 import { formatDate } from '@/utils/formatters'
+import { PAST_PRESETS } from '@/utils/datePresets'
 
 // Local calendar day as YYYY-MM-DD. Deliberately not toISOString(), which
 // converts to UTC first and hands back yesterday for anyone east of Greenwich
@@ -8,40 +9,17 @@ function isoDay(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-function daysAgo(days) {
-  const date = new Date()
-  date.setDate(date.getDate() + days)
-  return date
-}
-
-// First and last day of the month `offset` months from this one. Day 0 of the
-// next month is the last day of this one, so February needs no special case.
-function month(offset) {
-  const now = new Date()
-  return [new Date(now.getFullYear(), now.getMonth() + offset, 1), new Date(now.getFullYear(), now.getMonth() + offset + 1, 0)]
-}
-
-// The ranges worth one click. Ranges are functions rather than values because
-// the board stays open across midnight on a long shift - "Today" has to mean
-// the day it is when you pick it, not the day the page was loaded.
-const PRESETS = [
-  { key: 'today', label: 'Today', range: () => [daysAgo(0), daysAgo(0)] },
-  { key: 'yesterday', label: 'Yesterday', range: () => [daysAgo(-1), daysAgo(-1)] },
-  { key: 'last_7', label: 'Last 7 days', range: () => [daysAgo(-6), daysAgo(0)] },
-  { key: 'this_month', label: 'This month', range: () => month(0) },
-  { key: 'last_month', label: 'Last month', range: () => month(-1) },
-]
-
-function rangeLabel({ from, to, preset }) {
-  const named = PRESETS.find((item) => item.key === preset)
+function rangeLabel({ from, to, preset }, presets) {
+  const named = presets.find((item) => item.key === preset)
   if (named) return named.label
   if (from && to) return `${formatDate(from)} – ${formatDate(to)}`
   return from ? `From ${formatDate(from)}` : `Until ${formatDate(to)}`
 }
 
 /**
- * Date filter for a board's filter row: five presets, or a From/To pair for
- * anything they don't cover. Distinct from DateRangeFilter, which is the
+ * Date filter for a board's filter row: a handful of presets - the past-facing
+ * ones unless `presets` passes others - or a From/To pair for anything
+ * they don't cover. Distinct from DateRangeFilter, which is the
  * plain two-input popover the Admin and Finance pages hang off a secondary
  * button - this one wears FilterShell's chrome so it belongs in a row of
  * filter dropdowns, and leads with the windows worth one click.
@@ -51,11 +29,17 @@ function rangeLabel({ from, to, preset }) {
  * question, and demanding both ends would make it two clicks in a calendar for
  * a bound nobody cares about.
  */
-export function DateFilter({ label = 'Date', value, onChange, grow = false }) {
+export function DateFilter({ label = 'Date', value, onChange, grow = false, presets = PAST_PRESETS }) {
   const from = value?.from ?? ''
   const to = value?.to ?? ''
 
+  // A preset with no range is a choice a window can't express - the
+  // schedule's "Not scheduled" - and is read back off `preset` alone.
   function choose(preset) {
+    if (!preset.range) {
+      onChange({ from: null, to: null, preset: preset.key })
+      return
+    }
     const [start, end] = preset.range()
     onChange({ from: isoDay(start), to: isoDay(end), preset: preset.key })
   }
@@ -70,7 +54,7 @@ export function DateFilter({ label = 'Date', value, onChange, grow = false }) {
   return (
     <FilterShell
       label={label}
-      activeLabel={value ? rangeLabel(value) : null}
+      activeLabel={value ? rangeLabel(value, presets) : null}
       onClear={() => onChange(null)}
       grow={grow}
       menuWidth={272}
@@ -78,7 +62,7 @@ export function DateFilter({ label = 'Date', value, onChange, grow = false }) {
       {({ close }) => (
         <>
           <MenuOption label={`All ${label}s`} isSelected={!value} onClick={() => { onChange(null); close() }} />
-          {PRESETS.map((preset) => (
+          {presets.map((preset) => (
             <MenuOption
               key={preset.key}
               label={preset.label}

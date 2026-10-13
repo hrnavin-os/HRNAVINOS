@@ -317,6 +317,10 @@ class InductionEntryService:
         distinct = {
             field: set() for field in ("sales_person", "lead_source", "payment_mode", "category", "call_remark")
         }
+        # The Remarks page's Details answer. "Will attend" or "Will not attend"
+        # now, but it was free text before that, and the entries answered then
+        # still need to be reachable from the filter.
+        details: set[str] = set()
         batches: set[int] = set()
         assignees: dict[str, str] = {}
 
@@ -325,6 +329,8 @@ class InductionEntryService:
                 value = getattr(entry, field)
                 if value:
                     distinct[field].add(value)
+            if entry.remarks.details:
+                details.add(entry.remarks.details)
             if entry.batch_number is not None:
                 batches.add(entry.batch_number)
             if entry.assigned_to:
@@ -336,6 +342,7 @@ class InductionEntryService:
 
         return {
             **{field: sorted(values) for field, values in distinct.items()},
+            "details": sorted(details),
             # Sorted as numbers, so "Batch-9" comes after "Batch-10".
             "batch": [batch_label(number) for number in sorted(batches, reverse=True)],
             "assigned_to": [{"value": key, "label": label} for key, label in sorted(assignees.items(), key=lambda kv: kv[1])],

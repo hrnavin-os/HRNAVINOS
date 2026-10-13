@@ -7,6 +7,7 @@ import { inductionFormConfigService } from '@/services/inductionFormConfigServic
 import { ArrowRightLeft, ClipboardList, Target, UserX } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { DateFilter } from '@/components/ui/DateFilter'
 import { DatePresetFilter } from '@/components/ui/DatePresetFilter'
 import { FilterDropdown } from '@/components/ui/FilterDropdown'
 import { SortOrderSelect } from '@/components/ui/SortOrderSelect'
@@ -26,10 +27,35 @@ import { PERMISSIONS } from '@/constants/permissions'
 import { LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
 import { FOUNDATION_GROUP_LABELS, FOUNDATION_GROUP_OPTIONS } from '@/constants/foundationGroups'
 import { REMARK_GROUPS } from '@/constants/inductionCallRemarks'
+import { DETAILS_OPTIONS, DETAILS_VALUES } from '@/constants/inductionDetails'
 import { formatDate, formatDateTime } from '@/utils/formatters'
+import { UPCOMING_PRESETS } from '@/utils/datePresets'
 
 const dash = <span className="text-slate-400">—</span>
 const orDash = (value) => value || dash
+
+// The Update form's Details answer - will they attend or not. Set from the
+// form rather than here, so the cell only reads it. A free-text answer from
+// before it was a choice prints as it was typed, clipped to the column.
+function DetailsCell({ value }) {
+  if (!value) return dash
+  const option = DETAILS_OPTIONS.find((item) => item.value === value)
+  if (option) return <Badge tone={option.tone}>{option.value}</Badge>
+  return (
+    <span className="block max-w-48 truncate text-slate-600" title={value}>
+      {value}
+    </span>
+  )
+}
+
+// Straight after the call remark: how the call went, then what the candidate
+// said they would do.
+const detailsColumn = {
+  key: 'details',
+  header: 'Details',
+  align: 'center',
+  render: (row) => <DetailsCell value={row.remarks?.details} />,
+}
 
 // The batch, with its last change written underneath - where the student came
 // from and the reason given when they were moved. On the row rather than in
@@ -273,6 +299,21 @@ function remarkFilterOptions(values, { includeBlank }) {
   ]
 }
 
+// The two answers first, then anything typed as free text before Details was
+// a choice, so those entries can still be found. "Not recorded" leads, as "No
+// remark" does on the remark filter, and sends the same sentinel.
+function detailsFilterOptions(values) {
+  const legacy = (values ?? []).filter((value) => !DETAILS_VALUES.includes(value))
+  return [
+    { value: NO_REMARK, label: 'Not recorded' },
+    ...[...DETAILS_VALUES, ...legacy].map((value) => ({ value, label: value })),
+  ]
+}
+
+// The Call Schedule filter's ranges: the upcoming ones, plus the entries with
+// no call booked at all - the list somebody works through to book them.
+const SCHEDULE_PRESETS = [...UPCOMING_PRESETS, { key: 'unscheduled', label: 'Not scheduled' }]
+
 const EMPTY_FILTERS = {
   batch: '',
   foundation_group: '',
@@ -281,6 +322,7 @@ const EMPTY_FILTERS = {
   payment_mode: '',
   category: '',
   call_remark: '',
+  details: '',
   assigned_to: '',
 }
 
@@ -293,6 +335,9 @@ export function InductionLeadsBoard() {
   // `filters` because it is one filter that sends two params, and folding it
   // in would make the "Clear (n)" count read one date range as two.
   const [dateRange, setDateRange] = useState(null)
+  // The induction call date, held apart from `filters` for the same reason:
+  // one filter, up to two params - or `scheduled=false` for "Not scheduled".
+  const [schedule, setSchedule] = useState(null)
   // Newest or oldest registration first. Not a filter - it hides nothing - so
   // it sits outside `filters` and survives clearing them.
   const [sortOrder, setSortOrder] = useState('desc')
@@ -332,6 +377,9 @@ export function InductionLeadsBoard() {
     ...(effectiveSection ? { section: effectiveSection } : {}),
     ...(dateRange?.from ? { date_from: dateRange.from } : {}),
     ...(dateRange?.to ? { date_to: dateRange.to } : {}),
+    ...(schedule?.preset === 'unscheduled' ? { scheduled: false } : {}),
+    ...(schedule?.from ? { schedule_from: schedule.from } : {}),
+    ...(schedule?.to ? { schedule_to: schedule.to } : {}),
     ...(search ? { search } : {}),
   }
 
@@ -464,28 +512,33 @@ export function InductionLeadsBoard() {
   }
 
   // Group sits with the batch it is read beside; category, then schedule, then
-  // remark follow in the order they get filled in: what kind of candidate this
-  // is, when the call is, then how it went.
+  // remark and details follow in the order they get filled in: what kind of
+  // candidate this is, when the call is, how it went, and whether they will
+  // attend.
   const pendingColumns = insertBefore(
     insertBefore(
       insertBefore(
         insertBefore(
           insertBefore(
             insertBefore(
-              // A Section Admin only ever sees their own section's entries, so
-              // every row would name them - a column of one repeated value.
-              scopedSection ? columns.filter((column) => column.key !== 'assigned_to') : columns,
-              'registration_date',
-              groupColumn,
+              insertBefore(
+                // A Section Admin only ever sees their own section's entries,
+                // so every row would name them - a column of one repeated value.
+                scopedSection ? columns.filter((column) => column.key !== 'assigned_to') : columns,
+                'registration_date',
+                groupColumn,
+              ),
+              'assigned_to',
+              categoryColumn,
             ),
             'assigned_to',
-            categoryColumn,
+            scheduleColumn,
           ),
           'assigned_to',
-          scheduleColumn,
+          remarkColumn,
         ),
         'assigned_to',
-        remarkColumn,
+        detailsColumn,
       ),
       'assigned_to',
       whatsappColumn,
@@ -500,9 +553,13 @@ export function InductionLeadsBoard() {
     insertBefore(
       insertBefore(
         insertBefore(
-          insertBefore(MOVED_COLUMNS, 'foundation_status', scheduleColumn),
+          insertBefore(
+            insertBefore(MOVED_COLUMNS, 'foundation_status', scheduleColumn),
+            'foundation_status',
+            remarkColumn,
+          ),
           'foundation_status',
-          remarkColumn,
+          detailsColumn,
         ),
         'foundation_status',
         whatsappColumn,
@@ -594,7 +651,10 @@ export function InductionLeadsBoard() {
                   each dropdown shows an X once it holds a value, and the date
                   filter's own "All" is the whole-range option. */}
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+            {/* Nine filters: one row only on a wide screen, where each still
+                fits "Payment Mode" untruncated, and an even 3x3 or 5+4 below
+                that rather than a lone straggler. */}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 min-[1700px]:grid-cols-9">
               <FilterDropdown
                 grow
                 label="Batch"
@@ -640,6 +700,15 @@ export function InductionLeadsBoard() {
                 options={asOptions(options.category)}
                 onChange={(value) => setFilter('category', value)}
               />
+              {/* The induction call date set in the Call Schedule column -
+                  today's and tomorrow's calls, or the ones not booked yet. */}
+              <DateFilter
+                grow
+                label="Call Schedule"
+                value={schedule}
+                onChange={setSchedule}
+                presets={SCHEDULE_PRESETS}
+              />
               {/* Wider menu than the rest: remarks run to sixty characters,
                   and the default width cuts the quit ones off mid-word. */}
               <FilterDropdown
@@ -653,6 +722,13 @@ export function InductionLeadsBoard() {
                 })}
                 onChange={(value) => setFilter('call_remark', value)}
                 menuWidth={380}
+              />
+              <FilterDropdown
+                grow
+                label="Details"
+                value={filters.details}
+                options={detailsFilterOptions(options.details)}
+                onChange={(value) => setFilter('details', value)}
               />
             </div>
           </div>
