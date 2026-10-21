@@ -87,6 +87,9 @@ class LeadStatus(StrEnum):
     NEW_LEAD = "new_lead"
     RNR = "rnr"
     PRE_SCREENING = "pre_screening"
+    # Paid some of the fee and owes the rest. Set by hand from the lead's
+    # Move to Stage; recording a payment never moves a lead here by itself.
+    PARTIALLY_PAID = "partially_paid"
     FINANCIAL_APPROVAL = "financial_approval"
     BATCH_CONFIRMATION = "batch_confirmation"
     LOST = "lost"

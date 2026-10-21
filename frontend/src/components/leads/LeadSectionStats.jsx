@@ -1,5 +1,6 @@
 import {
   CalendarCheck,
+  HandCoins,
   Layers,
   PhoneCall,
   PhoneMissed,
@@ -20,6 +21,7 @@ const STAGE_ICONS = {
   new_lead: Sparkles,
   rnr: PhoneMissed,
   pre_screening: PhoneCall,
+  partially_paid: HandCoins,
   financial_approval: Wallet,
   batch_confirmation: CalendarCheck,
   lost: XCircle,

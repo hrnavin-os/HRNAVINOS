@@ -12,7 +12,7 @@ from pymongo import UpdateOne
 
 from app.database.base import BaseDocument, utcnow
 from app.models.audit_log import AuditLog
-from app.models.enums import LeadStatus
+from app.models.enums import LeadStatus, PaymentEntryKind
 from app.models.induction_entry import InductionEntry
 from app.models.lead import Lead
 from app.models.permission import Permission
@@ -482,6 +482,52 @@ async def backfill_finance_approvals() -> int:
     return approved
 
 
+PARTIALLY_PAID_MIGRATION = "partially_paid_from_financial_approval"
+
+
+async def move_part_payers_to_partially_paid() -> int:
+    """Moves the leads waiting in Financial Approval that still owe money to
+    the new Partially Paid stage, once.
+
+    Before the stage existed a part-payment had nowhere else to go, so those
+    leads sat in Financial Approval. Owing money means the payment collection
+    still has a balance on it - payment_ledger.py - which is why this runs
+    after the ledger backfill. Each move is written to the lead's timeline as
+    a move back, with the reason, so nobody finds a lead in a different stage
+    with no idea why. Once, recorded in `migrations`: after that the stage is
+    set by hand like any other.
+    """
+    collection = Lead.get_motor_collection()
+    migrations = collection.database["migrations"]
+    if await migrations.find_one({"_id": PARTIALLY_PAID_MIGRATION}):
+        return 0
+    match = {
+        "status": LeadStatus.FINANCIAL_APPROVAL.value,
+        "installments": {"$elemMatch": {"kind": PaymentEntryKind.BALANCE.value}},
+    }
+    ids = [row["_id"] async for row in collection.find(match, {"_id": 1})]
+    moved = 0
+    if ids:
+        result = await collection.update_many(
+            {"_id": {"$in": ids}, **match},
+            {"$set": {"status": LeadStatus.PARTIALLY_PAID.value, "updated_at": utcnow()}},
+        )
+        moved = result.modified_count
+        for lead_id in ids:
+            await AuditLog(
+                action="STAGE_BACK",
+                entity_type="Lead",
+                entity_id=str(lead_id),
+                changes={
+                    "status": LeadStatus.PARTIALLY_PAID.value,
+                    "previous_status": LeadStatus.FINANCIAL_APPROVAL.value,
+                    "reason": "Moved to the new Partially Paid stage - part of the fee is still due.",
+                },
+            ).insert()
+    await migrations.insert_one({"_id": PARTIALLY_PAID_MIGRATION, "applied_at": utcnow()})
+    return moved
+
+
 async def run_startup_backfills() -> None:
     approved = await backfill_finance_approvals()
     if approved:
@@ -489,6 +535,10 @@ async def run_startup_backfills() -> None:
     updated = await backfill_payment_ledger()
     if updated:
         logger.info("Converted the payment collection on %d leads.", updated)
+    # After the ledger: it reads the balance the ledger backfill writes.
+    moved = await move_part_payers_to_partially_paid()
+    if moved:
+        logger.info("Moved %d part-paid leads from Financial Approval to Partially Paid.", moved)
     for model in (Lead, InductionEntry):
         updated = await backfill_phone_normalized(model)
         if updated:

@@ -90,6 +90,8 @@ const STAGE_CELL_STYLES = {
   new_lead: 'bg-blue-600 text-white',
   rnr: 'bg-red-600 text-white',
   pre_screening: 'bg-yellow-700 text-white',
+  // cyan-700: 5.4:1 against white, with the rest.
+  partially_paid: 'bg-cyan-700 text-white',
   financial_approval: 'bg-purple-600 text-white',
   batch_confirmation: 'bg-green-700 text-white',
   lost: 'bg-orange-700 text-white',

@@ -52,13 +52,13 @@ import { DateTimePicker, isFutureDateTime } from '@/components/ui/DateTimePicker
 import { Calendar } from '@/components/ui/DatePresetFilter'
 
 // Any stage is reachable from any other, either way round (a move back asks
-// why). The one gate is money: Financial Approval and Batch Confirmation both
-// mean a payment has landed, so neither opens until the first one is on
-// record. Mirrors the backend's LeadService._validate_stage_transition so a
-// blocked button explains itself up front instead of failing the request
+// why). The one gate is money: Partially Paid, Financial Approval and Batch
+// Confirmation all mean a payment has landed, so none opens until the first
+// one is on record. Mirrors the backend's LeadService._validate_stage_transition
+// so a blocked button explains itself up front instead of failing the request
 // after the click.
 // Returns the reason a move is blocked, or null when it's allowed.
-const PAID_STAGES = ['financial_approval', 'batch_confirmation']
+const PAID_STAGES = ['partially_paid', 'financial_approval', 'batch_confirmation']
 
 function stageBlockReason(lead, targetStatus) {
   if (lead.status === targetStatus) return null
@@ -78,6 +78,7 @@ const STAGE_ACTIVE_TONES = {
   blue: 'border-blue-600 bg-blue-600 text-white',
   red: 'border-red-600 bg-red-600 text-white',
   amber: 'border-amber-500 bg-amber-500 text-white',
+  cyan: 'border-cyan-700 bg-cyan-700 text-white',
   violet: 'border-violet-600 bg-violet-600 text-white',
   emerald: 'border-emerald-600 bg-emerald-600 text-white',
   slate: 'border-slate-600 bg-slate-600 text-white',
@@ -110,7 +111,7 @@ const ACTION_TONES = {
 // the exit rather than a step (it asks its own question). Mirrors
 // LeadService._STAGE_ORDER on the backend, which refuses a move back with no
 // reason.
-const STAGE_ORDER = ['new_lead', 'rnr', 'pre_screening', 'financial_approval', 'batch_confirmation']
+const STAGE_ORDER = ['new_lead', 'rnr', 'pre_screening', 'partially_paid', 'financial_approval', 'batch_confirmation']
 
 function isStageReversal(current, target) {
   const from = STAGE_ORDER.indexOf(current)

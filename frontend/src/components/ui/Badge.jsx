@@ -2,7 +2,7 @@
 // Against a white row a pastel fill alone has almost no edge, and a column of
 // them reads as smudges; the ring is what makes each one a discrete token at
 // a glance. Text sits at 700 and the ring at 200 - measured so the label
-// clears 4.5:1 on its own fill in all nine tones.
+// clears 4.5:1 on its own fill in all ten tones.
 const TONES = {
   slate: 'bg-slate-100 text-slate-700 ring-slate-200',
   green: 'bg-green-50 text-green-700 ring-green-200',
@@ -13,6 +13,8 @@ const TONES = {
   teal: 'bg-teal-50 text-teal-700 ring-teal-200',
   pink: 'bg-pink-50 text-pink-700 ring-pink-200',
   emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  // The Partially Paid stage's - StatCard already had it.
+  cyan: 'bg-cyan-50 text-cyan-700 ring-cyan-200',
 }
 
 const OUTLINE_TONES = {
@@ -25,6 +27,8 @@ const OUTLINE_TONES = {
   teal: 'text-teal-600 ring-teal-300',
   pink: 'text-pink-600 ring-pink-300',
   emerald: 'text-emerald-600 ring-emerald-300',
+  // 700 rather than 600: cyan-600 on white is too light to read.
+  cyan: 'text-cyan-700 ring-cyan-300',
 }
 
 // whitespace-nowrap because a badge is one atomic label - letting a

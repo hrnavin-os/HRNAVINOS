@@ -118,6 +118,7 @@ const STAGE_BADGE = {
   new_lead: 'bg-blue-50 text-blue-700 ring-blue-200',
   rnr: 'bg-red-50 text-red-700 ring-red-200',
   pre_screening: 'bg-amber-50 text-amber-800 ring-amber-200',
+  partially_paid: 'bg-cyan-50 text-cyan-700 ring-cyan-200',
   financial_approval: 'bg-violet-50 text-violet-700 ring-violet-200',
   batch_confirmation: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   lost: 'bg-slate-100 text-slate-600 ring-slate-200',

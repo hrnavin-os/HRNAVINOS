@@ -30,7 +30,7 @@ async def test_insights_on_an_empty_institute(client, auth_headers):
     body = response.json()
     assert body["kpis"]["foundation"]["total"] == 0
     assert [row["status"] for row in body["pipeline"]] == [
-        "new_lead", "rnr", "pre_screening", "financial_approval", "batch_confirmation", "lost",
+        "new_lead", "rnr", "pre_screening", "partially_paid", "financial_approval", "batch_confirmation", "lost",
     ]
     # Every day of the window, including the quiet ones.
     assert len(body["trend"]) == 30

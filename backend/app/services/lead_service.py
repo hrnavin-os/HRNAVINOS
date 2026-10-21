@@ -828,9 +828,10 @@ class LeadService:
         """
         return [program.name for program in await self.programs.list_active()]
 
-    # The stages that mean Finance has seen money, so a lead can't enter one
-    # until a payment is on record.
+    # The stages that mean money has come in, so a lead can't enter one until
+    # a payment is on record.
     _PAID_STAGES = {
+        LeadStatus.PARTIALLY_PAID: "Partially Paid",
         LeadStatus.FINANCIAL_APPROVAL: "Financial Approval",
         LeadStatus.BATCH_CONFIRMATION: "Batch Confirmation",
     }
@@ -838,8 +839,8 @@ class LeadService:
     def _validate_stage_transition(self, lead: Lead, new: LeadStatus) -> None:
         """A lead can move to any stage from any other, in either direction -
         a move back still has to say why (see `update`). The one gate left is
-        money: Financial Approval and Batch Confirmation can't be entered until
-        the first payment is on record.
+        money: Partially Paid, Financial Approval and Batch Confirmation can't
+        be entered until the first payment is on record.
 
         There used to be an order as well (Financial Approval only from Follow
         up call, Batch Confirmation only from Financial Approval, and no way
@@ -981,6 +982,7 @@ class LeadService:
         LeadStatus.NEW_LEAD,
         LeadStatus.RNR,
         LeadStatus.PRE_SCREENING,
+        LeadStatus.PARTIALLY_PAID,
         LeadStatus.FINANCIAL_APPROVAL,
         LeadStatus.BATCH_CONFIRMATION,
     ]
@@ -1715,12 +1717,14 @@ class LeadService:
         would mean the feature silently did nothing for exactly the leads it
         exists for.
 
-        Two cases are left alone: a lead already at this stage (nothing to do)
-        and a Lost one, so acknowledging a stale reminder can't quietly pull a
-        written-off lead back into the pipeline.
+        Three cases are left alone: a lead already at this stage (nothing to
+        do), a Lost one, so acknowledging a stale reminder can't quietly pull a
+        written-off lead back into the pipeline, and a Partially Paid one -
+        that stage already means "call them for the rest", and moving it would
+        take the student off the list of part-payers it exists to keep.
         """
         lead = await self.get(lead_id)
-        if lead.status in (LeadStatus.PRE_SCREENING, LeadStatus.LOST):
+        if lead.status in (LeadStatus.PRE_SCREENING, LeadStatus.PARTIALLY_PAID, LeadStatus.LOST):
             return lead
 
         previous = lead.status

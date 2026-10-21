@@ -37,6 +37,7 @@ PIPELINE = [
     LeadStatus.NEW_LEAD,
     LeadStatus.RNR,
     LeadStatus.PRE_SCREENING,
+    LeadStatus.PARTIALLY_PAID,
     LeadStatus.FINANCIAL_APPROVAL,
     LeadStatus.BATCH_CONFIRMATION,
     LeadStatus.LOST,

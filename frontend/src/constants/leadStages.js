@@ -4,6 +4,9 @@ export const LEAD_STAGES = [
   { value: 'new_lead', label: 'New Lead', tone: 'blue' },
   { value: 'rnr', label: 'RNR', tone: 'red' },
   { value: 'pre_screening', label: 'Follow up call', tone: 'amber' },
+  // Paid some of the fee, owes the rest. Moved to by hand, once a payment is
+  // on record - see LeadService._PAID_STAGES.
+  { value: 'partially_paid', label: 'Partially Paid', tone: 'cyan' },
   { value: 'financial_approval', label: 'Financial Approval', tone: 'violet' },
   { value: 'batch_confirmation', label: 'Batch Confirmation', tone: 'emerald' },
   { value: 'lost', label: 'Quit', tone: 'slate' },
