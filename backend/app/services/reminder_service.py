@@ -36,7 +36,7 @@ from datetime import date, datetime, timezone
 from pymongo.errors import DuplicateKeyError
 
 from app.database.base import utcnow
-from app.models.enums import NotificationCategory, NotificationType
+from app.models.enums import NotificationCategory, NotificationType, PaymentEntryKind
 from app.models.lead import Lead
 from app.models.notification import Notification
 from app.models.user import User
@@ -181,12 +181,18 @@ class ReminderService:
                 due = installment.scheduled_at.isoformat()
                 # A part-paid installment's date is when the rest was promised.
                 collected = installment.collected()
-                message = (
-                    f"{lead.name} paid ₹{collected:,.0f} of their {label}; the balance of "
-                    f"₹{installment.amount - collected:,.0f} was due on {due} and is still unpaid."
-                    if collected and installment.amount
-                    else f"{lead.name}'s {label} was scheduled for {due} and is still unpaid."
-                )
+                if installment.kind == PaymentEntryKind.BALANCE:
+                    message = (
+                        f"{lead.name} promised the remaining ₹{installment.amount or 0:,.0f} "
+                        f"for {due} and it is still unpaid."
+                    )
+                elif collected and installment.amount:
+                    message = (
+                        f"{lead.name} paid ₹{collected:,.0f} of their {label}; the balance of "
+                        f"₹{installment.amount - collected:,.0f} was due on {due} and is still unpaid."
+                    )
+                else:
+                    message = f"{lead.name}'s {label} was scheduled for {due} and is still unpaid."
                 for user in recipients:
                     created += await self._raise(
                         user_id=user.id,

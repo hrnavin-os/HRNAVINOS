@@ -12,10 +12,13 @@ so they always reflect whatever an admin has configured - shared by
 Foundation Form submissions and manually assigning a plan to a CRM-created
 lead, so amounts always match the course the student picked either way.
 """
+from decimal import Decimal
+
 from app.exceptions.base import BadRequestError
 from app.models.enums import PaymentPlanOption, ProgramInterest
 from app.models.foundation_form_config import FoundationFormCategory, FoundationFormConfig, FoundationFormPlan
 from app.models.lead import PaymentInstallment
+from app.services.payment_ledger import opening_ledger
 
 # Seed data only. Programs are now rows in the `programs` collection, created
 # from these two dicts by scripts/seed_db.py so the four original programs keep
@@ -145,12 +148,19 @@ def get_plan_details(config: FoundationFormConfig, category_code: str, payment_p
     return plan
 
 
+def plan_fee(config: FoundationFormConfig, category_code: str, payment_plan: PaymentPlanOption) -> Decimal:
+    """What the plan costs in all - its installment amounts added up."""
+    plan = get_plan_details(config, category_code, payment_plan)
+    return sum((Decimal(amount) for amount in plan.amounts), Decimal(0))
+
+
 def build_installments(
     config: FoundationFormConfig, category_code: str, payment_plan: PaymentPlanOption
 ) -> list[PaymentInstallment]:
-    plan = get_plan_details(config, category_code, payment_plan)
-    labels = INSTALLMENT_LABELS[payment_plan]
-    return [PaymentInstallment(label=label, amount=amount) for label, amount in zip(labels, plan.amounts)]
+    """The payment collection a freshly chosen plan starts from: the whole fee
+    due, nothing received. The plan prices the fee; payments are recorded as
+    they come in rather than against a fixed slot each - see payment_ledger."""
+    return opening_ledger(plan_fee(config, category_code, payment_plan))
 
 
 def build_payment_expected_summary(config: FoundationFormConfig, category_code: str, payment_plan: str) -> str:

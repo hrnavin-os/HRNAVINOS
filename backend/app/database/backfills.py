@@ -23,6 +23,7 @@ from app.permissions.role_definitions import (
     RETIRED_ADMIN_ROLE,
     ROLE_SCOPED_SECTION,
 )
+from app.services.payment_ledger import to_ledger
 from app.utils.phone import normalize_phone
 
 logger = logging.getLogger(__name__)
@@ -371,7 +372,49 @@ async def grant_finance_tab_to_admin() -> int:
     return granted
 
 
+async def backfill_payment_ledger() -> int:
+    """Turns every lead's old per-plan slots (Week 1..6, Payment 1/2) into the
+    free-form payment collection - see app/services/payment_ledger.py.
+
+    The money recorded on them is kept as payments and what they still owed
+    becomes the balance, so no total, due amount or due date changes. The
+    original slots are copied to `lead_installments_backup` first: a slot with
+    details typed in but no money recorded has no place in the new shape, and
+    if anybody needs what was on it, it is there.
+
+    Only touches leads that still have an old slot, so every boot after the
+    first matches nothing. One lead failing is logged and skipped rather than
+    stopping the app from starting.
+    """
+    collection = Lead.get_motor_collection()
+    backups = collection.database["lead_installments_backup"]
+    rows = await collection.find(
+        {"installments": {"$elemMatch": {"kind": None}}}, {"_id": 1, "installments": 1}
+    ).to_list(length=None)
+    converted = 0
+    for row in rows:
+        try:
+            # $setOnInsert: the first copy is the original, whatever happens after.
+            await backups.update_one(
+                {"_id": row["_id"]},
+                {"$setOnInsert": {"installments": row["installments"], "backed_up_at": utcnow()}},
+                upsert=True,
+            )
+            lead = await Lead.find_one({"_id": row["_id"]})
+            if lead is None:
+                continue
+            lead.installments = to_ledger(lead.installments)
+            await lead.save()
+            converted += 1
+        except Exception:
+            logger.exception("Couldn't convert the payment collection on lead %s.", row["_id"])
+    return converted
+
+
 async def run_startup_backfills() -> None:
+    updated = await backfill_payment_ledger()
+    if updated:
+        logger.info("Converted the payment collection on %d leads.", updated)
     for model in (Lead, InductionEntry):
         updated = await backfill_phone_normalized(model)
         if updated:

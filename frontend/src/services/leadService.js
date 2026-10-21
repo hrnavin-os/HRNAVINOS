@@ -99,32 +99,40 @@ export const leadService = {
     })
     return data
   },
-  updateInstallment: async (
+  // Money received against the lead's fee. `index` null records a new token or
+  // payment (`kind`); a number corrects the one already at that index.
+  recordPayment: async (
     id,
     index,
-    { file, files, removeProofUrls, remarks, amount, receivedAmount, mode, qrCode, transactionId, upiId, scheduledAt },
+    { kind, files, removeProofUrls, remarks, receivedAmount, mode, qrCode, transactionId, upiId, balanceDueAt },
   ) => {
     const formData = new FormData()
-    if (file) formData.append('file', file)
+    if (index === null) formData.append('kind', kind)
     for (const picked of files ?? []) formData.append('files', picked)
     for (const url of removeProofUrls ?? []) formData.append('remove_proof_urls', url)
     // An empty form field reads as "not sent" on the server, so clearing the
     // remark is said explicitly.
     if (remarks !== undefined) {
       if (remarks.trim()) formData.append('remarks', remarks.trim())
-      else formData.append('clear_remarks', 'true')
+      else if (index !== null) formData.append('clear_remarks', 'true')
     }
-    if (amount !== undefined && amount !== null && amount !== '') formData.append('amount', amount)
     if (receivedAmount !== undefined && receivedAmount !== null && receivedAmount !== '') {
       formData.append('received_amount', receivedAmount)
     }
     if (mode) formData.append('mode', mode)
     if (qrCode?.trim()) formData.append('qr_code', qrCode.trim())
-    if (transactionId) formData.append('transaction_id', transactionId)
-    if (upiId) formData.append('upi_id', upiId)
-    if (scheduledAt) formData.append('scheduled_at', scheduledAt)
-    const { data } = await apiClient.post(`/leads/${id}/installments/${index}`, formData, {
-      headers: { 'Content-Type': undefined },
+    if (transactionId?.trim()) formData.append('transaction_id', transactionId.trim())
+    if (upiId?.trim()) formData.append('upi_id', upiId.trim())
+    if (balanceDueAt) formData.append('balance_due_at', balanceDueAt)
+    const url = index === null ? `/leads/${id}/payments` : `/leads/${id}/payments/${index}`
+    const { data } = await apiClient.post(url, formData, { headers: { 'Content-Type': undefined } })
+    return data
+  },
+  // When the rest of the fee will be paid, and the remark that goes with it.
+  updateBalance: async (id, { dueAt, remarks }) => {
+    const { data } = await apiClient.put(`/leads/${id}/balance`, {
+      due_at: dueAt || null,
+      remarks: remarks?.trim() || null,
     })
     return data
   },

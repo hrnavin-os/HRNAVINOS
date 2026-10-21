@@ -11,6 +11,7 @@ from app.exceptions.base import BadRequestError
 from app.models.enums import (
     InstallmentPaymentMode,
     LeadSource,
+    PaymentEntryKind,
     PaymentMethod,
     PaymentPlanOption,
 )
@@ -21,6 +22,7 @@ from app.schemas.induction_entry_schema import InductionEntryResponse
 from app.schemas.lead_schema import (
     LeadAnalyticsResponse,
     LeadAssign,
+    LeadBalanceUpdate,
     LeadCreate,
     LeadPlanAssign,
     LeadRejoin,
@@ -418,61 +420,139 @@ async def assign_lead_plan(
     return await service.to_response(lead)
 
 
-@router.post("/{lead_id}/installments/{index}", response_model=LeadResponse)
-async def update_installment(
+def _parse_received(received_amount: str | None) -> Decimal | None:
+    if not received_amount:
+        return None
+    try:
+        return Decimal(received_amount)
+    except InvalidOperation as exc:
+        raise BadRequestError("Amount received must be a valid number.") from exc
+
+
+# A new payment or token, and a correction to one already recorded, share one
+# form - the lead's payment collection, where the plan prices the fee and the
+# money is recorded as it comes in. See LeadService.record_payment.
+async def _record_payment(
     lead_id: uuid.UUID,
-    index: int,
-    file: UploadFile | None = File(default=None),
-    amount: str | None = Form(default=None),
-    # What was actually collected - can be less than the fee, leaving a balance.
+    index: int | None,
+    *,
+    kind: PaymentEntryKind,
+    received_amount: str | None,
+    mode: InstallmentPaymentMode | None,
+    qr_code: str | None,
+    transaction_id: str | None,
+    upi_id: str | None,
+    files: list[UploadFile] | None,
+    remove_proof_urls: list[str] | None,
+    remarks: str | None,
+    clear_remarks: bool,
+    balance_due_at: date | None,
+    actor: User,
+) -> LeadResponse:
+    service = LeadService()
+    scope = await get_actor_scope(actor)
+    lead = await service.record_payment(
+        lead_id,
+        index=index,
+        kind=kind,
+        received_amount=_parse_received(received_amount),
+        mode=mode,
+        qr_code=qr_code,
+        transaction_id=transaction_id,
+        upi_id=upi_id,
+        files=files,
+        remove_proof_urls=remove_proof_urls,
+        remarks=remarks,
+        clear_remarks=clear_remarks,
+        balance_due_at=balance_due_at,
+        actor_id=actor.id,
+        scope=scope,
+    )
+    return await service.to_response(lead)
+
+
+@router.post("/{lead_id}/payments", response_model=LeadResponse)
+async def add_lead_payment(
+    lead_id: uuid.UUID,
+    # A token (optional, up front) or a payment.
+    kind: PaymentEntryKind = Form(default=PaymentEntryKind.PAYMENT),
     received_amount: str | None = Form(default=None),
     mode: InstallmentPaymentMode | None = Form(default=None),
     # The QR code / account the money went into.
     qr_code: str | None = Form(default=None, max_length=100),
-    transaction_id: str | None = Form(default=None),
-    upi_id: str | None = Form(default=None),
-    scheduled_at: date | None = Form(default=None),
-    # Several proof images at once, added to what is already on file.
+    transaction_id: str | None = Form(default=None, max_length=100),
+    upi_id: str | None = Form(default=None, max_length=100),
+    # Several proof images at once.
+    files: list[UploadFile] | None = File(default=None),
+    remarks: str | None = Form(default=None, max_length=1000),
+    # When the rest will be paid, if this leaves some due and no date is set yet.
+    balance_due_at: date | None = Form(default=None),
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
+) -> LeadResponse:
+    return await _record_payment(
+        lead_id,
+        None,
+        kind=kind,
+        received_amount=received_amount,
+        mode=mode,
+        qr_code=qr_code,
+        transaction_id=transaction_id,
+        upi_id=upi_id,
+        files=files,
+        remove_proof_urls=None,
+        remarks=remarks,
+        clear_remarks=False,
+        balance_due_at=balance_due_at,
+        actor=actor,
+    )
+
+
+@router.post("/{lead_id}/payments/{index}", response_model=LeadResponse)
+async def update_lead_payment(
+    lead_id: uuid.UUID,
+    index: int,
+    received_amount: str | None = Form(default=None),
+    mode: InstallmentPaymentMode | None = Form(default=None),
+    qr_code: str | None = Form(default=None, max_length=100),
+    transaction_id: str | None = Form(default=None, max_length=100),
+    upi_id: str | None = Form(default=None, max_length=100),
+    # Added to what is already on file.
     files: list[UploadFile] | None = File(default=None),
     remove_proof_urls: list[str] | None = Form(default=None),
     remarks: str | None = Form(default=None, max_length=1000),
     # An empty form field arrives as "not sent", so clearing is its own flag.
     clear_remarks: bool = Form(default=False),
+    balance_due_at: date | None = Form(default=None),
     actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
 ) -> LeadResponse:
-    parsed_amount: Decimal | None = None
-    if amount:
-        try:
-            parsed_amount = Decimal(amount)
-        except InvalidOperation as exc:
-            raise BadRequestError("Amount must be a valid number.") from exc
-    parsed_received: Decimal | None = None
-    if received_amount:
-        try:
-            parsed_received = Decimal(received_amount)
-        except InvalidOperation as exc:
-            raise BadRequestError("Amount received must be a valid number.") from exc
-
-    service = LeadService()
-    scope = await get_actor_scope(actor)
-    lead = await service.update_installment(
+    return await _record_payment(
         lead_id,
         index,
-        file=file,
-        amount=parsed_amount,
-        received_amount=parsed_received,
-        qr_code=qr_code,
+        # Ignored for an existing entry, which keeps the kind it has.
+        kind=PaymentEntryKind.PAYMENT,
+        received_amount=received_amount,
         mode=mode,
+        qr_code=qr_code,
         transaction_id=transaction_id,
         upi_id=upi_id,
-        scheduled_at=scheduled_at,
-        actor_id=actor.id,
-        scope=scope,
         files=files,
         remove_proof_urls=remove_proof_urls,
         remarks=remarks,
         clear_remarks=clear_remarks,
+        balance_due_at=balance_due_at,
+        actor=actor,
     )
+
+
+@router.put("/{lead_id}/balance", response_model=LeadResponse)
+async def update_lead_balance(
+    lead_id: uuid.UUID,
+    payload: LeadBalanceUpdate,
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
+) -> LeadResponse:
+    service = LeadService()
+    scope = await get_actor_scope(actor)
+    lead = await service.update_balance(lead_id, payload, actor_id=actor.id, scope=scope)
     return await service.to_response(lead)
 
 

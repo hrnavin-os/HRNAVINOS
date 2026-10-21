@@ -33,12 +33,16 @@ import { Badge } from '@/components/ui/Badge'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
-import { INSTALLMENT_MODE_OPTIONS, PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
+import {
+  INSTALLMENT_MODE_LABELS,
+  INSTALLMENT_MODE_OPTIONS,
+  PAYMENT_PLAN_LABELS,
+} from '@/constants/installmentPaymentModes'
 import { PAYMENT_PLAN_TONES, QR_CODE_OPTIONS } from '@/constants/paymentOptions'
 import { leadService } from '@/services/leadService'
 import { foundationFormService } from '@/services/foundationFormService'
 import { PaymentDetailContent } from '@/components/payments/PaymentDetailModal'
-import { getInstallmentCollected, hasFirstPayment } from '@/utils/leadPayment'
+import { getPaymentLedger, hasFirstPayment } from '@/utils/leadPayment'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { formatCurrency, formatDate, formatDateTime, titleCase } from '@/utils/formatters'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
@@ -384,8 +388,8 @@ function PlanAssignmentForm({ onAssign, isAssigning, error }) {
   )
 }
 
-// One payment proof in the installment form: a square thumbnail that opens
-// the full image, with a corner button to take it off.
+// One payment proof: a square thumbnail that opens the full image, with a
+// corner button to take it off while the payment is being edited.
 function ProofThumb({ href, title, isNew = false, onRemove }) {
   return (
     <div className="relative">
@@ -396,14 +400,16 @@ function ProofThumb({ href, title, isNew = false, onRemove }) {
           className={`h-14 w-14 rounded-md border object-cover ${isNew ? 'border-brand-300' : 'border-slate-200'}`}
         />
       </a>
-      <button
-        type="button"
-        onClick={onRemove}
-        aria-label="Remove proof"
-        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm hover:text-red-600"
-      >
-        <X className="h-3 w-3" strokeWidth={2.5} aria-hidden="true" />
-      </button>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="Remove proof"
+          className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm hover:text-red-600"
+        >
+          <X className="h-3 w-3" strokeWidth={2.5} aria-hidden="true" />
+        </button>
+      )}
     </div>
   )
 }
@@ -431,32 +437,49 @@ function useQrCodeOptions(current) {
   return names
 }
 
-function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved = false }) {
-  const isTwoShotSecond = lead.payment_plan === 'two_shot' && index === 1
-  const [showPaidFields, setShowPaidFields] = useState(!isTwoShotSecond || installment.paid || Boolean(installment.mode))
+const asAmount = (value) => (value === '' || value === null || value === undefined ? 0 : Number(value))
+
+// One token or payment. A form while it is being recorded or corrected, and a
+// one-glance summary once saved: six full forms for six payments pushed the
+// balance off the bottom of the popup, and a saved payment is read far more
+// often than it is corrected.
+function PaymentCard({
+  kind,
+  title,
+  number,
+  entry,
+  due,
+  balanceDueAt,
+  onSave,
+  onRemove,
+  isSaving,
+  justSaved = false,
+  error,
+}) {
+  const isDraft = !entry
+  const isToken = kind === 'token'
+  const [editing, setEditing] = useState(isDraft)
   // New images picked but not yet saved, and saved ones marked for removal.
   const [files, setFiles] = useState([])
   const [removed, setRemoved] = useState([])
-  const [remarks, setRemarks] = useState(installment.remarks ?? '')
-  // What came in, not the fee: the fee is the program's and stays fixed, and a
-  // student can pay part of it now. Starts at the fee because paying in full
-  // is still the usual case.
-  const [received, setReceived] = useState(installment.received_amount ?? installment.amount ?? '')
-  const [mode, setMode] = useState(installment.mode ?? '')
-  // The account the money went into. Falls back to the lead's own QR code,
-  // which is where it was kept before it moved in here from the board.
-  const [qrCode, setQrCode] = useState(installment.qr_code ?? lead.qr_code ?? '')
+  const [remarks, setRemarks] = useState(entry?.remarks ?? '')
+  // What came in. Left empty on a new one rather than filled with the due
+  // amount: this is money, and a figure nobody typed is one nobody checked.
+  const [received, setReceived] = useState(entry?.received_amount ?? entry?.amount ?? '')
+  const [mode, setMode] = useState(entry?.mode ?? '')
+  // The account the money went into.
+  const [qrCode, setQrCode] = useState(entry?.qr_code ?? '')
   const [isAddingQr, setIsAddingQr] = useState(false)
   const qrOptions = useQrCodeOptions(qrCode)
-  const [transactionId, setTransactionId] = useState(installment.transaction_id ?? '')
-  const [upiId, setUpiId] = useState(installment.upi_id ?? '')
-  const [scheduledAt, setScheduledAt] = useState(installment.scheduled_at ?? '')
+  const [transactionId, setTransactionId] = useState(entry?.transaction_id ?? '')
+  const [upiId, setUpiId] = useState(entry?.upi_id ?? '')
+  const [balanceDate, setBalanceDate] = useState('')
   const [validationError, setValidationError] = useState(null)
   const fileInputRef = useRef(null)
 
-  // Installments saved before several proofs were possible carry only the
-  // single `proof_url`.
-  const storedKey = (installment.proof_urls?.length ? installment.proof_urls : [installment.proof_url])
+  // Entries saved before several proofs were possible carry only the single
+  // `proof_url`.
+  const storedKey = (entry?.proof_urls?.length ? entry.proof_urls : [entry?.proof_url])
     .filter(Boolean)
     .join('|')
   const stored = useMemo(() => (storedKey ? storedKey.split('|') : []), [storedKey])
@@ -469,36 +492,56 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
     setRemoved([])
   }, [storedKey])
 
+  // A correction that saved folds back to its summary.
+  useEffect(() => {
+    if (justSaved && !isDraft) setEditing(false)
+  }, [justSaved, isDraft])
+
   const filePreviews = useMemo(() => files.map((picked) => URL.createObjectURL(picked)), [files])
   // Every createObjectURL pins its blob in memory until it's revoked.
   useEffect(() => () => filePreviews.forEach((url) => URL.revokeObjectURL(url)), [filePreviews])
 
-  function handleSaveSchedule() {
-    if (!scheduledAt) {
-      setValidationError('Please pick a scheduled date before saving.')
-      return
-    }
+  // What this card can take: everything owed, plus what it already holds if it
+  // is a correction. Whatever it leaves is the balance.
+  const available = due + asAmount(entry?.amount)
+  const remaining = available - asAmount(received)
+  const needsBalanceDate = remaining > 0 && !balanceDueAt
+  const hasProof = Boolean(files.length || kept.length)
+
+  function cancelEdit() {
+    setRemarks(entry.remarks ?? '')
+    setReceived(entry.received_amount ?? entry.amount ?? '')
+    setMode(entry.mode ?? '')
+    setQrCode(entry.qr_code ?? '')
+    setIsAddingQr(false)
+    setTransactionId(entry.transaction_id ?? '')
+    setUpiId(entry.upi_id ?? '')
+    setFiles([])
+    setRemoved([])
     setValidationError(null)
-    onSave(index, { scheduledAt })
+    setEditing(false)
   }
 
-  const fee = Number(installment.amount ?? 0)
-  // Anything short of the fee stays due, on a date the student promised.
-  const balance = received !== '' && Number(received) > 0 ? Math.max(fee - Number(received), 0) : 0
-  const isPartPaid = !installment.paid && getInstallmentCollected(installment) > 0
-
-  function handleSavePayment() {
-    // The transaction / UPI id and the remarks are optional.
-    if (!received || Number(received) <= 0 || !mode || (!files.length && !kept.length)) {
-      setValidationError('Please fill in the amount received, mode, and at least one payment proof before saving.')
+  function handleSave() {
+    if (!received || Number(received) <= 0 || !mode) {
+      setValidationError('Fill in the amount received and the payment mode before saving.')
       return
     }
-    if (balance > 0 && !scheduledAt) {
-      setValidationError('Pick the date the balance amount will be paid.')
+    // The token is optional money up front, so its proof can follow later.
+    if (!isToken && !hasProof) {
+      setValidationError('Add at least one payment proof before saving.')
+      return
+    }
+    if (remaining < 0) {
+      setValidationError(`That is more than the ${formatCurrency(available)} still due.`)
+      return
+    }
+    if (needsBalanceDate && !balanceDate) {
+      setValidationError(`Pick the date the remaining ${formatCurrency(remaining)} will be paid.`)
       return
     }
     setValidationError(null)
-    onSave(index, {
+    onSave({
       files,
       removeProofUrls: removed,
       remarks,
@@ -507,74 +550,79 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
       qrCode,
       transactionId,
       upiId,
-      scheduledAt: balance > 0 ? scheduledAt : undefined,
+      balanceDueAt: needsBalanceDate ? balanceDate : undefined,
     })
   }
 
-  const hasProof = Boolean(files.length || kept.length)
-
   return (
-    <div
-      className={`overflow-hidden rounded-lg border bg-white ${
-        installment.paid ? 'border-emerald-200' : 'border-slate-200'
-      }`}
-    >
+    <div className={`overflow-hidden rounded-lg border bg-white ${entry ? 'border-emerald-200' : 'border-slate-200'}`}>
       <div
         className={`flex items-center gap-2 border-b px-3.5 py-2 ${
-          installment.paid ? 'border-emerald-100 bg-emerald-50/60' : 'border-slate-100 bg-slate-50/70'
+          entry ? 'border-emerald-100 bg-emerald-50/60' : 'border-slate-100 bg-slate-50/70'
         }`}
       >
         <span
           className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
-            installment.paid ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'
+            entry ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'
           }`}
         >
-          {installment.paid ? <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden="true" /> : index + 1}
+          {entry ? (
+            <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden="true" />
+          ) : isToken ? (
+            <Wallet className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+          ) : (
+            number
+          )}
         </span>
-        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{installment.label}</p>
-        {/* Settled rows are the common case once a plan is running - saying so
-            here means you don't have to read the form below to know. */}
-        {installment.paid && <Badge tone="emerald">Paid</Badge>}
-        {isPartPaid && (
-          <Badge tone="amber">
-            Part paid · {formatCurrency(fee - getInstallmentCollected(installment))} due
-            {installment.scheduled_at ? ` ${formatDate(installment.scheduled_at)}` : ''}
+        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{title}</p>
+        {justSaved ? (
+          <Badge tone="emerald">
+            <CheckCircle2 className="h-3 w-3" strokeWidth={2.5} aria-hidden="true" />
+            Saved
           </Badge>
+        ) : entry ? (
+          <Badge tone="emerald">Paid</Badge>
+        ) : (
+          isToken && <Badge tone="slate">Optional</Badge>
+        )}
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label="Remove this payment"
+            className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          >
+            <X className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+          </button>
         )}
       </div>
 
       <div className="p-3.5">
-        {isTwoShotSecond && !showPaidFields ? (
-          <div className="space-y-3">
-            <Input
-              type="date"
-              label="Scheduled Date"
-              value={scheduledAt}
-              onChange={(event) => setScheduledAt(event.target.value)}
-            />
-            <ErrorMessage message={validationError} />
-            {/* The save on the right, where it sits on the paid form; the
-                switch to that form as a quieter link on the left, so the two
-                share one line instead of stacking as two big buttons. */}
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
-              <button
-                type="button"
-                onClick={() => setShowPaidFields(true)}
-                className="text-sm font-semibold text-brand-600 hover:text-brand-700"
-              >
-                Payment received? Fill details
-              </button>
-              <Button variant={justSaved ? 'success' : 'primary'} onClick={handleSaveSchedule} disabled={isSaving}>
-                {isSaving ? (
-                  'Saving…'
-                ) : justSaved ? (
-                  <>
-                    <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                    Saved
-                  </>
-                ) : (
-                  'Save schedule'
-                )}
+        {!editing ? (
+          <div className="space-y-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-lg font-semibold text-slate-900">
+                {formatCurrency(entry.received_amount ?? entry.amount)}
+              </p>
+              {entry.paid_at && <p className="text-xs text-slate-500">{formatDate(entry.paid_at)}</p>}
+            </div>
+            <p className="text-sm text-slate-600">
+              {[INSTALLMENT_MODE_LABELS[entry.mode] ?? entry.mode, entry.qr_code, entry.transaction_id || entry.upi_id]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+            {entry.remarks && <p className="break-words text-sm text-slate-500">{entry.remarks}</p>}
+            {stored.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {stored.map((url) => (
+                  <ProofThumb key={url} href={`${MEDIA_BASE_URL}${url}`} />
+                ))}
+              </div>
+            )}
+            <div className="flex justify-end border-t border-slate-100 pt-2">
+              <Button variant="secondary" className="px-3! py-1! text-xs" onClick={() => setEditing(true)}>
+                <Pencil className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                Edit
               </Button>
             </div>
           </div>
@@ -583,19 +631,13 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
             {/* Amount and mode side by side: they're one thought ("how much,
                 how"), and stacked in a half-width card they pushed the proof
                 and the save button off the bottom of the popup. */}
-            {/* The fee is the program's; the payment method above is only its
-                label. What was actually handed over is typed below. */}
-            {fee > 0 && (
-              <p className="text-sm text-slate-500">
-                Fee <span className="font-semibold text-slate-900">{formatCurrency(fee)}</span>
-              </p>
-            )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Input
                 label="Amount Received"
                 type="number"
                 step="0.01"
                 min="0"
+                placeholder={available > 0 ? `Up to ${available}` : undefined}
                 value={received}
                 onChange={(event) => setReceived(event.target.value)}
               />
@@ -666,20 +708,27 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
               )}
             </div>
 
-            {/* Short of the fee: the rest stays due, and Finance chases it on
-                the date given here - the due reminder fires on it. */}
-            {balance > 0 && (
+            {/* What this leaves owing. The first payment short of the fee asks
+                when the rest is coming - the due reminders run off that date;
+                after that the date lives in Balance Due below. */}
+            {received !== '' && Number(received) > 0 && remaining > 0 && (
               <div className="grid grid-cols-1 items-end gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 sm:grid-cols-2">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-amber-700">Balance Due</p>
-                  <p className="text-lg font-semibold text-amber-800">{formatCurrency(balance)}</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-amber-700">Remaining Due</p>
+                  <p className="text-lg font-semibold text-amber-800">{formatCurrency(remaining)}</p>
                 </div>
-                <Input
-                  type="date"
-                  label="Balance Due Date"
-                  value={scheduledAt}
-                  onChange={(event) => setScheduledAt(event.target.value)}
-                />
+                {needsBalanceDate ? (
+                  <Input
+                    type="date"
+                    label="Remaining Due Date"
+                    value={balanceDate}
+                    onChange={(event) => setBalanceDate(event.target.value)}
+                  />
+                ) : (
+                  <p className="text-xs text-amber-700">
+                    Due {formatDate(balanceDueAt)} - change it under Balance Due.
+                  </p>
+                )}
               </div>
             )}
 
@@ -698,7 +747,7 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
             <div>
               <p className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700">
                 <ImagePlus className="h-4 w-4 text-slate-400" strokeWidth={2} aria-hidden="true" />
-                Payment Proof
+                Payment Proof{isToken ? ' (optional)' : ''}
               </p>
               <input
                 ref={fileInputRef}
@@ -753,36 +802,103 @@ function InstallmentRow({ lead, installment, index, onSave, isSaving, justSaved 
               )}
             </div>
 
-            <ErrorMessage message={validationError} />
-            <div className="flex justify-end border-t border-slate-100 pt-3">
-              {/* `justSaved` wins over `paid` for a few seconds so the click gets
-                  an acknowledgement of its own - going straight to "Paid" left
-                  it ambiguous whether this save had actually landed or the row
-                  was already settled beforehand. */}
-              <Button
-                variant={justSaved || installment.paid ? 'success' : 'primary'}
-                onClick={handleSavePayment}
-                disabled={isSaving}
-              >
-                {isSaving ? (
-                  'Saving…'
-                ) : justSaved ? (
-                  <>
-                    <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                    Saved
-                  </>
-                ) : installment.paid ? (
-                  <>
-                    <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                    Paid
-                  </>
-                ) : (
-                  'Save payment'
-                )}
+            <ErrorMessage message={validationError ?? error} />
+            <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+              {entry && (
+                <Button variant="secondary" onClick={cancelEdit} disabled={isSaving}>
+                  Cancel
+                </Button>
+              )}
+              <Button onClick={handleSave} disabled={isSaving}>
+                {isSaving ? 'Saving…' : entry ? 'Save changes' : isToken ? 'Save token' : 'Save payment'}
               </Button>
             </div>
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// What the plan costs, what has come in and what is left - read before the
+// cards, so nobody has to add up six of them to know where a student stands.
+function PaymentTotals({ ledger }) {
+  const items = [
+    { label: 'Total Fee', value: ledger.fee, tone: 'text-slate-900' },
+    { label: 'Received', value: ledger.received, tone: 'text-emerald-700' },
+    { label: 'Due', value: ledger.due, tone: ledger.due > 0 ? 'text-amber-700' : 'text-emerald-700' },
+  ]
+  return (
+    <div className="grid grid-cols-3 divide-x divide-slate-100 rounded-lg border border-slate-200 bg-white">
+      {items.map((item) => (
+        <div key={item.label} className="min-w-0 px-3 py-2">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{item.label}</p>
+          <p className={`truncate text-sm font-semibold ${item.tone}`}>{formatCurrency(item.value)}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// What is still owed, when the student said it is coming, and anything said
+// about it. Keyed on the stored values by its parent, so a payment that sets
+// the date redraws it rather than leaving the old one in the box.
+function BalancePanel({ ledger, onSave, isSaving, justSaved, error }) {
+  const balance = ledger.balance?.entry
+  const [dueAt, setDueAt] = useState(balance?.scheduled_at ?? '')
+  const [remarks, setRemarks] = useState(balance?.remarks ?? '')
+
+  if (!balance) {
+    if (ledger.fee <= 0) return null
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm font-semibold text-emerald-700">
+        <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+        Fully paid - {formatCurrency(ledger.received)} received
+      </div>
+    )
+  }
+
+  const today = new Date().toISOString().slice(0, 10)
+  const overdue = Boolean(balance.scheduled_at) && balance.scheduled_at < today
+  const dirty = dueAt !== (balance.scheduled_at ?? '') || remarks.trim() !== (balance.remarks ?? '')
+
+  return (
+    <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-3.5">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-amber-700">Balance Due</p>
+          <p className="text-lg font-semibold text-amber-800">{formatCurrency(ledger.due)}</p>
+        </div>
+        {overdue ? (
+          <Badge tone="red">Overdue since {formatDate(balance.scheduled_at)}</Badge>
+        ) : (
+          !balance.scheduled_at && <Badge tone="amber">No date set</Badge>
+        )}
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[11rem_1fr]">
+        <Input type="date" label="Next Payment Date" value={dueAt} onChange={(event) => setDueAt(event.target.value)} />
+        <Input
+          label="Remarks (optional)"
+          maxLength={1000}
+          placeholder="e.g. Will pay the rest after salary on the 5th"
+          value={remarks}
+          onChange={(event) => setRemarks(event.target.value)}
+        />
+      </div>
+      <ErrorMessage message={error} />
+      <div className="flex justify-end">
+        <Button variant={justSaved ? 'success' : 'primary'} onClick={() => onSave({ dueAt, remarks })} disabled={isSaving || !dirty}>
+          {isSaving ? (
+            'Saving…'
+          ) : justSaved ? (
+            <>
+              <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+              Saved
+            </>
+          ) : (
+            'Save'
+          )}
+        </Button>
       </div>
     </div>
   )
@@ -793,20 +909,75 @@ function PaymentCollectionSection({
   onAssignPlan,
   isAssigningPlan,
   assignPlanError,
-  onSaveInstallment,
-  savingIndex,
-  savedIndex,
+  onSavePayment,
+  savingPaymentKey,
+  savedPaymentKey,
+  failedPayment,
+  onSaveBalance,
+  isSavingBalance,
+  balanceError,
 }) {
+  const ledger = getPaymentLedger(lead)
+  // Payments not saved yet, by an id of their own. A lead with nothing
+  // recorded opens on one; Add payment puts another beside it.
+  const nextDraftId = useRef(1)
+  const [drafts, setDrafts] = useState(() => (ledger.payments.length === 0 ? [0] : []))
+
   if (!lead.payment_plan) {
     return <PlanAssignmentForm onAssign={onAssignPlan} isAssigning={isAssigningPlan} error={assignPlanError} />
   }
 
+  const owing = Boolean(ledger.balance)
+  const balanceDueAt = ledger.balance?.entry.scheduled_at ?? null
+  // A token is what comes before the payments, so once one is in it is no
+  // longer offered - and nothing new is offered once nothing is owed.
+  const tokenCard =
+    ledger.token || (owing && ledger.payments.length === 0)
+      ? { key: 'token', entry: ledger.token?.entry ?? null, index: ledger.token?.index ?? null }
+      : null
+  const paymentCards = [
+    ...ledger.payments.map(({ entry, index }, n) => ({ key: `payment-${n + 1}`, entry, index, number: n + 1 })),
+    ...(owing ? drafts : []).map((draftId, n) => ({
+      key: `draft-${draftId}`,
+      entry: null,
+      index: null,
+      number: ledger.payments.length + n + 1,
+      draftId,
+    })),
+  ]
+
+  function removeDraft(draftId) {
+    setDrafts((current) => current.filter((id) => id !== draftId))
+  }
+
+  function save(card, kind, values) {
+    onSavePayment(
+      {
+        cardKey: card.key,
+        index: card.index,
+        values: { ...values, kind },
+        // Where it lands once saved: a new payment is the next one in the list.
+        savedKey: card.entry ? card.key : kind === 'token' ? 'token' : `payment-${ledger.payments.length + 1}`,
+      },
+      card.draftId === undefined ? undefined : { onSuccess: () => removeDraft(card.draftId) },
+    )
+  }
+
+  function cardProps(card, kind) {
+    return {
+      kind,
+      entry: card.entry,
+      due: ledger.due,
+      balanceDueAt,
+      onSave: (values) => save(card, kind, values),
+      isSaving: savingPaymentKey === card.key,
+      justSaved: savedPaymentKey === card.key,
+      error: failedPayment?.cardKey === card.key ? failedPayment.message : null,
+    }
+  }
+
   return (
-    // The same panel every other block on this tab uses. It previously had a
-    // bespoke header to avoid nesting frames, but once the rest of the tab
-    // became panels that made payment collection the one section that looked
-    // like it came from somewhere else - and panel-around-cards is one level
-    // of nesting, not the three the old note was avoiding.
+    // The same panel every other block on this tab uses.
     <DetailPanel
       title="Payment Collection"
       icon={Wallet}
@@ -817,31 +988,54 @@ function PaymentCollectionSection({
         </Badge>
       }
     >
-      {lead.course_interest && (
-        <p className="mb-3 truncate text-sm font-semibold text-slate-900">{lead.course_interest}</p>
-      )}
-      {/* Two across for a plan with several installments - each card is a short
-          form, and stretched full width the fields looked lost. A single-shot
-          plan has exactly one, though, and half a row for it left the card
-          squeezed into a narrow column beside dead space, with every field
-          stacked down it. One installment gets the full width.
-          No max-height on purpose: the modal body is already the scroll
-          container, and a second one nested inside it gave the popup two
-          scrollbars side by side. */}
-      {/* items-start: a short schedule-only card beside a full payment form
-          would otherwise stretch into a tall, mostly empty box. */}
-      <div className={`grid grid-cols-1 items-start gap-3 ${lead.installments.length > 1 ? 'sm:grid-cols-2' : ''}`}>
-        {lead.installments.map((installment, index) => (
-          <InstallmentRow
-            key={index}
-            lead={lead}
-            installment={installment}
-            index={index}
-            onSave={onSaveInstallment}
-            isSaving={savingIndex === index}
-            justSaved={savedIndex === index}
-          />
-        ))}
+      <div className="space-y-3">
+        {lead.course_interest && (
+          <p className="truncate text-sm font-semibold text-slate-900">{lead.course_interest}</p>
+        )}
+        <PaymentTotals ledger={ledger} />
+
+        {tokenCard && <PaymentCard key={tokenCard.key} title="Token Amount" {...cardProps(tokenCard, 'token')} />}
+
+        {/* Two across once there are several - each card is a short form, and
+            stretched full width the fields looked lost - but one gets the
+            whole width rather than half a row beside dead space. items-start:
+            a saved summary beside an open form would otherwise stretch into a
+            tall, mostly empty box. No max-height: the modal body is already
+            the scroll container. */}
+        {paymentCards.length > 0 && (
+          <div className={`grid grid-cols-1 items-start gap-3 ${paymentCards.length > 1 ? 'sm:grid-cols-2' : ''}`}>
+            {paymentCards.map((card) => (
+              <PaymentCard
+                key={card.key}
+                title={`Payment ${card.number}`}
+                number={card.number}
+                // A draft can go as long as there is another card to fall back on.
+                onRemove={card.draftId !== undefined && paymentCards.length > 1 ? () => removeDraft(card.draftId) : undefined}
+                {...cardProps(card, 'payment')}
+              />
+            ))}
+          </div>
+        )}
+
+        {owing && (
+          <button
+            type="button"
+            onClick={() => setDrafts((current) => [...current, nextDraftId.current++])}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-brand-600 hover:border-brand-400 hover:bg-brand-50"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
+            Add payment
+          </button>
+        )}
+
+        <BalancePanel
+          key={`${ledger.balance?.entry.scheduled_at ?? ''}|${ledger.balance?.entry.remarks ?? ''}|${ledger.due}`}
+          ledger={ledger}
+          onSave={onSaveBalance}
+          isSaving={isSavingBalance}
+          justSaved={savedPaymentKey === 'balance'}
+          error={balanceError}
+        />
       </div>
     </DetailPanel>
   )
@@ -925,9 +1119,7 @@ function OverviewTab({
   onAssignPlan,
   isAssigningPlan,
   assignPlanError,
-  onSaveInstallment,
-  savingInstallmentIndex,
-  savedInstallmentIndex,
+  paymentProps,
 }) {
   return (
     <div className="space-y-4">
@@ -960,9 +1152,7 @@ function OverviewTab({
           onAssignPlan={onAssignPlan}
           isAssigningPlan={isAssigningPlan}
           assignPlanError={assignPlanError}
-          onSaveInstallment={onSaveInstallment}
-          savingIndex={savingInstallmentIndex}
-          savedIndex={savedInstallmentIndex}
+          {...paymentProps}
         />
       )}
 
@@ -1141,11 +1331,12 @@ export function LeadDetailModal({ lead, onClose }) {
   const [activeTab, setActiveTab] = useState('overview')
   const [followUpAt, setFollowUpAt] = useState(toDateTimeInputValue(lead.follow_up_at))
   // Mirrors the lead prop but gets refreshed from each mutation's response,
-  // so e.g. saving installment 1 of an EMI plan shows "Paid" on that row
-  // immediately instead of only after the modal is reopened.
+  // so e.g. saving a payment shows it as paid, with the balance worked out
+  // again, immediately instead of only after the modal is reopened.
   const [liveLead, setLiveLead] = useState(lead)
-  const [savingInstallmentIndex, setSavingInstallmentIndex] = useState(null)
-  const [savedInstallmentIndex, setSavedInstallmentIndex] = useState(null)
+  // The payment card being saved, and the one just saved - see paymentMutation.
+  const [savingPaymentKey, setSavingPaymentKey] = useState(null)
+  const [savedPaymentKey, setSavedPaymentKey] = useState(null)
   // A stage move that has to ask something first: why (Quit, or a move back to
   // an earlier stage), and/or when (Follow up call, which is a call booked for
   // a time). { status, kind: 'lost' | 'back' | 'followup', needsFollowUp }
@@ -1262,34 +1453,56 @@ export function LeadDetailModal({ lead, onClose }) {
     },
   })
 
-  const installmentMutation = useMutation({
-    mutationFn: ({ index, values }) => leadService.updateInstallment(lead.id, index, values),
+  // A token or payment, new or corrected. `cardKey` is the card that asked,
+  // so its own spinner and error show on it; `savedKey` is where the saved
+  // entry lands, which for a new one is a card that doesn't exist yet.
+  const paymentMutation = useMutation({
+    mutationFn: ({ index, values }) => leadService.recordPayment(lead.id, index, values),
     // Keyed off onSuccess, not onSettled: onSettled also fires on failure, and
-    // a row that says "Saved" after the request errored is worse than one that
-    // says nothing.
-    onSuccess: (updatedLead, { index }) => {
+    // a card that says "Saved" after the request errored is worse than one
+    // that says nothing.
+    onSuccess: (updatedLead, { savedKey }) => {
       setLiveLead(updatedLead)
       invalidateLeadQueries()
-      setSavedInstallmentIndex(index)
+      setSavedPaymentKey(savedKey)
     },
-    onSettled: () => setSavingInstallmentIndex(null),
+    onSettled: () => setSavingPaymentKey(null),
   })
 
-  // Clears the "Saved" confirmation after a beat so the button settles back to
-  // its real state ("Paid", or the schedule button) rather than claiming to be
-  // a save receipt forever.
-  useEffect(() => {
-    if (savedInstallmentIndex === null) return undefined
-    const timer = setTimeout(() => setSavedInstallmentIndex(null), 2500)
-    return () => clearTimeout(timer)
-  }, [savedInstallmentIndex])
+  const balanceMutation = useMutation({
+    mutationFn: (values) => leadService.updateBalance(lead.id, values),
+    onSuccess: (updatedLead) => {
+      setLiveLead(updatedLead)
+      invalidateLeadQueries()
+      setSavedPaymentKey('balance')
+    },
+  })
 
-  function handleSaveInstallment(index, values) {
-    setSavingInstallmentIndex(index)
-    installmentMutation.mutate({ index, values })
+  // Clears the "Saved" confirmation after a beat so the card settles back to
+  // its real state rather than claiming to be a save receipt forever.
+  useEffect(() => {
+    if (savedPaymentKey === null) return undefined
+    const timer = setTimeout(() => setSavedPaymentKey(null), 2500)
+    return () => clearTimeout(timer)
+  }, [savedPaymentKey])
+
+  const paymentProps = {
+    onSavePayment: (variables, options) => {
+      setSavingPaymentKey(variables.cardKey)
+      paymentMutation.mutate(variables, options)
+    },
+    savingPaymentKey,
+    savedPaymentKey,
+    failedPayment: paymentMutation.isError
+      ? { cardKey: paymentMutation.variables?.cardKey, message: getApiErrorMessage(paymentMutation.error) }
+      : null,
+    onSaveBalance: (values) => balanceMutation.mutate(values),
+    isSavingBalance: balanceMutation.isPending,
+    balanceError: balanceMutation.error ? getApiErrorMessage(balanceMutation.error) : null,
   }
 
-  const activeError = stageMutation.error || followUpMutation.error || installmentMutation.error
+  // Payment errors show on the card that raised them rather than up here.
+  const activeError = stageMutation.error || followUpMutation.error
   const stageInfo = LEAD_STAGE_BY_VALUE[liveLead.status]
   const visibleTabs = TABS.filter((tab) => !tab.matchedOnly || liveLead.induction_matched)
 
@@ -1353,9 +1566,7 @@ export function LeadDetailModal({ lead, onClose }) {
             onAssignPlan={(values) => planMutation.mutate(values)}
             isAssigningPlan={planMutation.isPending}
             assignPlanError={planMutation.error ? getApiErrorMessage(planMutation.error) : null}
-            onSaveInstallment={handleSaveInstallment}
-            savingInstallmentIndex={savingInstallmentIndex}
-            savedInstallmentIndex={savedInstallmentIndex}
+            paymentProps={paymentProps}
           />
         )}
         {activeTab === 'induction' && <InductionTab leadId={lead.id} />}

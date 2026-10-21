@@ -14,6 +14,26 @@ export function getInstallmentCollected(installment) {
   return 0
 }
 
+// A lead's payment collection split into its parts - see payment_ledger.py on
+// the backend. The plan prices the fee; an optional token and any number of
+// payments are what came in; the balance is what is still owed, with the date
+// it was promised for. Each part keeps its index into `installments`, which is
+// what the payment endpoints address it by.
+export function getPaymentLedger(lead) {
+  const entries = (lead.installments ?? []).map((entry, index) => ({ entry, index }))
+  const token = entries.find(({ entry }) => entry.kind === 'token') ?? null
+  const balance = entries.find(({ entry }) => entry.kind === 'balance') ?? null
+  // Anything else is money received. An entry with no kind at all is an old
+  // plan slot the startup backfill hasn't reached, shown as a payment rather
+  // than dropped.
+  const payments = entries.filter(({ entry }) => entry.kind !== 'token' && entry.kind !== 'balance')
+  const fee = entries.reduce((sum, { entry }) => sum + Number(entry.amount ?? 0), 0)
+  const received = [token, ...payments]
+    .filter(Boolean)
+    .reduce((sum, { entry }) => sum + getInstallmentCollected(entry), 0)
+  return { token, payments, balance, fee, received, due: balance ? Number(balance.entry.amount ?? 0) : 0 }
+}
+
 export function getLeadPaymentSummary(lead) {
   if (lead.payment_plan && lead.installments?.length) {
     const installments = lead.installments

@@ -46,9 +46,9 @@ async def test_insights_count_the_funnel_and_the_money(client, auth_headers, upl
     await client.put(f"/api/v1/leads/{quitter}", headers=auth_headers, json={"status": "lost", "lost_reason": "Joined elsewhere"})
     # ₹10,000 of a ₹15,000 fee, the rest promised for a date already past.
     await client.post(
-        f"/api/v1/leads/{paying}/installments/0",
+        f"/api/v1/leads/{paying}/payments",
         headers=auth_headers,
-        data={"mode": "upi", "received_amount": "10000", "scheduled_at": "2020-01-01"},
+        data={"mode": "upi", "received_amount": "10000", "balance_due_at": "2020-01-01"},
         files=[("files", ("proof.png", PNG, "image/png"))],
     )
     await InductionEntry(name="Nandhini", phone="5588558855", registration_date=date.today()).insert()

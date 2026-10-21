@@ -230,26 +230,29 @@ async def test_resubmission_does_not_reopen_a_lead_that_has_moved_on(client, aut
     assert lead["status"] == "pre_screening"
 
 
-async def test_resubmission_keeps_payment_details_already_recorded(client, auth_headers):
+async def test_resubmission_keeps_payment_details_already_recorded(
+    client, auth_headers, monkeypatch, tmp_path
+):
+    from app.config.settings import settings
+
+    monkeypatch.setattr(settings, "UPLOAD_DIR", str(tmp_path))
     await seed_programs(client)
     await client.post(FOUNDATION_URL, json=foundation_payload(payment_plan="two_shot"))
     lead_id = (await client.get("/api/v1/leads", headers=auth_headers)).json()["items"][0]["id"]
 
     recorded = await client.post(
-        f"/api/v1/leads/{lead_id}/installments/0",
+        f"/api/v1/leads/{lead_id}/payments",
         headers=auth_headers,
-        data={"amount": "9000", "mode": "upi", "transaction_id": "TXN-1"},
+        data={"received_amount": "9000", "mode": "upi", "transaction_id": "TXN-1", "balance_due_at": "2026-09-27"},
+        files=[("files", ("proof.png", b"\x89PNG\r\n\x1a\n" + b"0" * 16, "image/png"))],
     )
-    assert recorded.status_code == 200
-    # An installment only counts as paid once its proof is uploaded, so this is
-    # the half-finished state - details captured, proof still to come - that a
-    # resubmission is most likely to quietly destroy.
-    assert recorded.json()["installments"][0]["paid"] is False
+    assert recorded.status_code == 200, recorded.text
 
     await client.post(FOUNDATION_URL, json=foundation_payload(payment_plan="two_shot"))
 
     lead = (await client.get(f"/api/v1/leads/{lead_id}", headers=auth_headers)).json()
-    # Rebuilding the plan from the form would have wiped both of these.
+    # Rebuilding the plan from the form would have wiped the payment.
+    assert lead["installments"][0]["kind"] == "payment"
     assert lead["installments"][0]["transaction_id"] == "TXN-1"
     assert lead["installments"][0]["mode"] == "upi"
 
@@ -965,13 +968,18 @@ async def test_installment_takes_several_proofs_and_a_remark_without_an_id(
     await seed_programs(client)
     await client.post(FOUNDATION_URL, json=foundation_payload(payment_plan="two_shot"))
     lead_id = (await client.get("/api/v1/leads", headers=auth_headers)).json()["items"][0]["id"]
-    url = f"/api/v1/leads/{lead_id}/installments/0"
+    url = f"/api/v1/leads/{lead_id}/payments"
     png = b"\x89PNG\r\n\x1a\n" + b"0" * 16
 
     first = await client.post(
         url,
         headers=auth_headers,
-        data={"amount": "9000", "mode": "card", "remarks": "Paid at the front desk"},
+        data={
+            "received_amount": "9000",
+            "mode": "card",
+            "remarks": "Paid at the front desk",
+            "balance_due_at": "2026-09-27",
+        },
         files=[("files", ("a.png", png, "image/png")), ("files", ("b.png", png, "image/png"))],
     )
     assert first.status_code == 200, first.text
@@ -984,7 +992,7 @@ async def test_installment_takes_several_proofs_and_a_remark_without_an_id(
 
     removed = installment["proof_urls"][0]
     second = await client.post(
-        url,
+        f"{url}/0",
         headers=auth_headers,
         data={"remove_proof_urls": removed, "clear_remarks": "true"},
         files=[("files", ("c.png", png, "image/png"))],

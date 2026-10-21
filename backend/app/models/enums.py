@@ -68,6 +68,21 @@ class InstallmentPaymentMode(StrEnum):
     NETBANKING = "netbanking"
 
 
+class PaymentEntryKind(StrEnum):
+    """What one entry in a lead's payment collection is - see
+    app/services/payment_ledger.py. An entry with no kind is a plan slot from
+    before the collection was free-form (Week 1, Payment 2), which the startup
+    backfill converts."""
+
+    # Optional money taken up front to hold the seat. Always first.
+    TOKEN = "token"
+    # Money received, as many as it takes.
+    PAYMENT = "payment"
+    # What is still owed, with the date it was promised for. Always last, and
+    # only there while something is owed.
+    BALANCE = "balance"
+
+
 class LeadStatus(StrEnum):
     NEW_LEAD = "new_lead"
     RNR = "rnr"

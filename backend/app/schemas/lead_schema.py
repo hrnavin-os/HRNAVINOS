@@ -9,6 +9,7 @@ from app.models.enums import (
     InstallmentPaymentMode,
     LeadSource,
     LeadStatus,
+    PaymentEntryKind,
     PaymentMethod,
     PaymentOption,
     PaymentPlanOption,
@@ -139,12 +140,21 @@ class LeadPlanAssign(BaseModel):
     payment_plan: PaymentPlanOption
 
 
+class LeadBalanceUpdate(BaseModel):
+    """When the rest of the fee will be paid, and anything said about it.
+    Both are written as sent, so leaving one out clears it."""
+
+    due_at: date | None = None
+    remarks: str | None = Field(default=None, max_length=1000)
+
+
 class FollowUpEntryResponse(BaseModel):
     scheduled_at: datetime
     created_at: datetime
 
 
 class PaymentInstallmentResponse(BaseModel):
+    kind: PaymentEntryKind | None = None
     label: str
     amount: Decimal | None
     received_amount: Decimal | None = None

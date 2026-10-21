@@ -16,10 +16,11 @@ from app.models.enums import (
     NotificationCategory,
     NotificationType,
     PaymentCallRemark,
+    PaymentEntryKind,
     PaymentMethod,
 )
 from app.models.induction_entry import InductionEntry, batch_label, lead_batch_label, parse_batch
-from app.models.lead import FollowUpEntry, Lead, RemarkEntry
+from app.models.lead import FollowUpEntry, Lead, PaymentInstallment, RemarkEntry
 from app.models.notification import Notification
 from app.permissions.permission_codes import Permissions
 from app.repositories.audit_log_repository import AuditLogRepository
@@ -34,6 +35,7 @@ from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.lead_schema import (
     FollowUpEntryResponse,
     LeadAssign,
+    LeadBalanceUpdate,
     LeadCreate,
     LeadPlanAssign,
     LeadRejoin,
@@ -49,7 +51,8 @@ from app.schemas.lead_schema import (
 from app.services.audit_service import AuditService
 from app.services.foundation_group_sync import mirror_group_move
 from app.services.foundation_form_answers import derive_answers
-from app.services.foundation_form_pricing import build_installments, build_payment_expected_summary
+from app.services.foundation_form_pricing import build_payment_expected_summary, plan_fee
+from app.services.payment_ledger import RECEIVED_KINDS, TOKEN_LABEL, balance_of, fee_of, rebalance, to_ledger
 from app.services.reminder_service import ReminderService
 from app.services.storage_service import StorageService
 from app.models.foundation_group import pop_group_move
@@ -157,6 +160,7 @@ class LeadService:
             lost_at=lead.lost_at,
             installments=[
                 PaymentInstallmentResponse(
+                    kind=installment.kind,
                     label=installment.label,
                     amount=installment.amount,
                     received_amount=installment.received_amount,
@@ -970,10 +974,11 @@ class LeadService:
         filled the form for Generalist and settles on HR Recruitment) used to
         leave them on the old course's fees.
 
-        The plan itself stays; only its amounts follow the course. An
-        installment already marked paid keeps its amount, since that is money
-        actually received. A course that isn't a live program (a legacy value,
-        or cleared) leaves the pricing alone - there's nothing to price it from.
+        The plan itself stays; only its fee follows the course. Payments
+        already recorded keep their amounts, since that is money actually
+        received - what moves is the balance still due. A course that isn't a
+        live program (a legacy value, or cleared) leaves the pricing alone -
+        there's nothing to price it from.
 
         Mutates the lead in place and returns what changed, for the audit log.
         """
@@ -1006,26 +1011,11 @@ class LeadService:
             lead.payment_expected = None
             return {**changes, "payment_plan": None}
 
-        fresh = build_installments(config, program.category, lead.payment_plan)
-        installments = []
-        for index, priced in enumerate(fresh):
-            prior = lead.installments[index] if index < len(lead.installments) else None
-            if prior is None:
-                installments.append(priced)
-            elif prior.paid:
-                installments.append(prior)
-            else:
-                # A part-payment keeps what was received; only the fee it is
-                # measured against moves - which can settle it outright.
-                repriced = prior.model_copy(update={"amount": priced.amount})
-                repriced.paid = bool(
-                    repriced.received_amount is not None
-                    and repriced.received_amount >= priced.amount
-                    and repriced.mode
-                    and repriced.all_proofs()
-                )
-                installments.append(repriced)
-        lead.installments = installments
+        # Money received stays exactly as recorded; only the balance it is
+        # measured against moves - which can settle it outright.
+        lead.installments = rebalance(
+            to_ledger(lead.installments), plan_fee(config, program.category, lead.payment_plan)
+        )
         lead.payment_expected = build_payment_expected_summary(config, program.category, lead.payment_plan)
         return {**changes, "payment_expected": lead.payment_expected}
 
@@ -1227,14 +1217,19 @@ class LeadService:
         scope: str | None = None,
     ) -> Lead:
         """Attach a Foundation Form-style payment plan to a lead that didn't
-        arrive with one (e.g. created manually in the CRM), pre-populating
-        its installments from the same pricing table the public form uses."""
+        arrive with one (e.g. created manually in the CRM), or switch the one
+        it has, pricing the fee from the same table the public form uses.
+
+        A switch keeps every payment already recorded - the plan only prices
+        the fee, so what changes is how much is still due."""
         lead = await self.get(lead_id, scope=scope)
         config = await self.foundation_form_config.get_or_create()
         program = await self.programs.get_by_value(data.program_interest)
         if program is None or not program.is_active:
             raise BadRequestError("Selected program is not valid.")
-        installments = build_installments(config, program.category, data.payment_plan)
+        installments = rebalance(
+            to_ledger(lead.installments), plan_fee(config, program.category, data.payment_plan)
+        )
         lead.program_interest = data.program_interest
         lead.payment_plan = data.payment_plan
         lead.installments = installments
@@ -1252,85 +1247,115 @@ class LeadService:
         )
         return lead
 
-    async def update_installment(
+    async def record_payment(
         self,
         lead_id: uuid.UUID,
-        index: int,
         *,
-        file: UploadFile | None,
-        amount: Decimal | None,
+        index: int | None,
+        kind: PaymentEntryKind,
+        received_amount: Decimal | None,
         mode: InstallmentPaymentMode | None,
-        received_amount: Decimal | None = None,
         qr_code: str | None = None,
-        transaction_id: str | None,
-        upi_id: str | None,
-        scheduled_at: date | None,
-        actor_id: uuid.UUID | None,
-        files: List[UploadFile] | None = None,
-        remove_proof_urls: List[str] | None = None,
+        transaction_id: str | None = None,
+        upi_id: str | None = None,
         remarks: str | None = None,
         clear_remarks: bool = False,
+        files: List[UploadFile] | None = None,
+        remove_proof_urls: List[str] | None = None,
+        balance_due_at: date | None = None,
+        actor_id: uuid.UUID | None,
         scope: str | None = None,
     ) -> Lead:
-        lead = await self.get(lead_id, scope=scope)
-        if index < 0 or index >= len(lead.installments):
-            raise BadRequestError("Invalid installment index for this lead's plan.")
+        """Records money received against the lead's fee - a new payment or
+        token when `index` is None, or a correction to the one at `index`.
 
-        installment = lead.installments[index]
-        if amount is not None:
-            installment.amount = amount
+        Each payment is what actually came in; the balance is worked out from
+        them, so there is no fixed slot to fill and no fee per payment. A
+        payment needs its amount, mode and proof. The token is optional money
+        up front and so asks less: its proof can follow, or never come.
+        """
+        lead = await self.get(lead_id, scope=scope)
+        if not lead.payment_plan:
+            raise BadRequestError("Pick this lead's payment plan before recording a payment.")
+        ledger = to_ledger(lead.installments)
+        fee = fee_of(ledger)
+
+        if index is None:
+            if kind == PaymentEntryKind.BALANCE:
+                raise BadRequestError("Record a token or a payment.")
+            if kind == PaymentEntryKind.TOKEN and any(entry.kind == PaymentEntryKind.TOKEN for entry in ledger):
+                raise BadRequestError("A token amount is already recorded for this lead - edit that one instead.")
+            entry = PaymentInstallment(kind=kind, label=TOKEN_LABEL if kind == PaymentEntryKind.TOKEN else "Payment")
+            ledger.append(entry)
+        else:
+            if index < 0 or index >= len(ledger) or ledger[index].kind not in RECEIVED_KINDS:
+                raise BadRequestError("That payment isn't on this lead any more. Reopen the lead and try again.")
+            entry = ledger[index]
+
+        if received_amount is not None:
+            entry.received_amount = received_amount
         if mode is not None:
-            installment.mode = mode
+            entry.mode = mode
         if qr_code is not None and qr_code.strip():
-            installment.qr_code = qr_code.strip()[:100]
-            # The lead's own QR field is what the board filters and the sheet
-            # export read, so it follows the latest payment's account.
-            lead.qr_code = installment.qr_code
+            entry.qr_code = qr_code.strip()[:100]
         if transaction_id is not None:
-            installment.transaction_id = transaction_id
+            entry.transaction_id = transaction_id.strip() or None
         if upi_id is not None:
-            installment.upi_id = upi_id
-        if scheduled_at is not None:
-            installment.scheduled_at = scheduled_at
+            entry.upi_id = upi_id.strip() or None
         if clear_remarks:
-            installment.remarks = None
+            entry.remarks = None
         elif remarks is not None:
-            installment.remarks = remarks.strip()[:1000] or None
+            entry.remarks = remarks.strip()[:1000] or None
 
         # Proofs accumulate: several screenshots of one payment are normal (a
         # bank app splits the receipt across screens), so a new upload is added
         # beside what is there rather than replacing it. Removal is explicit.
-        proofs = [url for url in installment.all_proofs() if url not in set(remove_proof_urls or [])]
-        uploads = [upload for upload in [file, *(files or [])] if upload is not None]
+        proofs = [url for url in entry.all_proofs() if url not in set(remove_proof_urls or [])]
+        uploads = [upload for upload in files or [] if upload is not None]
         if len(proofs) + len(uploads) > MAX_INSTALLMENT_PROOFS:
-            raise BadRequestError(f"An installment can hold at most {MAX_INSTALLMENT_PROOFS} proof images.")
+            raise BadRequestError(f"A payment can hold at most {MAX_INSTALLMENT_PROOFS} proof images.")
+
+        if entry.received_amount is None or entry.received_amount <= 0:
+            raise BadRequestError("The amount received must be more than zero.")
+        if not entry.mode:
+            raise BadRequestError("Pick how the money was paid.")
+        if entry.kind == PaymentEntryKind.PAYMENT and not (proofs or uploads):
+            raise BadRequestError("Add at least one payment proof.")
+        # Measured before this entry counts, so a correction can go up to what
+        # it already was plus whatever else is owed.
+        others = sum(
+            (other.collected() for other in ledger if other.kind in RECEIVED_KINDS and other is not entry),
+            Decimal(0),
+        )
+        if others + entry.received_amount > fee:
+            raise BadRequestError(
+                f"₹{entry.received_amount:,.0f} is more than the ₹{fee - others:,.0f} still due on this lead."
+            )
+
+        # Only now, once nothing can be refused: a refused save shouldn't
+        # leave its images behind on disk.
         for upload in uploads:
             proofs.append(await self.storage.save_image(upload, subdir=f"leads/{lead_id}/installments"))
-        installment.proof_urls = proofs
-        installment.proof_url = proofs[0] if proofs else None
+        entry.proof_urls = proofs
+        entry.proof_url = proofs[0] if proofs else None
+        entry.amount = entry.received_amount
+        if not entry.paid:
+            entry.paid = True
+            entry.paid_at = utcnow().date()
 
-        if received_amount is not None:
-            if received_amount <= 0:
-                raise BadRequestError("The amount received must be more than zero.")
-            installment.received_amount = received_amount
-
-        was_paid = installment.paid
-        # The transaction / UPI id is optional: a payment is recorded once its
-        # mode is known and there is proof of it.
-        recorded = bool(installment.mode and proofs)
-        # The payment method is only the label; the cash is whatever was keyed
-        # in. Short of the fee, the rest stays due - and a balance nobody has
-        # promised a date for is one nobody will chase, so it needs one.
-        short = (
-            installment.received_amount is not None
-            and installment.amount is not None
-            and installment.received_amount < installment.amount
-        )
-        if recorded and short and installment.scheduled_at is None:
-            raise BadRequestError("Pick the date the balance amount will be paid.")
-        installment.paid = recorded and not short
-        if installment.paid and not was_paid:
-            installment.paid_at = utcnow().date()
+        lead.installments = rebalance(ledger, fee)
+        balance = balance_of(lead.installments)
+        if balance is not None:
+            if balance_due_at is not None:
+                balance.scheduled_at = balance_due_at
+            # A balance nobody has promised a date for is one nobody will
+            # chase - the due reminders run off this date.
+            if balance.scheduled_at is None:
+                raise BadRequestError(f"Pick the date the remaining ₹{balance.amount:,.0f} will be paid.")
+        # The lead's own QR field is what the board filters and the sheet
+        # export read, so it follows the latest payment's account.
+        if entry.qr_code:
+            lead.qr_code = entry.qr_code
 
         lead.updated_by = actor_id
         lead.touch(actor_id)
@@ -1341,10 +1366,44 @@ class LeadService:
             entity_type="Lead",
             entity_id=str(lead.id),
             changes={
-                "installment_index": index,
-                "paid": installment.paid,
-                "received_amount": str(installment.received_amount) if installment.received_amount is not None else None,
-                "scheduled_at": installment.scheduled_at.isoformat() if installment.scheduled_at else None,
+                "payment": entry.label,
+                "received_amount": str(entry.received_amount),
+                "mode": entry.mode,
+                "balance": str(balance.amount) if balance else "0",
+                "balance_due_at": balance.scheduled_at.isoformat() if balance and balance.scheduled_at else None,
+            },
+        )
+        return lead
+
+    async def update_balance(
+        self,
+        lead_id: uuid.UUID,
+        data: LeadBalanceUpdate,
+        *,
+        actor_id: uuid.UUID | None,
+        scope: str | None = None,
+    ) -> Lead:
+        """When the rest of the fee will be paid, and the remark that goes with
+        it - set from the Balance Due box under the payments."""
+        lead = await self.get(lead_id, scope=scope)
+        ledger = to_ledger(lead.installments)
+        balance = balance_of(ledger)
+        if balance is None:
+            raise BadRequestError("Nothing is due on this lead.")
+        balance.scheduled_at = data.due_at
+        balance.remarks = (data.remarks or "").strip()[:1000] or None
+        lead.installments = ledger
+        lead.updated_by = actor_id
+        lead.touch(actor_id)
+        await lead.save()
+        await self.audit.record(
+            user_id=actor_id,
+            action="UPDATE",
+            entity_type="Lead",
+            entity_id=str(lead.id),
+            changes={
+                "balance_due_at": balance.scheduled_at.isoformat() if balance.scheduled_at else None,
+                "balance_remarks": balance.remarks,
             },
         )
         return lead

@@ -423,30 +423,13 @@ function withAddedOptions(builtIn, added) {
   ]
 }
 
-// Anything already recorded against the current plan's installments. Changing
-// the plan rebuilds them from the price list, so this is what would be lost.
-function hasCollectedPayments(lead) {
-  return (lead.installments ?? []).some(
-    (installment) =>
-      installment.paid ||
-      installment.proof_url ||
-      installment.transaction_id ||
-      installment.upi_id ||
-      installment.mode ||
-      installment.scheduled_at,
-  )
-}
-
 /**
  * The lead's payment plan, changed from the table.
  *
  * Goes through the same assign-plan call the detail modal uses rather than
- * writing the field directly: the plan is what the installment schedule is
- * built from, so the two have to be set together or the row would claim a plan
- * whose amounts belong to a different one.
- *
- * That rebuild is also why a plan with money already recorded against it asks
- * first - amounts, proofs and dates on the old schedule don't survive it.
+ * writing the field directly: the plan prices the fee, so the two have to be
+ * set together or the row would claim a plan whose fee belongs to a different
+ * one. Payments already recorded are kept - only the balance due moves.
  *
  * Only the plans this lead's program actually offers are listed, since the
  * price list is per category and the API rejects the rest anyway. A lead with
@@ -513,16 +496,6 @@ function PaymentPlanCell({ lead, pricing, onError }) {
     event.stopPropagation()
     close(event)
     if (value === lead.payment_plan) return
-    if (
-      hasCollectedPayments(lead) &&
-      !window.confirm(
-        `Change ${lead.name}'s payment method to "${PAYMENT_PLAN_LABELS[value] ?? value}"?\n\n` +
-          'The installment schedule is rebuilt from the price list, so amounts, proofs, ' +
-          'modes and dates already recorded against the current plan will be lost.',
-      )
-    ) {
-      return
-    }
     mutation.mutate(value)
   }
 

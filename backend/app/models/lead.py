@@ -12,6 +12,7 @@ from app.models.enums import (
     InstallmentPaymentMode,
     LeadSource,
     LeadStatus,
+    PaymentEntryKind,
     PaymentMethod,
     PaymentOption,
     PaymentPlanOption,
@@ -66,10 +67,14 @@ class RemarkEntry(BaseModel):
 
 
 class PaymentInstallment(BaseModel):
-    """One payment in a Foundation Form lead's plan (1 for single shot, 2 for
-    two shot, 6 for EMI). Pre-populated with label/amount from the pricing
-    table at submission time; staff fill in the rest as each is collected."""
+    """One entry in a Foundation Form lead's payment collection: the token, a
+    payment received, or the balance still due - see
+    app/services/payment_ledger.py for how they fit together. The amounts add
+    up to the plan's fee whatever mix of entries is there, which is what every
+    total and due figure reads."""
 
+    # None on plan slots saved before the collection was free-form.
+    kind: PaymentEntryKind | None = None
     label: str
     # The fee this installment is for, priced from the program.
     amount: MongoDecimal | None = None

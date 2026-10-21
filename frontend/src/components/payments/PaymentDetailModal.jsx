@@ -99,16 +99,14 @@ function buildInfoItems(lead, summary) {
 // settled balance is worse than no button.
 function buildReminderKinds(lead, summary) {
   const kinds = []
-  const unpaidInstallments = (lead.installments ?? []).filter((installment) => !installment.paid).length
 
+  // One amount owed whatever the plan - payments come in as they come, not
+  // one per week - so the EMI reminder no longer counts instalments left.
   if (summary.hasPlan && summary.dueAmount > 0) {
     kinds.push({
       kind: lead.payment_plan === 'emi_6_weeks' ? 'emi' : 'due',
       label: lead.payment_plan === 'emi_6_weeks' ? 'Remind: EMI' : 'Remind: Due',
-      detail:
-        lead.payment_plan === 'emi_6_weeks'
-          ? `${unpaidInstallments} instalment${unpaidInstallments === 1 ? '' : 's'} left · ${formatCurrency(summary.dueAmount)}`
-          : formatCurrency(summary.dueAmount),
+      detail: formatCurrency(summary.dueAmount),
     })
   }
 
@@ -287,7 +285,7 @@ function PaymentHealthBanner({ health, onMarkLost, isMarkingLost }) {
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-600">
           <AlertTriangle className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
         </span>
-        <p className="text-sm font-semibold text-amber-700">1st Due Missed — one EMI payment is overdue.</p>
+        <p className="text-sm font-semibold text-amber-700">1st Due Missed — the promised payment date has passed.</p>
       </div>
     )
   }
@@ -388,9 +386,8 @@ export function PaymentDetailContent({ lead, error, onMarkLost, isMarkingLost, s
 
       {lead.installments?.length > 1 && (
         <div>
-          <p className="mb-1.5 text-sm font-medium text-slate-700">
-            {lead.payment_plan === 'emi_6_weeks' ? 'EMI Schedule' : 'Payment Schedule'}
-          </p>
+          {/* The token, each payment received, and the balance still due. */}
+          <p className="mb-1.5 text-sm font-medium text-slate-700">Payments</p>
           <div className="table-scroll flex gap-2.5 overflow-x-auto pb-1.5">
             {lead.installments.map((installment, index) => (
               <InstallmentScheduleCard key={index} installment={installment} />
