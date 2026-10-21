@@ -104,16 +104,22 @@ export function StatCard({ label, value, toneName, isActive, onClick, icon: Icon
       // directly above the table they filter, and nudging them shifts the one
       // thing the eye is using as an anchor. Colour and the focus ring carry
       // the interaction instead.
-      className={`group flex-1 basis-44 rounded-lg border px-3.5 py-2.5 text-left ${
+      //
+      // A size container, so the card can tighten itself when its row makes
+      // it narrow - eight stages in one row on a scaled laptop screen - rather
+      // than clipping the label. Below 11rem the padding, icon and gap shrink;
+      // below 9.75rem the icon goes, leaving the label the whole card. The
+      // padding sits on the inner div because a container can't query itself.
+      className={`group @container flex-1 basis-44 rounded-lg border text-left ${
         interactive
           ? 'transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500'
           : ''
       } ${isActive ? `${tone.active} shadow-sm` : tone.inactive}`}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 px-3.5 py-2.5 @max-[11rem]:gap-2 @max-[11rem]:px-3">
         {Icon && (
           <span
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-white ${
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-white @max-[11rem]:h-8 @max-[11rem]:w-8 @max-[9.75rem]:hidden ${
               isActive ? 'bg-white/20' : tone.plate
             }`}
           >
