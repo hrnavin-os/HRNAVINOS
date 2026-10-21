@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Pagination } from '@/components/ui/Pagination'
 import { formatCurrency, formatDate, formatDateTime, titleCase } from '@/utils/formatters'
-import { getLeadPaymentSummary } from '@/utils/leadPayment'
+import { getLeadPaymentSummary, getPaymentLedger } from '@/utils/leadPayment'
 import { PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
 import { LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
 import { PaymentDetailModal } from '@/components/payments/PaymentDetailModal'
@@ -47,13 +47,35 @@ const amountColumn = {
     return paidAmount !== null ? formatCurrency(paidAmount) : '—'
   },
 }
-const modeColumn = {
-  key: 'mode',
-  header: 'Mode',
+// The accounts the money went into - what Finance checks the bank against.
+// Every one the token and payments used, not just the latest: a student can
+// pay the token into one QR code and the rest into another. Leads with no
+// payment collection carry only the lead's own QR code.
+function paidIntoQrCodes(lead) {
+  const { token, payments } = getPaymentLedger(lead)
+  const codes = [token, ...payments].filter(Boolean).map(({ entry }) => entry.qr_code).filter(Boolean)
+  const unique = [...new Set(codes)]
+  return unique.length ? unique : lead.qr_code ? [lead.qr_code] : []
+}
+
+// In place of the payment mode, which was UPI on nearly every row and told
+// Finance nothing it needed to check.
+const qrCodeColumn = {
+  key: 'qr_code',
+  header: 'QR Code',
   align: 'center',
   render: (row) => {
-    const { mode } = getLeadPaymentSummary(row)
-    return mode ? <Badge outline tone="emerald">{titleCase(mode)}</Badge> : '—'
+    const codes = paidIntoQrCodes(row)
+    if (!codes.length) return '—'
+    return (
+      <div className="flex flex-col items-center gap-1">
+        {codes.map((code) => (
+          <Badge key={code} outline tone="violet">
+            {code}
+          </Badge>
+        ))}
+      </div>
+    )
   },
 }
 const dueColumn = {
@@ -87,7 +109,7 @@ const AWAITING_COLUMNS = [
   contactColumn,
   planColumn,
   amountColumn,
-  modeColumn,
+  qrCodeColumn,
   dueColumn,
   { key: 'status', header: 'Status', render: () => <Badge tone="amber">● Awaiting Approval</Badge> },
   actionColumn('Review', 'primary'),
@@ -110,6 +132,7 @@ const APPROVED_COLUMNS = [
   contactColumn,
   planColumn,
   amountColumn,
+  qrCodeColumn,
   dueColumn,
   {
     // Where the student is now. Approval moves them to Batch Confirmation,
