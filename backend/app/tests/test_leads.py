@@ -35,6 +35,28 @@ async def test_assign_lead_to_user(client, auth_headers):
     assert response.json()["assigned_to"] == me["id"]
 
 
+async def test_a_follow_up_keeps_its_remark_in_the_history(client, auth_headers):
+    create = await client.post(
+        "/api/v1/leads",
+        headers=auth_headers,
+        json={"name": "Ravi Kumar", "phone": "9876543210", "course_interest": "Data Science"},
+    )
+    lead_id = create.json()["id"]
+
+    response = await client.put(
+        f"/api/v1/leads/{lead_id}",
+        headers=auth_headers,
+        json={"follow_up_at": "2026-10-25T04:30:00Z", "follow_up_remarks": "  Call back after salary  "},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["follow_up_at"].startswith("2026-10-25T04:30")
+    assert body["follow_up_history"][0]["remarks"] == "Call back after salary"
+    # Not a lead field: it lives on the history entry only.
+    assert "follow_up_remarks" not in body
+
+
 async def test_update_lead_status(client, auth_headers):
     create = await client.post(
         "/api/v1/leads",

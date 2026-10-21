@@ -92,6 +92,9 @@ class LeadUpdate(BaseModel):
     # Required whenever status moves back to an earlier stage. Kept on the
     # timeline entry for the move rather than on the lead.
     stage_change_reason: str | None = Field(default=None, max_length=500)
+    # What the follow-up is for, sent with follow_up_at. Kept on that
+    # follow-up's history entry rather than on the lead.
+    follow_up_remarks: str | None = Field(default=None, max_length=1000)
 
 
 class LeadRejoin(BaseModel):
@@ -151,6 +154,7 @@ class LeadBalanceUpdate(BaseModel):
 class FollowUpEntryResponse(BaseModel):
     scheduled_at: datetime
     created_at: datetime
+    remarks: str | None = None
 
 
 class PaymentInstallmentResponse(BaseModel):

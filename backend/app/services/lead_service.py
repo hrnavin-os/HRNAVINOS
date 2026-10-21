@@ -133,7 +133,9 @@ class LeadService:
             assigned_to_name=assigned_to_name,
             follow_up_at=lead.follow_up_at,
             follow_up_history=[
-                FollowUpEntryResponse(scheduled_at=entry.scheduled_at, created_at=entry.created_at)
+                FollowUpEntryResponse(
+                    scheduled_at=entry.scheduled_at, created_at=entry.created_at, remarks=entry.remarks
+                )
                 for entry in sorted(lead.follow_up_history, key=lambda e: e.created_at, reverse=True)
             ],
             payment_image_url=lead.payment_image_url,
@@ -327,9 +329,14 @@ class LeadService:
         update_data = data.model_dump(exclude_unset=True)
         update_data["reviewed"] = True
         update_data["updated_by"] = actor_id
+        # Not a lead field - it goes on the follow-up's history entry.
+        follow_up_remarks = (update_data.pop("follow_up_remarks", None) or "").strip() or None
         if update_data.get("follow_up_at"):
             lead.follow_up_history.insert(
-                0, FollowUpEntry(scheduled_at=update_data["follow_up_at"], created_by=actor_id)
+                0,
+                FollowUpEntry(
+                    scheduled_at=update_data["follow_up_at"], created_by=actor_id, remarks=follow_up_remarks
+                ),
             )
         # A move between foundation class groups is recorded rather than just
         # written, so the board can say a student was moved. The name lookup is
@@ -911,9 +918,14 @@ class LeadService:
             if "course_interest" in update_data
             else {}
         )
+        # Not a lead field - it goes on the follow-up's history entry.
+        follow_up_remarks = (update_data.pop("follow_up_remarks", None) or "").strip() or None
         if update_data.get("follow_up_at"):
             lead.follow_up_history.insert(
-                0, FollowUpEntry(scheduled_at=update_data["follow_up_at"], created_by=actor_id)
+                0,
+                FollowUpEntry(
+                    scheduled_at=update_data["follow_up_at"], created_by=actor_id, remarks=follow_up_remarks
+                ),
             )
         # A move between foundation class groups is recorded rather than just
         # written, so the board can say a student was moved. The name lookup is

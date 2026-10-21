@@ -35,6 +35,8 @@ class FollowUpEntry(BaseModel):
     scheduled_at: datetime
     created_at: datetime = Field(default_factory=utcnow)
     created_by: uuid.UUID | None = None
+    # What the follow-up is for, typed with the date in the lead's Follow-up tab.
+    remarks: str | None = Field(default=None, max_length=1000)
 
 
 class RemarkEntry(BaseModel):

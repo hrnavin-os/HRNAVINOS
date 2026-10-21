@@ -49,6 +49,7 @@ import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { DetailPanel, InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
 import { MEDIA_BASE_URL } from '@/constants/config'
 import { DateTimePicker, isFutureDateTime } from '@/components/ui/DateTimePicker'
+import { Calendar } from '@/components/ui/DatePresetFilter'
 
 // Any stage is reachable from any other, either way round (a move back asks
 // why). The one gate is money: Financial Approval and Batch Confirmation both
@@ -1211,16 +1212,47 @@ function PaymentDetailsTab({ lead }) {
   )
 }
 
-function FollowUpTab({ followUpAt, setFollowUpAt, history, onSave, isSaving, onClose }) {
+// A follow-up from this tab is a day, not an appointment: it is saved at the
+// start of the calling day, which is when its reminder lands.
+const FOLLOW_UP_TIME = '10:00'
+
+function FollowUpTab({ day, setDay, remarks, setRemarks, history, onSave, isSaving, onClose }) {
+  const today = toDateTimeInputValue(new Date()).slice(0, 10)
   return (
     <div className="space-y-4">
-      <DateTimePicker label="Schedule next follow-up" value={followUpAt} onChange={setFollowUpAt} />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <p className="mb-2 text-xs font-medium text-slate-600">Schedule next follow-up</p>
+          <div className="rounded-lg border border-slate-200 bg-white p-3.5">
+            <Calendar from={day} to={day} min={today} onPick={setDay} />
+          </div>
+          {/* What will be saved, in words. */}
+          <p className="mt-2 flex items-center gap-1.5 text-sm">
+            <CalendarClock className="h-4 w-4 shrink-0 text-brand-600" strokeWidth={2} aria-hidden="true" />
+            {day ? (
+              <span className="font-medium text-slate-900">
+                {new Intl.DateTimeFormat('en-IN', { dateStyle: 'full' }).format(new Date(`${day}T00:00`))}
+              </span>
+            ) : (
+              <span className="text-slate-500">Pick a day in the calendar</span>
+            )}
+          </p>
+        </div>
+        <Textarea
+          label="Remarks (optional)"
+          rows={8}
+          maxLength={1000}
+          placeholder="What is this follow-up for? e.g. Call back after salary, confirm the batch…"
+          value={remarks}
+          onChange={(event) => setRemarks(event.target.value)}
+        />
+      </div>
 
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={onClose}>
           Close
         </Button>
-        <Button onClick={onSave} disabled={isSaving}>
+        <Button onClick={onSave} disabled={isSaving || !day}>
           {isSaving ? 'Saving…' : 'Save follow-up'}
         </Button>
       </div>
@@ -1236,8 +1268,9 @@ function FollowUpTab({ followUpAt, setFollowUpAt, history, onSave, isSaving, onC
           <ul className="space-y-2">
             {history.map((entry) => (
               <li key={`${entry.scheduled_at}-${entry.created_at}`} className="rounded-lg bg-slate-50 p-3 text-sm">
-                <p className="font-semibold text-slate-900">{formatDateTime(entry.scheduled_at)}</p>
-                <p className="text-xs text-slate-500">Scheduled on {formatDateTime(entry.created_at)}</p>
+                <p className="font-semibold text-slate-900">{formatDate(entry.scheduled_at)}</p>
+                {entry.remarks && <p className="mt-0.5 break-words text-slate-700">{entry.remarks}</p>}
+                <p className="mt-0.5 text-xs text-slate-500">Scheduled on {formatDateTime(entry.created_at)}</p>
               </li>
             ))}
           </ul>
@@ -1329,7 +1362,10 @@ function TimelineTab({ leadId }) {
 export function LeadDetailModal({ lead, onClose }) {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState('overview')
-  const [followUpAt, setFollowUpAt] = useState(toDateTimeInputValue(lead.follow_up_at))
+  // The Follow-up tab's day and remarks. The day starts on the one already
+  // booked, so saving just a remark keeps it.
+  const [followUpDay, setFollowUpDay] = useState(toDateTimeInputValue(lead.follow_up_at).slice(0, 10))
+  const [followUpRemarks, setFollowUpRemarks] = useState('')
   // Mirrors the lead prop but gets refreshed from each mutation's response,
   // so e.g. saving a payment shows it as paid, with the balance worked out
   // again, immediately instead of only after the modal is reopened.
@@ -1438,7 +1474,10 @@ export function LeadDetailModal({ lead, onClose }) {
 
   const followUpMutation = useMutation({
     mutationFn: () =>
-      leadService.update(lead.id, { follow_up_at: followUpAt ? new Date(followUpAt).toISOString() : null }),
+      leadService.update(lead.id, {
+        follow_up_at: new Date(`${followUpDay}T${FOLLOW_UP_TIME}`).toISOString(),
+        follow_up_remarks: followUpRemarks.trim() || null,
+      }),
     onSuccess: () => {
       invalidateLeadQueries()
       onClose()
@@ -1573,8 +1612,10 @@ export function LeadDetailModal({ lead, onClose }) {
         {activeTab === 'payment' && <PaymentDetailsTab lead={liveLead} />}
         {activeTab === 'followup' && (
           <FollowUpTab
-            followUpAt={followUpAt}
-            setFollowUpAt={setFollowUpAt}
+            day={followUpDay}
+            setDay={setFollowUpDay}
+            remarks={followUpRemarks}
+            setRemarks={setFollowUpRemarks}
             history={liveLead.follow_up_history ?? []}
             onSave={() => followUpMutation.mutate()}
             isSaving={followUpMutation.isPending}
