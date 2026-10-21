@@ -12,7 +12,8 @@ import { inductionFormConfigService } from '@/services/inductionFormConfigServic
 import { getApiErrorMessage } from '@/services/apiClient'
 import { LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
 import { PERMISSIONS } from '@/constants/permissions'
-import { formatDate, titleCase } from '@/utils/formatters'
+import { formatCurrency, formatDate, titleCase } from '@/utils/formatters'
+import { getPaymentLedger } from '@/utils/leadPayment'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
@@ -233,6 +234,35 @@ function BatchCell({ lead, onError }) {
       >
         <X className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
       </button>
+    </div>
+  )
+}
+
+// What has come in against the lead's fee and what is still owed, read off the
+// payments recorded in the lead popup. Due is the fee less what was received,
+// which is the balance entry's amount on a converted ledger and still right on
+// a lead whose old plan slots haven't been converted yet. A lead with no plan
+// has no fee to measure against, so it shows only an amount typed in by hand.
+function PaidDueCell({ lead }) {
+  if (!lead.installments?.length) {
+    const paid = Number(lead.paid_amount ?? 0)
+    if (!paid) return <span className="text-slate-400">—</span>
+    return <p className="whitespace-nowrap text-sm font-medium text-slate-900">{formatCurrency(paid)} paid</p>
+  }
+
+  const { fee, received, balance } = getPaymentLedger(lead)
+  const due = Math.max(fee - received, 0)
+  const dueBy = balance?.entry.scheduled_at
+  return (
+    <div className="whitespace-nowrap" title={due && dueBy ? `Balance due by ${formatDate(dueBy)}` : undefined}>
+      <p className={`text-sm font-medium ${received ? 'text-slate-900' : 'text-slate-400'}`}>
+        {formatCurrency(received)} paid
+      </p>
+      {due ? (
+        <p className="text-xs font-medium text-amber-700">{formatCurrency(due)} due</p>
+      ) : (
+        <p className="text-xs font-medium text-emerald-600">Fully paid</p>
+      )}
     </div>
   )
 }
@@ -855,6 +885,15 @@ function FoundationLeadsBoard() {
       align: 'center',
       render: (row) => <BatchCell key={row.id} lead={row} onError={setEditError} />,
     },
+    // Read-only: payments are recorded in the lead popup's Payment Collection.
+    // Before Payment Method because it is the answer to it - the plan says
+    // how the fee is split, this says how much of it has come in.
+    {
+      key: 'paid_due',
+      header: 'Paid / Due',
+      align: 'center',
+      render: (row) => <PaidDueCell lead={row} />,
+    },
     {
       key: 'payment_plan',
       header: 'Payment Method',
@@ -863,8 +902,6 @@ function FoundationLeadsBoard() {
         <PaymentPlanCell key={row.id} lead={row} pricing={pricingQuery.data} onError={setEditError} />
       ),
     },
-    // No Paying Amount column: what was received is recorded with the payment
-    // itself, in the lead popup's Payment Collection.
     // The day the student picked on the Foundation Form's "When will you make
     // the payment?" step - stored on the lead's raw form answers since
     // submission, just never shown on the board. Next to Payment Remarks
