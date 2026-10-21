@@ -121,8 +121,11 @@ export function StatCard({ label, value, toneName, isActive, onClick, icon: Icon
           </span>
         )}
         <div className="min-w-0 flex-1">
+          {/* Two lines before it clips, not one: in a full row of stages a
+              card is narrow enough that "Batch Confirmation" would otherwise
+              lose its last letters. A label that fits stays on one line. */}
           <p
-            className={`truncate text-[11px] font-semibold uppercase leading-tight tracking-wide ${
+            className={`line-clamp-2 text-[11px] font-semibold uppercase leading-tight tracking-wide ${
               isActive ? 'text-white/80' : tone.label
             }`}
           >

@@ -78,28 +78,39 @@ export function LeadSectionStats({
 // Drilled into one section: "All Leads" (of that section) + a card per
 // pipeline stage, mirroring the pre-existing stage-tabs row this replaces
 // at the top level - just scoped to the current section.
+//
+// One row of equal columns once the row is wide enough for every stage to
+// keep a readable label (eight cards, ~86rem). A wrapping row left one or two
+// cards stranded on a second line - Quit alone, or Batch Confirmation and Quit
+// - which read as a separate group. auto-cols-fr is minmax(0, 1fr), so a long
+// label wraps inside its card instead of pushing the row wider. Below that it
+// wraps as before: eight cards squeezed into a laptop's width would clip every
+// label to a few letters. Sized off the row's own width, not the screen's,
+// since the sidebar and browser zoom decide how much of the screen it gets.
 export function LeadSectionStageStats({ total, stages, byStatus, activeStage, onSelect }) {
   return (
-    <div className="mb-4 flex flex-wrap gap-3">
-      <StatCard
-        label="All Leads"
-        value={total}
-        toneName="brand"
-        icon={Users}
-        isActive={activeStage === ''}
-        onClick={() => onSelect('')}
-      />
-      {stages.map((stage) => (
+    <div className="@container mb-4">
+      <div className="flex flex-wrap gap-3 @min-[86rem]:grid @min-[86rem]:auto-cols-fr @min-[86rem]:grid-flow-col">
         <StatCard
-          key={stage.value}
-          label={stage.label}
-          value={byStatus[stage.value] ?? 0}
-          toneName={stage.tone}
-          icon={STAGE_ICONS[stage.value]}
-          isActive={activeStage === stage.value}
-          onClick={() => onSelect(stage.value)}
+          label="All Leads"
+          value={total}
+          toneName="brand"
+          icon={Users}
+          isActive={activeStage === ''}
+          onClick={() => onSelect('')}
         />
-      ))}
+        {stages.map((stage) => (
+          <StatCard
+            key={stage.value}
+            label={stage.label}
+            value={byStatus[stage.value] ?? 0}
+            toneName={stage.tone}
+            icon={STAGE_ICONS[stage.value]}
+            isActive={activeStage === stage.value}
+            onClick={() => onSelect(stage.value)}
+          />
+        ))}
+      </div>
     </div>
   )
 }
