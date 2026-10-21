@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { CheckCircle2, Clock } from 'lucide-react'
 import { leadService } from '@/services/leadService'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { DataTable } from '@/components/ui/DataTable'
@@ -8,7 +9,6 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Pagination } from '@/components/ui/Pagination'
-import { TabStrip } from '@/components/ui/TabStrip'
 import { formatCurrency, formatDate, formatDateTime, titleCase } from '@/utils/formatters'
 import { getLeadPaymentSummary } from '@/utils/leadPayment'
 import { PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
@@ -125,6 +125,39 @@ const APPROVED_COLUMNS = [
   actionColumn('View', 'secondary'),
 ]
 
+// Which list is open is the whole point of the page, so the two tabs span it
+// in big halves, each in its own accent - amber for what still needs Finance,
+// green for what Finance has approved - rather than the small TabStrip pill.
+const VIEW_TAB_STYLES = {
+  awaiting: { icon: Clock, active: 'bg-amber-50 text-amber-700' },
+  approved: { icon: CheckCircle2, active: 'bg-green-100 text-emerald-600' },
+}
+
+function ViewTabs({ tabs, value, onChange }) {
+  return (
+    <div className="mb-4 flex overflow-hidden rounded-lg border border-slate-200">
+      {tabs.map((tab, index) => {
+        const { icon: Icon, active } = VIEW_TAB_STYLES[tab.key]
+        const isActive = value === tab.key
+        return (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => onChange(tab.key)}
+            aria-pressed={isActive}
+            className={`flex flex-1 items-center justify-center gap-2 px-4 py-3 text-sm font-semibold transition-colors sm:text-base ${
+              index > 0 ? 'border-l border-slate-200' : ''
+            } ${isActive ? active : 'bg-slate-50 text-slate-500 hover:bg-slate-100'}`}
+          >
+            <Icon className="h-4.5 w-4.5" strokeWidth={2} aria-hidden="true" />
+            {tab.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 // Finance's income approvals in two lists: leads waiting on Finance, and the
 // students Finance has approved. Approving one moves it across - the backend
 // records the approval (LeadService.approve_payment), and both lists are
@@ -162,15 +195,10 @@ export function IncomeApprovalsTab() {
 
   return (
     <>
-      <TabStrip
-        className="mb-3"
+      <ViewTabs
         tabs={[
           { key: 'awaiting', label: `Awaiting Approval (${awaitingQuery.data?.total ?? 0})` },
-          {
-            key: 'approved',
-            label: `Approved Students (${approvedQuery.data?.total ?? 0})`,
-            active: 'bg-white text-emerald-700 shadow-sm ring-1 ring-slate-900/5',
-          },
+          { key: 'approved', label: `Approved Students (${approvedQuery.data?.total ?? 0})` },
         ]}
         value={view}
         onChange={(key) => {
