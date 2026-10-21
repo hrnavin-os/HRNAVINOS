@@ -306,8 +306,10 @@ export function LeadRemarksCell({ lead, onError }) {
                     )}
                   </h2>
                   {/* The modal is detached from the row that opened it, so it
-                      has to say whose remarks these are. */}
+                      has to say whose remarks these are - and the number, so
+                      the call a remark is about can be made from here. */}
                   <p className="truncate text-xs text-slate-500">{lead.name}</p>
+                  {lead.phone && <p className="truncate text-xs text-slate-500">{lead.phone}</p>}
                 </div>
               }
             >
