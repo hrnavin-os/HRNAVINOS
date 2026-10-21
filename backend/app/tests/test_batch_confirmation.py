@@ -60,11 +60,10 @@ async def _make_batch(client, auth_headers, course_id, *, tutor_id=None, capacit
 async def _make_ready_lead(client, auth_headers, *, name, phone, email, paid=True):
     """A lead walked down the funnel to batch_confirmation, fee optionally cleared.
 
-    Financial Approval and Batch Confirmation are gates - each can only be
-    entered from the stage directly before it (see
-    LeadService._validate_stage_transition), so this has to step through
-    rather than jump straight to the end. Financial Approval additionally
-    requires a first payment on record, hence the amount recorded before it.
+    Walked the way a real lead goes, though nothing makes it any more (see
+    LeadService._validate_stage_transition). Financial Approval and Batch
+    Confirmation do still need a first payment on record, hence the amount
+    recorded before them.
 
     `paid=False` still pays to get through that gate, then zeroes the amount
     again, leaving a lead parked at batch_confirmation with nothing cleared -

@@ -810,24 +810,30 @@ class LeadService:
         """
         return [program.name for program in await self.programs.list_active()]
 
-    def _validate_stage_transition(self, lead: Lead, new: LeadStatus) -> None:
-        """Financial Approval and Batch Confirmation are pipeline gates: each
-        can only be entered from the stage directly before it, and only once
-        the money backing it has actually arrived. Once a lead reaches Batch
-        Confirmation it can't move back (Lost stays reachable as an exit)."""
-        current = lead.status
-        if current == new:
-            return
-        if current == LeadStatus.BATCH_CONFIRMATION and new != LeadStatus.LOST:
-            raise BadRequestError("A lead in Batch Confirmation can't be moved back to an earlier stage.")
-        if new == LeadStatus.BATCH_CONFIRMATION and current != LeadStatus.FINANCIAL_APPROVAL:
-            raise BadRequestError("A lead can only move to Batch Confirmation from Financial Approval.")
-        if new == LeadStatus.FINANCIAL_APPROVAL:
-            if current != LeadStatus.PRE_SCREENING:
-                raise BadRequestError("A lead can only move to Financial Approval from Pre Screening.")
-            self._require_first_payment(lead)
+    # The stages that mean Finance has seen money, so a lead can't enter one
+    # until a payment is on record.
+    _PAID_STAGES = {
+        LeadStatus.FINANCIAL_APPROVAL: "Financial Approval",
+        LeadStatus.BATCH_CONFIRMATION: "Batch Confirmation",
+    }
 
-    def _require_first_payment(self, lead: Lead) -> None:
+    def _validate_stage_transition(self, lead: Lead, new: LeadStatus) -> None:
+        """A lead can move to any stage from any other, in either direction -
+        a move back still has to say why (see `update`). The one gate left is
+        money: Financial Approval and Batch Confirmation can't be entered until
+        the first payment is on record.
+
+        There used to be an order as well (Financial Approval only from Follow
+        up call, Batch Confirmation only from Financial Approval, and no way
+        back out of Batch Confirmation). Section Admins found it got in the way
+        of putting a lead where it actually was, and the payment is the part
+        that protects anything."""
+        if lead.status == new:
+            return
+        if new in self._PAID_STAGES:
+            self._require_first_payment(lead, self._PAID_STAGES[new])
+
+    def _require_first_payment(self, lead: Lead, stage: str) -> None:
         """Financial Approval means "Finance has seen money" - so at least the
         first payment must be on record before the stage can be entered.
 
@@ -846,12 +852,12 @@ class LeadService:
             if not lead.installments[0].collected():
                 raise BadRequestError(
                     "The first installment must be recorded as paid (amount, mode, reference and proof) "
-                    "before this lead can move to Financial Approval."
+                    f"before this lead can move to {stage}."
                 )
             return
         if lead.paid_amount is None or lead.paid_amount <= 0:
             raise BadRequestError(
-                "Record a payment before moving this lead to Financial Approval - either assign a payment "
+                f"Record a payment before moving this lead to {stage} - either assign a payment "
                 "plan and collect its first installment, or set the amount received."
             )
 

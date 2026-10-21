@@ -65,3 +65,37 @@ async def test_quit_keeps_its_own_reason_and_is_not_a_move_back(client, auth_hea
     timeline = (await client.get(f"/api/v1/leads/{lead_id}/timeline", headers=auth_headers)).json()
     assert timeline[0]["action"] == "UPDATE"
     assert timeline[0]["changes"]["lost_reason"] == "Joined elsewhere"
+
+
+async def test_a_paid_lead_can_go_straight_to_financial_approval(client, auth_headers):
+    """No stage has to be passed through first - only the money is checked."""
+    lead_id = await make_lead(client, auth_headers)
+    await move(client, auth_headers, lead_id, paid_amount="5000")
+
+    response = await move(client, auth_headers, lead_id, status="financial_approval")
+
+    assert response.status_code == 200, response.text
+
+
+async def test_batch_confirmation_still_needs_a_payment(client, auth_headers):
+    lead_id = await make_lead(client, auth_headers)
+
+    response = await move(client, auth_headers, lead_id, status="batch_confirmation")
+
+    assert response.status_code == 400
+    assert "batch confirmation" in response.json()["message"].lower()
+    lead = (await client.get(f"/api/v1/leads/{lead_id}", headers=auth_headers)).json()
+    assert lead["status"] == "new_lead"
+
+
+async def test_a_lead_can_move_back_out_of_batch_confirmation(client, auth_headers):
+    lead_id = await make_lead(client, auth_headers)
+    await move(client, auth_headers, lead_id, paid_amount="5000")
+    await move(client, auth_headers, lead_id, status="batch_confirmation")
+
+    response = await move(
+        client, auth_headers, lead_id, status="pre_screening", stage_change_reason="Batch is full, calling again"
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "pre_screening"

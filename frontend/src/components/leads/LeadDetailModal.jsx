@@ -46,24 +46,19 @@ import { DetailPanel, InductionEntryDetail } from '@/components/leads/InductionE
 import { MEDIA_BASE_URL } from '@/constants/config'
 import { DateTimePicker, isFutureDateTime } from '@/components/ui/DateTimePicker'
 
-// Financial Approval and Batch Confirmation are pipeline gates: each is only
-// reachable from the stage directly before it, Financial Approval also needs
-// a first payment on record, and once a lead reaches Batch Confirmation it
-// can't move back (Lost stays reachable as an exit). Mirrors the backend's
-// LeadService._validate_stage_transition so a blocked button explains itself
-// up front instead of failing the request after the click.
+// Any stage is reachable from any other, either way round (a move back asks
+// why). The one gate is money: Financial Approval and Batch Confirmation both
+// mean a payment has landed, so neither opens until the first one is on
+// record. Mirrors the backend's LeadService._validate_stage_transition so a
+// blocked button explains itself up front instead of failing the request
+// after the click.
 // Returns the reason a move is blocked, or null when it's allowed.
+const PAID_STAGES = ['financial_approval', 'batch_confirmation']
+
 function stageBlockReason(lead, targetStatus) {
   if (lead.status === targetStatus) return null
-  if (lead.status === 'batch_confirmation') {
-    return targetStatus === 'lost' ? null : "A lead in Batch Confirmation can't move back to an earlier stage"
-  }
-  if (targetStatus === 'batch_confirmation') {
-    return lead.status === 'financial_approval' ? null : 'Move through Financial Approval first'
-  }
-  if (targetStatus === 'financial_approval') {
-    if (lead.status !== 'pre_screening') return 'Complete Follow up call first'
-    if (!hasFirstPayment(lead)) return 'Record the first payment before moving to Financial Approval'
+  if (PAID_STAGES.includes(targetStatus) && !hasFirstPayment(lead)) {
+    return `Record the first payment before moving to ${stageLabel(targetStatus)}`
   }
   return null
 }
@@ -1418,8 +1413,8 @@ export function LeadDetailModal({ lead, onClose }) {
             )}
             {pendingStage.needsFollowUp && (
               <div className={pendingNeedsReason ? 'mt-4' : ''}>
-                <p className="mb-2 text-sm font-semibold text-brand-800">When is the follow-up call?</p>
-                <DateTimePicker label="Follow-up date and time" value={stageFollowUpAt} onChange={setStageFollowUpAt} />
+                <p className="mb-2 text-sm font-semibold text-brand-800">When is the student available?</p>
+                <DateTimePicker label="Available on" value={stageFollowUpAt} onChange={setStageFollowUpAt} />
                 {followUpInPast && (
                   <p className="mt-1.5 text-xs font-medium text-red-600">That time has already passed - pick a later one.</p>
                 )}
