@@ -108,6 +108,22 @@ const VIEWS = [
   { value: INDUCTION_STATUS.quit, label: 'Quit Students', tone: 'red', icon: UserX },
 ]
 
+// Pinned: the row is read far out to the right, and the name is what says
+// whose it is. The number sits under it for the same reason - it is what gets
+// dialled, and the column it also appears in has scrolled away by then.
+// Shared by the working tabs and the Moved tab.
+const nameColumn = {
+  key: 'name',
+  header: 'Name',
+  sticky: true,
+  render: (row) => (
+    <div className="min-w-0">
+      <p className="font-medium text-slate-900">{row.name}</p>
+      {row.phone && <p className="text-xs tabular-nums text-slate-500">{row.phone}</p>}
+    </div>
+  ),
+}
+
 // Induction submissions are their own records, not Leads, so this board has
 // its own columns rather than reusing the Foundation ones - there is no stage,
 // payment plan or query on an induction entry.
@@ -115,14 +131,7 @@ const VIEWS = [
 // No create form: entries arrive through the shareable form in
 // Admin > Form Collection. Editing stays available for corrections.
 const columns = [
-  // Pinned: the row is read far out to the right, and the name is what says
-  // whose it is.
-  {
-    key: 'name',
-    header: 'Name',
-    sticky: true,
-    render: (row) => <span className="font-medium text-slate-900">{row.name}</span>,
-  },
+  nameColumn,
   {
     // Phone over email is a deliberate two-line stack, not wrapping - each
     // line is still a single unbroken value.
@@ -181,12 +190,7 @@ const columns = [
 // induction bookkeeping, and what you actually want to know is who moved, when
 // they registered, when they crossed, and where they are now.
 const MOVED_COLUMNS = [
-  {
-    key: 'name',
-    header: 'Name',
-    sticky: true,
-    render: (row) => <span className="font-medium text-slate-900">{row.name}</span>,
-  },
+  nameColumn,
   { key: 'phone', header: 'Mobile Number' },
   {
     key: 'registration_date',

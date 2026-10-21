@@ -784,12 +784,17 @@ function FoundationLeadsBoard() {
       key: 'name',
       header: 'Name',
       // Pinned while the board scrolls sideways, so the payment columns out
-      // on the right still say whose row they are.
+      // on the right still say whose row they are. The number rides along
+      // under the name: it is what gets dialled, and the Contact column has
+      // scrolled away by the time you are reading the payment columns.
       sticky: true,
       render: (row) => (
         <div className="flex items-center gap-3">
           <LeadAvatar name={row.name} />
-          <span className="font-medium text-slate-900">{row.name}</span>
+          <div className="min-w-0">
+            <p className="font-medium text-slate-900">{row.name}</p>
+            {row.phone && <p className="text-xs tabular-nums text-slate-500">{row.phone}</p>}
+          </div>
         </div>
       ),
     },
