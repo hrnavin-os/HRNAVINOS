@@ -111,6 +111,13 @@ const STATES = ['all', 'yes', 'no']
 
 const stateLabel = (key, tab) => (key === 'all' ? 'All students' : key === 'yes' ? tab.yes : tab.no)
 
+// The Terms tab's Onboarded filter: whether the student's Foundation lead has
+// the payment remark Onboarded. Values are the API's `onboarded` param.
+const ONBOARDED_OPTIONS = [
+  { value: 'true', label: 'Onboarded' },
+  { value: 'false', label: 'Not onboarded' },
+]
+
 // The Polls tab's not-selected side, split by whether a section admin has rung
 // the student yet. Values are the API's `follow_up` param.
 const FOLLOW_UP_FILTERS = [
@@ -148,6 +155,9 @@ export function InductionAttendancePage({ only }) {
   // cutting across one - both groups are the same batch - so it sits beside
   // the Batch filter and is read from the same registration date.
   const [group, setGroup] = useState('')
+  // Terms only: students whose Foundation payment remark is Onboarded, or the
+  // rest.
+  const [onboarded, setOnboarded] = useState('')
   const [error, setError] = useState(null)
   // Polls, "Not selected" side only: everyone not selected, only those nobody
   // has followed up yet, or only those somebody has.
@@ -163,8 +173,17 @@ export function InductionAttendancePage({ only }) {
   // undefined rather than '' for an unset filter: the API treats a missing
   // param as "no filter", where an empty string would be a section nobody is
   // in and return nothing.
-  const filters = { section: section || undefined, batch: batch || undefined, group: group || undefined }
   const isPolls = marker === 'polls'
+  const isTerms = marker === 'terms'
+  // Onboarded is only offered on the Terms tab, so it only applies there - a
+  // value left set when the full board moves to another tab would otherwise
+  // narrow it with no visible control saying so.
+  const filters = {
+    section: section || undefined,
+    batch: batch || undefined,
+    group: group || undefined,
+    onboarded: isTerms && onboarded ? onboarded : undefined,
+  }
 
   const query = usePaginatedQuery('induction-attendance', attendanceBoardService, {
     marker,
@@ -296,6 +315,25 @@ export function InductionAttendancePage({ only }) {
       align: 'center',
       render: (row) => formatDate(row.registration_date),
     },
+    // The Foundation lead's payment remark, read from there rather than
+    // marked here: who has been onboarded is who most needs to have signed.
+    ...(isTerms
+      ? [
+          {
+            key: 'onboarded',
+            header: 'Onboarded',
+            align: 'center',
+            render: (row) =>
+              row.onboarded ? (
+                <span title="Payment remark on the Foundation board">
+                  <Badge tone="green">Onboarded</Badge>
+                </span>
+              ) : (
+                <span className="text-slate-400">—</span>
+              ),
+          },
+        ]
+      : []),
     // One marker column: the open tab's. All four at once meant a table wider
     // than the screen, so reading any single one - which is what a tab is for
     // - cost a horizontal scroll past three columns nobody had asked about.
@@ -590,17 +628,26 @@ export function InductionAttendancePage({ only }) {
             options={FOUNDATION_GROUP_OPTIONS}
             onChange={setGroup}
           />
+          {isTerms && (
+            <FilterDropdown
+              label="Onboarded"
+              value={onboarded}
+              options={ONBOARDED_OPTIONS}
+              onChange={setOnboarded}
+            />
+          )}
 
           {/* Only once something is set, and it clears everything the row
               holds - hunting three controls to get back to the whole roll is
               the cost a filter row otherwise quietly charges. */}
-          {(section || batch || group || search) && (
+          {(section || batch || group || filters.onboarded || search) && (
             <button
               type="button"
               onClick={() => {
                 setSection('')
                 setBatch('')
                 setGroup('')
+                setOnboarded('')
                 setSearch('')
                 setPage(1)
               }}

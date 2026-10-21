@@ -17,7 +17,9 @@ from typing import Callable
 
 from app.database.base import utcnow
 from app.exceptions.base import BadRequestError, NotFoundError
+from app.models.enums import PaymentCallRemark
 from app.models.induction_entry import AttendanceMark, FollowUpRemark, InductionEntry, batch_label, parse_batch
+from app.models.lead import Lead
 from app.models.terms_document import TermsDocument
 from app.repositories.induction_entry_repository import COMPLETED_REMARK, InductionEntryRepository
 from app.repositories.user_repository import UserRepository
@@ -278,8 +280,9 @@ class AttendanceBoardService:
         return found
 
     @staticmethod
-    def to_response(entry: InductionEntry) -> AttendanceStudentResponse:
+    def to_response(entry: InductionEntry, *, onboarded: bool = False) -> AttendanceStudentResponse:
         return AttendanceStudentResponse(
+            onboarded=onboarded,
             id=entry.id,
             name=entry.name,
             phone=entry.phone,
@@ -297,6 +300,46 @@ class AttendanceBoardService:
             ],
         )
 
+    async def respond(self, entry: InductionEntry) -> AttendanceStudentResponse:
+        """One row, for the endpoints that change a single student."""
+        return self.to_response(entry, onboarded=entry.id in await self._onboarded([entry]))
+
+    @staticmethod
+    async def _onboarded(entries: list[InductionEntry]) -> set[uuid.UUID]:
+        """The ids of the entries whose Foundation lead has the payment remark
+        Onboarded.
+
+        Read off the lead rather than copied onto the entry: the remark is set
+        on the Foundation board, and a copy would go stale the first time
+        somebody changed it there. One query for the page, like the induction
+        board's foundation statuses.
+        """
+        lead_ids = [entry.foundation_lead_id for entry in entries if entry.foundation_lead_id]
+        if not lead_ids:
+            return set()
+        onboarded = set(
+            await Lead.get_motor_collection().distinct(
+                "_id",
+                {"_id": {"$in": lead_ids}, "is_deleted": False, "payment_call_remarks": PaymentCallRemark.ONBOARDED.value},
+            )
+        )
+        return {entry.id for entry in entries if entry.foundation_lead_id in onboarded}
+
+    @staticmethod
+    async def _onboarded_condition(onboarded: bool | None) -> dict | None:
+        """The filter for one side of Onboarded, or None for no filter.
+
+        The remark lives on the lead, so this asks which leads are onboarded
+        first and matches entries linked to them. "Not onboarded" includes the
+        entries with no Foundation lead at all, which `$nin` matches on its own.
+        """
+        if onboarded is None:
+            return None
+        lead_ids = await Lead.get_motor_collection().distinct(
+            "_id", {"is_deleted": False, "payment_call_remarks": PaymentCallRemark.ONBOARDED.value}
+        )
+        return {"foundation_lead_id": {"$in" if onboarded else "$nin": lead_ids}}
+
     def _query(
         self,
         *,
@@ -306,6 +349,7 @@ class AttendanceBoardService:
         batch: str | None = None,
         group: int | None = None,
         follow_up: FollowUpState | None = None,
+        onboarded: dict | None = None,
     ) -> dict:
         """The stored-field query for one tab, narrowed to a section if the
         caller is pinned to one. With no marker, the filters alone - the whole
@@ -313,6 +357,9 @@ class AttendanceBoardService:
 
         `follow_up` splits the Polls tab by whether a section admin has rung
         the student yet - pending is nobody has, done is somebody has.
+
+        `onboarded` is the condition `_onboarded_condition` built, since
+        answering it takes a query of the leads and this does not await.
 
         Note what is *not* here: the induction board's status tabs. This board
         covers everyone who came through induction, whether they are still in
@@ -333,6 +380,8 @@ class AttendanceBoardService:
             conditions.append(marker.query(state == "yes"))
         if follow_up and marker_key == "polls":
             conditions.append({FOLLOWED_UP: {"$exists": follow_up == "done"}})
+        if onboarded:
+            conditions.append(onboarded)
         # Which foundation class group. A stored field since the group became
         # something the office decides rather than something the registration
         # date implies, so this is an equality match and no longer has to be
@@ -361,6 +410,7 @@ class AttendanceBoardService:
         batch: str | None = None,
         group: int | None = None,
         follow_up: FollowUpState | None = None,
+        onboarded: bool | None = None,
     ) -> PaginatedResponse[AttendanceStudentResponse]:
         items, total = await self.entries.list(
             page=params.page,
@@ -376,14 +426,24 @@ class AttendanceBoardService:
                 batch=batch,
                 group=group,
                 follow_up=follow_up,
+                onboarded=await self._onboarded_condition(onboarded),
             ),
         )
+        onboarded_ids = await self._onboarded(items)
         return PaginatedResponse[AttendanceStudentResponse].build(
-            [self.to_response(entry) for entry in items], total, params.page, params.page_size
+            [self.to_response(entry, onboarded=entry.id in onboarded_ids) for entry in items],
+            total,
+            params.page,
+            params.page_size,
         )
 
     async def stats(
-        self, *, section: str | None = None, batch: str | None = None, group: int | None = None
+        self,
+        *,
+        section: str | None = None,
+        batch: str | None = None,
+        group: int | None = None,
+        onboarded: bool | None = None,
     ) -> AttendanceStatsResponse:
         """Every tab's split, in one response.
 
@@ -398,7 +458,14 @@ class AttendanceBoardService:
         """
         base = {
             "is_deleted": False,
-            **self._query(marker_key=None, state="all", section=section, batch=batch, group=group),
+            **self._query(
+                marker_key=None,
+                state="all",
+                section=section,
+                batch=batch,
+                group=group,
+                onboarded=await self._onboarded_condition(onboarded),
+            ),
         }
         total = await InductionEntry.find(base).count()
 

@@ -76,6 +76,8 @@ async def list_students(
     # Polls only: of the students listed, those nobody has followed up yet
     # (pending) or those somebody has (done).
     follow_up: FollowUpState | None = None,
+    # Whether their Foundation lead's payment remark is Onboarded.
+    onboarded: bool | None = None,
     sort_by: str = "registration_date",
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     actor: User = Depends(RequirePermissions(Permissions.INDUCTION_ATTENDANCE_VIEW)),
@@ -92,6 +94,7 @@ async def list_students(
         batch=batch,
         group=group,
         follow_up=follow_up,
+        onboarded=onboarded,
     )
 
 
@@ -102,10 +105,13 @@ async def stats(
     section: str | None = None,
     batch: str | None = None,
     group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
+    onboarded: bool | None = None,
     actor: User = Depends(RequirePermissions(Permissions.INDUCTION_ATTENDANCE_VIEW)),
 ) -> AttendanceStatsResponse:
     scope = await get_actor_scope(actor)
-    return await AttendanceBoardService().stats(section=scope or section, batch=batch, group=group)
+    return await AttendanceBoardService().stats(
+        section=scope or section, batch=batch, group=group, onboarded=onboarded
+    )
 
 
 @router.get("/filter-options")
@@ -139,7 +145,7 @@ async def set_mark(
     if scope is not None and marker not in SCOPED_MARKERS:
         raise ForbiddenError("Section Admins can only mark polls.")
     entry = await service.set_mark(entry_id, marker, marked=payload.marked, actor_id=actor.id, section=scope)
-    return service.to_response(entry)
+    return await service.respond(entry)
 
 
 @router.post("/students/{entry_id}/poll-follow-ups", response_model=AttendanceStudentResponse)
@@ -155,4 +161,4 @@ async def add_poll_follow_up(
     service = AttendanceBoardService()
     scope = await get_actor_scope(actor)
     entry = await service.add_poll_follow_up(entry_id, payload.remark, actor_id=actor.id, section=scope)
-    return service.to_response(entry)
+    return await service.respond(entry)

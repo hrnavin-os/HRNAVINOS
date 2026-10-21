@@ -97,6 +97,9 @@ class AttendanceStudentResponse(BaseModel):
     # to Foundation, quit). Shown so the board reads without opening the other
     # one: chasing a signature from somebody who quit is wasted effort.
     status: str
+    # Their Foundation lead's payment remark is Onboarded - set on the
+    # Foundation board, and shown on the Terms board beside the signature.
+    onboarded: bool = False
     marks: dict[str, MarkResponse]
     # The section admins' follow-up calls on a student who hasn't selected the
     # poll, newest first.

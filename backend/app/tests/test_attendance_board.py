@@ -135,6 +135,69 @@ async def test_foundation_class_is_answered_by_the_foundation_link(client, auth_
     assert attended.json()["items"][0]["marks"]["foundation_class"]["source"] == "auto"
 
 
+async def link_to_foundation(client, auth_headers, *, phone: str, remark: str | None = "onboarded") -> None:
+    """Takes a student through the Foundation Form - which links their lead to
+    the induction entry on mobile number - and sets the lead's payment remark
+    the way the Foundation board does."""
+    from app.models.induction_entry import InductionEntry
+
+    assert (await client.get("/api/v1/public/foundation-form/pricing")).status_code == 200
+    submitted = await client.post(
+        FOUNDATION_URL,
+        json={
+            "name": "Student",
+            "mobile_number": phone,
+            "email": f"{phone}@example.com",
+            "program_interest": "only_recruitment",
+            "payment_timeline": "immediate",
+            "queries": "None",
+        },
+    )
+    assert submitted.status_code in (200, 201), submitted.text
+    entry = await InductionEntry.find_one({"phone": phone})
+    assert entry.foundation_lead_id is not None
+    if remark is not None:
+        updated = await client.put(
+            f"/api/v1/leads/{entry.foundation_lead_id}", headers=auth_headers, json={"payment_call_remarks": remark}
+        )
+        assert updated.status_code == 200, updated.text
+
+
+async def test_onboarded_on_foundation_shows_on_the_board(client, auth_headers):
+    """Onboarded is the Foundation lead's payment remark, read from there -
+    not a mark anybody makes on this board."""
+    arun = await add_student(client, auth_headers, name="Arun", phone="9876543210")
+    await add_student(client, auth_headers, name="Divya", phone="9876500000")
+    await link_to_foundation(client, auth_headers, phone="9876543210")
+    await link_to_foundation(client, auth_headers, phone="9876500000", remark="confirmed_to_pay")
+
+    rows = (await client.get(STUDENTS_URL, headers=auth_headers)).json()["items"]
+    assert {row["name"]: row["onboarded"] for row in rows} == {"Arun": True, "Divya": False}
+
+    # A row sent back after a mark carries it too.
+    signed = await mark(client, auth_headers, arun, "terms", True)
+    assert signed.json()["onboarded"] is True
+
+
+async def test_onboarded_filter_narrows_the_terms_board_and_its_counts(client, auth_headers):
+    arun = await add_student(client, auth_headers, name="Arun", phone="9876543210")
+    await add_student(client, auth_headers, name="Divya", phone="9876500000")
+    await add_student(client, auth_headers, name="Chitra", phone="9876511111")
+    await link_to_foundation(client, auth_headers, phone="9876543210")
+    await link_to_foundation(client, auth_headers, phone="9876500000", remark="confirmed_to_pay")
+    await mark(client, auth_headers, arun, "terms", True)
+
+    onboarded = await client.get(STUDENTS_URL, headers=auth_headers, params={"marker": "terms", "onboarded": True})
+    assert [row["name"] for row in onboarded.json()["items"]] == ["Arun"]
+
+    # Not onboarded takes in the students with no Foundation lead at all.
+    rest = await client.get(STUDENTS_URL, headers=auth_headers, params={"marker": "terms", "onboarded": False})
+    assert sorted(row["name"] for row in rest.json()["items"]) == ["Chitra", "Divya"]
+
+    stats = (await client.get(STATS_URL, headers=auth_headers, params={"onboarded": True})).json()
+    assert stats["markers"]["terms"] == {"total": 1, "yes": 1, "no": 0}
+
+
 async def test_a_manual_no_overrides_the_automatic_foundation_answer(client, auth_headers):
     entry_id = await add_student(client, auth_headers, phone="9876543210")
     assert (await client.get("/api/v1/public/foundation-form/pricing")).status_code == 200
