@@ -78,6 +78,8 @@ async def list_leads(
     # longer capped at two: the number of groups is whatever the Induction Call
     # Form's Group dropdown offers.
     foundation_group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
+    # True for the Finance page's Approved Students tab.
+    finance_approved: bool | None = None,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> PaginatedResponse[LeadResponse]:
     params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)
@@ -98,6 +100,7 @@ async def list_leads(
         date_to=date_to,
         induction_matched=induction_matched,
         foundation_group=foundation_group,
+        finance_approved=finance_approved,
     )
     items = [await service.to_response(lead) for lead in result.items]
     return PaginatedResponse[LeadResponse].build(items, result.total, result.page, result.page_size)
@@ -553,6 +556,18 @@ async def update_lead_balance(
     service = LeadService()
     scope = await get_actor_scope(actor)
     lead = await service.update_balance(lead_id, payload, actor_id=actor.id, scope=scope)
+    return await service.to_response(lead)
+
+
+@router.post("/{lead_id}/finance-approve", response_model=LeadResponse)
+async def finance_approve_lead(
+    lead_id: uuid.UUID,
+    # The same permission the Review popup's Approve button was gated on.
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
+) -> LeadResponse:
+    service = LeadService()
+    scope = await get_actor_scope(actor)
+    lead = await service.approve_payment(lead_id, actor_id=actor.id, scope=scope)
     return await service.to_response(lead)
 
 

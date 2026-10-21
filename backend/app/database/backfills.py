@@ -6,10 +6,13 @@ is idempotent and only touches rows that are actually missing the value, so
 every boot after the first one is a single cheap query that matches nothing.
 """
 import logging
+import uuid
 
 from pymongo import UpdateOne
 
 from app.database.base import BaseDocument, utcnow
+from app.models.audit_log import AuditLog
+from app.models.enums import LeadStatus
 from app.models.induction_entry import InductionEntry
 from app.models.lead import Lead
 from app.models.permission import Permission
@@ -411,7 +414,78 @@ async def backfill_payment_ledger() -> int:
     return converted
 
 
+FINANCE_APPROVALS_MIGRATION = "finance_approvals_from_batch_confirmation"
+
+
+async def backfill_finance_approvals() -> int:
+    """Puts the students Finance approved before approvals were recorded onto
+    the Finance page's Approved Students tab, once.
+
+    Approving used to move a lead to Batch Confirmation and record nothing
+    else, so reaching that stage is the record there is. Each lead that ever
+    did gets the time of its latest move there, and who made it, from the
+    audit log; one sitting in the stage with no such entry (imported, seeded)
+    is dated by its last update. A lead back in Financial Approval is skipped -
+    it is waiting to be approved again. Once, recorded in `migrations`: from
+    then on only Finance's own Approve sets it.
+    """
+    collection = Lead.get_motor_collection()
+    migrations = collection.database["migrations"]
+    if await migrations.find_one({"_id": FINANCE_APPROVALS_MIGRATION}):
+        return 0
+    moves = await AuditLog.get_motor_collection().aggregate(
+        [
+            {"$match": {"entity_type": "Lead", "changes.status": LeadStatus.BATCH_CONFIRMATION.value}},
+            {"$sort": {"created_at": -1}},
+            {"$group": {"_id": "$entity_id", "at": {"$first": "$created_at"}, "by": {"$first": "$user_id"}}},
+        ]
+    ).to_list(length=None)
+    approvals: dict[uuid.UUID, dict] = {}
+    for move in moves:
+        try:
+            approvals[uuid.UUID(str(move["_id"]))] = move
+        except ValueError:
+            continue
+    leads = await collection.find(
+        {
+            "finance_approved_at": None,
+            "status": {"$ne": LeadStatus.FINANCIAL_APPROVAL.value},
+            "$or": [{"status": LeadStatus.BATCH_CONFIRMATION.value}, {"_id": {"$in": list(approvals)}}],
+        },
+        {"_id": 1, "updated_at": 1},
+    ).to_list(length=None)
+    approver_ids = {move["by"] for move in approvals.values() if move.get("by")}
+    names = {
+        user["_id"]: f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() or None
+        async for user in User.get_motor_collection().find(
+            {"_id": {"$in": list(approver_ids)}}, {"first_name": 1, "last_name": 1}
+        )
+    }
+    operations = []
+    for lead in leads:
+        move = approvals.get(lead["_id"])
+        by = move.get("by") if move else None
+        operations.append(
+            UpdateOne(
+                {"_id": lead["_id"]},
+                {
+                    "$set": {
+                        "finance_approved_at": move["at"] if move else lead.get("updated_at"),
+                        "finance_approved_by": by,
+                        "finance_approved_by_name": names.get(by),
+                    }
+                },
+            )
+        )
+    approved = (await collection.bulk_write(operations, ordered=False)).modified_count if operations else 0
+    await migrations.insert_one({"_id": FINANCE_APPROVALS_MIGRATION, "applied_at": utcnow()})
+    return approved
+
+
 async def run_startup_backfills() -> None:
+    approved = await backfill_finance_approvals()
+    if approved:
+        logger.info("Recorded the finance approval on %d leads already past it.", approved)
     updated = await backfill_payment_ledger()
     if updated:
         logger.info("Converted the payment collection on %d leads.", updated)

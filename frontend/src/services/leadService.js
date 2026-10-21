@@ -157,6 +157,12 @@ export const leadService = {
     const { data } = await apiClient.delete(`/leads/${id}/remarks/${remarkId}`)
     return data
   },
+  // Finance's Approve: records the approval and moves the lead on to Batch
+  // Confirmation, which puts it on the Approved Students tab.
+  financeApprove: async (id) => {
+    const { data } = await apiClient.post(`/leads/${id}/finance-approve`)
+    return data
+  },
   markLost: async (id) => {
     const { data } = await apiClient.post(`/leads/${id}/mark-lost`)
     return data

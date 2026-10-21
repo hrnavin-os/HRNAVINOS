@@ -250,6 +250,15 @@ class Lead(BaseDocument):
     # why rather than just that it happened.
     lost_reason: str | None = Field(default=None, max_length=500)
     lost_at: datetime | None = None
+    # Set when Finance approves the payment from Income Approvals, which also
+    # moves the lead to Batch Confirmation - the Approved Students tab lists
+    # these. Recorded rather than read off the stage, because the stage can now
+    # be reached without Finance (see LeadService._validate_stage_transition).
+    # Cleared when the lead comes back for approval, so it is in one tab only.
+    # The approver's name is snapshotted for the same reason remark authors are.
+    finance_approved_at: datetime | None = None
+    finance_approved_by: uuid.UUID | None = None
+    finance_approved_by_name: str | None = Field(default=None, max_length=150)
 
     class Settings:
         name = "leads"

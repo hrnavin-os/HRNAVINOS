@@ -19,12 +19,13 @@ export function ReviewApprovalModal({ lead, onClose }) {
   const [isRejecting, setIsRejecting] = useState(false)
   const [reason, setReason] = useState('')
 
+  // Approving is its own call, not a status write: it records that Finance
+  // approved, which is what puts the lead on the Approved Students tab.
   const mutation = useMutation({
-    mutationFn: ({ status, stageChangeReason }) =>
-      leadService.update(lead.id, {
-        status,
-        ...(stageChangeReason ? { stage_change_reason: stageChangeReason } : {}),
-      }),
+    mutationFn: ({ approve, stageChangeReason }) =>
+      approve
+        ? leadService.financeApprove(lead.id)
+        : leadService.update(lead.id, { status: 'pre_screening', stage_change_reason: stageChangeReason }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['income-approvals'] })
       queryClient.invalidateQueries({ queryKey: ['leads'] })
@@ -63,7 +64,7 @@ export function ReviewApprovalModal({ lead, onClose }) {
             </Button>
             <Button
               variant="reject"
-              onClick={() => mutation.mutate({ status: 'pre_screening', stageChangeReason: reason.trim() })}
+              onClick={() => mutation.mutate({ approve: false, stageChangeReason: reason.trim() })}
               disabled={!reason.trim() || mutation.isPending}
             >
               <XCircle className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
@@ -83,7 +84,7 @@ export function ReviewApprovalModal({ lead, onClose }) {
                 </Button>
                 <Button
                   variant="approve"
-                  onClick={() => mutation.mutate({ status: 'batch_confirmation' })}
+                  onClick={() => mutation.mutate({ approve: true })}
                   disabled={mutation.isPending}
                 >
                   <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />

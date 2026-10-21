@@ -231,6 +231,10 @@ class LeadResponse(BaseModel):
     group_assigned_at: datetime | None = None
     lost_reason: str | None = None
     lost_at: datetime | None = None
+    # When and by whom Finance approved the payment. Set means the lead is on
+    # the Approved Students tab.
+    finance_approved_at: datetime | None = None
+    finance_approved_by_name: str | None = None
     payment_plan: PaymentPlanOption | None = None
     installments: list[PaymentInstallmentResponse] = []
     created_at: datetime

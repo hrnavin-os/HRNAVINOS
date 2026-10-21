@@ -160,6 +160,8 @@ class LeadService:
             group_assigned_at=lead.group_assigned_at,
             lost_reason=lead.lost_reason,
             lost_at=lead.lost_at,
+            finance_approved_at=lead.finance_approved_at,
+            finance_approved_by_name=lead.finance_approved_by_name,
             installments=[
                 PaymentInstallmentResponse(
                     kind=installment.kind,
@@ -264,9 +266,14 @@ class LeadService:
         date_to: date | None = None,
         induction_matched: bool | None = None,
         foundation_group: int | None = None,
+        finance_approved: bool | None = None,
     ) -> PaginatedResponse:
         # See LeadRepository.count_total for why this isn't a plain "reviewed": True.
         filters = {"reviewed": {"$ne": False}}
+        # The Finance page's Approved Students tab. `$eq: None` also matches
+        # leads from before the field, where the key is absent.
+        if finance_approved is not None:
+            filters["finance_approved_at"] = {"$ne": None} if finance_approved else {"$eq": None}
         # Separates leads that came across from an induction call from those
         # whose number never appeared in Induction. `$eq: None` rather than a
         # bare None so it also matches leads created before the field existed,
@@ -900,6 +907,13 @@ class LeadService:
                 raise BadRequestError("Give a reason when marking a lead as Quit.")
             update_data["lost_reason"] = reason
             update_data["lost_at"] = utcnow()
+        # Back for approval: what Finance approved before is not what it is
+        # being asked about now, so the lead leaves Approved Students until it
+        # is approved again - and is never on both of Finance's tabs at once.
+        if data.status == LeadStatus.FINANCIAL_APPROVAL and lead.status != LeadStatus.FINANCIAL_APPROVAL:
+            update_data["finance_approved_at"] = None
+            update_data["finance_approved_by"] = None
+            update_data["finance_approved_by_name"] = None
         # Not a lead field - it goes to the timeline, not the document.
         back_reason = (update_data.pop("stage_change_reason", None) or "").strip()
         previous_status = lead.status
@@ -1416,6 +1430,42 @@ class LeadService:
             changes={
                 "balance_due_at": balance.scheduled_at.isoformat() if balance.scheduled_at else None,
                 "balance_remarks": balance.remarks,
+            },
+        )
+        return lead
+
+    async def approve_payment(
+        self, lead_id: uuid.UUID, *, actor_id: uuid.UUID | None, scope: str | None = None
+    ) -> Lead:
+        """Finance's Approve on Income Approvals: the payment has been checked,
+        so the lead moves on to Batch Confirmation and onto the Approved
+        Students tab.
+
+        Its own action rather than a status write, because the stage can be
+        reached without Finance now - what the tab lists is what Finance
+        actually approved, and only this records that.
+        """
+        lead = await self.get(lead_id, scope=scope)
+        if lead.status != LeadStatus.FINANCIAL_APPROVAL:
+            raise BadRequestError("Only a lead awaiting financial approval can be approved.")
+        self._validate_stage_transition(lead, LeadStatus.BATCH_CONFIRMATION)
+        previous_status = lead.status
+        lead.status = LeadStatus.BATCH_CONFIRMATION
+        lead.finance_approved_at = utcnow()
+        lead.finance_approved_by = actor_id
+        lead.finance_approved_by_name = await self._actor_name(actor_id)
+        lead.updated_by = actor_id
+        lead.touch(actor_id)
+        await lead.save()
+        await self.audit.record(
+            user_id=actor_id,
+            action="UPDATE",
+            entity_type="Lead",
+            entity_id=str(lead.id),
+            changes={
+                "status": LeadStatus.BATCH_CONFIRMATION,
+                "previous_status": previous_status,
+                "finance_approved": True,
             },
         )
         return lead
