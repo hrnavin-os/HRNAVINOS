@@ -166,6 +166,8 @@ class InductionEntryUpdate(BaseModel):
     # refuses a quit remark that arrives without one, and clears the stored
     # reason when the remark moves off quit.
     quit_reason: str | None = Field(default=None, max_length=500)
+    # Why they haven't moved to Foundation yet. Empty clears it.
+    foundation_pending_reason: str | None = Field(default=None, max_length=500)
     # Moving a student between groups. A number here, not the form's label:
     # the board already knows which group it picked, and the service records
     # the move from whatever was there before.
@@ -197,6 +199,8 @@ class InductionEntryResponse(BaseModel):
     call_remark: str | None = None
     # Why they quit. Only ever set while the remark says quit.
     quit_reason: str | None = None
+    # Why they haven't moved to Foundation yet, typed from the board.
+    foundation_pending_reason: str | None = None
     # Set by the round-robin at creation, not by the form.
     assigned_to: uuid.UUID | None = None
     assigned_to_name: str | None = None

@@ -885,9 +885,8 @@ function FoundationLeadsBoard() {
         <PaymentPlanCell key={row.id} lead={row} pricing={pricingQuery.data} onError={setEditError} />
       ),
     },
-    // No Paying Amount or QR-Code columns: both are recorded with the payment
-    // itself, in the lead popup's Payment Collection - what was received, and
-    // which account it went into.
+    // No Paying Amount column: what was received is recorded with the payment
+    // itself, in the lead popup's Payment Collection.
     // The day the student picked on the Foundation Form's "When will you make
     // the payment?" step - stored on the lead's raw form answers since
     // submission, just never shown on the board. Next to Payment Remarks
@@ -926,6 +925,27 @@ function FoundationLeadsBoard() {
         />
       ),
     },
+    // Which account the money went into. Recording a payment in the lead
+    // popup's Payment Collection sets this too (the lead mirrors its latest
+    // installment's QR code); picking one here is for a payment that came in
+    // before anyone recorded it there. Plain text - the roster has no tones.
+    {
+      key: 'qr_code',
+      header: 'QR Code',
+      align: 'center',
+      render: (row) => (
+        <SelectBadgeCell
+          key={row.id}
+          lead={row}
+          field="qr_code"
+          options={qrCodeOptions}
+          placeholder="Select…"
+          plain
+          allowAdd
+          onError={setEditError}
+        />
+      ),
+    },
     {
       key: 'stage',
       header: 'Stage',
@@ -936,7 +956,7 @@ function FoundationLeadsBoard() {
         return (
           // Same geometry as Badge (which this can't use - it needs solid
           // fills Badge's tone map doesn't carry), so the Stage chip and the
-          // Payment Remarks chip beside it are the same object in two colours.
+          // Payment Remarks chip before it are the same object in two colours.
           <span className={`inline-flex items-center whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] font-medium ${style}`}>
             {stage?.label ?? titleCase(row.status)}
           </span>

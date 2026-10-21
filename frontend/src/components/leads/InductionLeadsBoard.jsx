@@ -20,6 +20,7 @@ import { InductionGroupCell } from '@/components/leads/FoundationGroupCell'
 import { InductionQuitReasonCell } from '@/components/leads/InductionQuitReasonCell'
 import { InductionWhatsAppCell, WhatsAppColumnHeader } from '@/components/leads/WhatsAppGroupCell'
 import { InductionRecordingCell } from '@/components/leads/InductionRecordingCell'
+import { FoundationPendingReasonCell } from '@/components/leads/FoundationPendingReasonCell'
 import { InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
 import { InductionUpdateModal } from '@/components/leads/InductionUpdateModal'
 import { useAuth } from '@/hooks/useAuth'
@@ -766,7 +767,7 @@ export function InductionLeadsBoard() {
               : [
                 ...pendingColumns,
                 {
-                  // Last column, before Actions: opens the four-page post-call form.
+                  // Opens the four-page post-call form.
                   key: 'update',
                   header: 'Update',
                   align: 'center',
@@ -783,6 +784,13 @@ export function InductionLeadsBoard() {
                       {hasDetails(row) ? 'Edit' : 'Update'}
                     </Button>
                   ),
+                },
+                {
+                  // Straight after Update: what is holding this candidate back
+                  // from Foundation, set after the follow-up call.
+                  key: 'foundation_pending_reason',
+                  header: 'Foundation Pending Reason',
+                  render: (row) => <FoundationPendingReasonCell entry={row} onError={setError} />,
                 },
               ]
         }

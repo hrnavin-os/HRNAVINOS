@@ -567,6 +567,11 @@ class InductionEntryService:
         if update_data.get("phone"):
             update_data["phone_normalized"] = normalize_phone(update_data["phone"])
         _resolve_quit_reason(entry, update_data)
+        # Spaces alone are no reason; stored as None so the cell asks again.
+        if "foundation_pending_reason" in update_data:
+            update_data["foundation_pending_reason"] = (
+                update_data["foundation_pending_reason"] or ""
+            ).strip() or None
         # Checked before anything is written onto the entry, so a change
         # refused for want of a reason leaves nothing half-applied.
         batch_change = _pending_batch_change(entry, update_data)

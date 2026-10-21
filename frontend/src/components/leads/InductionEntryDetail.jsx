@@ -319,6 +319,17 @@ export function InductionEntryDetail({ entry, hideAssignee = false }) {
         />
       )}
 
+      {/* Why they hadn't come across to Foundation, typed from the board's
+          column of the same name. */}
+      {entry.foundation_pending_reason && (
+        <DetailSection
+          title="Foundation Pending"
+          icon={ArrowRightLeft}
+          tone="amber"
+          entries={[['Reason', entry.foundation_pending_reason]]}
+        />
+      )}
+
       {/* The post-call pages. Each section is skipped entirely when empty, so
           an entry nobody has worked yet reads as short rather than as a wall
           of dashes. */}

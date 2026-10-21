@@ -229,6 +229,11 @@ class InductionEntry(BaseDocument):
     # together (see InductionEntryService.update). Longer than the remark it
     # explains because this one is prose, not a disposition off a list.
     quit_reason: str | None = Field(default=None, max_length=500)
+    # Why a candidate still on the Induction board hasn't come across to
+    # Foundation yet, in the caller's own words - typed from its own column
+    # beside Update. Kept once they do move: it is the record of what held
+    # them up. Blank text is stored as None (see InductionEntryService.update).
+    foundation_pending_reason: str | None = Field(default=None, max_length=500)
 
     # Which foundation class group this student sits in. Asked for on the
     # form as `group` and stored under the longer name the boards already use
