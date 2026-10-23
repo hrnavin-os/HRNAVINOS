@@ -25,6 +25,7 @@ from app.repositories.role_repository import RoleRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.induction_entry_schema import (
+    DeletedInductionEntryResponse,
     InductionDetailsUpdate,
     InductionEntryCreate,
     InductionEntryResponse,
@@ -288,8 +289,8 @@ class InductionEntryService:
         The status is applied here rather than by the caller, so every route
         onto this board inherits the rule that an entry belongs to exactly one
         tab - it can't be listed as both still in Induction and already moved.
-        A moved entry is never deleted; it has left the queue and is reachable
-        through the lead it became.
+        A moved entry stays on the Moved tab; it has left the queue and is
+        reachable through the lead it became.
         """
         items, total = await self.entries.list(
             page=params.page,
@@ -669,9 +670,46 @@ class InductionEntryService:
         )
         return entry
 
-    async def delete(self, entry_id: uuid.UUID, *, actor_id: uuid.UUID | None) -> None:
+    async def delete(self, entry_id: uuid.UUID, *, reason: str, actor_id: uuid.UUID | None) -> None:
+        """Soft-deletes an induction entry, with the reason the Deleted History
+        lists against it - see LeadService.delete.
+
+        Allowed on every tab. On the Moved tab it removes only the induction
+        record: the Foundation lead it became is a lead of its own, deleted
+        from the Foundation board if it is to go too.
+        """
         entry = await self.get(entry_id)
-        await self.entries.delete(entry)
+        note = reason.strip()
+        if len(note) < 3:
+            raise BadRequestError("Give a reason for deleting this entry.")
+        await self.entries.delete(entry, actor_id=actor_id, reason=note)
         await self.audit.record(
-            user_id=actor_id, action="DELETE", entity_type="InductionEntry", entity_id=str(entry.id)
+            user_id=actor_id,
+            action="DELETE",
+            entity_type="InductionEntry",
+            entity_id=str(entry.id),
+            changes={"reason": note},
         )
+
+    async def list_deleted(self, params: PaginationParams, *, scope: str | None = None) -> PaginatedResponse:
+        """The Induction board's Deleted History, most recent first. Only
+        entries deleted with a reason, for the reason LeadService.list_deleted
+        gives."""
+        items, total = await self.entries.list(
+            page=params.page,
+            page_size=params.page_size,
+            search=params.search,
+            search_fields=["name", "phone"],
+            sort_by="deleted_at",
+            sort_order="desc",
+            include_deleted=True,
+            filters={"is_deleted": True, "deleted_reason": {"$ne": None}, "section": scope},
+        )
+        names = await self.users.names_by_id(entry.deleted_by for entry in items)
+        rows = [
+            DeletedInductionEntryResponse.model_validate(entry).model_copy(
+                update={"deleted_by_name": names.get(entry.deleted_by)}
+            )
+            for entry in items
+        ]
+        return PaginatedResponse.build(rows, total, params.page, params.page_size)

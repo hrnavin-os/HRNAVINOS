@@ -375,6 +375,42 @@ async def grant_finance_tab_to_admin() -> int:
     return granted
 
 
+LEAD_DELETE_MIGRATION = "lead_delete_for_admin"
+
+
+async def grant_lead_delete_to_admin() -> int:
+    """Gives the admin roles the delete option on every Induction and
+    Foundation lead, once.
+
+    It replaces the Super Admin's "Admin can delete leads" switch, which
+    granted the permission at request time while it was on. Now it is an
+    ordinary permission on the role - deletes are accounted for by the reason
+    each one has to give - so it is granted here and, like any other, taken
+    away in the role editor. Same reach and same once-only rule as
+    grant_finance_tab_to_admin, for the same reason: a role still called
+    "Admin" has no definition for backfill_role_permissions to top up.
+    """
+    migrations = Role.get_motor_collection().database["migrations"]
+    if await migrations.find_one({"_id": LEAD_DELETE_MIGRATION}):
+        return 0
+    lead_delete = await Permission.find_one({"code": "leads.delete"})
+    granted = 0
+    if lead_delete is not None:
+        roles = await Role.find(
+            {"name": {"$in": [RETIRED_ADMIN_ROLE, "Admin Head"]}, "is_deleted": False, "scoped_section": None}
+        ).to_list()
+        for role in roles:
+            if lead_delete.id in role.permission_ids:
+                continue
+            role.permission_ids = [*role.permission_ids, lead_delete.id]
+            role.touch()
+            await role.save()
+            granted += 1
+            logger.info("Gave the %s role the delete option on leads.", role.name)
+    await migrations.insert_one({"_id": LEAD_DELETE_MIGRATION, "applied_at": utcnow()})
+    return granted
+
+
 async def backfill_payment_ledger() -> int:
     """Turns every lead's old per-plan slots (Week 1..6, Payment 1/2) into the
     free-form payment collection - see app/services/payment_ledger.py.
@@ -562,4 +598,5 @@ async def run_startup_backfills() -> None:
     await align_admin_team_roles()
     await describe_admin_team_roles()
     await grant_finance_tab_to_admin()
+    await grant_lead_delete_to_admin()
     await backfill_role_permissions()

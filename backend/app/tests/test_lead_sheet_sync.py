@@ -182,7 +182,7 @@ async def test_record_deleted_in_erp_leaves_the_sheet(client):
     sheets = FakeSheets()
     await sync(sheets)
 
-    await LeadService().delete(lead.id, actor_id=None)
+    await LeadService().delete(lead.id, reason="Duplicate enquiry", actor_id=None)
     await sync(sheets)
 
     assert [row["Name"] for row in sheets.rows(FOUNDATION)] == ["Second Lead"]

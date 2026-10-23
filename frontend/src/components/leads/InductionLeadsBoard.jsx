@@ -23,6 +23,7 @@ import { InductionRecordingCell } from '@/components/leads/InductionRecordingCel
 import { FoundationPendingReasonCell } from '@/components/leads/FoundationPendingReasonCell'
 import { InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
 import { InductionUpdateModal } from '@/components/leads/InductionUpdateModal'
+import { DeletedHistoryButton } from '@/components/leads/LeadDeletionHistoryModal'
 import { useAuth } from '@/hooks/useAuth'
 import { PERMISSIONS } from '@/constants/permissions'
 import { LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
@@ -330,7 +331,8 @@ const EMPTY_FILTERS = {
 }
 
 export function InductionLeadsBoard() {
-  const { user } = useAuth()
+  const { user, hasPermission } = useAuth()
+  const canDeleteLead = hasPermission(PERMISSIONS.LEADS_DELETE)
   const scopedSection = user?.scoped_section || null
   const [sectionFilter, setSectionFilter] = useState('')
   const [filters, setFilters] = useState(EMPTY_FILTERS)
@@ -673,6 +675,9 @@ export function InductionLeadsBoard() {
                   is seven filters and the toolbar stays at two lines. */}
               {scopedSection && <div className="min-w-36 flex-1">{scheduleFilter}</div>}
               {scopedSection && <div className="min-w-36 flex-1">{detailsFilter}</div>}
+              {/* Whoever can delete a lead can read back every deletion, with
+                  the reason given - the same button the Foundation board has. */}
+              {canDeleteLead && <DeletedHistoryButton board="induction" />}
               {/* No "Clear all" button. It appeared as a second row the
                   moment anything was selected, pushing the table down, and
                   every control it would have reset already clears itself -
@@ -800,10 +805,12 @@ export function InductionLeadsBoard() {
         }
         serialNumber
         extraParams={{ status, sort_order: sortOrder, section: effectiveSection || undefined, ...activeFilters }}
-        // View stays on both tabs - the induction record is exactly what you
-        // want to read about somebody who has moved. Edit and delete don't:
-        // a moved entry is the history behind a Foundation lead, and editing
-        // the phone number there would break the match that put it here.
+        // View stays on every tab - the induction record is exactly what you
+        // want to read about somebody who has moved. So does delete: an admin
+        // can remove any lead, giving a reason the Deleted History keeps.
+        // Edit doesn't: a moved entry is the history behind a Foundation lead,
+        // and editing the phone number there would break the match that put
+        // it here.
         rowActions={{
           view: {
             title: (row) => row.name,
@@ -833,11 +840,18 @@ export function InductionLeadsBoard() {
                     category: row.category ?? '',
                   }),
                 },
-                remove: {
-                  permission: PERMISSIONS.LEADS_DELETE,
-                  describe: (row) => `${row.name} (${row.phone})`,
-                },
               }),
+          remove: {
+            permission: PERMISSIONS.LEADS_DELETE,
+            describe: (row) => `${row.name} (${row.phone})`,
+            requireReason: true,
+            reasonLabel: 'Reason for deleting this lead',
+            reasonPlaceholder: 'e.g. Duplicate of another entry with the same number',
+            consequence: (row) =>
+              row.status === INDUCTION_STATUS.moved
+                ? 'The induction record is removed from the board. Their Foundation lead stays - delete it from the Foundation board if it should go too. Your reason is kept in the Deleted History.'
+                : 'The entry is removed from the board. Your reason is kept in the Deleted History.',
+          },
         }}
       />
 

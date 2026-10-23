@@ -1,4 +1,7 @@
 """Data access for InductionEntry documents."""
+import uuid
+
+from app.database.base import utcnow
 from app.models.enums import InductionStatus
 from app.models.induction_entry import InductionEntry
 from app.repositories.base_repository import BaseRepository
@@ -159,6 +162,23 @@ class InductionEntryRepository(BaseRepository[InductionEntry]):
             .to_list()
         )
         return matches[0] if matches else None
+
+    async def release_from_lead(self, lead_id: uuid.UUID, *, actor_id: uuid.UUID | None) -> int:
+        """Hands the entries that moved to this Foundation lead back to the
+        Induction board, for when the lead is deleted. The same repair a
+        Foundation reset makes - see SettingsService.reset_leads. Returns how
+        many were handed back."""
+        result = await InductionEntry.find({"is_deleted": False, "foundation_lead_id": lead_id}).update(
+            {
+                "$set": {
+                    "foundation_lead_id": None,
+                    "converted_at": None,
+                    "updated_at": utcnow(),
+                    "updated_by": actor_id,
+                }
+            }
+        )
+        return result.modified_count
 
     async def count_converted(self) -> int:
         return await InductionEntry.find(

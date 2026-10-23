@@ -136,6 +136,36 @@ class LeadAssign(BaseModel):
     assigned_to: uuid.UUID
 
 
+class LeadDelete(BaseModel):
+    """Why a lead is being removed. Required - see LeadService.delete."""
+
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class DeletedLeadResponse(BaseModel):
+    """One row of the Foundation board's Deleted History: who the lead was,
+    where they had got to, and who took them off the board, when and why.
+
+    Its own shape rather than LeadResponse: a deleted lead is a record to read,
+    and the full response resolves payments, remarks and follow-ups that nobody
+    is going to work on again.
+    """
+
+    id: uuid.UUID
+    name: str
+    phone: str
+    section: str | None
+    # The stage the lead was at when it was deleted - nothing moves it after.
+    status: LeadStatus
+    course_interest: str | None
+    created_at: datetime
+    deleted_at: datetime | None
+    deleted_by_name: str | None = None
+    deleted_reason: str | None
+
+    model_config = {"from_attributes": True}
+
+
 class LeadPlanAssign(BaseModel):
     # A Program.value; validated against the live programs collection in
     # LeadService.assign_plan() rather than by a closed enum here.

@@ -20,10 +20,12 @@ from app.permissions.permission_codes import Permissions
 from app.schemas.common import MessageResponse, PaginatedResponse, PaginationParams
 from app.schemas.induction_entry_schema import InductionEntryResponse
 from app.schemas.lead_schema import (
+    DeletedLeadResponse,
     LeadAnalyticsResponse,
     LeadAssign,
     LeadBalanceUpdate,
     LeadCreate,
+    LeadDelete,
     LeadPlanAssign,
     LeadRejoin,
     LeadRemarkCreate,
@@ -277,6 +279,22 @@ async def list_pending_review_leads(
     that haven't been checked yet, so they aren't visible in Leads (CRM)."""
     service = LeadService()
     return [await service.to_response(lead) for lead in await service.list_pending_review()]
+
+
+@router.get("/deleted", response_model=PaginatedResponse[DeletedLeadResponse])
+async def list_deleted_leads(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: str | None = None,
+    # The same permission as the delete itself: whoever can take a lead off
+    # the board can read back who else has, and why.
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_DELETE)),
+) -> PaginatedResponse[DeletedLeadResponse]:
+    """The Foundation board's Deleted History: every lead deleted from it, with
+    who deleted it, when and the reason they gave."""
+    params = PaginationParams(page=page, page_size=page_size, search=search)
+    scope = await get_actor_scope(actor)
+    return await LeadService().list_deleted(params, scope=scope)
 
 
 @router.post("/{lead_id}/review", response_model=LeadResponse)
@@ -675,8 +693,11 @@ async def assign_lead(
 @router.delete("/{lead_id}", response_model=MessageResponse)
 async def delete_lead(
     lead_id: uuid.UUID,
+    # A body on DELETE rather than a query string, as for users: the reason is
+    # free text somebody types, and that does not belong in a URL.
+    payload: LeadDelete,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_DELETE)),
 ) -> MessageResponse:
     scope = await get_actor_scope(actor)
-    await LeadService().delete(lead_id, actor_id=actor.id, scope=scope)
+    await LeadService().delete(lead_id, reason=payload.reason, actor_id=actor.id, scope=scope)
     return MessageResponse(message="Lead deleted successfully.")

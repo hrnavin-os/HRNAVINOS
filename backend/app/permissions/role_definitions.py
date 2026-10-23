@@ -73,7 +73,10 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     # (the Google Sheets export). What the "Admin" role held before the team's
     # roles were aligned (see RETIRED_ADMIN_ROLE below).
     "Admin Head": [
-        P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE,
+        # LEADS_DELETE is the delete icon on every Induction and Foundation
+        # lead, and the Deleted History beside it. Every delete has to give a
+        # reason, which that history lists against the row.
+        P.LEADS_VIEW, P.LEADS_CREATE, P.LEADS_UPDATE, P.LEADS_DELETE,
         P.LEAD_ANALYTICS_VIEW, P.FORM_COLLECTION_VIEW, P.FORM_COLLECTION_CONFIGURE,
         # Statistics' Finance tab too - the collections and dues, and the
         # repayment reminders to section admins - beside the Operation

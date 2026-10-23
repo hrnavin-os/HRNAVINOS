@@ -3,6 +3,13 @@ import { createResourceService } from '@/services/resourceService'
 
 export const leadService = {
   ...createResourceService('/leads'),
+  // The Foundation board's Deleted History: every lead deleted from it, with
+  // who deleted it, when and why. Paginated like list(), searched by name or
+  // mobile.
+  listDeleted: async (params = {}) => {
+    const { data } = await apiClient.get('/leads/deleted', { params })
+    return data
+  },
   assign: async (id, assignedTo) => {
     const { data } = await apiClient.post(`/leads/${id}/assign`, { assigned_to: assignedTo })
     return data

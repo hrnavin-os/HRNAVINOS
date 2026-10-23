@@ -3,6 +3,11 @@ import { createResourceService } from '@/services/resourceService'
 
 export const inductionEntryService = {
   ...createResourceService('/induction-entries'),
+  // The Induction board's Deleted History - leadService.listDeleted's twin.
+  listDeleted: async (params = {}) => {
+    const { data } = await apiClient.get('/induction-entries/deleted', { params })
+    return data
+  },
   // Counts behind the board's stat cards.
   //
   // Takes the same filter row list() does, because the cards are a summary of

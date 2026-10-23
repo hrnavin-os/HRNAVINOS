@@ -44,7 +44,7 @@ async def _login_as(client, role_name: str, email: str) -> dict:
 
 async def test_each_admin_team_role_holds_exactly_its_menus(seeded):
     assert await _codes(await _role("Admin Head")) == {
-        "leads.view", "leads.create", "leads.update",
+        "leads.view", "leads.create", "leads.update", "leads.delete",
         "lead_analytics.view", "finance_analytics.view",
         "form_collection.view", "form_collection.configure",
         "induction_attendance.view", "induction_attendance.mark", "induction_attendance.configure",

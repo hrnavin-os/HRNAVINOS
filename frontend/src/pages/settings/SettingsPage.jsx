@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/Button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { useAuth } from '@/hooks/useAuth'
-import { LeadDeleteToggleCard } from '@/components/settings/LeadDeleteToggleCard'
 import { ResetLeadsCard } from '@/components/settings/ResetLeadsCard'
 import { PERMISSIONS } from '@/constants/permissions'
 
@@ -77,12 +76,7 @@ export function SettingsPage() {
           permission code - showing a button that always 403s is worse than not
           showing it. The Admin Head resets from the Admin portal's own
           Settings page (SheetExportPage), which carries the same card. */}
-      {user?.role === 'Super Admin' && (
-        <>
-          <LeadDeleteToggleCard />
-          <ResetLeadsCard />
-        </>
-      )}
+      {user?.role === 'Super Admin' && <ResetLeadsCard />}
     </div>
   )
 }

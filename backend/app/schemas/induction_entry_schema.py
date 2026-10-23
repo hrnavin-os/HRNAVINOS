@@ -177,6 +177,32 @@ class InductionEntryUpdate(BaseModel):
     foundation_group_direct: bool | None = None
 
 
+class InductionEntryDelete(BaseModel):
+    """Why an induction entry is being removed. Required - see
+    InductionEntryService.delete."""
+
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class DeletedInductionEntryResponse(BaseModel):
+    """One row of the Induction board's Deleted History - the Foundation
+    board's DeletedLeadResponse, for an induction entry."""
+
+    id: uuid.UUID
+    name: str
+    phone: str
+    section: str | None
+    batch_number: int | None
+    # Which tab it was on when it was deleted.
+    status: InductionStatus
+    registration_date: date
+    deleted_at: datetime | None
+    deleted_by_name: str | None = None
+    deleted_reason: str | None
+
+    model_config = {"from_attributes": True}
+
+
 class InductionEntryResponse(BaseModel):
     id: uuid.UUID
     name: str

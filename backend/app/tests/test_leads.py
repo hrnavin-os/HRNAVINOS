@@ -682,7 +682,9 @@ async def test_delete_lead_takes_it_off_the_board(client, auth_headers):
     )
     lead_id = create.json()["id"]
 
-    deleted = await client.delete(f"/api/v1/leads/{lead_id}", headers=auth_headers)
+    deleted = await client.request(
+        "DELETE", f"/api/v1/leads/{lead_id}", headers=auth_headers, json={"reason": "Duplicate enquiry"}
+    )
     assert deleted.status_code == 200
 
     listing = await client.get("/api/v1/leads", headers=auth_headers)

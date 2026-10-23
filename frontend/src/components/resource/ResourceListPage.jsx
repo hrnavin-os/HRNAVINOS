@@ -41,7 +41,8 @@ export function ResourceListPage({
   //   edit:   { title?, permission?, fields, defaults?, transform? }
   //           or { title?, permission?, render({ row, onClose, onSaved }) }
   //   remove: { permission?, describe(row), lockedReason?(row),
-  //             requireReason?, consequence? }  - requireReason makes the
+  //             requireReason?, reasonLabel?, reasonPlaceholder?,
+  //             consequence?(row) or consequence }  - requireReason makes the
   //             dialog ask why before it will delete, for records that are
   //             kept and listed afterwards
   //   lockedReason?(row) -> string disables BOTH edit and delete with a tooltip
@@ -308,7 +309,13 @@ export function ResourceListPage({
           error={deleteMutation.error ? getApiErrorMessage(deleteMutation.error) : null}
           isPending={deleteMutation.isPending}
           requireReason={Boolean(rowActions.remove.requireReason)}
-          consequence={rowActions.remove.consequence}
+          reasonLabel={rowActions.remove.reasonLabel}
+          reasonPlaceholder={rowActions.remove.reasonPlaceholder}
+          consequence={
+            typeof rowActions.remove.consequence === 'function'
+              ? rowActions.remove.consequence(deletingRow)
+              : rowActions.remove.consequence
+          }
           onConfirm={(reason) => deleteMutation.mutate({ id: deletingRow.id, reason })}
           onClose={() => setDeletingRow(null)}
         />

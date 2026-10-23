@@ -20,6 +20,7 @@ export function ConfirmDeleteModal({
   onClose,
   requireReason = false,
   reasonLabel = 'Reason for deleting',
+  reasonPlaceholder = 'e.g. Left the company on 30 Aug',
   // What happens to the record. The default is the permanent case; callers
   // that keep the record say so, since "cannot be undone" is not true there
   // and a warning nobody believes is worse than none.
@@ -47,7 +48,7 @@ export function ConfirmDeleteModal({
             maxLength={500}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            placeholder="e.g. Left the company on 30 Aug"
+            placeholder={reasonPlaceholder}
             className={`${FIELD} resize-none py-2`}
           />
         </label>

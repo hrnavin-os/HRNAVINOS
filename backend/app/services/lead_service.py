@@ -25,6 +25,7 @@ from app.models.notification import Notification
 from app.permissions.permission_codes import Permissions
 from app.repositories.audit_log_repository import AuditLogRepository
 from app.repositories.foundation_form_config_repository import FoundationFormConfigRepository
+from app.repositories.induction_entry_repository import InductionEntryRepository
 from app.repositories.lead_repository import LeadRepository
 from app.repositories.notification_repository import NotificationRepository
 from app.repositories.permission_repository import PermissionRepository
@@ -33,6 +34,7 @@ from app.repositories.role_repository import RoleRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.lead_schema import (
+    DeletedLeadResponse,
     FollowUpEntryResponse,
     LeadAssign,
     LeadBalanceUpdate,
@@ -102,6 +104,7 @@ LEAD_SEARCH_FIELDS = ["name", "phone", "email", "course_interest"]
 class LeadService:
     def __init__(self) -> None:
         self.leads = LeadRepository()
+        self.induction_entries = InductionEntryRepository()
         self.users = UserRepository()
         self.audit = AuditService()
         self.audit_logs = AuditLogRepository()
@@ -1783,7 +1786,57 @@ class LeadService:
         )
         return lead
 
-    async def delete(self, lead_id: uuid.UUID, *, actor_id: uuid.UUID | None, scope: str | None = None) -> None:
+    async def delete(
+        self, lead_id: uuid.UUID, *, reason: str, actor_id: uuid.UUID | None, scope: str | None = None
+    ) -> None:
+        """Soft-deletes a lead, on the record.
+
+        The reason is required, as it is for users and roles: the Deleted
+        History lists every lead taken off the board with who did it and why,
+        and an optional reason would be blank on exactly the rows anybody
+        eventually asks about.
+
+        The induction entry the lead moved from goes back to the Induction
+        board, as on a Foundation reset. Left pointing at a deleted lead it
+        reads as moved while sitting on neither board, and a Foundation Form
+        sent again from the same number could never link to it.
+        """
         lead = await self.get(lead_id, scope=scope)
-        await self.leads.delete(lead)
-        await self.audit.record(user_id=actor_id, action="DELETE", entity_type="Lead", entity_id=str(lead.id))
+        note = reason.strip()
+        if len(note) < 3:
+            raise BadRequestError("Give a reason for deleting this lead.")
+        await self.leads.delete(lead, actor_id=actor_id, reason=note)
+        returned = await self.induction_entries.release_from_lead(lead.id, actor_id=actor_id)
+        await self.audit.record(
+            user_id=actor_id,
+            action="DELETE",
+            entity_type="Lead",
+            entity_id=str(lead.id),
+            changes={"reason": note, "induction_entries_returned": returned},
+        )
+
+    async def list_deleted(self, params: PaginationParams, *, scope: str | None = None) -> PaginatedResponse:
+        """The Foundation board's Deleted History, most recent first.
+
+        Only leads deleted with a reason: a board reset takes every lead off at
+        once without one, and listing those here would bury the deletions
+        somebody actually chose under hundreds that nobody did.
+        """
+        items, total = await self.leads.list(
+            page=params.page,
+            page_size=params.page_size,
+            search=params.search,
+            search_fields=["name", "phone"],
+            sort_by="deleted_at",
+            sort_order="desc",
+            include_deleted=True,
+            filters={"is_deleted": True, "deleted_reason": {"$ne": None}, "section": scope},
+        )
+        names = await self.users.names_by_id(lead.deleted_by for lead in items)
+        rows = [
+            DeletedLeadResponse.model_validate(lead).model_copy(
+                update={"deleted_by_name": names.get(lead.deleted_by)}
+            )
+            for lead in items
+        ]
+        return PaginatedResponse.build(rows, total, params.page, params.page_size)

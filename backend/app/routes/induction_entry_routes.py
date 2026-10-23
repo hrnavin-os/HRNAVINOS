@@ -18,9 +18,11 @@ from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.common import MessageResponse, PaginatedResponse, PaginationParams
 from app.schemas.induction_entry_schema import (
+    DeletedInductionEntryResponse,
     InductionAnalyticsResponse,
     InductionDetailsUpdate,
     InductionEntryCreate,
+    InductionEntryDelete,
     InductionEntryResponse,
     InductionEntryStatsResponse,
     InductionEntryUpdate,
@@ -242,6 +244,19 @@ async def entry_stats(
     )
 
 
+@router.get("/deleted", response_model=PaginatedResponse[DeletedInductionEntryResponse])
+async def list_deleted_entries(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: str | None = None,
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_DELETE)),
+) -> PaginatedResponse[DeletedInductionEntryResponse]:
+    """The Induction board's Deleted History - see the /leads/deleted route."""
+    params = PaginationParams(page=page, page_size=page_size, search=search)
+    scope = await get_actor_scope(actor)
+    return await InductionEntryService().list_deleted(params, scope=scope)
+
+
 @router.get("/filter-options")
 async def filter_options(
     status: InductionStatus = InductionStatus.PENDING_INDUCTION,
@@ -327,7 +342,8 @@ async def update_entry_details(
 @router.delete("/{entry_id}", response_model=MessageResponse)
 async def delete_entry(
     entry_id: uuid.UUID,
+    payload: InductionEntryDelete,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_DELETE)),
 ) -> MessageResponse:
-    await InductionEntryService().delete(entry_id, actor_id=actor.id)
+    await InductionEntryService().delete(entry_id, reason=payload.reason, actor_id=actor.id)
     return MessageResponse(message="Induction entry deleted successfully.")

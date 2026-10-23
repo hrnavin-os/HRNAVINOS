@@ -35,6 +35,7 @@ import { LeadWhatsAppCell, WhatsAppColumnHeader } from '@/components/leads/Whats
 import { InductionLeadsBoard } from '@/components/leads/InductionLeadsBoard'
 import { RowActions } from '@/components/resource/RowActions'
 import { ConfirmDeleteModal } from '@/components/resource/ConfirmDeleteModal'
+import { DeletedHistoryButton } from '@/components/leads/LeadDeletionHistoryModal'
 import { useLeadBoard } from '@/hooks/useLeadBoard'
 import {
   PAYMENT_PLAN_TONES,
@@ -610,7 +611,7 @@ function FoundationLeadsBoard() {
   // somebody's record.
   const [deletingLead, setDeletingLead] = useState(null)
   const deleteMutation = useMutation({
-    mutationFn: (id) => leadService.remove(id),
+    mutationFn: ({ id, reason }) => leadService.remove(id, reason),
     onSuccess: () => {
       // The stat cards count the same leads, so they go stale with the table.
       queryClient.invalidateQueries({ queryKey: ['leads'] })
@@ -1196,10 +1197,14 @@ function FoundationLeadsBoard() {
             }}
           />
 
+          {/* Whoever can delete a lead can read back every deletion, with the
+              reason given. Sits ahead of Create Lead and takes the ml-auto
+              when it is here, so the two stay together on the right. */}
+          {canDeleteLead && <DeletedHistoryButton board="foundation" className="ml-auto" />}
           {/* Most leads still arrive through the Form Collection forms; this
               is for the walk-in or phone enquiry with nobody to fill one in. */}
           {canCreateLead && (
-            <Button className="ml-auto shrink-0" onClick={() => setIsCreating(true)}>
+            <Button className={`${canDeleteLead ? '' : 'ml-auto'} shrink-0`} onClick={() => setIsCreating(true)}>
               <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
               Create Lead
             </Button>
@@ -1236,10 +1241,15 @@ function FoundationLeadsBoard() {
       {deletingLead && (
         <ConfirmDeleteModal
           describe={`${deletingLead.name} (${deletingLead.phone})`}
-          consequence="The lead is removed from the board, along with its remarks and payment history."
+          // Every delete is kept in the Deleted History with the reason
+          // against it, so the dialog will not delete without one.
+          requireReason
+          reasonLabel="Reason for deleting this lead"
+          reasonPlaceholder="e.g. Duplicate of another lead with the same number"
+          consequence="The lead is removed from the board, along with its remarks and payment history. If it came from Induction, the induction entry goes back to the Induction board. Your reason is kept in the Deleted History."
           error={deleteMutation.error ? getApiErrorMessage(deleteMutation.error) : null}
           isPending={deleteMutation.isPending}
-          onConfirm={() => deleteMutation.mutate(deletingLead.id)}
+          onConfirm={(reason) => deleteMutation.mutate({ id: deletingLead.id, reason })}
           onClose={() => setDeletingLead(null)}
         />
       )}
