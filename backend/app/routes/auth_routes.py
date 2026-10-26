@@ -5,7 +5,7 @@ from app.config.settings import settings
 from app.core.dependencies import get_current_user, get_role_permission_codes, get_user_role
 from app.middleware.rate_limiter import limiter
 from app.models.user import User
-from app.permissions.role_definitions import LEAD_RESET_ROLES
+from app.permissions.role_definitions import LEAD_RESET_ROLES, PAYMENT_DELETE_ROLES
 from app.schemas.auth_schema import (
     ChangePasswordRequest,
     CurrentUserResponse,
@@ -85,6 +85,7 @@ async def me(user: User = Depends(get_current_user)) -> CurrentUserResponse:
         permissions=sorted(permission_codes),
         scoped_section=role.scoped_section if role else None,
         can_reset_leads=bool(role and role.name in LEAD_RESET_ROLES),
+        can_delete_payments=bool(role and role.name in PAYMENT_DELETE_ROLES),
         is_active=user.is_active,
         is_verified=user.is_verified,
     )

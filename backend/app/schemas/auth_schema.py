@@ -61,6 +61,9 @@ class CurrentUserResponse(BaseModel):
     # buttons to someone the endpoint refuses, or hide them from someone it
     # would let through.
     can_reset_leads: bool = False
+    # Whether the lead popup's payment cards offer Delete - from
+    # PAYMENT_DELETE_ROLES, the list the delete endpoint checks.
+    can_delete_payments: bool = False
     is_active: bool
     is_verified: bool
 

@@ -54,7 +54,15 @@ from app.services.audit_service import AuditService
 from app.services.foundation_group_sync import mirror_group_move
 from app.services.foundation_form_answers import derive_answers
 from app.services.foundation_form_pricing import build_payment_expected_summary, plan_fee
-from app.services.payment_ledger import RECEIVED_KINDS, TOKEN_LABEL, balance_of, fee_of, rebalance, to_ledger
+from app.services.payment_ledger import (
+    RECEIVED_KINDS,
+    TOKEN_LABEL,
+    balance_of,
+    fee_of,
+    rebalance,
+    received_of,
+    to_ledger,
+)
 from app.services.reminder_service import ReminderService
 from app.services.storage_service import StorageService
 from app.models.foundation_group import pop_group_move
@@ -1402,6 +1410,71 @@ class LeadService:
                 "mode": entry.mode,
                 "balance": str(balance.amount) if balance else "0",
                 "balance_due_at": balance.scheduled_at.isoformat() if balance and balance.scheduled_at else None,
+            },
+        )
+        return lead
+
+    async def delete_payment(
+        self,
+        lead_id: uuid.UUID,
+        index: int,
+        *,
+        reason: str,
+        actor_id: uuid.UUID | None,
+        scope: str | None = None,
+    ) -> Lead:
+        """Takes a token or payment recorded by mistake off the lead. What it
+        held goes back onto the balance, and the payments after it move up a
+        number.
+
+        The entry - amount, mode, account, proofs - goes into the audit log
+        with the reason, so what was removed can still be read and put back.
+        The proof images stay on disk for the same reason."""
+        lead = await self.get(lead_id, scope=scope)
+        ledger = to_ledger(lead.installments)
+        if index < 0 or index >= len(ledger) or ledger[index].kind not in RECEIVED_KINDS:
+            raise BadRequestError("That payment isn't on this lead any more. Reopen the lead and try again.")
+        # Before the entry goes: the fee is every entry's amount, its own included.
+        fee = fee_of(ledger)
+        removed = ledger.pop(index)
+        # The paid stages are entered on the strength of a payment
+        # (_validate_stage_transition), so the last one can't go out from
+        # under a lead still sitting in one.
+        if lead.status in self._PAID_STAGES and received_of(ledger) <= 0:
+            raise BadRequestError(
+                f"This is the only payment on this lead, which is in {self._PAID_STAGES[lead.status]}. "
+                "Move the lead back to an earlier stage before deleting it."
+            )
+
+        lead.installments = rebalance(ledger, fee)
+        # The lead's own QR field follows the latest payment's account, so it
+        # falls back to whichever is now the latest.
+        if removed.qr_code and lead.qr_code == removed.qr_code:
+            lead.qr_code = next(
+                (entry.qr_code for entry in reversed(lead.installments) if entry.qr_code), lead.qr_code
+            )
+
+        lead.updated_by = actor_id
+        lead.touch(actor_id)
+        await lead.save()
+        balance = balance_of(lead.installments)
+        await self.audit.record(
+            user_id=actor_id,
+            action="DELETE_PAYMENT",
+            entity_type="Lead",
+            entity_id=str(lead.id),
+            changes={
+                "payment": removed.label,
+                "received_amount": str(removed.collected()),
+                "mode": removed.mode,
+                "qr_code": removed.qr_code,
+                "transaction_id": removed.transaction_id,
+                "upi_id": removed.upi_id,
+                "paid_at": removed.paid_at.isoformat() if removed.paid_at else None,
+                "proof_urls": removed.all_proofs(),
+                "remarks": removed.remarks,
+                "reason": reason.strip(),
+                "balance": str(balance.amount) if balance else "0",
             },
         )
         return lead

@@ -6,7 +6,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 
-from app.core.dependencies import RequireAnyPermission, RequirePermissions, get_actor_scope
+from app.core.dependencies import RequireAnyPermission, RequirePermissions, RequireRoles, get_actor_scope
 from app.exceptions.base import BadRequestError
 from app.models.enums import (
     InstallmentPaymentMode,
@@ -17,6 +17,7 @@ from app.models.enums import (
 )
 from app.models.user import User
 from app.permissions.permission_codes import Permissions
+from app.permissions.role_definitions import PAYMENT_DELETE_ROLES
 from app.schemas.common import MessageResponse, PaginatedResponse, PaginationParams
 from app.schemas.induction_entry_schema import InductionEntryResponse
 from app.schemas.lead_schema import (
@@ -26,6 +27,7 @@ from app.schemas.lead_schema import (
     LeadBalanceUpdate,
     LeadCreate,
     LeadDelete,
+    LeadPaymentDelete,
     LeadPlanAssign,
     LeadRejoin,
     LeadRemarkCreate,
@@ -563,6 +565,21 @@ async def update_lead_payment(
         balance_due_at=balance_due_at,
         actor=actor,
     )
+
+
+@router.delete("/{lead_id}/payments/{index}", response_model=LeadResponse)
+async def delete_lead_payment(
+    lead_id: uuid.UUID,
+    index: int,
+    # A body on DELETE, as for a lead: the reason is free text, not a URL part.
+    payload: LeadPaymentDelete,
+    # Role, not permission - see PAYMENT_DELETE_ROLES.
+    actor: User = Depends(RequireRoles(*PAYMENT_DELETE_ROLES)),
+) -> LeadResponse:
+    service = LeadService()
+    scope = await get_actor_scope(actor)
+    lead = await service.delete_payment(lead_id, index, reason=payload.reason, actor_id=actor.id, scope=scope)
+    return await service.to_response(lead)
 
 
 @router.put("/{lead_id}/balance", response_model=LeadResponse)

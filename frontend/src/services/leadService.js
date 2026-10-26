@@ -135,6 +135,12 @@ export const leadService = {
     const { data } = await apiClient.post(url, formData, { headers: { 'Content-Type': undefined } })
     return data
   },
+  // Takes a token or payment recorded by mistake off the lead - admins only.
+  // The reason goes in the DELETE body: it is typed prose, not a URL part.
+  deletePayment: async (id, index, reason) => {
+    const { data } = await apiClient.delete(`/leads/${id}/payments/${index}`, { data: { reason } })
+    return data
+  },
   // When the rest of the fee will be paid, and the remark that goes with it.
   updateBalance: async (id, { dueAt, remarks }) => {
     const { data } = await apiClient.put(`/leads/${id}/balance`, {

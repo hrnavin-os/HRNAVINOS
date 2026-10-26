@@ -167,6 +167,12 @@ RETIRED_ADMIN_ROLE = "Admin"
 # old name "Admin" again (see grant_finance_tab_to_admin), so both are named.
 LEAD_RESET_ROLES = ("Super Admin", "Admin Head", RETIRED_ADMIN_ROLE)
 
+# Who may delete a recorded token or payment off a lead (the lead popup's
+# Payment Collection) - for one entered by mistake. By role, like the reset:
+# taking money off the books shouldn't be a box ticked on a Section Admin's
+# role, and those are the roles that record the payments in the first place.
+PAYMENT_DELETE_ROLES = LEAD_RESET_ROLES
+
 # Which Form Collection section (if any) a role's members are restricted to -
 # an open-ended section code (not a closed enum; admins can add new sections
 # from the Form Collection page). Absent/None for every other role = unscoped,

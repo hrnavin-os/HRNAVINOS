@@ -173,6 +173,13 @@ class LeadPlanAssign(BaseModel):
     payment_plan: PaymentPlanOption
 
 
+class LeadPaymentDelete(BaseModel):
+    """Why a recorded payment is being taken off. Required - see
+    LeadService.delete_payment."""
+
+    reason: str = Field(min_length=3, max_length=500)
+
+
 class LeadBalanceUpdate(BaseModel):
     """When the rest of the fee will be paid, and anything said about it.
     Both are written as sent, so leaving one out clears it."""

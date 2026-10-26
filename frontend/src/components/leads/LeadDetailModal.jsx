@@ -44,6 +44,7 @@ import { foundationFormService } from '@/services/foundationFormService'
 import { PaymentDetailContent } from '@/components/payments/PaymentDetailModal'
 import { getPaymentLedger, hasFirstPayment } from '@/utils/leadPayment'
 import { getApiErrorMessage } from '@/services/apiClient'
+import { useAuth } from '@/hooks/useAuth'
 import { formatCurrency, formatDate, formatDateTime, titleCase } from '@/utils/formatters'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { DetailPanel, InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
@@ -94,6 +95,7 @@ const ACTION_ICONS = {
   DELETE: Trash2,
   REJOIN: RotateCcw,
   STAGE_BACK: Undo2,
+  DELETE_PAYMENT: Trash2,
 }
 const ACTION_TONES = {
   CREATE: 'bg-emerald-100 text-emerald-600',
@@ -105,6 +107,7 @@ const ACTION_TONES = {
   REJOIN: 'bg-teal-100 text-teal-600',
   // A move back undoes somebody's progress, so it stands out from the edits.
   STAGE_BACK: 'bg-amber-100 text-amber-600',
+  DELETE_PAYMENT: 'bg-red-100 text-red-600',
 }
 
 // The pipeline in order, for telling a move back from a move forward. Quit is
@@ -133,6 +136,13 @@ function describeTimelineEntry(entry) {
     return {
       title: `Moved back to ${stageLabel(changes.status)}${by}`,
       detail: changes.previous_status ? `from ${stageLabel(changes.previous_status)}` : null,
+      reason: changes.reason ?? null,
+    }
+  }
+  if (entry.action === 'DELETE_PAYMENT') {
+    return {
+      title: `Deleted ${changes.payment ?? 'a payment'} of ${formatCurrency(Number(changes.received_amount ?? 0))}${by}`,
+      detail: [INSTALLMENT_MODE_LABELS[changes.mode] ?? changes.mode, changes.qr_code].filter(Boolean).join(' · ') || null,
       reason: changes.reason ?? null,
     }
   }
@@ -457,10 +467,16 @@ function PaymentCard({
   isSaving,
   justSaved = false,
   error,
+  // Admins only (PAYMENT_DELETE_ROLES) - absent for everyone else.
+  onDelete,
+  isDeleting = false,
+  deleteError,
 }) {
   const isDraft = !entry
   const isToken = kind === 'token'
   const [editing, setEditing] = useState(isDraft)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleteReason, setDeleteReason] = useState('')
   // New images picked but not yet saved, and saved ones marked for removal.
   const [files, setFiles] = useState([])
   const [removed, setRemoved] = useState([])
@@ -621,12 +637,61 @@ function PaymentCard({
                 ))}
               </div>
             )}
-            <div className="flex justify-end border-t border-slate-100 pt-2">
-              <Button variant="secondary" className="px-3! py-1! text-xs" onClick={() => setEditing(true)}>
-                <Pencil className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-                Edit
-              </Button>
-            </div>
+            {confirmingDelete ? (
+              // Asked rather than fired on the press: this takes money off the
+              // books, and the reason is what the timeline keeps of it.
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                <p className="text-sm font-semibold text-red-800">
+                  Delete this {isToken ? 'token' : 'payment'} of {formatCurrency(entry.received_amount ?? entry.amount)}?
+                </p>
+                <p className="mt-0.5 text-xs text-red-700">
+                  It goes back onto the balance due. The lead&rsquo;s timeline keeps what was deleted and why.
+                </p>
+                <div className="mt-2.5">
+                  <Input
+                    autoFocus
+                    label="Reason"
+                    maxLength={500}
+                    placeholder="e.g. Added by mistake - duplicate entry"
+                    value={deleteReason}
+                    onChange={(event) => setDeleteReason(event.target.value)}
+                  />
+                </div>
+                <ErrorMessage message={deleteError} />
+                <div className="mt-2.5 flex flex-wrap justify-end gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setConfirmingDelete(false)
+                      setDeleteReason('')
+                    }}
+                    disabled={isDeleting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="danger"
+                    onClick={() => onDelete(deleteReason.trim())}
+                    disabled={isDeleting || deleteReason.trim().length < 3}
+                  >
+                    {isDeleting ? 'Deleting…' : 'Yes, delete'}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-2">
+                {onDelete && (
+                  <Button variant="reject" className="px-3! py-1! text-xs" onClick={() => setConfirmingDelete(true)}>
+                    <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                    Delete
+                  </Button>
+                )}
+                <Button variant="secondary" className="px-3! py-1! text-xs" onClick={() => setEditing(true)}>
+                  <Pencil className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                  Edit
+                </Button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
@@ -918,6 +983,10 @@ function PaymentCollectionSection({
   onSaveBalance,
   isSavingBalance,
   balanceError,
+  onDeletePayment,
+  deletingPaymentKey,
+  failedDelete,
+  paymentDeletions = 0,
 }) {
   const ledger = getPaymentLedger(lead)
   // Payments not saved yet, by an id of their own. A lead with nothing
@@ -975,8 +1044,22 @@ function PaymentCollectionSection({
       isSaving: savingPaymentKey === card.key,
       justSaved: savedPaymentKey === card.key,
       error: failedPayment?.cardKey === card.key ? failedPayment.message : null,
+      ...(card.entry && onDeletePayment
+        ? {
+            onDelete: (reason) => onDeletePayment({ cardKey: card.key, index: card.index, reason }),
+            isDeleting: deletingPaymentKey === card.key,
+            deleteError: failedDelete?.cardKey === card.key ? failedDelete.message : null,
+          }
+        : {}),
     }
   }
+
+  // A saved card's form is filled from its entry when it mounts, and its key
+  // is its place in the list - so once one is deleted, the next one along
+  // would take over its card with the deleted entry's figures still in the
+  // form. Each delete gives the saved cards new keys, so they start afresh.
+  // Drafts keep theirs: what is typed into one has nothing to do with it.
+  const mountKey = (card) => (card.entry || card.key === 'token' ? `${card.key}@${paymentDeletions}` : card.key)
 
   return (
     // The same panel every other block on this tab uses.
@@ -996,7 +1079,7 @@ function PaymentCollectionSection({
         )}
         <PaymentTotals ledger={ledger} />
 
-        {tokenCard && <PaymentCard key={tokenCard.key} title="Token Amount" {...cardProps(tokenCard, 'token')} />}
+        {tokenCard && <PaymentCard key={mountKey(tokenCard)} title="Token Amount" {...cardProps(tokenCard, 'token')} />}
 
         {/* Two across once there are several - each card is a short form, and
             stretched full width the fields looked lost - but one gets the
@@ -1008,7 +1091,7 @@ function PaymentCollectionSection({
           <div className={`grid grid-cols-1 items-start gap-3 ${paymentCards.length > 1 ? 'sm:grid-cols-2' : ''}`}>
             {paymentCards.map((card) => (
               <PaymentCard
-                key={card.key}
+                key={mountKey(card)}
                 title={`Payment ${card.number}`}
                 number={card.number}
                 // A draft can go as long as there is another card to fall back on.
@@ -1374,6 +1457,11 @@ export function LeadDetailModal({ lead, onClose }) {
   // The payment card being saved, and the one just saved - see paymentMutation.
   const [savingPaymentKey, setSavingPaymentKey] = useState(null)
   const [savedPaymentKey, setSavedPaymentKey] = useState(null)
+  // How many payments this popup has deleted - see PaymentCollectionSection's
+  // mountKey. Admins only: the server answers who, from PAYMENT_DELETE_ROLES.
+  const [paymentDeletions, setPaymentDeletions] = useState(0)
+  const { user } = useAuth()
+  const canDeletePayments = Boolean(user?.can_delete_payments)
   // A stage move that has to ask something first: why (Quit, or a move back to
   // an earlier stage), and/or when (Follow up call, which is a call booked for
   // a time). { status, kind: 'lost' | 'back' | 'followup', needsFollowUp }
@@ -1518,6 +1606,22 @@ export function LeadDetailModal({ lead, onClose }) {
     },
   })
 
+  // A token or payment recorded by mistake, taken off. The new lead and the
+  // new card keys are set together, so the cards never draw once with the
+  // list shifted under the old keys.
+  const deletePaymentMutation = useMutation({
+    mutationFn: ({ index, reason }) => leadService.deletePayment(lead.id, index, reason),
+    onSuccess: (updatedLead) => {
+      setLiveLead(updatedLead)
+      setPaymentDeletions((count) => count + 1)
+      invalidateLeadQueries()
+      // The Finance board's lists and the Statistics Finance tab read the
+      // same payments.
+      queryClient.invalidateQueries({ queryKey: ['income-approvals'] })
+      queryClient.invalidateQueries({ queryKey: ['statistics', 'finance'] })
+    },
+  })
+
   // Clears the "Saved" confirmation after a beat so the card settles back to
   // its real state rather than claiming to be a save receipt forever.
   useEffect(() => {
@@ -1539,6 +1643,12 @@ export function LeadDetailModal({ lead, onClose }) {
     onSaveBalance: (values) => balanceMutation.mutate(values),
     isSavingBalance: balanceMutation.isPending,
     balanceError: balanceMutation.error ? getApiErrorMessage(balanceMutation.error) : null,
+    onDeletePayment: canDeletePayments ? (variables) => deletePaymentMutation.mutate(variables) : undefined,
+    deletingPaymentKey: deletePaymentMutation.isPending ? deletePaymentMutation.variables?.cardKey : null,
+    failedDelete: deletePaymentMutation.isError
+      ? { cardKey: deletePaymentMutation.variables?.cardKey, message: getApiErrorMessage(deletePaymentMutation.error) }
+      : null,
+    paymentDeletions,
   }
 
   // Payment errors show on the card that raised them rather than up here.
