@@ -38,12 +38,11 @@ function greeting() {
   return 'Good evening'
 }
 
-// The KPI icon plates, in the summary cards' nude ramps (styles/index.css).
 const TONES = {
-  blue: 'bg-fog-100 text-fog-600 ring-fog-200',
-  orange: 'bg-caramel-100 text-caramel-600 ring-caramel-200',
-  violet: 'bg-mauve-100 text-mauve-600 ring-mauve-200',
-  emerald: 'bg-sage-100 text-sage-600 ring-sage-200',
+  blue: 'bg-blue-50 text-blue-600 ring-blue-100',
+  orange: 'bg-orange-50 text-orange-600 ring-orange-100',
+  violet: 'bg-violet-50 text-violet-600 ring-violet-100',
+  emerald: 'bg-emerald-50 text-emerald-600 ring-emerald-100',
 }
 
 // This month against last. No arrow when last month had nothing: a rise
@@ -58,7 +57,7 @@ function MonthDelta({ now, before }) {
   return (
     <span
       className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-semibold ${
-        up ? 'bg-sage-100 text-sage-700' : 'bg-terracotta-100 text-terracotta-700'
+        up ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
       }`}
     >
       <Icon className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
