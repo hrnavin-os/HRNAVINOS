@@ -49,6 +49,8 @@ plus a map of the modules — it is not a substitute for the generated docs.
 | Lead Management (CRM) | `/leads` | pre-sales pipeline, includes `/assign` |
 | Admissions | `/admissions` | confirms a Student into a Course/Batch |
 | Student Management | `/students` | |
+| Student Portal | `/student-portal` | staff board for enrolled batches: `/batches/{id}` roster and totals, `/batches/{id}/attendance.pdf`, classes (`/batches/{id}/sessions`, `/sessions/{id}`, `/sync`), per-class `attendance` overrides and absentee `remarks`, per-student `/link` and `/terms` |
+| Student Portal (public) | `/public/student-portal/{token}` | a student's private link, no login: `GET` the page, `POST /terms` to sign, `POST /classes/{id}/recording` to open a recording. Nothing past the terms is returned until they are signed |
 | Course Management | `/courses` | |
 | Batch Management | `/batches` | |
 | Tutor Management | `/tutors` | |

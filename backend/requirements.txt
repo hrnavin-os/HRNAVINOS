@@ -32,6 +32,9 @@ python-dotenv==1.0.1
 tenacity==9.0.0
 # Also used at runtime for the Google Sheets OAuth/API calls (app/services/google_sheets_service.py)
 httpx==0.28.1
+# The Student Portal's attendance report PDF (app/services/attendance_report_pdf.py).
+# Pure Python, so the image needs no system libraries for it.
+fpdf2==2.8.3
 
 # ==================== Logging ====================
 python-json-logger==3.2.1

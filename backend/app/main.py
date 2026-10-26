@@ -18,6 +18,7 @@ from app.exceptions.handlers import register_exception_handlers
 from app.middleware.rate_limiter import limiter
 from app.middleware.request_context import RequestContextMiddleware
 from app.routes.api_router import api_router
+from app.services.class_attendance_service import run_forever as run_class_sync
 from app.services.lead_sheet_sync_service import run_forever as run_lead_sheet_sync
 from app.services.meet_attendance_service import run_forever as run_meet_sync
 from app.services.sheet_export_service import run_forever as run_sheet_export
@@ -38,6 +39,10 @@ async def lifespan(app: FastAPI):
         # Idles until GOOGLE_MEET_ADMIN_EMAIL and a service account are set; a
         # lease lets one worker read the Meet audit log per interval.
         asyncio.create_task(run_meet_sync()),
+        # The Student Portal's classes: live attendance from the same Meet
+        # audit log, recording views from the Drive one. Same credentials,
+        # same idling until they are set, a lease of its own.
+        asyncio.create_task(run_class_sync()),
     ]
     yield
     for task in background:

@@ -63,10 +63,16 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         P.BATCHES_VIEW, P.BATCHES_CREATE, P.BATCHES_UPDATE,
         P.LEADS_VIEW, P.COURSES_VIEW, P.TUTORS_VIEW,
         P.STUDENTS_VIEW, P.ADMISSIONS_VIEW, P.REPORTS_VIEW,
+        # The Student Portal picks up where confirming a batch leaves off:
+        # the students it just created, now attending classes.
+        P.STUDENT_PORTAL_VIEW, P.STUDENT_PORTAL_MARK, P.STUDENT_PORTAL_MANAGE,
     ],
     "Post Sales Executive": [
         P.DASHBOARD_VIEW,
         P.STUDENTS_VIEW, P.STUDENTS_UPDATE, P.TICKETS_VIEW, P.TICKETS_UPDATE, P.NOTIFICATIONS_VIEW,
+        # Looking after a student once they've enrolled is this role's job:
+        # chasing the terms signature, ringing the absentees.
+        P.STUDENT_PORTAL_VIEW, P.STUDENT_PORTAL_MARK, P.STUDENT_PORTAL_MANAGE,
     ],
     # Leads the Admin team: the whole Admin group of the sidebar - Statistics,
     # Lead Dashboard, Form Collection, Attendance, Programs and its Settings

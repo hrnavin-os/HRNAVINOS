@@ -9,6 +9,8 @@ import { StatisticsPage } from '@/pages/statistics/StatisticsPage'
 import { FormCollectionPage } from '@/pages/leads/FormCollectionPage'
 import { FoundationFormPage } from '@/pages/public/FoundationFormPage'
 import { InductionFormPage } from '@/pages/public/InductionFormPage'
+import { StudentLinkPage } from '@/pages/public/StudentLinkPage'
+import { StudentPortalPage } from '@/pages/studentPortal/StudentPortalPage'
 import { MarketingBoardPage } from '@/pages/marketing/MarketingBoardPage'
 import { AdmissionsPage } from '@/pages/admissions/AdmissionsPage'
 import { StudentsPage } from '@/pages/students/StudentsPage'
@@ -48,6 +50,10 @@ export function AppRoutes() {
           button can create new ones at any time), so this is a dynamic route
           rather than one static entry per section. */}
       <Route path="/foundation-form/:section" element={<FoundationFormPage />} />
+      {/* A student's private link: no login, the token is who they are. Kept
+          short (/s/) because it is typed into WhatsApp messages and read off
+          phones. */}
+      <Route path="/s/:token" element={<StudentLinkPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
@@ -116,6 +122,11 @@ export function AppRoutes() {
               their own section's students, which the API enforces. */}
           <Route element={<ProtectedRoute permission={PERMISSIONS.INDUCTION_ATTENDANCE_VIEW} />}>
             <Route path="/polls" element={<InductionAttendancePage key="polls" only="polls" />} />
+          </Route>
+          {/* blockScoped like its nav entry: a batch is drawn from every
+              section, so it isn't a Section Admin's to run. */}
+          <Route element={<ProtectedRoute permission={PERMISSIONS.STUDENT_PORTAL_VIEW} blockScoped />}>
+            <Route path="/student-portal" element={<StudentPortalPage />} />
           </Route>
           <Route element={<ProtectedRoute permission={PERMISSIONS.COURSES_VIEW} />}>
             <Route path="/courses" element={<CoursesPage />} />

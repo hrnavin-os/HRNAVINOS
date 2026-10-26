@@ -42,6 +42,12 @@ export const PERMISSIONS = {
   INDUCTION_ATTENDANCE_MARK: 'induction_attendance.mark',
   INDUCTION_ATTENDANCE_CONFIGURE: 'induction_attendance.configure',
 
+  // The Student Portal: reading a batch, marking attendance and logging the
+  // absentee calls, and running the batch (classes, recordings, links, terms).
+  STUDENT_PORTAL_VIEW: 'student_portal.view',
+  STUDENT_PORTAL_MARK: 'student_portal.mark',
+  STUDENT_PORTAL_MANAGE: 'student_portal.manage',
+
   LEADS_VIEW: 'leads.view',
   LEADS_CREATE: 'leads.create',
   LEADS_UPDATE: 'leads.update',

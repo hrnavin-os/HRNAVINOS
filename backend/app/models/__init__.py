@@ -5,6 +5,7 @@ from app.models.attendance import Attendance
 from app.models.audit_log import AuditLog
 from app.models.batch import Batch
 from app.models.batch_allocation import BatchAllocation
+from app.models.class_session import ClassSession, SessionAttendance
 from app.models.company import Company
 from app.models.course import Course
 from app.models.department import Department
@@ -40,6 +41,7 @@ ALL_DOCUMENTS = [
     AuditLog,
     Batch,
     BatchAllocation,
+    ClassSession,
     Company,
     Course,
     Department,
@@ -64,6 +66,7 @@ ALL_DOCUMENTS = [
     Report,
     Role,
     AppSettings,
+    SessionAttendance,
     SheetExport,
     Student,
     TermsDocument,
@@ -79,6 +82,7 @@ __all__ = [
     "AuditLog",
     "Batch",
     "BatchAllocation",
+    "ClassSession",
     "Company",
     "Course",
     "Department",
@@ -102,6 +106,7 @@ __all__ = [
     "RefreshToken",
     "Report",
     "Role",
+    "SessionAttendance",
     "SheetExport",
     "AppSettings",
     "Student",

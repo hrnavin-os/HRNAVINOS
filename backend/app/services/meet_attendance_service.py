@@ -174,16 +174,34 @@ def _parameters(event: dict) -> dict:
 
 async def fetch_call_ended(http: httpx.AsyncClient, start: datetime, end: datetime) -> list[dict]:
     """Every `call_ended` event in [start, end), all pages."""
+    return await fetch_activities(http, "meet", event_name="call_ended", start=start, end=end)
+
+
+async def fetch_activities(
+    http: httpx.AsyncClient,
+    application: str,
+    *,
+    event_name: str,
+    start: datetime,
+    end: datetime,
+    filters: str | None = None,
+) -> list[dict]:
+    """Every `event_name` event of one audit-log application in [start, end),
+    all pages. `meet` here; `drive` for the Student Portal's recording views,
+    which the same delegated admin and scope can read."""
     token = await _access_token(http)
     params = {
-        "eventName": "call_ended",
+        "eventName": event_name,
         "startTime": start.isoformat().replace("+00:00", "Z"),
         "endTime": end.isoformat().replace("+00:00", "Z"),
         "maxResults": 1000,
     }
+    if filters:
+        params["filters"] = filters
+    url = REPORTS_URL.rsplit("/", 1)[0] + f"/{application}"
     items: list[dict] = []
     while True:
-        response = await http.get(REPORTS_URL, params=params, headers={"Authorization": f"Bearer {token}"})
+        response = await http.get(url, params=params, headers={"Authorization": f"Bearer {token}"})
         if response.status_code == 403:
             raise MeetSyncError(
                 f"Google denied the audit log to {settings.GOOGLE_MEET_ADMIN_EMAIL}. It must be a Workspace "

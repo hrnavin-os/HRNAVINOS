@@ -33,6 +33,8 @@ from app.routes import (
     settings_routes,
     sheet_export_routes,
     staff_routes,
+    student_link_routes,
+    student_portal_routes,
     student_routes,
     ticket_routes,
     tutor_routes,
@@ -59,6 +61,8 @@ api_router.include_router(induction_form_routes.router)
 api_router.include_router(induction_form_config_routes.router)
 api_router.include_router(admission_routes.router)
 api_router.include_router(student_routes.router)
+api_router.include_router(student_portal_routes.router)
+api_router.include_router(student_link_routes.router)
 api_router.include_router(program_routes.router)
 api_router.include_router(course_routes.router)
 api_router.include_router(batch_routes.router)

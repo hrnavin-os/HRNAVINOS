@@ -1,4 +1,5 @@
 import {
+  BookOpenCheck,
   ChartColumn,
   LayoutDashboard,
   Target,
@@ -184,6 +185,21 @@ export const NAV_ITEMS = [
     to: '/whatsapp-links',
     permission: PERMISSIONS.WHATSAPP_LINKS_VIEW,
     icon: MessageCircle,
+  },
+
+  {
+    // The enrolled batches: their classes and recordings, each student's
+    // terms signature and private link, attendance and the absentee calls.
+    // Its own heading after Onboarding, because it starts where confirming a
+    // batch ends - the students that confirmation created.
+    label: 'Student Portal',
+    shortLabel: 'Students',
+    to: '/student-portal',
+    permission: PERMISSIONS.STUDENT_PORTAL_VIEW,
+    icon: BookOpenCheck,
+    group: 'Students',
+    // A batch is drawn from every section, so it isn't a Section Admin's.
+    hiddenForScopedUsers: true,
   },
 
   { label: 'Finance', to: '/payments', permission: PERMISSIONS.PAYMENTS_VIEW, icon: Wallet, group: 'Finance' },

@@ -250,6 +250,7 @@ async def test_every_sidebar_menu_has_a_permission_of_its_own(client, auth_heade
         "programs",             # Programs
         "batch_confirmation",   # Batch Confirmation
         "whatsapp_links",       # WhatsApp Links
+        "student_portal",       # Student Portal
         "payments",             # Finance
         "staffs",               # Employee > Staffs
         "departments",          # Employee > Departments

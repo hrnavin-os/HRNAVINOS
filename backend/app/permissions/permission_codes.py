@@ -191,6 +191,20 @@ class Permissions(StrEnum):
     INDUCTION_ATTENDANCE_MARK = "induction_attendance.mark"
     INDUCTION_ATTENDANCE_CONFIGURE = "induction_attendance.configure"
 
+    # ---------- Student Portal ----------
+    # Where staff run an enrolled batch: its classes and recordings, each
+    # student's terms signature and private link, attendance and the
+    # absentee calls. Its own codes rather than students.*, which belong to
+    # the bare student register nothing in the sidebar links to.
+    #
+    # Three jobs: reading where a batch stands; marking attendance and logging
+    # the absentee calls; and running the batch - scheduling classes,
+    # attaching recordings, issuing and revoking students' links, recording a
+    # signature taken on paper. The last decides what students can reach.
+    STUDENT_PORTAL_VIEW = "student_portal.view"
+    STUDENT_PORTAL_MARK = "student_portal.mark"
+    STUDENT_PORTAL_MANAGE = "student_portal.manage"
+
 
 # The modules the role editor offers.
 #
@@ -222,6 +236,7 @@ OFFERED_MODULES: set[str] = {
     "form_collection",
     "programs",
     "induction_attendance",
+    "student_portal",
     "batch_confirmation",
     "whatsapp_links",
     "notifications",
