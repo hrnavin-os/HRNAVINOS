@@ -11,71 +11,10 @@
 // one 200px band across the top of the board - the first thing the eye landed
 // on was the decoration rather than the figures. Solid fills at one step,
 // with the accent doing the identifying and the number doing the talking.
-const TONE_STYLES = {
-  brand: {
-    active: 'border-brand-600 bg-brand-600',
-    inactive: 'border-brand-100 bg-brand-50/70 hover:bg-brand-50',
-    plate: 'bg-brand-600',
-    label: 'text-brand-700/80',
-    value: 'text-brand-700',
-  },
-  blue: {
-    active: 'border-blue-600 bg-blue-600',
-    inactive: 'border-blue-100 bg-blue-50/70 hover:bg-blue-50',
-    plate: 'bg-blue-600',
-    label: 'text-blue-700/80',
-    value: 'text-blue-700',
-  },
-  emerald: {
-    active: 'border-emerald-600 bg-emerald-600',
-    inactive: 'border-emerald-100 bg-emerald-50/70 hover:bg-emerald-50',
-    plate: 'bg-emerald-600',
-    label: 'text-emerald-700/80',
-    value: 'text-emerald-700',
-  },
-  amber: {
-    active: 'border-amber-500 bg-amber-500',
-    inactive: 'border-amber-100 bg-amber-50/70 hover:bg-amber-50',
-    plate: 'bg-amber-500',
-    label: 'text-amber-700/80',
-    value: 'text-amber-700',
-  },
-  violet: {
-    active: 'border-violet-600 bg-violet-600',
-    inactive: 'border-violet-100 bg-violet-50/70 hover:bg-violet-50',
-    plate: 'bg-violet-600',
-    label: 'text-violet-700/80',
-    value: 'text-violet-700',
-  },
-  rose: {
-    active: 'border-rose-600 bg-rose-600',
-    inactive: 'border-rose-100 bg-rose-50/70 hover:bg-rose-50',
-    plate: 'bg-rose-600',
-    label: 'text-rose-700/80',
-    value: 'text-rose-700',
-  },
-  cyan: {
-    active: 'border-cyan-600 bg-cyan-600',
-    inactive: 'border-cyan-100 bg-cyan-50/70 hover:bg-cyan-50',
-    plate: 'bg-cyan-600',
-    label: 'text-cyan-700/80',
-    value: 'text-cyan-700',
-  },
-  red: {
-    active: 'border-red-600 bg-red-600',
-    inactive: 'border-red-100 bg-red-50/70 hover:bg-red-50',
-    plate: 'bg-red-600',
-    label: 'text-red-700/80',
-    value: 'text-red-700',
-  },
-  slate: {
-    active: 'border-slate-600 bg-slate-600',
-    inactive: 'border-slate-200 bg-white hover:bg-slate-50',
-    plate: 'bg-slate-500',
-    label: 'text-slate-500',
-    value: 'text-slate-700',
-  },
-}
+//
+// The colours themselves live in constants/statTones, which every other
+// summary card in the ERP reads too, so they all wear this card's look.
+import { statTone } from '@/constants/statTones'
 
 // `hint` is a line of qualifying text under the value ("For selected period").
 //
@@ -85,7 +24,7 @@ const TONE_STYLES = {
 // That is what lets the Payments summary use this card instead of keeping its
 // own near-copy of it.
 export function StatCard({ label, value, toneName, isActive, onClick, icon: Icon, hint }) {
-  const tone = TONE_STYLES[toneName] ?? TONE_STYLES.slate
+  const tone = statTone(toneName)
   const interactive = Boolean(onClick)
   const Wrapper = interactive ? 'button' : 'div'
 
@@ -114,7 +53,7 @@ export function StatCard({ label, value, toneName, isActive, onClick, icon: Icon
         interactive
           ? 'transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500'
           : ''
-      } ${isActive ? `${tone.active} shadow-sm` : tone.inactive}`}
+      } ${isActive ? `${tone.active} shadow-sm` : `${tone.surface} ${interactive ? tone.hover : ''}`}`}
     >
       <div className="flex items-center gap-3 px-3.5 py-2.5 @max-[11rem]:gap-2 @max-[11rem]:px-3">
         {Icon && (

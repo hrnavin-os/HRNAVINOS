@@ -530,6 +530,8 @@ function PopulationBoard({ boardTabs }) {
               share={largest ? percent(largest.count, baseTotal) : null}
               deltaLabel={largest ? `${largest.count} ${board.unit.toLowerCase()}` : null}
               icon={Crown}
+              // Its own colour, so it doesn't read as a second Total card.
+              tone="violet"
               onClick={largestLabel ? toggleLargest : undefined}
               active={activeCard === 'largest'}
             />

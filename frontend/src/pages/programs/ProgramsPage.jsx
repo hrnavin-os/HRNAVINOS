@@ -6,6 +6,7 @@ import { foundationFormConfigService } from '@/services/foundationFormConfigServ
 import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { PERMISSIONS } from '@/constants/permissions'
+import { statTone } from '@/constants/statTones'
 import { formatCurrency, formatDate } from '@/utils/formatters'
 
 // Mirrors INSTALLMENT_LABELS in backend/app/services/foundation_form_pricing.py.
@@ -32,11 +33,13 @@ const STATUS_OPTIONS = [
 
 const SECTION_HEADING = 'text-xs font-semibold uppercase tracking-wide text-slate-400'
 
+const FIGURE_TONE = statTone('brand')
+
 function StatTile({ label, value }) {
   return (
-    <div className="rounded-lg border border-brand-100 bg-brand-50 px-3 py-2.5">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-brand-700/70">{label}</p>
-      <p className="mt-0.5 text-base font-semibold text-brand-700">{value}</p>
+    <div className={`rounded-lg border px-3 py-2.5 ${FIGURE_TONE.surface}`}>
+      <p className={`text-[11px] font-semibold uppercase tracking-wide ${FIGURE_TONE.label}`}>{label}</p>
+      <p className={`mt-0.5 text-base font-semibold tabular-nums ${FIGURE_TONE.value}`}>{value}</p>
     </div>
   )
 }

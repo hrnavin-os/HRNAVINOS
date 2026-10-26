@@ -21,6 +21,7 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { ActivityTrendChart } from '@/components/dashboard/ActivityTrendChart'
 import { PipelineFunnel } from '@/components/dashboard/PipelineFunnel'
 import { LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
+import { statTone } from '@/constants/statTones'
 import { shortMoney } from '@/constants/statisticsBoards'
 import { formatCurrency, formatDate } from '@/utils/formatters'
 import { useAuth } from '@/hooks/useAuth'
@@ -38,26 +39,20 @@ function greeting() {
   return 'Good evening'
 }
 
-const TONES = {
-  blue: 'bg-blue-50 text-blue-600 ring-blue-100',
-  orange: 'bg-orange-50 text-orange-600 ring-orange-100',
-  violet: 'bg-violet-50 text-violet-600 ring-violet-100',
-  emerald: 'bg-emerald-50 text-emerald-600 ring-emerald-100',
-}
-
 // This month against last. No arrow when last month had nothing: a rise
 // "from zero" is not a percentage.
 function MonthDelta({ now, before }) {
   if (!before) {
-    return <span className="text-xs text-slate-400">{now ? 'First this month' : 'Nothing yet this month'}</span>
+    return <span className="text-xs text-slate-500">{now ? 'First this month' : 'Nothing yet this month'}</span>
   }
   const change = Math.round(((now - before) / before) * 100)
   const up = change >= 0
   const Icon = up ? ArrowUpRight : ArrowDownRight
   return (
+    // White, so the chip stands off the card's wash whichever colour it is.
     <span
-      className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-semibold ${
-        up ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+      className={`inline-flex items-center gap-0.5 rounded-full bg-white px-1.5 py-0.5 text-xs font-semibold ring-1 ring-black/5 ${
+        up ? 'text-emerald-700' : 'text-red-700'
       }`}
     >
       <Icon className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
@@ -67,18 +62,23 @@ function MonthDelta({ now, before }) {
   )
 }
 
+// Dressed like every other summary card in the ERP (constants/statTones): a
+// wash of its tone, with the label and the figure in the tone's dark step.
 function KpiCard({ label, value, icon: Icon, tone, footer, children }) {
+  const style = statTone(tone)
   return (
-    <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className={`flex flex-col rounded-xl border p-5 ${style.surface}`}>
       <div className="flex items-start justify-between gap-3">
-        <p className="text-[13px] font-medium text-slate-500">{label}</p>
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 ${TONES[tone]}`}>
+        <p className={`text-[11px] font-semibold uppercase leading-tight tracking-wide ${style.label}`}>{label}</p>
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-white ${style.plate}`}>
           <Icon className="h-4.5 w-4.5" strokeWidth={2} aria-hidden="true" />
         </span>
       </div>
-      <p className="mt-1 text-[28px] font-semibold leading-tight tracking-tight text-slate-900 tabular-nums">{value}</p>
+      <p className={`mt-1 text-[28px] font-semibold leading-tight tracking-tight tabular-nums ${style.value}`}>
+        {value}
+      </p>
       <div className="mt-2 min-h-5">{children}</div>
-      {footer && <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500">{footer}</p>}
+      {footer && <p className="mt-3 border-t border-black/5 pt-3 text-xs text-slate-600">{footer}</p>}
     </div>
   )
 }
@@ -224,7 +224,7 @@ function DashboardBody({ data }) {
           tone="violet"
           footer={`${kpis.batch_confirmed} batch confirmed · ${kpis.quit} quit`}
         >
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-slate-600">
             {kpis.moved_to_foundation} of {kpis.induction.total} candidates moved on
           </span>
         </KpiCard>
@@ -237,7 +237,7 @@ function DashboardBody({ data }) {
         >
           {/* Collected against everything billed so far. */}
           <div className="flex items-center gap-2">
-            <div className="h-1.5 flex-1 rounded-full bg-slate-100">
+            <div className="h-1.5 flex-1 rounded-full bg-white">
               <div className="h-full rounded-full bg-emerald-500" style={{ width: `${collectedShare}%` }} />
             </div>
             <span className="text-xs font-semibold text-slate-700 tabular-nums">{collectedShare}%</span>
