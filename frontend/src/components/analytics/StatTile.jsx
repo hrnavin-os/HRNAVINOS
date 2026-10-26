@@ -5,36 +5,40 @@ import { TrendingDown, TrendingUp } from 'lucide-react'
 // makes a row of tiles read as a strip of related figures at a glance - the
 // colour is the tile's identity, repeated at a size you can see from across
 // the room, which a 32px icon chip alone cannot do.
+//
+// Nude ramps (styles/index.css), under the tone names callers pass - see
+// StatCard for the mapping. Collected / Outstanding / Overdue still read as
+// sage / caramel / terracotta, so the good-to-bad order survives the palette.
 const TONES = {
   brand: {
-    plate: 'bg-brand-50 text-brand-600',
-    pill: 'bg-brand-50 text-brand-700',
-    rail: 'bg-brand-500',
-    ring: 'ring-brand-500 bg-brand-50/40',
+    plate: 'bg-cocoa-100 text-cocoa-600',
+    pill: 'bg-cocoa-100 text-cocoa-700',
+    rail: 'bg-cocoa-500',
+    ring: 'ring-cocoa-500 bg-cocoa-50',
   },
   emerald: {
-    plate: 'bg-emerald-50 text-emerald-600',
-    pill: 'bg-emerald-50 text-emerald-700',
-    rail: 'bg-emerald-500',
-    ring: 'ring-emerald-500 bg-emerald-50/40',
+    plate: 'bg-sage-100 text-sage-600',
+    pill: 'bg-sage-100 text-sage-700',
+    rail: 'bg-sage-500',
+    ring: 'ring-sage-500 bg-sage-50',
   },
   red: {
-    plate: 'bg-red-50 text-red-600',
-    pill: 'bg-red-50 text-red-700',
-    rail: 'bg-red-500',
-    ring: 'ring-red-500 bg-red-50/40',
+    plate: 'bg-terracotta-100 text-terracotta-600',
+    pill: 'bg-terracotta-100 text-terracotta-700',
+    rail: 'bg-terracotta-500',
+    ring: 'ring-terracotta-500 bg-terracotta-50',
   },
   amber: {
-    plate: 'bg-amber-50 text-amber-600',
-    pill: 'bg-amber-50 text-amber-700',
-    rail: 'bg-amber-500',
-    ring: 'ring-amber-500 bg-amber-50/40',
+    plate: 'bg-caramel-100 text-caramel-600',
+    pill: 'bg-caramel-100 text-caramel-700',
+    rail: 'bg-caramel-500',
+    ring: 'ring-caramel-500 bg-caramel-50',
   },
   slate: {
-    plate: 'bg-slate-100 text-slate-500',
-    pill: 'bg-slate-100 text-slate-600',
-    rail: 'bg-slate-300',
-    ring: 'ring-slate-400 bg-slate-50',
+    plate: 'bg-greige-100 text-greige-500',
+    pill: 'bg-greige-100 text-greige-600',
+    rail: 'bg-greige-200',
+    ring: 'ring-greige-500 bg-greige-50',
   },
 }
 
@@ -126,7 +130,7 @@ export function StatTile({
               chip is what keeps it from competing with the number above. */}
           <span
             className={`inline-flex items-center gap-0.5 rounded px-1 py-0.5 font-bold ${
-              good ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+              good ? 'bg-sage-100 text-sage-700' : 'bg-terracotta-100 text-terracotta-700'
             }`}
           >
             <Arrow className="h-3 w-3 shrink-0" strokeWidth={2.5} aria-hidden="true" />

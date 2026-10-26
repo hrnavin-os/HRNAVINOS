@@ -34,9 +34,10 @@ const SECTION_HEADING = 'text-xs font-semibold uppercase tracking-wide text-slat
 
 function StatTile({ label, value }) {
   return (
-    <div className="rounded-lg border border-brand-100 bg-brand-50 px-3 py-2.5">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-brand-700/70">{label}</p>
-      <p className="mt-0.5 text-base font-semibold text-brand-700">{value}</p>
+    // Cocoa, the nude every "all of it" summary card wears - see StatCard.
+    <div className="rounded-lg border border-cocoa-200 bg-cocoa-50 px-3 py-2.5">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-cocoa-700/70">{label}</p>
+      <p className="mt-0.5 text-base font-semibold text-cocoa-700">{value}</p>
     </div>
   )
 }

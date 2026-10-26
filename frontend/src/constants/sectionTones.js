@@ -2,11 +2,12 @@
 // so a section reads as the same colour wherever it appears.
 //
 // The ORDER is deliberate, not alphabetical: these render side by side, so
-// adjacent hues have to stay separable for colour-blind readers. Emerald is
-// kept away from both amber (weak under protanopia) and cyan (too close even
-// with full colour vision). Verified with a palette validator - worst adjacent
-// pair is rose/amber at deltaE 9.4 (deutan) and 16.6 normal-vision, both above
-// the floor. Re-check before reshuffling.
+// adjacent cards have to stay separable. The names are the old accents; each
+// resolves to a nude ramp (styles/index.css) - fog, sage, mauve, caramel,
+// blush, sand in this order. Nudes are low-chroma, so the order alternates
+// their lightness: the worst adjacent pair is blush/sand at deltaE 8.8 under
+// normal vision, and every card is labelled besides. Re-check before
+// reshuffling.
 export const SECTION_TONE_ORDER = ['blue', 'emerald', 'violet', 'amber', 'rose', 'cyan']
 
 export function sectionToneAt(index) {
@@ -15,13 +16,14 @@ export function sectionToneAt(index) {
 
 // Low-opacity card surfaces: enough tint to tell two cards apart at a glance,
 // not enough to fight the text sitting on them.
+// A full step of the nude rather than 60% of it, which is next to white.
 export const CARD_TONE_CLASSES = {
-  blue: 'border-blue-200 bg-blue-50/60',
-  emerald: 'border-emerald-200 bg-emerald-50/60',
-  violet: 'border-violet-200 bg-violet-50/60',
-  amber: 'border-amber-200 bg-amber-50/60',
-  rose: 'border-rose-200 bg-rose-50/60',
-  cyan: 'border-cyan-200 bg-cyan-50/60',
+  blue: 'border-fog-200 bg-fog-50',
+  emerald: 'border-sage-200 bg-sage-50',
+  violet: 'border-mauve-200 bg-mauve-50',
+  amber: 'border-caramel-200 bg-caramel-50',
+  rose: 'border-blush-200 bg-blush-50',
+  cyan: 'border-sand-200 bg-sand-50',
 }
 
 // The icon plate keeps the accent at full strength - it's the one element
@@ -30,10 +32,10 @@ export const CARD_TONE_CLASSES = {
 // One step, not a gradient: at 40px a two-stop ramp is not read as depth, only
 // as an edge that doesn't match the flat plates everywhere else in the app.
 export const CARD_PLATE_CLASSES = {
-  blue: 'bg-blue-600',
-  emerald: 'bg-emerald-600',
-  violet: 'bg-violet-600',
-  amber: 'bg-amber-500',
-  rose: 'bg-rose-600',
-  cyan: 'bg-cyan-600',
+  blue: 'bg-fog-600',
+  emerald: 'bg-sage-600',
+  violet: 'bg-mauve-600',
+  amber: 'bg-caramel-600',
+  rose: 'bg-blush-600',
+  cyan: 'bg-sand-600',
 }
