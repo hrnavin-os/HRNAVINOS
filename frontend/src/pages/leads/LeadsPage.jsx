@@ -13,7 +13,7 @@ import { getApiErrorMessage } from '@/services/apiClient'
 import { LEAD_STAGES, LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
 import { PERMISSIONS } from '@/constants/permissions'
 import { formatCurrency, formatDate, titleCase } from '@/utils/formatters'
-import { getPaymentLedger } from '@/utils/leadPayment'
+import { getInstallmentCollected, getPaymentLedger } from '@/utils/leadPayment'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
@@ -237,6 +237,21 @@ function BatchCell({ lead, onError }) {
       >
         <X className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
       </button>
+    </div>
+  )
+}
+
+// The token the student paid up front to hold their seat, recorded as the
+// Token Amount card in the lead popup's Payment Collection. Optional, so most
+// rows have none.
+function TokenCell({ lead }) {
+  const { token } = getPaymentLedger(lead)
+  const amount = token ? getInstallmentCollected(token.entry) : 0
+  if (!amount) return <span className="text-slate-400">—</span>
+  return (
+    <div className="whitespace-nowrap">
+      <p className="text-sm font-medium text-slate-900">{formatCurrency(amount)}</p>
+      {token.entry.paid_at && <p className="text-xs text-slate-500">{formatDate(token.entry.paid_at)}</p>}
     </div>
   )
 }
@@ -887,6 +902,13 @@ function FoundationLeadsBoard() {
       header: 'Batch',
       align: 'center',
       render: (row) => <BatchCell key={row.id} lead={row} onError={setEditError} />,
+    },
+    // Read-only, like Paid / Due: the token is recorded in the lead popup.
+    {
+      key: 'token',
+      header: 'Token',
+      align: 'center',
+      render: (row) => <TokenCell lead={row} />,
     },
     // Read-only: payments are recorded in the lead popup's Payment Collection.
     // Before Payment Method because it is the answer to it - the plan says
