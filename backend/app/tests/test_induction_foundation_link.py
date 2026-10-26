@@ -832,6 +832,29 @@ async def test_the_analytics_filters_narrow_the_breakdown(client, auth_headers):
     assert [item["value"] for item in august["items"]] == ["Career Gap"]
 
 
+async def test_the_analytics_group_filter_narrows_the_breakdown(client, auth_headers):
+    """The group sits in the same filter rail as the window and the section, so
+    the ring and the headline count only that class."""
+    await seed_programs(client)
+    await client.post(
+        INDUCTION_URL,
+        json=induction_payload(name="One", phone="9000000220", category="Fresher", group="Group 1"),
+    )
+    await client.post(
+        INDUCTION_URL,
+        json=induction_payload(name="Two", phone="9000000221", category="Career Gap", group="Group 2"),
+    )
+
+    group_two = (
+        await client.get(
+            "/api/v1/induction-entries/analytics?dimension=category&foundation_group=2", headers=auth_headers
+        )
+    ).json()
+
+    assert group_two["total"] == 1
+    assert [item["value"] for item in group_two["items"]] == ["Career Gap"]
+
+
 async def test_the_analytics_compares_against_the_previous_period(client, auth_headers):
     """The arrows on the stat tiles need a period to point away from. With a
     window set that is the window of the same length before it; the label says

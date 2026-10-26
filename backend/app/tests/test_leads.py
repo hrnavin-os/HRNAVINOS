@@ -667,6 +667,20 @@ async def test_foundation_analytics_window_narrows_the_population(client, auth_h
     assert data["total"] == 1
 
 
+async def test_foundation_analytics_group_narrows_the_population(client, auth_headers):
+    """Every dimension, the batch one read through the induction entry included."""
+    await make_lead(client, auth_headers, name="Arun", phone="9000000101", foundation_group=1)
+    await make_lead(
+        client, auth_headers, name="Bala", phone="9000000102", foundation_group=2, course_interest="Full Stack"
+    )
+
+    by_course = await analytics(client, auth_headers, "course", foundation_group=2)
+    assert by_course["total"] == 1
+    assert [item["value"] for item in by_course["items"]] == ["Full Stack"]
+
+    assert (await analytics(client, auth_headers, "batch", foundation_group=1))["total"] == 1
+
+
 async def test_foundation_analytics_refuses_an_unknown_dimension(client, auth_headers):
     """The field is looked up in a closed map, so no caller can group the
     collection by an arbitrary field."""

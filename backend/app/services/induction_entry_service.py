@@ -410,6 +410,7 @@ class InductionEntryService:
         section: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
+        foundation_group: int | None = None,
         outcome: str | None = None,
     ) -> dict:
         """Counts per distinct value of one field, with how many of each went on
@@ -423,9 +424,10 @@ class InductionEntryService:
         interesting question isn't how many Freshers there were - it's how many
         of them converted and how many walked. A bare count answers neither.
 
-        The window and the section are the dashboard's filter rail. Applied
-        here, inside the one $match every view on the canvas is built on, so
-        two panels on the same screen cannot end up counting different people.
+        The window, the section and the group are the dashboard's filter rail.
+        Applied here, inside the one $match every view on the canvas is built
+        on, so two panels on the same screen cannot end up counting different
+        people.
 
         `outcome` is a clicked summary card - Moved to Foundation, or Quit -
         and narrows every figure to the candidates it counts, in that same
@@ -438,6 +440,8 @@ class InductionEntryService:
         match: dict = {"is_deleted": False, **self._outcome_match(outcome)}
         if section:
             match["section"] = section
+        if foundation_group:
+            match["foundation_group"] = foundation_group
         # Registration dates are stored as midnight datetimes, and a pipeline
         # stage isn't passed through the ODM's encoder the way a find() query
         # is - so the bounds are converted here rather than left as dates.
@@ -471,7 +475,9 @@ class InductionEntryService:
             ]
         ).to_list()
 
-        current, comparison = await self._period_comparison(section, date_from, date_to, outcome)
+        current, comparison = await self._period_comparison(
+            section, date_from, date_to, outcome, foundation_group=foundation_group
+        )
 
         return {
             "dimension": dimension,
@@ -494,7 +500,13 @@ class InductionEntryService:
         }
 
     async def _period_comparison(
-        self, section: str | None, date_from: date | None, date_to: date | None, outcome: str | None = None
+        self,
+        section: str | None,
+        date_from: date | None,
+        date_to: date | None,
+        outcome: str | None = None,
+        *,
+        foundation_group: int | None = None,
     ) -> tuple[dict, dict] | tuple[None, None]:
         """This period's three headline figures and the previous period's.
 
@@ -521,12 +533,21 @@ class InductionEntryService:
             label = "last 30 days vs the 30 before"
         earlier = (current[0] - timedelta(days=span), current[0] - timedelta(days=1))
 
+        scope = {"outcome": outcome, "foundation_group": foundation_group}
         return (
-            {"label": label, **await self._headline(section, *current, outcome=outcome)},
-            {"label": label, **await self._headline(section, *earlier, outcome=outcome)},
+            {"label": label, **await self._headline(section, *current, **scope)},
+            {"label": label, **await self._headline(section, *earlier, **scope)},
         )
 
-    async def _headline(self, section: str | None, start: date, end: date, *, outcome: str | None = None) -> dict:
+    async def _headline(
+        self,
+        section: str | None,
+        start: date,
+        end: date,
+        *,
+        outcome: str | None = None,
+        foundation_group: int | None = None,
+    ) -> dict:
         """How many registered in a window, how many of them moved, how many
         quit. The same three numbers the stat tiles lead with."""
         match: dict = {
@@ -539,6 +560,8 @@ class InductionEntryService:
         }
         if section:
             match["section"] = section
+        if foundation_group:
+            match["foundation_group"] = foundation_group
         quit_match = {
             "$regexMatch": {"input": {"$ifNull": ["$call_remark", ""]}, "regex": "quit", "options": "i"}
         }

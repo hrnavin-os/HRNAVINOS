@@ -22,6 +22,7 @@ import { MiniStatStrip, StatTile } from '@/components/analytics/StatTile'
 import { colorByEntity, percent } from '@/constants/analyticsPalette'
 import { BOARDS, BOARD_BY_KEY, shortMoney } from '@/constants/statisticsBoards'
 import { REMARK_GROUPS, REMARK_GROUP_BY_VALUE } from '@/constants/inductionCallRemarks'
+import { FOUNDATION_GROUP_OPTIONS } from '@/constants/foundationGroups'
 import { formatCurrency } from '@/utils/formatters'
 
 const MEASURES = [
@@ -117,6 +118,9 @@ function PopulationBoard({ boardTabs }) {
   )
   const [dateRange, setDateRange] = useState(null)
   const [section, setSection] = useState('')
+  // Which foundation class group. Both halves store it, so it filters either
+  // board - and stays set across the switch, like the window and the section.
+  const [group, setGroup] = useState('')
   const [measure, setMeasure] = useState('count')
   // The highlighted value, shared by every view on the canvas. One string
   // rather than a per-panel selection: the whole point of a dashboard is that
@@ -159,6 +163,7 @@ function PopulationBoard({ boardTabs }) {
     date_from: dateRange?.from || undefined,
     date_to: dateRange?.to || undefined,
     section: section || undefined,
+    foundation_group: group || undefined,
   }
   const narrowed = outcome ? { ...filters, outcome } : filters
 
@@ -405,6 +410,15 @@ function PopulationBoard({ boardTabs }) {
               />
             </div>
           )}
+          <div className="w-36">
+            <FilterDropdown
+              grow
+              label="Group"
+              value={group}
+              options={FOUNDATION_GROUP_OPTIONS}
+              onChange={setGroup}
+            />
+          </div>
           {outcome && (
             // The clicked card, named in the row with the other filters so it
             // is clear why the charts below have shrunk - and droppable from

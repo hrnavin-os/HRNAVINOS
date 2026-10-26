@@ -279,6 +279,9 @@ async def analytics(
     date_from: date | None = None,
     date_to: date | None = None,
     section: str | None = None,
+    # Which foundation class group, the same equality match the board's own
+    # Group filter makes.
+    foundation_group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
     # A clicked summary card: narrows every figure to the candidates who moved
     # to Foundation, or the ones who quit.
     outcome: Literal["moved", "quit"] | None = None,
@@ -302,7 +305,12 @@ async def analytics(
     """
     scope = await get_actor_scope(actor)
     data = await InductionEntryService().analytics(
-        dimension, section=scope or section, date_from=date_from, date_to=date_to, outcome=outcome
+        dimension,
+        section=scope or section,
+        date_from=date_from,
+        date_to=date_to,
+        foundation_group=foundation_group,
+        outcome=outcome,
     )
     return InductionAnalyticsResponse(**data)
 

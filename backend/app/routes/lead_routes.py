@@ -184,6 +184,9 @@ async def analytics(
     date_from: date | None = None,
     date_to: date | None = None,
     section: str | None = None,
+    # Which foundation class group, the same equality match the board's own
+    # Group filter makes.
+    foundation_group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
     # A clicked summary card: narrows every figure to the leads that reached
     # Batch Confirmation, the ones lost, or the ones with money collected.
     outcome: Literal["confirmed", "lost", "paid"] | None = None,
@@ -206,7 +209,12 @@ async def analytics(
     """
     scope = await get_actor_scope(actor)
     data = await LeadService().analytics(
-        dimension, section=scope or section, date_from=date_from, date_to=date_to, outcome=outcome
+        dimension,
+        section=scope or section,
+        date_from=date_from,
+        date_to=date_to,
+        foundation_group=foundation_group,
+        outcome=outcome,
     )
     return LeadAnalyticsResponse(**data)
 
@@ -237,6 +245,7 @@ async def finance_leads(
     date_from: date | None = None,
     date_to: date | None = None,
     section: str | None = None,
+    foundation_group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
     actor: User = Depends(RequirePermissions(Permissions.FINANCE_ANALYTICS_VIEW)),
 ) -> list[LeadResponse]:
     """The Statistics Finance tab's rows: every lead at Financial Approval or
@@ -249,7 +258,9 @@ async def finance_leads(
     """
     service = LeadService()
     scope = await get_actor_scope(actor)
-    leads = await service.finance_leads(section=scope or section, date_from=date_from, date_to=date_to)
+    leads = await service.finance_leads(
+        section=scope or section, date_from=date_from, date_to=date_to, foundation_group=foundation_group
+    )
     return [await service.to_response(lead) for lead in leads]
 
 

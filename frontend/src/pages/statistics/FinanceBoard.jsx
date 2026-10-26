@@ -16,6 +16,7 @@ import {
 import { leadService } from '@/services/leadService'
 import { foundationFormConfigService } from '@/services/foundationFormConfigService'
 import { getApiErrorMessage } from '@/services/apiClient'
+import { FOUNDATION_GROUP_OPTIONS } from '@/constants/foundationGroups'
 import { useAuth } from '@/hooks/useAuth'
 import { DataTable } from '@/components/ui/DataTable'
 import { DateFilter } from '@/components/ui/DateFilter'
@@ -300,6 +301,7 @@ export function FinanceBoard({ boardTabs, onOpenBoard }) {
   const scopedSection = user?.scoped_section || null
   const [dateRange, setDateRange] = useState(null)
   const [section, setSection] = useState('')
+  const [group, setGroup] = useState('')
   const [view, setView] = useState('overdue')
   const [viewing, setViewing] = useState(null)
   const [search, setSearch] = useState('')
@@ -319,6 +321,7 @@ export function FinanceBoard({ boardTabs, onOpenBoard }) {
     date_from: dateRange?.from || undefined,
     date_to: dateRange?.to || undefined,
     section: section || undefined,
+    foundation_group: group || undefined,
   }
   const query = useQuery({
     queryKey: ['statistics', 'finance', filters],
@@ -390,6 +393,9 @@ export function FinanceBoard({ boardTabs, onOpenBoard }) {
               />
             </div>
           )}
+          <div className="w-36">
+            <FilterDropdown grow label="Group" value={group} options={FOUNDATION_GROUP_OPTIONS} onChange={setGroup} />
+          </div>
           {card && (
             // The clicked card, named beside the other filters so it is clear
             // why the panels below have shrunk, and droppable from here too.

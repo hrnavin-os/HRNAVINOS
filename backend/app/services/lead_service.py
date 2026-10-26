@@ -388,6 +388,7 @@ class LeadService:
         section: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
+        foundation_group: int | None = None,
     ) -> "list[Lead]":  # quoted: `list` is this class's own method here
         """Everyone whose money Finance has approved or is still approving - the
         population the Statistics Finance tab reads.
@@ -400,7 +401,7 @@ class LeadService:
             "is_deleted": False,
             "reviewed": {"$ne": False},
             "status": {"$in": [LeadStatus.FINANCIAL_APPROVAL, LeadStatus.BATCH_CONFIRMATION]},
-            **self._board_filters(date_from=date_from, date_to=date_to),
+            **self._board_filters(date_from=date_from, date_to=date_to, foundation_group=foundation_group),
         }
         if section:
             filters["section"] = section
@@ -554,7 +555,13 @@ class LeadService:
     }
 
     def _analytics_match(
-        self, section: str | None, date_from: date | None, date_to: date | None, outcome: str | None = None
+        self,
+        section: str | None,
+        date_from: date | None,
+        date_to: date | None,
+        outcome: str | None = None,
+        *,
+        foundation_group: int | None = None,
     ) -> dict:
         """The one population every Foundation view on the canvas is drawn from.
 
@@ -573,6 +580,8 @@ class LeadService:
             match.update(outcome_match)
         if section:
             match["section"] = section
+        if foundation_group:
+            match["foundation_group"] = foundation_group
         window: dict = {}
         if date_from:
             window["$gte"] = datetime.combine(date_from, time.min)
@@ -632,6 +641,7 @@ class LeadService:
         section: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
+        foundation_group: int | None = None,
         outcome: str | None = None,
     ) -> dict:
         """Counts per distinct value of one Foundation field, with how many of
@@ -647,8 +657,15 @@ class LeadService:
         counts are the whole payload, and the board has to keep working at a few
         thousand rows.
         """
+        scope = {
+            "section": section,
+            "date_from": date_from,
+            "date_to": date_to,
+            "outcome": outcome,
+            "foundation_group": foundation_group,
+        }
         if dimension == "batch":
-            return await self._batch_analytics(section=section, date_from=date_from, date_to=date_to, outcome=outcome)
+            return await self._batch_analytics(**scope)
 
         field = self._ANALYTICS_FIELDS.get(dimension)
         if field is None:
@@ -656,7 +673,7 @@ class LeadService:
 
         rows = await Lead.aggregate(
             [
-                {"$match": self._analytics_match(section, date_from, date_to, outcome)},
+                {"$match": self._analytics_match(**scope)},
                 {"$group": {"_id": field, **self._ANALYTICS_MEASURES}},
                 {"$sort": {"count": -1}},
             ]
@@ -674,14 +691,17 @@ class LeadService:
                 }
                 for row in rows
             ],
-            section=section,
-            date_from=date_from,
-            date_to=date_to,
-            outcome=outcome,
+            **scope,
         )
 
     async def _batch_analytics(
-        self, *, section: str | None, date_from: date | None, date_to: date | None, outcome: str | None = None
+        self,
+        *,
+        section: str | None,
+        date_from: date | None,
+        date_to: date | None,
+        outcome: str | None = None,
+        foundation_group: int | None = None,
     ) -> dict:
         """Leads per batch - the batch number entered on the Induction form.
 
@@ -693,9 +713,16 @@ class LeadService:
         in at zero rather than left out: a gap in the intake is a finding, and
         a chart that skips it draws a straight line across it.
         """
+        scope = {
+            "section": section,
+            "date_from": date_from,
+            "date_to": date_to,
+            "outcome": outcome,
+            "foundation_group": foundation_group,
+        }
         rows = await Lead.aggregate(
             [
-                {"$match": self._analytics_match(section, date_from, date_to, outcome)},
+                {"$match": self._analytics_match(**scope)},
                 {
                     "$lookup": {
                         "from": InductionEntry.Settings.name,
@@ -738,9 +765,7 @@ class LeadService:
         # "largest" tile and its ranking read the same way whichever tab is
         # open. The chronological views sort on `order` themselves.
         items.sort(key=lambda item: item["count"], reverse=True)
-        return await self._analytics_response(
-            "batch", items, section=section, date_from=date_from, date_to=date_to, outcome=outcome
-        )
+        return await self._analytics_response("batch", items, **scope)
 
     async def _analytics_response(
         self,
@@ -753,8 +778,11 @@ class LeadService:
         date_from: date | None,
         date_to: date | None,
         outcome: str | None = None,
+        foundation_group: int | None = None,
     ) -> dict:
-        current, comparison = await self._period_comparison(section, date_from, date_to, outcome)
+        current, comparison = await self._period_comparison(
+            section, date_from, date_to, outcome, foundation_group=foundation_group
+        )
         return {
             "dimension": dimension,
             "total": sum(item["count"] for item in items),
@@ -764,7 +792,13 @@ class LeadService:
         }
 
     async def _period_comparison(
-        self, section: str | None, date_from: date | None, date_to: date | None, outcome: str | None = None
+        self,
+        section: str | None,
+        date_from: date | None,
+        date_to: date | None,
+        outcome: str | None = None,
+        *,
+        foundation_group: int | None = None,
     ) -> tuple[dict, dict] | tuple[None, None]:
         """This period's headline figures and the previous period's.
 
@@ -791,17 +825,26 @@ class LeadService:
             label = "last 30 days vs the 30 before"
         earlier = (current[0] - timedelta(days=span), current[0] - timedelta(days=1))
 
+        scope = {"outcome": outcome, "foundation_group": foundation_group}
         return (
-            {"label": label, **await self._headline(section, *current, outcome=outcome)},
-            {"label": label, **await self._headline(section, *earlier, outcome=outcome)},
+            {"label": label, **await self._headline(section, *current, **scope)},
+            {"label": label, **await self._headline(section, *earlier, **scope)},
         )
 
-    async def _headline(self, section: str | None, start: date, end: date, *, outcome: str | None = None) -> dict:
+    async def _headline(
+        self,
+        section: str | None,
+        start: date,
+        end: date,
+        *,
+        outcome: str | None = None,
+        foundation_group: int | None = None,
+    ) -> dict:
         """Total, confirmed and lost over one window - the figures the period
         arrows compare, counted the same way the breakdown counts them."""
         rows = await Lead.aggregate(
             [
-                {"$match": self._analytics_match(section, start, end, outcome)},
+                {"$match": self._analytics_match(section, start, end, outcome, foundation_group=foundation_group)},
                 {
                     "$group": {
                         "_id": None,

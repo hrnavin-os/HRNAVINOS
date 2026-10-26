@@ -296,6 +296,16 @@ async def test_the_finance_tab_lists_approved_and_pending_students(client, auth_
     assert [row["name"] for row in only_a] == ["Approved"]
 
 
+async def test_the_finance_tab_filters_by_group(client, auth_headers):
+    await Lead(name="One", phone="9876500021", foundation_group=1, status=LeadStatus.BATCH_CONFIRMATION).insert()
+    await Lead(name="Two", phone="9876500022", foundation_group=2, status=LeadStatus.FINANCIAL_APPROVAL).insert()
+    headers = await _login_as(client, "Operation Coordinator", "ops@example.com")
+
+    response = await client.get("/api/v1/leads/finance", headers=headers, params={"foundation_group": 2})
+    assert response.status_code == 200, response.text
+    assert [row["name"] for row in response.json()] == ["Two"]
+
+
 async def test_the_finance_tab_is_its_own_grant(client, auth_headers):
     # Sales Head reads Statistics but was not given its Finance tab.
     headers = await _login_as(client, "Sales Head", "sales@example.com")
