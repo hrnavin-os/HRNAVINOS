@@ -88,7 +88,10 @@ def build_attendance_pdf(roster: BatchRosterResponse, rows: dict, *, generated_o
         part
         for part in (
             batch.course_name,
-            f"{batch.start_date:%d %b %Y} - {batch.end_date:%d %b %Y}",
+            # A batch opened from the leads has no dates until staff give it them.
+            f"{batch.start_date:%d %b %Y} - {batch.end_date:%d %b %Y}"
+            if batch.start_date and batch.end_date
+            else None,
             f"{len(roster.students)} students",
             f"{len(held_sessions)} of {len(roster.sessions)} classes held",
             f"Generated {generated_on:%d %b %Y}",

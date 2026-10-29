@@ -198,7 +198,7 @@ function BatchBoard({ batchId, canMark, canManage }) {
         (!termsPendingOnly || !row.terms_signed) &&
         (!needle ||
           row.name.toLowerCase().includes(needle) ||
-          row.email.toLowerCase().includes(needle) ||
+          (row.email ?? '').toLowerCase().includes(needle) ||
           (row.phone ?? '').includes(needle)),
     )
   }, [data, search, termsPendingOnly])
@@ -339,6 +339,9 @@ function BatchBoard({ batchId, canMark, canManage }) {
 /**
  * The Student Portal: where staff run an enrolled batch.
  *
+ * Every lead at Batch Confirmation is a student here, in the batch the leads
+ * page shows it in; the server enrols them as the batch list loads.
+ *
  * Students never log in. Each has a private link (/s/<token>) on which they
  * sign the Terms & Conditions - the first step, before anything else opens -
  * and then find their live classes and recordings. Everything about them is
@@ -361,10 +364,9 @@ export function StudentPortalPage() {
   if (!batches.length) {
     return (
       <Card className="p-8 text-center">
-        <p className="text-sm font-medium text-slate-800">No enrolled batches yet.</p>
+        <p className="text-sm font-medium text-slate-800">No enrolled students yet.</p>
         <p className="mt-1 text-sm text-slate-500">
-          A batch appears here once it is confirmed under Batch Confirmation, which is what turns its leads into
-          students.
+          A lead appears here as a student once it reaches Batch Confirmation, in the batch the leads page shows it in.
         </p>
       </Card>
     )

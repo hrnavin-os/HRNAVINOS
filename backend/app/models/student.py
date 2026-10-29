@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 from app.database.base import BaseDocument
 from app.models.enums import StudentStatus
 
+EMAIL_INDEX_NAME = "email_1"
+
 
 class StudentTerms(BaseModel):
     """A student's agreement to the Terms & Conditions - the first step of the
@@ -43,12 +45,23 @@ class Student(BaseDocument):
     user_id: uuid.UUID | None = None
     first_name: str = Field(max_length=100)
     last_name: str = Field(max_length=100)
-    email: str = Field(max_length=255)
+    # None for a student enrolled from a lead that gave no email.
+    email: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=20)
     course_id: uuid.UUID | None = None
     batch_id: uuid.UUID | None = None
     admission_date: date
     status: StudentStatus = StudentStatus.ACTIVE
+
+    # The lead this student was enrolled from, when the Student Portal
+    # enrolled them for reaching Batch Confirmation. See
+    # StudentEnrollmentService.
+    lead_id: uuid.UUID | None = None
+    # When the portal dropped this student because their lead left Batch
+    # Confirmation (marked Lost, or deleted). It is what lets the portal undo
+    # its own drop if the lead comes back, without undoing one a member of
+    # staff made by hand.
+    lead_left_at: datetime | None = None
 
     # The secret in the student's private link (/s/<token>). Students never
     # log in: the link is how they sign the terms and reach their classes, so
@@ -61,7 +74,23 @@ class Student(BaseDocument):
     class Settings:
         name = "students"
         indexes = [
-            IndexModel([("email", 1)], unique=True),
+            # Unique among the students who have an email. Partial, as on
+            # users, so two students without one don't collide; connect_to_mongo
+            # drops the old plain index of the same name before this is built.
+            IndexModel(
+                [("email", 1)],
+                name=EMAIL_INDEX_NAME,
+                unique=True,
+                partialFilterExpression={"email": {"$type": "string"}},
+            ),
+            # One student per lead, so two portal loads at once can't both
+            # enrol the same lead.
+            IndexModel(
+                [("lead_id", 1)],
+                unique=True,
+                partialFilterExpression={"lead_id": {"$type": "binData"}},
+                name="uq_student_lead",
+            ),
             IndexModel([("course_id", 1)]),
             IndexModel([("batch_id", 1)]),
             IndexModel([("user_id", 1)]),

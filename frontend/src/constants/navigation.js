@@ -190,8 +190,8 @@ export const NAV_ITEMS = [
   {
     // The enrolled batches: their classes and recordings, each student's
     // terms signature and private link, attendance and the absentee calls.
-    // Its own heading after Onboarding, because it starts where confirming a
-    // batch ends - the students that confirmation created.
+    // Its own heading after Onboarding, because it starts where Batch
+    // Confirmation ends - the leads that reached it, as students.
     label: 'Student Portal',
     shortLabel: 'Students',
     to: '/student-portal',

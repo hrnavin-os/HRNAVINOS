@@ -30,7 +30,8 @@ class StudentResponse(BaseModel):
     id: uuid.UUID
     first_name: str
     last_name: str
-    email: EmailStr
+    # None for a student enrolled from a lead that gave no email.
+    email: EmailStr | None
     phone: str | None
     course_id: uuid.UUID | None
     batch_id: uuid.UUID | None

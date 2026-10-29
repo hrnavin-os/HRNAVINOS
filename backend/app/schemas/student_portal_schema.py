@@ -75,8 +75,9 @@ class PortalBatchResponse(BaseModel):
     name: str
     course_name: str | None
     status: BatchStatus
-    start_date: date
-    end_date: date
+    # None on a batch opened from the leads until staff give it dates.
+    start_date: date | None
+    end_date: date | None
     student_count: int
     session_count: int
     terms_signed_count: int
@@ -97,7 +98,7 @@ class AttendanceTotals(BaseModel):
 class PortalStudentRow(BaseModel):
     id: uuid.UUID
     name: str
-    email: str
+    email: str | None
     phone: str | None
     status: StudentStatus
     terms_signed: bool
@@ -140,7 +141,7 @@ class AttendanceFacts(BaseModel):
 class SessionRosterRow(AttendanceFacts):
     student_id: uuid.UUID
     name: str
-    email: str
+    email: str | None
     phone: str | None
     status: StudentStatus
     terms_signed: bool
@@ -176,7 +177,7 @@ class StudentSessionRow(AttendanceFacts):
 class PortalStudentDetail(BaseModel):
     id: uuid.UUID
     name: str
-    email: str
+    email: str | None
     phone: str | None
     status: StudentStatus
     admission_date: date

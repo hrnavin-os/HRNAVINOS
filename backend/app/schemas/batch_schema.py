@@ -35,11 +35,12 @@ class BatchUpdate(BaseModel):
 
 class BatchResponse(BaseModel):
     id: uuid.UUID
-    course_id: uuid.UUID
+    # None, with the dates, on a batch the Student Portal opened from the leads.
+    course_id: uuid.UUID | None
     tutor_id: uuid.UUID | None
     name: str
-    start_date: date
-    end_date: date
+    start_date: date | None
+    end_date: date | None
     schedule: str | None
     capacity: int
     status: BatchStatus

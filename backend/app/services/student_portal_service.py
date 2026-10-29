@@ -24,7 +24,7 @@ from app.models.batch import Batch
 from app.models.class_session import ClassSession, SessionAttendance, resolve
 from app.models.course import Course
 from app.models.enums import StudentStatus
-from app.models.induction_entry import FollowUpRemark
+from app.models.induction_entry import FollowUpRemark, parse_batch
 from app.models.student import Student, StudentTerms
 from app.schemas.student_portal_schema import (
     AttendanceFacts,
@@ -56,6 +56,7 @@ from app.services.class_attendance_service import (
 )
 from app.services.meet_attendance_service import MeetSyncError, format_meeting_code, normalize_meeting_code
 from app.services.storage_service import StorageService
+from app.services.student_enrollment_service import StudentEnrollmentService
 
 PORTAL_PATH = "/s/{token}"
 
@@ -205,7 +206,11 @@ class StudentPortalService:
 
     async def batches(self) -> list[PortalBatchResponse]:
         """Every batch with students or classes in it, newest first. A batch
-        with neither hasn't been confirmed yet and has nothing to manage."""
+        with neither has nothing to manage.
+
+        Brings the students into line with the leads at Batch Confirmation
+        first, so whoever reached the stage since the last look is here."""
+        await StudentEnrollmentService().sync()
         students = Student.get_motor_collection()
         sessions = ClassSession.get_motor_collection()
         student_counts = {
@@ -232,7 +237,13 @@ class StudentPortalService:
         batch_ids = set(student_counts) | set(session_counts)
         if not batch_ids:
             return []
-        batches = await Batch.find({"_id": {"$in": list(batch_ids)}, "is_deleted": False}).sort("-start_date").to_list()
+        batches = await Batch.find({"_id": {"$in": list(batch_ids)}, "is_deleted": False}).to_list()
+        # Latest start first. A batch opened from the leads has no dates, so
+        # those follow, the highest batch number first and "No batch yet" last.
+        batches.sort(
+            key=lambda batch: (batch.start_date or date.min, parse_batch(batch.lead_batch) or 0),
+            reverse=True,
+        )
         courses = {
             course.id: course.name
             for course in await Course.find({"_id": {"$in": list({batch.course_id for batch in batches})}}).to_list()
@@ -253,7 +264,7 @@ class StudentPortalService:
         ]
 
     async def _batch_response(self, batch: Batch, students: list[Student], sessions: list[ClassSession]):
-        course = await Course.get(batch.course_id)
+        course = await Course.get(batch.course_id) if batch.course_id else None
         return PortalBatchResponse(
             id=batch.id,
             name=batch.name,
