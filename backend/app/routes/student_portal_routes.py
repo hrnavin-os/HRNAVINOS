@@ -13,7 +13,9 @@ from app.models.user import User
 from app.permissions.permission_codes import Permissions
 from app.schemas.common import MessageResponse
 from app.schemas.student_portal_schema import (
+    AttendanceChecks,
     AttendanceOverride,
+    AttendanceRegisterResponse,
     BatchRosterResponse,
     CallRemarkCreate,
     ClassSessionCreate,
@@ -48,6 +50,11 @@ async def list_portal_batches(actor: User = Depends(VIEW)) -> list[PortalBatchRe
 @router.get("/batches/{batch_id}", response_model=BatchRosterResponse)
 async def get_batch_roster(batch_id: uuid.UUID, actor: User = Depends(VIEW)) -> BatchRosterResponse:
     return await StudentPortalService().roster(batch_id)
+
+
+@router.get("/batches/{batch_id}/register", response_model=AttendanceRegisterResponse)
+async def get_attendance_register(batch_id: uuid.UUID, actor: User = Depends(VIEW)) -> AttendanceRegisterResponse:
+    return await StudentPortalService().register(batch_id)
 
 
 @router.get("/batches/{batch_id}/attendance.pdf", response_class=Response)
@@ -107,6 +114,16 @@ async def set_class_attendance(
         session_id, student_id, payload.attended, actor_id=actor.id, actor_name=actor.full_name
     )
     return MessageResponse(message="Attendance updated.")
+
+
+@router.put("/sessions/{session_id}/students/{student_id}/checks", response_model=MessageResponse)
+async def set_register_checks(
+    session_id: uuid.UUID, student_id: uuid.UUID, payload: AttendanceChecks, actor: User = Depends(MARK)
+) -> MessageResponse:
+    await StudentPortalService().set_checks(
+        session_id, student_id, payload, actor_id=actor.id, actor_name=actor.full_name
+    )
+    return MessageResponse(message="Register updated.")
 
 
 @router.post(

@@ -73,6 +73,55 @@ def local_today() -> date:
     return (utcnow() + timedelta(minutes=settings.MEET_UTC_OFFSET_MINUTES)).date()
 
 
+# How far either side of the start and the end a student can be and still
+# pass that check: joining by ten past, or leaving no more than ten minutes
+# before the close, is being there.
+CHECK_GRACE = timedelta(minutes=10)
+
+
+def _local_instant(day: date, clock: str | None) -> datetime | None:
+    """"19:00" on a class's day, in the institute's zone, as a UTC instant."""
+    if not clock:
+        return None
+    hours, minutes = (int(part) for part in clock.split(":"))
+    start, _ = day_window(day)
+    return start + timedelta(hours=hours, minutes=minutes)
+
+
+def live_checks(session: ClassSession, row: SessionAttendance | None) -> tuple[bool | None, bool | None]:
+    """The register's two checks for one student at one class: there when it
+    started (H), and still there at its end (C). A staff tick decides a check;
+    otherwise Meet does, from the student's first join and last leave against
+    the class's times - or, where the class has none, the call's own first
+    join and last leave.
+
+    Derived on read rather than stored by the sync, so correcting a class's
+    times re-takes both checks at once. None for a class still to come, or a
+    check nothing can answer yet (a held class Meet hasn't been read for).
+    """
+    if session.held_on > local_today():
+        return (
+            row.start_mark if row is not None else None,
+            row.end_mark if row is not None else None,
+        )
+    live = row.live if row is not None else None
+    auto_start = auto_end = None
+    if live is not None:
+        start = _local_instant(session.held_on, session.start_time) or session.call_started_at
+        end = _local_instant(session.held_on, session.end_time) or session.call_ended_at
+        auto_start = start is not None and live.joined_at <= start + CHECK_GRACE and live.left_at >= start
+        auto_end = end is not None and live.left_at >= end - CHECK_GRACE and live.joined_at <= end
+    elif session.live_synced_at is not None:
+        # Meet was read for this class and the student wasn't in it.
+        auto_start = auto_end = False
+    start_mark = row.start_mark if row is not None else None
+    end_mark = row.end_mark if row is not None else None
+    return (
+        start_mark if start_mark is not None else auto_start,
+        end_mark if end_mark is not None else auto_end,
+    )
+
+
 def first_views(items: list[dict], file_id: str) -> dict[str, datetime]:
     """Each viewer's earliest `view` of one file, by lower-cased email."""
     views: dict[str, datetime] = {}
@@ -244,6 +293,11 @@ class ClassAttendanceService:
 
         unmatched.sort(key=lambda attendee: -attendee.duration_seconds)
         session.unmatched = unmatched[:MAX_UNMATCHED]
+        # Everybody counts here, matched or not: the tutor is usually first in
+        # and last out, and is on nobody's roster.
+        everyone = list(people.values())
+        session.call_started_at = min((person.joined_at for person in everyone), default=None)
+        session.call_ended_at = max((person.left_at for person in everyone), default=None)
         session.live_synced_at = utcnow()
         session.live_sync_error = None
         await session.save()

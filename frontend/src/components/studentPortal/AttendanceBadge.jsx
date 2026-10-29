@@ -40,9 +40,12 @@ export function AttendanceBadge({ attended, via }) {
 }
 
 // 80% is the line the certificate will be drawn at, so it is the line the
-// colour changes at too: green is "on track for the certificate".
+// colour changes at too: green is "on track for the certificate". The
+// portal's Low Attendance stage is everyone under it.
+export const CERTIFICATE_PERCENT = 80
+
 export function PercentBadge({ percent }) {
   if (percent === null || percent === undefined) return <span className="text-slate-400">—</span>
-  const tone = percent >= 80 ? 'green' : percent >= 60 ? 'amber' : 'red'
+  const tone = percent >= CERTIFICATE_PERCENT ? 'green' : percent >= 60 ? 'amber' : 'red'
   return <Badge tone={tone}>{`${percent}%`}</Badge>
 }

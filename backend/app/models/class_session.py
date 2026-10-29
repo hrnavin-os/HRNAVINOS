@@ -46,9 +46,13 @@ class ClassSession(BaseDocument):
     sequence: int = Field(ge=1, le=500)
     title: str = Field(max_length=150)
     held_on: date
-    # "19:00" - shown to the student beside the Meet link. Display only: the
-    # sync reads the whole day, so a class that starts late still counts.
+    # "19:00" - shown to the student beside the Meet link. The sync reads the
+    # whole day, so a class that starts late still counts; the times are what
+    # the register's start and end checks are taken against (see
+    # class_attendance_service.live_checks), and without them the call's own
+    # first join and last leave stand in.
     start_time: str | None = Field(default=None, max_length=10)
+    end_time: str | None = Field(default=None, max_length=10)
     # Lower-case letters only, as normalize_meeting_code returns it. None for
     # a class with no live session (a recording-only lesson).
     meeting_code: str | None = Field(default=None, max_length=32)
@@ -61,6 +65,10 @@ class ClassSession(BaseDocument):
 
     live_synced_at: datetime | None = None
     live_sync_error: str | None = Field(default=None, max_length=500)
+    # When the call itself began and ended - the first join and the last
+    # leave of anybody in it, the tutor included - as the last sync read it.
+    call_started_at: datetime | None = None
+    call_ended_at: datetime | None = None
     recording_synced_at: datetime | None = None
     recording_sync_error: str | None = Field(default=None, max_length=500)
     unmatched: list[UnmatchedAttendee] = Field(default_factory=list)
@@ -104,6 +112,16 @@ class SessionAttendance(BaseDocument):
     override_by: uuid.UUID | None = None
     override_by_name: str | None = Field(default=None, max_length=150)
 
+    # The register's two checks, as a member of staff ticked them: present
+    # when the class started (H) and still there at its end (C). None leaves
+    # each to what Meet says. A tick counts the student present, the way
+    # ticking the sheet always did; an untick never counts them absent on its
+    # own - the override above is for that.
+    start_mark: bool | None = None
+    end_mark: bool | None = None
+    marks_at: datetime | None = None
+    marks_by_name: str | None = Field(default=None, max_length=150)
+
     # What the student said when they were rung about missing the class. A
     # history, oldest first: a second call is a second answer.
     call_remarks: list[FollowUpRemark] = Field(default_factory=list)
@@ -125,7 +143,9 @@ def resolve(row: SessionAttendance | None, *, held: bool) -> tuple[bool | None, 
 
     attended is None for a class that hasn't happened, unless somebody has
     said otherwise - nobody can have missed it yet. A recording counts the
-    same as the live class: catching up on the recording is attending.
+    same as the live class: catching up on the recording is attending. So
+    does a staff tick on either of the register's checks, which is how a class
+    is taken by hand while Meet isn't being read.
     """
     if row is not None and row.override is not None:
         return row.override, "manual"
@@ -133,6 +153,8 @@ def resolve(row: SessionAttendance | None, *, held: bool) -> tuple[bool | None, 
         return True, "live"
     if row is not None and (row.recording_viewed_at or row.recording_opened_at):
         return True, "recording"
+    if row is not None and (row.start_mark or row.end_mark):
+        return True, "manual"
     if not held:
         return None, None
     return False, None

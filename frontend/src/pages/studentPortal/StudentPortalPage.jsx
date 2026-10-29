@@ -5,12 +5,17 @@ import {
   AlertTriangle,
   CalendarDays,
   CirclePlay,
+  ClipboardList,
   FileDown,
   FileSignature,
+  Link2Off,
   PhoneCall,
   Plus,
   Search,
+  Send,
+  TrendingDown,
   Users,
+  UserX,
   Video,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
@@ -28,7 +33,8 @@ import { TableCard } from '@/components/ui/TableCard'
 import { DataTable } from '@/components/ui/DataTable'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { AttendanceBadge, PercentBadge } from '@/components/studentPortal/AttendanceBadge'
+import { AttendanceBadge, CERTIFICATE_PERCENT, PercentBadge } from '@/components/studentPortal/AttendanceBadge'
+import { AttendanceRegister } from '@/components/studentPortal/AttendanceRegister'
 import { ClassSessionModal } from '@/components/studentPortal/ClassSessionModal'
 import { ClassRosterModal } from '@/components/studentPortal/ClassRosterModal'
 import { PortalStudentModal } from '@/components/studentPortal/PortalStudentModal'
@@ -36,13 +42,44 @@ import { AbsenteesPanel } from '@/components/studentPortal/AbsenteesPanel'
 import { usePortalRefresh } from '@/hooks/usePortalRefresh'
 import { formatDate, titleCase } from '@/utils/formatters'
 
-const TABS = [
-  { key: 'students', label: 'Students', icon: Users },
-  { key: 'classes', label: 'Classes', icon: CalendarDays },
-  { key: 'absentees', label: 'Absentees', icon: PhoneCall },
+const STATUS_TONES = { active: 'green', on_hold: 'amber', completed: 'blue', dropped: 'red' }
+
+// The stage row, in the order a student moves through the portal - their link
+// goes out, they sign the terms, they attend - so the row reads as the process
+// left to right, like the lead boards' stage rows. Each card filters the
+// student list. A dropped student is only under Dropped: the others are about
+// the students still on the course.
+const STAGES = [
+  { key: 'all', label: 'All Students', tone: 'brand', icon: Users, empty: 'No students in this batch yet.' },
+  {
+    key: 'no_link',
+    label: 'Link Not Sent',
+    tone: 'violet',
+    icon: Link2Off,
+    empty: 'Every student has been sent their link.',
+  },
+  { key: 'awaiting', label: 'Awaiting Signature', tone: 'amber', icon: Send, empty: 'Nobody is waiting to sign.' },
+  { key: 'signed', label: 'T&C Signed', tone: 'emerald', icon: FileSignature, empty: 'Nobody has signed yet.' },
+  {
+    key: 'low',
+    label: 'Low Attendance',
+    tone: 'rose',
+    icon: TrendingDown,
+    empty: `Everyone is at ${CERTIFICATE_PERCENT}% attendance or above.`,
+  },
+  { key: 'dropped', label: 'Dropped', tone: 'slate', icon: UserX, empty: 'Nobody has dropped out.' },
 ]
 
-const STATUS_TONES = { active: 'green', on_hold: 'amber', completed: 'blue', dropped: 'red' }
+function inStage(row, stage) {
+  if (stage === 'dropped') return row.status === 'dropped'
+  if (row.status === 'dropped') return false
+  if (stage === 'no_link') return !row.terms_signed && !row.has_link
+  if (stage === 'awaiting') return !row.terms_signed && row.has_link
+  if (stage === 'signed') return row.terms_signed
+  // Only once a class has been held - nobody is behind on nothing.
+  if (stage === 'low') return row.totals.percent !== null && row.totals.percent < CERTIFICATE_PERCENT
+  return true
+}
 
 const studentColumns = [
   {
@@ -57,35 +94,50 @@ const studentColumns = [
     ),
   },
   {
+    // Named as the stage cards name them, so a badge and its card agree.
     key: 'terms',
     header: 'T&C',
     render: (row) =>
       row.terms_signed ? (
-        <Badge tone="green">Signed {formatDate(row.terms_accepted_at)}</Badge>
+        <Badge tone="emerald">Signed {formatDate(row.terms_accepted_at)}</Badge>
+      ) : row.has_link ? (
+        <Badge tone="amber">Awaiting signature</Badge>
       ) : (
-        <Badge tone="amber">{row.has_link ? 'Pending · link sent' : 'Pending · no link'}</Badge>
+        <Badge tone="violet">Link not sent</Badge>
       ),
   },
   {
     key: 'percent',
     header: 'Attendance',
-    render: (row) => (
-      <span className="inline-flex items-center gap-2">
-        <PercentBadge percent={row.totals.percent} />
-        <span className="text-xs tabular-nums text-slate-500">
-          {row.totals.attended}/{row.totals.held}
+    render: (row) =>
+      row.totals.held ? (
+        <span className="inline-flex items-center gap-2">
+          <PercentBadge percent={row.totals.percent} />
+          <span className="text-xs tabular-nums text-slate-500">
+            {row.totals.attended} of {row.totals.held}
+          </span>
         </span>
-      </span>
-    ),
+      ) : (
+        <span className="text-xs text-slate-400">No classes yet</span>
+      ),
   },
   {
     key: 'via',
-    header: 'Live · Recording · Marked',
-    render: (row) => (
-      <span className="text-xs tabular-nums text-slate-600">
-        {row.totals.live} · {row.totals.recording} · {row.totals.manual}
-      </span>
-    ),
+    header: 'How Attended',
+    render: (row) =>
+      row.totals.attended ? (
+        <span className="text-xs tabular-nums text-slate-600">
+          {[
+            row.totals.live && `${row.totals.live} live`,
+            row.totals.recording && `${row.totals.recording} recording`,
+            row.totals.manual && `${row.totals.manual} marked`,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </span>
+      ) : (
+        <span className="text-slate-400">—</span>
+      ),
   },
   {
     key: 'status',
@@ -163,11 +215,37 @@ function ClassesList({ sessions, onOpen }) {
   )
 }
 
+// One line saying what it means for today's work, with the server setup folded
+// away behind it: the setup is for whoever configures the server, and spelled
+// out in full it was the loudest thing on the board for everyone else.
+function SyncNotice() {
+  return (
+    <details className="group rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+      <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
+        <AlertTriangle className="h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
+        <span className="flex-1">
+          <span className="font-semibold">Automatic attendance is off.</span> Mark attendance by hand for now;
+          recordings opened from a student&rsquo;s link still count.
+        </span>
+        <span className="shrink-0 font-medium text-amber-700 hover:underline">
+          <span className="group-open:hidden">Setup details</span>
+          <span className="hidden group-open:inline">Hide</span>
+        </span>
+      </summary>
+      <p className="mt-2 border-t border-amber-200 pt-2">
+        Live attendance and recording views are read automatically once the server&rsquo;s Google service account has
+        domain-wide delegation for <span className="font-mono">admin.reports.audit.readonly</span> and{' '}
+        <span className="font-mono">GOOGLE_MEET_ADMIN_EMAIL</span> is set - the same setup the Success Meet sync uses.
+      </p>
+    </details>
+  )
+}
+
 function BatchBoard({ batchId, canMark, canManage }) {
   const refresh = usePortalRefresh()
   const [tab, setTab] = useState('students')
   const [search, setSearch] = useState('')
-  const [termsPendingOnly, setTermsPendingOnly] = useState(false)
+  const [stage, setStage] = useState('all')
   const [studentId, setStudentId] = useState(null)
   const [rosterSessionId, setRosterSessionId] = useState(null)
   // undefined: closed. null: adding a new class. An object: editing that one.
@@ -195,64 +273,77 @@ function BatchBoard({ batchId, canMark, canManage }) {
     const needle = search.trim().toLowerCase()
     return (data?.students ?? []).filter(
       (row) =>
-        (!termsPendingOnly || !row.terms_signed) &&
+        inStage(row, stage) &&
         (!needle ||
           row.name.toLowerCase().includes(needle) ||
           (row.email ?? '').toLowerCase().includes(needle) ||
           (row.phone ?? '').includes(needle)),
     )
-  }, [data, search, termsPendingOnly])
+  }, [data, search, stage])
 
   if (query.isLoading) return <LoadingSpinner />
   if (query.isError) return <ErrorMessage message={getApiErrorMessage(query.error)} />
 
-  const { batch, sessions } = data
+  const { sessions } = data
   const heldCount = sessions.filter((session) => session.held).length
-  const percents = data.students.map((row) => row.totals.percent).filter((value) => value !== null)
+  const counts = Object.fromEntries(
+    STAGES.map((entry) => [entry.key, data.students.filter((row) => inStage(row, entry.key)).length]),
+  )
+  const percents = data.students
+    .filter((row) => row.status !== 'dropped' && row.totals.percent !== null)
+    .map((row) => row.totals.percent)
   const average = percents.length ? Math.round(percents.reduce((sum, value) => sum + value, 0) / percents.length) : null
   const nextSequence = sessions.reduce((max, session) => Math.max(max, session.sequence), 0) + 1
   const editingSession = sessions.find((session) => session.id === rosterSessionId)
+  const activeStage = STAGES.find((entry) => entry.key === stage)
+  // The batch's average sits on the Low Attendance card, the figure it's read against.
+  const hints = {
+    low: !heldCount
+      ? 'No classes held yet'
+      : `Under ${CERTIFICATE_PERCENT}%${average === null ? '' : ` · average ${average}%`}`,
+  }
+  const tabs = [
+    { key: 'students', label: 'Students', icon: Users },
+    // The attendance sheet, as it was kept by hand - now filled from Meet.
+    { key: 'register', label: 'Register', icon: ClipboardList },
+    {
+      key: 'classes',
+      label: sessions.length ? `Classes · ${heldCount} of ${sessions.length} held` : 'Classes',
+      icon: CalendarDays,
+    },
+    { key: 'absentees', label: 'Absentees', icon: PhoneCall },
+  ]
 
   return (
     <div className="space-y-4">
-      {!data.sync_configured && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-          <p className="font-semibold">Automatic attendance isn&rsquo;t set up on the server yet.</p>
-          <p className="mt-1">
-            Classes can be scheduled and marked by hand now. Live attendance and recording views are read automatically
-            once the server&rsquo;s Google service account has domain-wide delegation for{' '}
-            <span className="font-mono">admin.reports.audit.readonly</span> and{' '}
-            <span className="font-mono">GOOGLE_MEET_ADMIN_EMAIL</span> is set - the same setup the Success Meet sync
-            uses. Recordings opened from a student&rsquo;s link are counted either way.
-          </p>
-        </div>
-      )}
+      {!data.sync_configured && <SyncNotice />}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Students" value={batch.student_count} toneName="brand" icon={Users} />
-        <StatCard
-          label="T&C signed"
-          value={`${batch.terms_signed_count}/${batch.student_count}`}
-          toneName={batch.terms_signed_count === batch.student_count ? 'emerald' : 'amber'}
-          icon={FileSignature}
-          isActive={termsPendingOnly}
-          onClick={() => {
-            setTab('students')
-            setTermsPendingOnly((value) => !value)
-          }}
-          hint={termsPendingOnly ? 'Showing pending only' : 'Click to show pending'}
-        />
-        <StatCard label="Classes held" value={`${heldCount}/${sessions.length}`} toneName="blue" icon={CalendarDays} />
-        <StatCard
-          label="Average attendance"
-          value={average === null ? '—' : `${average}%`}
-          toneName={average === null ? 'slate' : average >= 80 ? 'emerald' : average >= 60 ? 'amber' : 'rose'}
-          icon={Video}
-        />
+      {/* One row of equal columns once there's room, as on the lead boards;
+          it wraps on a phone or a narrow window. */}
+      <div className="@container">
+        <div className="flex flex-wrap gap-3 @min-[64rem]:grid @min-[64rem]:auto-cols-fr @min-[64rem]:grid-flow-col @min-[64rem]:gap-2">
+          {STAGES.map((entry) => (
+            <StatCard
+              key={entry.key}
+              label={entry.label}
+              value={counts[entry.key]}
+              toneName={entry.tone}
+              icon={entry.icon}
+              hint={hints[entry.key]}
+              isActive={tab === 'students' && stage === entry.key}
+              onClick={() => {
+                // A stage is a filter on the student list, so picking one from
+                // Classes or Absentees brings the list back to show it.
+                setTab('students')
+                setStage(entry.key)
+              }}
+            />
+          ))}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <TabStrip tabs={TABS} value={tab} onChange={setTab} />
+        <TabStrip tabs={tabs} value={tab} onChange={setTab} />
         <div className="flex flex-wrap gap-2">
           {tab === 'classes' && canManage && (
             <Button onClick={() => setEditing(null)}>
@@ -279,24 +370,36 @@ function BatchBoard({ batchId, canMark, canManage }) {
                 rightElement={<Search className="h-4 w-4 text-slate-400" strokeWidth={2} aria-hidden="true" />}
               />
             </div>
-            {termsPendingOnly && (
+            {stage !== 'all' && (
               <button
                 type="button"
-                onClick={() => setTermsPendingOnly(false)}
+                onClick={() => setStage('all')}
                 className="text-xs font-medium text-brand-600 hover:text-brand-700"
               >
-                Showing T&amp;C pending only · show everyone
+                Showing {activeStage.label} · show all
               </button>
             )}
+            {/* Says what a row is for: nothing else on the board does, and the
+                link, the signature and the attendance all live behind it. */}
+            <p className="ml-auto text-xs text-slate-400">
+              Click a student to send their link, record a signature or see their attendance.
+            </p>
           </div>
           <DataTable
             columns={studentColumns}
             rows={students}
-            emptyMessage={data.students.length ? 'No student matches.' : 'No students in this batch yet.'}
+            emptyMessage={
+              search.trim()
+                ? 'No student matches.'
+                : stage === 'low' && !heldCount
+                  ? 'No classes have been held yet.'
+                  : activeStage.empty
+            }
             onRowClick={(row) => setStudentId(row.id)}
           />
         </TableCard>
       )}
+      {tab === 'register' && <AttendanceRegister batchId={batchId} canMark={canMark} />}
       {tab === 'classes' && <ClassesList sessions={sessions} onOpen={(session) => setRosterSessionId(session.id)} />}
       {tab === 'absentees' && <AbsenteesPanel sessions={sessions} canMark={canMark} />}
 

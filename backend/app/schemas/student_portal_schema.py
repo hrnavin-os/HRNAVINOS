@@ -20,6 +20,7 @@ class ClassSessionCreate(BaseModel):
     title: str = Field(min_length=1, max_length=150)
     held_on: date
     start_time: str | None = Field(default=None, pattern=START_TIME_PATTERN)
+    end_time: str | None = Field(default=None, pattern=START_TIME_PATTERN)
     # A Meet link or code ("abc-defg-hij"). Optional: a lesson can be
     # recording-only.
     meeting: str | None = Field(default=None, max_length=300)
@@ -35,6 +36,7 @@ class ClassSessionUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=150)
     held_on: date | None = None
     start_time: str | None = Field(default=None, pattern=START_TIME_PATTERN)
+    end_time: str | None = Field(default=None, pattern=START_TIME_PATTERN)
     meeting: str | None = Field(default=None, max_length=300)
     min_minutes: int | None = Field(default=None, ge=0, le=600)
     recording_url: str | None = Field(default=None, max_length=500)
@@ -47,6 +49,7 @@ class ClassSessionResponse(BaseModel):
     title: str
     held_on: date
     start_time: str | None
+    end_time: str | None
     # "abc-defg-hij", as Meet prints it, and the link built from it.
     meeting_code: str | None
     meet_url: str | None
@@ -202,6 +205,67 @@ class AttendanceOverride(BaseModel):
 
 class CallRemarkCreate(BaseModel):
     remark: str = Field(min_length=1, max_length=1000)
+
+
+class AttendanceChecks(BaseModel):
+    """The register's start (H) and end (C) checks. Only the ones sent are
+    changed: True ticked, False unticked, None handed back to Meet."""
+
+    start: bool | None = None
+    end: bool | None = None
+
+
+# ---------- The register ----------
+
+
+class RegisterSession(BaseModel):
+    id: uuid.UUID
+    sequence: int
+    title: str
+    held_on: date
+    start_time: str | None
+    end_time: str | None
+    held: bool
+
+
+class RegisterCell(BaseModel):
+    """One student at one class, as a line of the attendance sheet reads."""
+
+    session_id: uuid.UUID
+    # None for a class still to come, or one Meet hasn't been read for yet.
+    start: bool | None
+    end: bool | None
+    # Ticked by a member of staff rather than read from Meet.
+    start_marked: bool
+    end_marked: bool
+    attended: bool | None
+    via: AttendedVia | None
+    override: bool | None
+    call_remarks: list[CallRemarkResponse]
+    # What the data says about the day, for a cell nobody has written a
+    # remark in: "Left early", "Watched the recording", "Only 4 min".
+    note: str | None
+
+
+class RegisterRow(BaseModel):
+    student_id: uuid.UUID
+    name: str
+    email: str | None
+    phone: str | None
+    status: StudentStatus
+    # The lead's section, and the sheet's batch code built from it: "B-29A".
+    section: str | None
+    code: str | None
+    cells: list[RegisterCell]
+    totals: AttendanceTotals
+
+
+class AttendanceRegisterResponse(BaseModel):
+    batch_id: uuid.UUID
+    batch_name: str
+    sessions: list[RegisterSession]
+    rows: list[RegisterRow]
+    sync_configured: bool
 
 
 class PortalLinkResponse(BaseModel):

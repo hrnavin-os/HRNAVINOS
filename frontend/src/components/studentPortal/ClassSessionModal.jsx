@@ -16,6 +16,7 @@ function initialValues(session, nextSequence) {
       title: '',
       held_on: new Date().toISOString().slice(0, 10),
       start_time: '',
+      end_time: '',
       meeting: '',
       min_minutes: '10',
       recording_url: '',
@@ -26,6 +27,7 @@ function initialValues(session, nextSequence) {
     title: session.title,
     held_on: session.held_on,
     start_time: session.start_time ?? '',
+    end_time: session.end_time ?? '',
     meeting: session.meet_url ?? '',
     min_minutes: String(session.min_minutes),
     recording_url: session.recording_url ?? '',
@@ -48,13 +50,14 @@ export function ClassSessionModal({ batchId, session, nextSequence, canManage, o
   const save = useMutation({
     mutationFn: () => {
       // Empty strings go through for the two links - that is how a wrong
-      // link is cleared - but start_time is a pattern-checked field, where
+      // link is cleared - but the times are pattern-checked fields, where
       // "nothing" has to be null.
       const payload = {
         sequence: Number(values.sequence),
         title: values.title.trim(),
         held_on: values.held_on,
         start_time: values.start_time || null,
+        end_time: values.end_time || null,
         meeting: values.meeting.trim(),
         min_minutes: Number(values.min_minutes) || 0,
         recording_url: values.recording_url.trim(),
@@ -116,9 +119,13 @@ export function ClassSessionModal({ batchId, session, nextSequence, canManage, o
             disabled={!canManage}
           />
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
+        {/* The times are what the register's start and end checks are taken
+            against; without them the call's own first join and last leave
+            stand in. */}
+        <div className="grid gap-3 sm:grid-cols-4">
           <Input label="Date" type="date" required value={values.held_on} onChange={set('held_on')} disabled={!canManage} />
           <Input label="Starts at" type="time" value={values.start_time} onChange={set('start_time')} disabled={!canManage} />
+          <Input label="Ends at" type="time" value={values.end_time} onChange={set('end_time')} disabled={!canManage} />
           <Input
             label="Counts after (min)"
             type="number"

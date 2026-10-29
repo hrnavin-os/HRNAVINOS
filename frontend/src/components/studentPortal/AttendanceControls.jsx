@@ -56,7 +56,9 @@ export function AttendanceControl({ sessionId, studentId, override, disabled, on
  * first, and the box to add today's answer. A history, because a second call
  * a week later is a second answer and the first one still matters.
  */
-export function RemarkThread({ sessionId, studentId, remarks, canAdd, onAdded }) {
+// `suggestions` are the remarks written most often, offered as one-tap fills
+// for the box - the register passes the ones the attendance sheet used.
+export function RemarkThread({ sessionId, studentId, remarks, canAdd, onAdded, suggestions = [] }) {
   const [remark, setRemark] = useState('')
   const mutation = useMutation({
     mutationFn: () => studentPortalService.addCallRemark(sessionId, studentId, remark.trim()),
@@ -81,6 +83,20 @@ export function RemarkThread({ sessionId, studentId, remarks, canAdd, onAdded })
         </ol>
       ) : (
         <p className="text-xs text-slate-400">No call logged yet.</p>
+      )}
+      {canAdd && suggestions.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {suggestions.map((suggestion) => (
+            <button
+              key={suggestion}
+              type="button"
+              onClick={() => setRemark(suggestion)}
+              className="rounded-full px-2.5 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-inset ring-slate-300 hover:bg-slate-50"
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
       )}
       {canAdd && (
         <form

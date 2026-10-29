@@ -25,9 +25,12 @@ from app.models.class_session import ClassSession, SessionAttendance, resolve
 from app.models.course import Course
 from app.models.enums import StudentStatus
 from app.models.induction_entry import FollowUpRemark, parse_batch
+from app.models.lead import Lead
 from app.models.student import Student, StudentTerms
 from app.schemas.student_portal_schema import (
+    AttendanceChecks,
     AttendanceFacts,
+    AttendanceRegisterResponse,
     AttendanceTotals,
     BatchRosterResponse,
     CallRemarkResponse,
@@ -39,6 +42,9 @@ from app.schemas.student_portal_schema import (
     PortalStudentRow,
     PublicClass,
     PublicPortalResponse,
+    RegisterCell,
+    RegisterRow,
+    RegisterSession,
     SessionRosterResponse,
     SessionRosterRow,
     StudentSessionRow,
@@ -50,6 +56,7 @@ from app.services.audit_service import AuditService
 from app.services.class_attendance_service import (
     ClassAttendanceService,
     ensure_row,
+    live_checks,
     local_today,
     parse_drive_file_id,
     record_recording_view,
@@ -121,6 +128,45 @@ def _totals(
     )
 
 
+def _batch_code(number: int | None, section: str | None) -> str | None:
+    """The batch as the sheet wrote it, with the student's section: "B-29A"."""
+    if number is None:
+        return section.upper() if section else None
+    return f"B-{number}{(section or '').upper()}"
+
+
+def _register_note(
+    row: SessionAttendance | None,
+    *,
+    held: bool,
+    attended: bool | None,
+    via: str | None,
+    start: bool | None,
+    end: bool | None,
+) -> str | None:
+    """What the data says about one student's day, in the words the sheet's
+    remarks used, for a cell nobody has written a remark in. None where the
+    two ticks already say it all."""
+    if not held:
+        return None
+    if row is not None and row.override is not None:
+        return "Marked present" if row.override else "Marked absent"
+    if via == "recording":
+        return "Watched the recording"
+    live = row.live if row is not None else None
+    minutes = live.duration_seconds // 60 if live is not None else 0
+    if live is not None and not live.attended and not attended:
+        return f"Only {minutes} min in the call"
+    # Read from Meet or ticked by hand alike.
+    if start and end is False:
+        return "Went out early"
+    if end and start is False:
+        return "Joined late"
+    if via == "live" and not start and not end:
+        return f"In and out · {minutes} min"
+    return None
+
+
 class StudentPortalService:
     def __init__(self) -> None:
         self.audit = AuditService()
@@ -185,6 +231,7 @@ class StudentPortalService:
             title=session.title,
             held_on=session.held_on,
             start_time=session.start_time,
+            end_time=session.end_time,
             meeting_code=format_meeting_code(session.meeting_code) if session.meeting_code else None,
             meet_url=_meet_url(session.meeting_code),
             min_minutes=session.min_minutes,
@@ -417,6 +464,7 @@ class StudentPortalService:
             title=data.title.strip(),
             held_on=data.held_on,
             start_time=data.start_time,
+            end_time=data.end_time,
             meeting_code=self._meeting_code(data.meeting),
             min_minutes=data.min_minutes,
             recording_url=recording_url,
@@ -446,6 +494,8 @@ class StudentPortalService:
             session.held_on = changes["held_on"]
         if "start_time" in changes:
             session.start_time = changes["start_time"]
+        if "end_time" in changes:
+            session.end_time = changes["end_time"]
         if changes.get("min_minutes") is not None:
             session.min_minutes = changes["min_minutes"]
         if "meeting" in changes:
@@ -462,6 +512,8 @@ class StudentPortalService:
         if (session.meeting_code, session.held_on) != before[:2]:
             reset["live"] = None
             session.unmatched = []
+            session.call_started_at = None
+            session.call_ended_at = None
             session.live_synced_at = None
             session.live_sync_error = None
         # The same Drive file under a differently-shaped link is still the
@@ -570,6 +622,114 @@ class StudentPortalService:
         await SessionAttendance.get_motor_collection().update_one(
             {"session_id": session.id, "student_id": student.id},
             {"$push": {"call_remarks": entry.model_dump()}, "$set": {"updated_at": utcnow()}},
+        )
+
+    async def set_checks(
+        self,
+        session_id: uuid.UUID,
+        student_id: uuid.UUID,
+        checks: AttendanceChecks,
+        *,
+        actor_id: uuid.UUID | None,
+        actor_name: str | None,
+    ) -> None:
+        """Ticks or unticks the register's start and end checks. Only the
+        checks sent change; None hands one back to Meet."""
+        session = await self._session(session_id)
+        student = await self._student_in(session, student_id)
+        changes = {
+            f"{name}_mark": getattr(checks, name) for name in ("start", "end") if name in checks.model_fields_set
+        }
+        if not changes:
+            return
+        await ensure_row(session, student.id)
+        await SessionAttendance.get_motor_collection().update_one(
+            {"session_id": session.id, "student_id": student.id},
+            {"$set": {**changes, "marks_at": utcnow(), "marks_by_name": actor_name, "updated_at": utcnow()}},
+        )
+        await self.audit.record(
+            user_id=actor_id,
+            action="UPDATE",
+            entity_type="SessionAttendance",
+            entity_id=f"{session.id}:{student.id}",
+            changes=changes,
+        )
+
+    # ---------- The register ----------
+
+    async def register(self, batch_id: uuid.UUID) -> AttendanceRegisterResponse:
+        """The batch as the attendance sheet laid it out: a line per student, a
+        column group per class - the start check, the end check and the
+        remarks - and the totals at the end."""
+        batch = await self._batch(batch_id)
+        students = await self._students_of(batch.id)
+        sessions = await self._sessions_of(batch.id)
+        rows = await self._rows_for(sessions)
+        today = local_today()
+        lead_ids = [student.lead_id for student in students if student.lead_id]
+        sections = {
+            lead.id: lead.section
+            for lead in (await Lead.find({"_id": {"$in": lead_ids}}).to_list() if lead_ids else [])
+        }
+        number = parse_batch(batch.lead_batch or batch.name)
+
+        register_rows = []
+        for student in students:
+            section = sections.get(student.lead_id)
+            cells = []
+            for session in sessions:
+                row = rows.get((session.id, student.id))
+                held = session.held_on <= today
+                attended, via = resolve(row, held=held)
+                start, end = live_checks(session, row)
+                cells.append(
+                    RegisterCell(
+                        session_id=session.id,
+                        start=start,
+                        end=end,
+                        start_marked=row is not None and row.start_mark is not None,
+                        end_marked=row is not None and row.end_mark is not None,
+                        attended=attended,
+                        via=via,
+                        override=row.override if row else None,
+                        call_remarks=[
+                            CallRemarkResponse(remark=remark.remark, at=remark.at, by_name=remark.by_name)
+                            for remark in (row.call_remarks if row else [])
+                        ],
+                        note=_register_note(row, held=held, attended=attended, via=via, start=start, end=end),
+                    )
+                )
+            register_rows.append(
+                RegisterRow(
+                    student_id=student.id,
+                    name=student.full_name,
+                    email=student.email,
+                    phone=student.phone,
+                    status=student.status,
+                    section=section.upper() if section else None,
+                    code=_batch_code(number, section),
+                    cells=cells,
+                    totals=_totals(student.id, sessions, rows, today),
+                )
+            )
+
+        return AttendanceRegisterResponse(
+            batch_id=batch.id,
+            batch_name=batch.name,
+            sessions=[
+                RegisterSession(
+                    id=session.id,
+                    sequence=session.sequence,
+                    title=session.title,
+                    held_on=session.held_on,
+                    start_time=session.start_time,
+                    end_time=session.end_time,
+                    held=session.held_on <= today,
+                )
+                for session in sessions
+            ],
+            rows=register_rows,
+            sync_configured=settings.meet_sync_configured,
         )
 
     # ---------- The student's link ----------

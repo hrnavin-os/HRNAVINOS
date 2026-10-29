@@ -13,6 +13,10 @@ export const studentPortalService = {
     const { data } = await apiClient.get(`/student-portal/batches/${batchId}`)
     return data
   },
+  register: async (batchId) => {
+    const { data } = await apiClient.get(`/student-portal/batches/${batchId}/register`)
+    return data
+  },
   // A Blob, not a URL: the report needs the bearer token, which a plain link
   // to the endpoint wouldn't carry.
   attendancePdf: async (batchId) => {
@@ -49,6 +53,12 @@ export const studentPortalService = {
     const { data } = await apiClient.put(`/student-portal/sessions/${sessionId}/students/${studentId}/attendance`, {
       attended,
     })
+    return data
+  },
+  // The register's start (H) and end (C) checks. Only the keys sent change:
+  // true ticked, false unticked, null handed back to Meet.
+  setChecks: async (sessionId, studentId, checks) => {
+    const { data } = await apiClient.put(`/student-portal/sessions/${sessionId}/students/${studentId}/checks`, checks)
     return data
   },
   addCallRemark: async (sessionId, studentId, remark) => {
