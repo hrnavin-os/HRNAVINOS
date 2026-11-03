@@ -813,6 +813,15 @@ function FoundationLeadsBoard() {
     setPage(1)
   }
 
+  // The filter row's Section dropdown. The same state the cards write, so the
+  // two always agree - but it doesn't leave the Quit Students tab the way a
+  // card does: there it narrows the quit list to one section, which no card
+  // can, since the tab starts from all of them.
+  function filterSection(code) {
+    setSectionFilter(code)
+    setPage(1)
+  }
+
   // Across every section, so the section selection is dropped - the Section
   // column comes back to say where each one was.
   function selectLost() {
@@ -1155,9 +1164,16 @@ function FoundationLeadsBoard() {
             }}
           />
 
-          {/* No Section filter here: the stat cards above already are the
-              section switcher, and two controls driving one piece of state
-              just invited them to disagree on screen. */}
+          {/* Not for a Section Admin, who is locked to their own section. */}
+          {!scopedSection && (
+            <FilterDropdown
+              label="Section"
+              value={sectionFilter}
+              options={sectionOptions.map((section) => ({ value: section.code, label: section.label }))}
+              onChange={filterSection}
+            />
+          )}
+
           {/* Every row on the Quit Students tab is the same stage. */}
           {!showLost && (
             <FilterDropdown
