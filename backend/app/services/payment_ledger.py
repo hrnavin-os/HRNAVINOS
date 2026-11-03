@@ -51,6 +51,11 @@ def balance_of(entries: list[PaymentInstallment]) -> PaymentInstallment | None:
     return next((entry for entry in entries if entry.kind == PaymentEntryKind.BALANCE), None)
 
 
+def token_of(entries: list[PaymentInstallment]) -> PaymentInstallment | None:
+    """The token, if one has actually been paid."""
+    return next((entry for entry in entries if entry.kind == PaymentEntryKind.TOKEN and entry.collected()), None)
+
+
 def rebalance(entries: list[PaymentInstallment], fee: Decimal) -> list[PaymentInstallment]:
     """Puts the entries back in order and works the balance out again against
     `fee`. The balance keeps its promised date and remark - those are about the

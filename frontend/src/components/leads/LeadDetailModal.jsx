@@ -42,7 +42,7 @@ import { PAYMENT_PLAN_TONES, QR_CODE_OPTIONS } from '@/constants/paymentOptions'
 import { leadService } from '@/services/leadService'
 import { foundationFormService } from '@/services/foundationFormService'
 import { PaymentDetailContent } from '@/components/payments/PaymentDetailModal'
-import { getPaymentLedger, hasFirstPayment } from '@/utils/leadPayment'
+import { getPaymentLedger, hasFirstPayment, hasToken } from '@/utils/leadPayment'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { useAuth } from '@/hooks/useAuth'
 import { formatCurrency, formatDate, formatDateTime, titleCase } from '@/utils/formatters'
@@ -53,16 +53,19 @@ import { DateTimePicker, isFutureDateTime } from '@/components/ui/DateTimePicker
 import { Calendar } from '@/components/ui/DatePresetFilter'
 
 // Any stage is reachable from any other, either way round (a move back asks
-// why). The one gate is money: Partially Paid, Financial Approval and Batch
-// Confirmation all mean a payment has landed, so none opens until the first
-// one is on record. Mirrors the backend's LeadService._validate_stage_transition
-// so a blocked button explains itself up front instead of failing the request
+// why). The one gate is money: Token Amount doesn't open until the token is on
+// record, nor Financial Approval and Batch Confirmation until the first
+// payment is. Mirrors the backend's LeadService._validate_stage_transition so
+// a blocked button explains itself up front instead of failing the request
 // after the click.
 // Returns the reason a move is blocked, or null when it's allowed.
-const PAID_STAGES = ['partially_paid', 'financial_approval', 'batch_confirmation']
+const PAID_STAGES = ['financial_approval', 'batch_confirmation']
 
 function stageBlockReason(lead, targetStatus) {
   if (lead.status === targetStatus) return null
+  if (targetStatus === 'token_amount' && !hasToken(lead)) {
+    return `Record the token amount before moving to ${stageLabel(targetStatus)}`
+  }
   if (PAID_STAGES.includes(targetStatus) && !hasFirstPayment(lead)) {
     return `Record the first payment before moving to ${stageLabel(targetStatus)}`
   }
@@ -114,7 +117,7 @@ const ACTION_TONES = {
 // the exit rather than a step (it asks its own question). Mirrors
 // LeadService._STAGE_ORDER on the backend, which refuses a move back with no
 // reason.
-const STAGE_ORDER = ['new_lead', 'rnr', 'pre_screening', 'partially_paid', 'financial_approval', 'batch_confirmation']
+const STAGE_ORDER = ['new_lead', 'rnr', 'pre_screening', 'token_amount', 'financial_approval', 'batch_confirmation']
 
 function isStageReversal(current, target) {
   const from = STAGE_ORDER.indexOf(current)

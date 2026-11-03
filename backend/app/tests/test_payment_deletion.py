@@ -56,6 +56,13 @@ async def test_the_token_can_be_deleted(client, auth_headers, uploads):
     lead_id = await planned_lead(client, auth_headers)
     await pay(client, auth_headers, lead_id, received_amount="5000", balance_due_at="2026-09-27")
     await pay(client, auth_headers, lead_id, proof=False, kind="token", received_amount="1500")
+    # Recording the token moved the lead to Token Amount, which it can't be
+    # taken out from under (test_token_amount_stage).
+    await client.put(
+        f"/api/v1/leads/{lead_id}",
+        headers=auth_headers,
+        json={"status": "new_lead", "stage_change_reason": "Token was recorded by mistake"},
+    )
 
     response = await delete_payment(client, auth_headers, lead_id, 0)
 
@@ -96,11 +103,11 @@ async def test_the_balance_cannot_be_deleted(client, auth_headers, uploads):
 
 
 async def test_the_last_payment_stays_while_the_lead_is_in_a_paid_stage(client, auth_headers, uploads):
-    """Partially Paid and the stages after it are entered on a payment, so the
-    only one can't be taken out from under a lead still in one."""
+    """Financial Approval and the stage after it are entered on a payment, so
+    the only one can't be taken out from under a lead still in one."""
     lead_id = await planned_lead(client, auth_headers)
     await pay(client, auth_headers, lead_id, received_amount="5000", balance_due_at="2026-09-27")
-    moved = await client.put(f"/api/v1/leads/{lead_id}", headers=auth_headers, json={"status": "partially_paid"})
+    moved = await client.put(f"/api/v1/leads/{lead_id}", headers=auth_headers, json={"status": "financial_approval"})
     assert moved.status_code == 200, moved.text
 
     response = await delete_payment(client, auth_headers, lead_id, 0)

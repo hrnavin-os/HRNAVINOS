@@ -110,6 +110,12 @@ export function hasFirstPayment(lead) {
   return Number(lead.paid_amount ?? 0) > 0
 }
 
+// Mirrors payment_ledger.token_of: has the token advance been paid?
+export function hasToken(lead) {
+  const { token } = getPaymentLedger(lead)
+  return Boolean(token) && getInstallmentCollected(token.entry) > 0
+}
+
 // Reads a multi-installment plan's due dates against today to flag missed
 // EMI/two-shot payments: an installment counts as missed once its whole due
 // date has passed with no payment recorded (same-day grace - due today is

@@ -87,9 +87,11 @@ class LeadStatus(StrEnum):
     NEW_LEAD = "new_lead"
     RNR = "rnr"
     PRE_SCREENING = "pre_screening"
-    # Paid some of the fee and owes the rest. Set by hand from the lead's
-    # Move to Stage; recording a payment never moves a lead here by itself.
-    PARTIALLY_PAID = "partially_paid"
+    # Paid the token advance to hold the seat. Recording the token moves a lead
+    # here from New Lead, RNR or Follow up call; it can also be set by hand,
+    # once a token is on record. Replaced Partially Paid, which any payment
+    # opened - see backfills.move_partially_paid_to_token_amount.
+    TOKEN_AMOUNT = "token_amount"
     FINANCIAL_APPROVAL = "financial_approval"
     BATCH_CONFIRMATION = "batch_confirmation"
     LOST = "lost"

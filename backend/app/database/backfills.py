@@ -518,63 +518,85 @@ async def backfill_finance_approvals() -> int:
     return approved
 
 
-PARTIALLY_PAID_MIGRATION = "partially_paid_from_financial_approval"
+TOKEN_AMOUNT_MIGRATION = "token_amount_replaces_partially_paid"
+
+# The retired Partially Paid stage's stored value. LeadStatus no longer has it,
+# so only the migration that clears it out still names it.
+PARTIALLY_PAID = "partially_paid"
 
 
-async def move_part_payers_to_partially_paid() -> int:
-    """Moves the leads waiting in Financial Approval that still owe money to
-    the new Partially Paid stage, once.
+async def move_partially_paid_to_token_amount() -> int:
+    """Token Amount replaces Partially Paid, once.
 
-    Before the stage existed a part-payment had nowhere else to go, so those
-    leads sat in Financial Approval. Owing money means the payment collection
-    still has a balance on it - payment_ledger.py - which is why this runs
-    after the ledger backfill. Each move is written to the lead's timeline as
-    a move back, with the reason, so nobody finds a lead in a different stage
-    with no idea why. Once, recorded in `migrations`: after that the stage is
-    set by hand like any other.
+    Every lead that has paid its token and sits before Financial Approval -
+    in Partially Paid, or in New Lead, RNR or Follow up call from before
+    recording a token moved a lead - goes to Token Amount. A Partially Paid
+    lead with no token goes to Financial Approval, where part-payers sat
+    before Partially Paid existed, and waits there for Finance like any lead
+    entering it (see LeadService.update).
+
+    Raw documents rather than Lead: a Lead can't be read with a status
+    LeadStatus no longer has, which is also why this runs before every other
+    backfill. Each move goes on the lead's timeline with the reason, so nobody
+    finds a lead in a different stage with no idea why. Once, recorded in
+    `migrations`: after that the stage is set like any other.
     """
     collection = Lead.get_motor_collection()
     migrations = collection.database["migrations"]
-    if await migrations.find_one({"_id": PARTIALLY_PAID_MIGRATION}):
+    if await migrations.find_one({"_id": TOKEN_AMOUNT_MIGRATION}):
         return 0
-    match = {
-        "status": LeadStatus.FINANCIAL_APPROVAL.value,
-        "installments": {"$elemMatch": {"kind": PaymentEntryKind.BALANCE.value}},
-    }
-    ids = [row["_id"] async for row in collection.find(match, {"_id": 1})]
+    before_token = [PARTIALLY_PAID, LeadStatus.NEW_LEAD.value, LeadStatus.RNR.value, LeadStatus.PRE_SCREENING.value]
+    paid_token = {"installments": {"$elemMatch": {"kind": PaymentEntryKind.TOKEN.value, "paid": True}}}
+    moves = [
+        (
+            {"status": {"$in": before_token}, **paid_token},
+            {"status": LeadStatus.TOKEN_AMOUNT.value},
+            "Moved to the new Token Amount stage - the token is paid.",
+        ),
+        (
+            {"status": PARTIALLY_PAID},
+            {
+                "status": LeadStatus.FINANCIAL_APPROVAL.value,
+                "finance_approved_at": None,
+                "finance_approved_by": None,
+                "finance_approved_by_name": None,
+            },
+            "Partially Paid was replaced by Token Amount, and this lead has no token on record.",
+        ),
+    ]
     moved = 0
-    if ids:
+    for match, fields, reason in moves:
+        rows = await collection.find(match, {"_id": 1, "status": 1}).to_list(length=None)
+        if not rows:
+            continue
         result = await collection.update_many(
-            {"_id": {"$in": ids}, **match},
-            {"$set": {"status": LeadStatus.PARTIALLY_PAID.value, "updated_at": utcnow()}},
+            {"_id": {"$in": [row["_id"] for row in rows]}, **match},
+            {"$set": {**fields, "updated_at": utcnow()}},
         )
-        moved = result.modified_count
-        for lead_id in ids:
+        moved += result.modified_count
+        for row in rows:
             await AuditLog(
-                action="STAGE_BACK",
+                action="UPDATE",
                 entity_type="Lead",
-                entity_id=str(lead_id),
-                changes={
-                    "status": LeadStatus.PARTIALLY_PAID.value,
-                    "previous_status": LeadStatus.FINANCIAL_APPROVAL.value,
-                    "reason": "Moved to the new Partially Paid stage - part of the fee is still due.",
-                },
+                entity_id=str(row["_id"]),
+                changes={"status": fields["status"], "previous_status": row["status"], "reason": reason},
             ).insert()
-    await migrations.insert_one({"_id": PARTIALLY_PAID_MIGRATION, "applied_at": utcnow()})
+    await migrations.insert_one({"_id": TOKEN_AMOUNT_MIGRATION, "applied_at": utcnow()})
     return moved
 
 
 async def run_startup_backfills() -> None:
+    # First: until it has run, a lead still in Partially Paid can't be read by
+    # the backfills that load a Lead.
+    moved = await move_partially_paid_to_token_amount()
+    if moved:
+        logger.info("Moved %d leads into Token Amount or out of the retired Partially Paid stage.", moved)
     approved = await backfill_finance_approvals()
     if approved:
         logger.info("Recorded the finance approval on %d leads already past it.", approved)
     updated = await backfill_payment_ledger()
     if updated:
         logger.info("Converted the payment collection on %d leads.", updated)
-    # After the ledger: it reads the balance the ledger backfill writes.
-    moved = await move_part_payers_to_partially_paid()
-    if moved:
-        logger.info("Moved %d part-paid leads from Financial Approval to Partially Paid.", moved)
     for model in (Lead, InductionEntry):
         updated = await backfill_phone_normalized(model)
         if updated:

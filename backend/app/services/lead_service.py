@@ -62,6 +62,7 @@ from app.services.payment_ledger import (
     rebalance,
     received_of,
     to_ledger,
+    token_of,
 )
 from app.services.reminder_service import ReminderService
 from app.services.storage_service import StorageService
@@ -885,16 +886,21 @@ class LeadService:
     # The stages that mean money has come in, so a lead can't enter one until
     # a payment is on record.
     _PAID_STAGES = {
-        LeadStatus.PARTIALLY_PAID: "Partially Paid",
+        LeadStatus.TOKEN_AMOUNT: "Token Amount",
         LeadStatus.FINANCIAL_APPROVAL: "Financial Approval",
         LeadStatus.BATCH_CONFIRMATION: "Batch Confirmation",
     }
 
+    # Where a lead is when its token comes in, if recording the token is to
+    # move it to Token Amount. Not from the stages after it - a token
+    # recorded late doesn't undo Finance's progress - nor from Quit.
+    _BEFORE_TOKEN = (LeadStatus.NEW_LEAD, LeadStatus.RNR, LeadStatus.PRE_SCREENING)
+
     def _validate_stage_transition(self, lead: Lead, new: LeadStatus) -> None:
         """A lead can move to any stage from any other, in either direction -
         a move back still has to say why (see `update`). The one gate left is
-        money: Partially Paid, Financial Approval and Batch Confirmation can't
-        be entered until the first payment is on record.
+        money: Token Amount can't be entered until the token is on record, nor
+        Financial Approval and Batch Confirmation until the first payment is.
 
         There used to be an order as well (Financial Approval only from Follow
         up call, Batch Confirmation only from Financial Approval, and no way
@@ -903,7 +909,10 @@ class LeadService:
         that protects anything."""
         if lead.status == new:
             return
-        if new in self._PAID_STAGES:
+        if new == LeadStatus.TOKEN_AMOUNT:
+            if token_of(lead.installments) is None:
+                raise BadRequestError("Record the token amount before moving this lead to Token Amount.")
+        elif new in self._PAID_STAGES:
             self._require_first_payment(lead, self._PAID_STAGES[new])
 
     def _require_first_payment(self, lead: Lead, stage: str) -> None:
@@ -1036,7 +1045,7 @@ class LeadService:
         LeadStatus.NEW_LEAD,
         LeadStatus.RNR,
         LeadStatus.PRE_SCREENING,
-        LeadStatus.PARTIALLY_PAID,
+        LeadStatus.TOKEN_AMOUNT,
         LeadStatus.FINANCIAL_APPROVAL,
         LeadStatus.BATCH_CONFIRMATION,
     ]
@@ -1438,6 +1447,11 @@ class LeadService:
         # export read, so it follows the latest payment's account.
         if entry.qr_code:
             lead.qr_code = entry.qr_code
+        # The token is what Token Amount is for, so recording one puts the lead
+        # there - see _BEFORE_TOKEN for where it doesn't.
+        previous_status = lead.status
+        if index is None and kind == PaymentEntryKind.TOKEN and lead.status in self._BEFORE_TOKEN:
+            lead.status = LeadStatus.TOKEN_AMOUNT
 
         lead.updated_by = actor_id
         lead.touch(actor_id)
@@ -1455,6 +1469,15 @@ class LeadService:
                 "balance_due_at": balance.scheduled_at.isoformat() if balance and balance.scheduled_at else None,
             },
         )
+        # Its own entry, so the timeline shows the move beside the payment.
+        if lead.status != previous_status:
+            await self.audit.record(
+                user_id=actor_id,
+                action="UPDATE",
+                entity_type="Lead",
+                entity_id=str(lead.id),
+                changes={"status": lead.status, "previous_status": previous_status},
+            )
         return lead
 
     async def delete_payment(
@@ -1482,7 +1505,13 @@ class LeadService:
         removed = ledger.pop(index)
         # The paid stages are entered on the strength of a payment
         # (_validate_stage_transition), so the last one can't go out from
-        # under a lead still sitting in one.
+        # under a lead still sitting in one - nor the token from under a lead
+        # in Token Amount.
+        if lead.status == LeadStatus.TOKEN_AMOUNT and removed.kind == PaymentEntryKind.TOKEN:
+            raise BadRequestError(
+                "This lead is in Token Amount on the strength of this token. "
+                "Move the lead to an earlier stage before deleting it."
+            )
         if lead.status in self._PAID_STAGES and received_of(ledger) <= 0:
             raise BadRequestError(
                 f"This is the only payment on this lead, which is in {self._PAID_STAGES[lead.status]}. "
@@ -1838,12 +1867,12 @@ class LeadService:
 
         Three cases are left alone: a lead already at this stage (nothing to
         do), a Lost one, so acknowledging a stale reminder can't quietly pull a
-        written-off lead back into the pipeline, and a Partially Paid one -
-        that stage already means "call them for the rest", and moving it would
-        take the student off the list of part-payers it exists to keep.
+        written-off lead back into the pipeline, and a Token Amount one - that
+        stage already means "call them for the rest", and moving it would take
+        the student off the list of token payers it exists to keep.
         """
         lead = await self.get(lead_id)
-        if lead.status in (LeadStatus.PRE_SCREENING, LeadStatus.PARTIALLY_PAID, LeadStatus.LOST):
+        if lead.status in (LeadStatus.PRE_SCREENING, LeadStatus.TOKEN_AMOUNT, LeadStatus.LOST):
             return lead
 
         previous = lead.status

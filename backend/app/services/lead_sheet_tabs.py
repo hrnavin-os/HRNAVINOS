@@ -136,7 +136,7 @@ LEAD_STAGE_LABELS = {
     LeadStatus.NEW_LEAD: "New Lead",
     LeadStatus.RNR: "RNR",
     LeadStatus.PRE_SCREENING: "Follow up call",
-    LeadStatus.PARTIALLY_PAID: "Partially Paid",
+    LeadStatus.TOKEN_AMOUNT: "Token Amount",
     LeadStatus.FINANCIAL_APPROVAL: "Financial Approval",
     LeadStatus.BATCH_CONFIRMATION: "Batch Confirmation",
     LeadStatus.LOST: "Quit",

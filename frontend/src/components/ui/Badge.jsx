@@ -13,7 +13,7 @@ const TONES = {
   teal: 'bg-teal-50 text-teal-700 ring-teal-200',
   pink: 'bg-pink-50 text-pink-700 ring-pink-200',
   emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  // The Partially Paid stage's - StatCard already had it.
+  // The Token Amount stage's - StatCard already had it.
   cyan: 'bg-cyan-50 text-cyan-700 ring-cyan-200',
 }
 
