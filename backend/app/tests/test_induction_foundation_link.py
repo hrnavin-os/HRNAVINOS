@@ -250,6 +250,24 @@ async def test_lead_source_options_are_the_sources_the_leads_came_from(client, a
     assert response.json() == ["Instagram", "Meta-1"]
 
 
+async def test_lead_source_spelled_differently_is_one_option(client, auth_headers):
+    """Typed by hand, the same source arrives in different case and spacing.
+    It is one option, named the way most entries spell it, and picking it
+    finds every one of them."""
+    await seed_programs(client)
+    spellings = ["Direct Instagram", "Direct instagram", " Direct  Instagram ", "Direct Instagram"]
+    for index, spelling in enumerate(spellings):
+        phone = f"900000001{index}"
+        await client.post(INDUCTION_URL, json=induction_payload(name=f"P{index}", phone=phone, lead_source=spelling))
+        await client.post(FOUNDATION_URL, json=foundation_payload(name=f"Lead {index}", mobile_number=phone))
+
+    options = (await client.get("/api/v1/leads/lead-source-options", headers=auth_headers)).json()
+    assert options == ["Direct Instagram"]
+
+    leads = (await client.get("/api/v1/leads?lead_source=Direct Instagram", headers=auth_headers)).json()
+    assert leads["total"] == 4
+
+
 # --------------------------------------------------------------------------
 # Duplicate prevention
 # --------------------------------------------------------------------------

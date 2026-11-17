@@ -1,4 +1,5 @@
 """Data access for InductionEntry documents."""
+import re
 import uuid
 
 from app.database.base import utcnow
@@ -103,22 +104,49 @@ class InductionEntryRepository(BaseRepository[InductionEntry]):
         return {row["_id"]: row["count"] for row in rows}
 
     async def ids_with_lead_source(self, lead_source: str) -> list[uuid.UUID]:
-        """Every entry whose Lead Source is exactly this one, for the
+        """Every entry whose Lead Source is this one, for the
         Foundation board's Lead Source filter - the source is recorded on the
         induction call, not on the lead it later turned into.
 
         Deleted entries included: removing the call record doesn't change
         where the lead it brought in came from. Through Motor's distinct
         because only the ids are wanted, not thousands of whole documents."""
-        return await InductionEntry.get_motor_collection().distinct("_id", {"lead_source": lead_source})
+        words = lead_source.split()
+        if not words:
+            return []
+        # Typed by hand, so the same source is stored as "Direct Instagram",
+        # "Direct instagram" and "Direct  Instagram ". All of them are the one
+        # option the filter offers (see distinct_lead_sources), so all of them
+        # are what picking it matches: any case, any run of spaces.
+        pattern = r"^\s*" + r"\s+".join(re.escape(word) for word in words) + r"\s*$"
+        return await InductionEntry.get_motor_collection().distinct(
+            "_id", {"lead_source": {"$regex": pattern, "$options": "i"}}
+        )
 
     async def distinct_lead_sources(self, entry_ids: list[uuid.UUID]) -> list[str]:
         """The Lead Sources among these entries, for the Foundation board's
-        filter options."""
-        values = await InductionEntry.get_motor_collection().distinct(
-            "lead_source", {"_id": {"$in": entry_ids}, "lead_source": {"$ne": None}}
-        )
-        return sorted({value for value in values if value}, key=str.lower)
+        filter options - one per source, however many ways it was typed.
+
+        Values differing only in case or spacing are one source. Each is shown
+        the way most entries spell it, so a one-off "Direct instagram" doesn't
+        get to name the option."""
+        rows = await InductionEntry.get_motor_collection().aggregate(
+            [
+                {"$match": {"_id": {"$in": entry_ids}, "lead_source": {"$ne": None}}},
+                {"$group": {"_id": "$lead_source", "count": {"$sum": 1}}},
+            ]
+        ).to_list(None)
+        best: dict[str, tuple[int, str]] = {}
+        for row in rows:
+            label = " ".join((row["_id"] or "").split())
+            if not label:
+                continue
+            key = label.lower()
+            # Most-used spelling wins; ties go to the alphabetically first, so
+            # the label doesn't change from one load to the next.
+            if key not in best or (row["count"], best[key][1]) > (best[key][0], label):
+                best[key] = (row["count"], label)
+        return sorted((label for _, label in best.values()), key=str.lower)
 
     async def list_all_for_options(
         self, *, status: InductionStatus, section: str | None = None
