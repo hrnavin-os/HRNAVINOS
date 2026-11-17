@@ -167,6 +167,9 @@ class LeadService:
             batch_number=lead.batch_number,
             induction_batch=batch_label(entry.batch_number) if entry else None,
             batch=lead_batch_label(entry.batch_number if entry else None, lead.batch_number),
+            # Spaces tidied the way the filter's options are, so the column
+            # and the dropdown name a source the same way.
+            lead_source=(" ".join(entry.lead_source.split()) or None) if entry and entry.lead_source else None,
             foundation_group=lead.foundation_group,
             foundation_group_history=FoundationGroupMoveSchema.of(lead.foundation_group_history),
             group_assigned_at=lead.group_assigned_at,

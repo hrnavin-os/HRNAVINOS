@@ -923,6 +923,14 @@ function FoundationLeadsBoard() {
       align: 'center',
       render: (row) => <BatchCell key={row.id} lead={row} onError={setEditError} />,
     },
+    // Read-only: recorded on the Induction Call Form for the call this lead
+    // was matched to, and changed there. Blank for a lead no call matched.
+    {
+      key: 'lead_source',
+      header: 'Lead Source',
+      align: 'center',
+      render: (row) => (row.lead_source ? <Badge tone="amber">{row.lead_source}</Badge> : '—'),
+    },
     // Read-only, like Paid / Due: the token is recorded in the lead popup.
     {
       key: 'token',

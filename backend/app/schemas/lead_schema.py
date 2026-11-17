@@ -256,6 +256,10 @@ class LeadResponse(BaseModel):
     # The batch to show: induction_batch when there is one, otherwise the
     # typed batch_number as "Batch-N". See lead_batch_label.
     batch: str | None = None
+    # Where the lead came from (Meta-1, Retargeting...), as the Induction Call
+    # Form recorded it for the call this lead was matched to. None for a lead
+    # no induction call matched - the lead itself carries no source.
+    lead_source: str | None = None
     # Which of the month's two foundation classes this lead came through - 1 for
     # the first sitting, 2 for the second. Derived from `created_at` (the day
     # the Foundation Form was filled in, which is the day of the class) rather

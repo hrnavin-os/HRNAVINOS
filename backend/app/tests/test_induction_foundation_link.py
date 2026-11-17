@@ -220,6 +220,14 @@ async def test_leads_can_be_filtered_by_lead_source(client, auth_headers):
     nobody = (await client.get("/api/v1/leads?lead_source=Retargeting", headers=auth_headers)).json()
     assert nobody["total"] == 0
 
+    # The table's Lead Source column: the matched call's source, or none.
+    everyone = (await client.get("/api/v1/leads", headers=auth_headers)).json()
+    assert {item["name"]: item["lead_source"] for item in everyone["items"]} == {
+        "Arun Kumar": "Instagram",
+        "Meera S": "Meta-1",
+        "Cold Lead": None,
+    }
+
     # The stat cards and the WhatsApp header count the same rows the table shows.
     stats = (await client.get("/api/v1/leads/stats?lead_source=Meta-1", headers=auth_headers)).json()
     assert stats["total"] == 1
