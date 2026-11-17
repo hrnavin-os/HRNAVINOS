@@ -278,6 +278,7 @@ class LeadService:
         date_to: date | None = None,
         induction_matched: bool | None = None,
         foundation_group: int | None = None,
+        lead_source: str | None = None,
         finance_approved: bool | None = None,
     ) -> PaginatedResponse:
         # See LeadRepository.count_total for why this isn't a plain "reviewed": True.
@@ -286,12 +287,6 @@ class LeadService:
         # leads from before the field, where the key is absent.
         if finance_approved is not None:
             filters["finance_approved_at"] = {"$ne": None} if finance_approved else {"$eq": None}
-        # Separates leads that came across from an induction call from those
-        # whose number never appeared in Induction. `$eq: None` rather than a
-        # bare None so it also matches leads created before the field existed,
-        # where the key is absent rather than null.
-        if induction_matched is not None:
-            filters["induction_entry_id"] = {"$ne": None} if induction_matched else {"$eq": None}
         if status:
             filters["status"] = status
         if assigned_to:
@@ -313,8 +308,16 @@ class LeadService:
                 date_from=date_from,
                 date_to=date_to,
                 foundation_group=foundation_group,
+                induction_entry_ids=await self._lead_source_entry_ids(lead_source),
             )
         )
+        # Separates leads that came across from an induction call from those
+        # whose number never appeared in Induction. `$eq: None` rather than a
+        # bare None so it also matches leads created before the field existed,
+        # where the key is absent rather than null. Merged into, not written
+        # over, the Lead Source filter's `$in`, which sets the same key.
+        if induction_matched is not None:
+            filters.setdefault("induction_entry_id", {})["$ne" if induction_matched else "$eq"] = None
         # Second place the reminder sweep is driven from, besides the
         # notification poll. That poll only happens while the bell is on
         # screen, which is a Section Admin on the Foundation board - so a
@@ -419,6 +422,7 @@ class LeadService:
         date_from: date | None = None,
         date_to: date | None = None,
         foundation_group: int | None = None,
+        induction_entry_ids: "list[uuid.UUID] | None" = None,  # quoted: `list` is a method here
         search: str | None = None,
     ) -> dict:
         """The Foundation board's filter row as a Mongo filter - one copy, read
@@ -454,6 +458,12 @@ class LeadService:
         # longer has to be composed around the date range above.
         if foundation_group:
             filters["foundation_group"] = foundation_group
+        # The Lead Source filter, already resolved to the induction entries
+        # carrying that source (see _lead_source_entry_ids). None is "not
+        # filtering"; an empty list is a source nobody's entry has, which
+        # matches no lead - as it should.
+        if induction_entry_ids is not None:
+            filters["induction_entry_id"] = {"$in": induction_entry_ids}
         # The same match the table's search box makes (BaseRepository._build_query).
         if search:
             pattern = re.escape(search)
@@ -472,6 +482,7 @@ class LeadService:
         date_from: date | None = None,
         date_to: date | None = None,
         foundation_group: int | None = None,
+        lead_source: str | None = None,
         search: str | None = None,
     ) -> LeadStatsResponse:
         # Whatever the board's filter row is set to, so the cards move with the
@@ -486,6 +497,7 @@ class LeadService:
             date_from=date_from,
             date_to=date_to,
             foundation_group=foundation_group,
+            induction_entry_ids=await self._lead_source_entry_ids(lead_source),
             search=search,
         )
         total = await self.leads.count_total(section=section, narrow=narrow)
@@ -513,6 +525,7 @@ class LeadService:
         date_from: date | None = None,
         date_to: date | None = None,
         foundation_group: int | None = None,
+        lead_source: str | None = None,
         search: str | None = None,
     ) -> dict[str, int]:
         """Of the rows the Foundation table matches, how many have joined the
@@ -531,6 +544,7 @@ class LeadService:
             date_from=date_from,
             date_to=date_to,
             foundation_group=foundation_group,
+            induction_entry_ids=await self._lead_source_entry_ids(lead_source),
             search=search,
         )
         total = await self.leads.count_total(section=section, narrow=narrow)
@@ -861,6 +875,27 @@ class LeadService:
 
     async def course_options(self) -> List[str]:
         return await self.leads.distinct_course_interests()
+
+    async def _lead_source_entry_ids(self, lead_source: str | None) -> "list[uuid.UUID] | None":
+        """The induction entries with this Lead Source, for _board_filters.
+
+        A lead's source is not stored on the lead: it is what the Induction
+        Call Form recorded for the call the lead was matched to on mobile
+        number, so the filter is "leads whose induction entry is one of these".
+        A lead nobody matched to an induction call has no source, and never
+        shows under one.
+        """
+        if not lead_source:
+            return None
+        return await self.induction_entries.ids_with_lead_source(lead_source)
+
+    async def lead_source_options(self) -> List[str]:
+        """The Lead Sources the board's leads actually came from, for its
+        filter - read off the matched induction entries rather than the
+        Induction form's configured list, so the filter never offers a source
+        that would match nobody on this board."""
+        entry_ids = await self.leads.linked_induction_entry_ids()
+        return await self.induction_entries.distinct_lead_sources(entry_ids) if entry_ids else []
 
     async def field_options(self, field: str) -> List[str]:
         return await self.leads.distinct_values(field)

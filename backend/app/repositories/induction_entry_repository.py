@@ -102,6 +102,24 @@ class InductionEntryRepository(BaseRepository[InductionEntry]):
         ).to_list()
         return {row["_id"]: row["count"] for row in rows}
 
+    async def ids_with_lead_source(self, lead_source: str) -> list[uuid.UUID]:
+        """Every entry whose Lead Source is exactly this one, for the
+        Foundation board's Lead Source filter - the source is recorded on the
+        induction call, not on the lead it later turned into.
+
+        Deleted entries included: removing the call record doesn't change
+        where the lead it brought in came from. Through Motor's distinct
+        because only the ids are wanted, not thousands of whole documents."""
+        return await InductionEntry.get_motor_collection().distinct("_id", {"lead_source": lead_source})
+
+    async def distinct_lead_sources(self, entry_ids: list[uuid.UUID]) -> list[str]:
+        """The Lead Sources among these entries, for the Foundation board's
+        filter options."""
+        values = await InductionEntry.get_motor_collection().distinct(
+            "lead_source", {"_id": {"$in": entry_ids}, "lead_source": {"$ne": None}}
+        )
+        return sorted({value for value in values if value}, key=str.lower)
+
     async def list_all_for_options(
         self, *, status: InductionStatus, section: str | None = None
     ) -> list[InductionEntry]:

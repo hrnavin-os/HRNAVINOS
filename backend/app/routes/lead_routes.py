@@ -82,6 +82,9 @@ async def list_leads(
     # longer capped at two: the number of groups is whatever the Induction Call
     # Form's Group dropdown offers.
     foundation_group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
+    # The Induction Call Form's Lead Source, read through the induction entry
+    # each lead was matched to - the lead itself doesn't carry one.
+    lead_source: str | None = None,
     # True for the Finance page's Approved Students tab.
     finance_approved: bool | None = None,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
@@ -104,6 +107,7 @@ async def list_leads(
         date_to=date_to,
         induction_matched=induction_matched,
         foundation_group=foundation_group,
+        lead_source=lead_source,
         finance_approved=finance_approved,
     )
     items = [await service.to_response(lead) for lead in result.items]
@@ -124,6 +128,7 @@ async def lead_stats(
     date_from: date | None = None,
     date_to: date | None = None,
     foundation_group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
+    lead_source: str | None = None,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> LeadStatsResponse:
     scope = await get_actor_scope(actor)
@@ -138,6 +143,7 @@ async def lead_stats(
         date_from=date_from,
         date_to=date_to,
         foundation_group=foundation_group,
+        lead_source=lead_source,
     )
 
 
@@ -155,6 +161,7 @@ async def whatsapp_counts(
     date_from: date | None = None,
     date_to: date | None = None,
     foundation_group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
+    lead_source: str | None = None,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> LeadWhatsAppCountsResponse:
     # Declared before /{lead_id}, or that route would try to parse
@@ -172,6 +179,7 @@ async def whatsapp_counts(
             date_from=date_from,
             date_to=date_to,
             foundation_group=foundation_group,
+            lead_source=lead_source,
         )
     )
 
@@ -227,6 +235,16 @@ async def list_course_options(
     Course filter dropdown - not a closed enum, so this reflects real data
     rather than a hardcoded list."""
     return await LeadService().course_options()
+
+
+@router.get("/lead-source-options", response_model=list[str])
+async def list_lead_source_options(
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
+) -> list[str]:
+    """The Lead Sources the board's leads came from, for the Lead Source
+    filter - read off the induction entries they were matched to. Declared
+    before /{lead_id}, like the other fixed segments."""
+    return await LeadService().lead_source_options()
 
 
 @router.get("/field-options/{field}", response_model=list[str])

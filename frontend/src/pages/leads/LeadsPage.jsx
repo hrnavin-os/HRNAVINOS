@@ -690,6 +690,9 @@ function FoundationLeadsBoard() {
   // Which of the month's two foundation classes a lead came through - read off
   // the day their Foundation Form landed, which is the Date column beside it.
   const [groupFilter, setGroupFilter] = useState('')
+  // Where the lead came from (Meta-1, Retargeting...), as the Induction Call
+  // Form recorded it for the call the lead was matched to.
+  const [leadSourceFilter, setLeadSourceFilter] = useState('')
   const [sortOrder, setSortOrder] = useState('desc')
   // `{ from, to, preset }` or null - the same shape the Induction board uses.
   const [dateRange, setDateRange] = useState(null)
@@ -740,6 +743,13 @@ function FoundationLeadsBoard() {
   const courseOptions = (courseOptionsQuery.data ?? []).filter(
     (course) => !EXCLUDED_COURSE_OPTIONS.includes(course),
   )
+  // Only the sources somebody on this board actually came from, so the filter
+  // never offers one that matches nobody.
+  const leadSourceOptionsQuery = useQuery({
+    queryKey: ['lead-source-options'],
+    queryFn: leadService.getLeadSourceOptions,
+  })
+  const leadSourceOptions = leadSourceOptionsQuery.data ?? []
 
   // The filter row, shared by the table and the stat cards so a filter moves
   // both. Stage, section and the Lost tab are added per consumer below.
@@ -749,6 +759,7 @@ function FoundationLeadsBoard() {
     payment_call_remarks: callRemarkFilter || undefined,
     qr_code: qrCodeFilter || undefined,
     foundation_group: groupFilter || undefined,
+    lead_source: leadSourceFilter || undefined,
     date_from: dateRange?.from || undefined,
     date_to: dateRange?.to || undefined,
   }
@@ -1231,6 +1242,16 @@ function FoundationLeadsBoard() {
             options={FOUNDATION_GROUP_OPTIONS}
             onChange={(value) => {
               setGroupFilter(value)
+              setPage(1)
+            }}
+          />
+
+          <FilterDropdown
+            label="Lead Source"
+            value={leadSourceFilter}
+            options={leadSourceOptions.map((source) => ({ value: source, label: source }))}
+            onChange={(value) => {
+              setLeadSourceFilter(value)
               setPage(1)
             }}
           />

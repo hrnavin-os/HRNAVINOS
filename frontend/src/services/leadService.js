@@ -52,6 +52,13 @@ export const leadService = {
     const { data } = await apiClient.get('/leads/course-options')
     return data
   },
+  // The Lead Sources (Meta-1, Retargeting...) the board's leads came from -
+  // read off the Induction entries they were matched to, since a lead doesn't
+  // carry one of its own. For the Foundation board's Lead Source filter.
+  getLeadSourceOptions: async () => {
+    const { data } = await apiClient.get('/leads/lead-source-options')
+    return data
+  },
   // Every course a lead can be moved onto - the live programs, plus any
   // value already in the data that is no longer one. Distinct from
   // getCourseOptions, which is what is in use and is what the filter wants.

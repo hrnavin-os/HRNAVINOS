@@ -195,6 +195,61 @@ async def test_leads_can_be_filtered_by_induction_match(client, auth_headers):
     assert stats["by_induction_match"] == {"matched": 1, "unmatched": 1}
 
 
+async def seed_two_sources(client) -> None:
+    """Two matched leads from different Lead Sources, and one nobody matched
+    to an induction call - which has no source at all."""
+    await seed_programs(client)
+    await client.post(INDUCTION_URL, json=induction_payload())  # Instagram
+    await client.post(INDUCTION_URL, json=induction_payload(name="Meera", phone="9000000001", lead_source="Meta-1"))
+    # An induction call that never became a Foundation lead: its source is
+    # not one the Foundation board's leads came from.
+    await client.post(INDUCTION_URL, json=induction_payload(name="Ravi", phone="9000000002", lead_source="Retargeting"))
+    await client.post(FOUNDATION_URL, json=foundation_payload())
+    await client.post(FOUNDATION_URL, json=foundation_payload(name="Meera S", mobile_number="9000000001"))
+    await client.post(FOUNDATION_URL, json=foundation_payload(name="Cold Lead", mobile_number="9123456789"))
+
+
+async def test_leads_can_be_filtered_by_lead_source(client, auth_headers):
+    await seed_two_sources(client)
+
+    meta = (await client.get("/api/v1/leads?lead_source=Meta-1", headers=auth_headers)).json()
+    assert [item["name"] for item in meta["items"]] == ["Meera S"]
+    instagram = (await client.get("/api/v1/leads?lead_source=Instagram", headers=auth_headers)).json()
+    assert [item["name"] for item in instagram["items"]] == ["Arun Kumar"]
+    # A source no lead came through matches nobody, rather than everybody.
+    nobody = (await client.get("/api/v1/leads?lead_source=Retargeting", headers=auth_headers)).json()
+    assert nobody["total"] == 0
+
+    # The stat cards and the WhatsApp header count the same rows the table shows.
+    stats = (await client.get("/api/v1/leads/stats?lead_source=Meta-1", headers=auth_headers)).json()
+    assert stats["total"] == 1
+    counts = (await client.get("/api/v1/leads/whatsapp-counts?lead_source=Meta-1", headers=auth_headers)).json()
+    assert counts["added"] + counts["not_added"] == 1
+
+
+async def test_lead_source_filter_combines_with_induction_match(client, auth_headers):
+    await seed_two_sources(client)
+
+    matched = (
+        await client.get("/api/v1/leads?lead_source=Meta-1&induction_matched=true", headers=auth_headers)
+    ).json()
+    assert [item["name"] for item in matched["items"]] == ["Meera S"]
+    # A lead with a Lead Source was matched by definition, so this is nobody -
+    # not the unmatched lead the second filter alone would return.
+    unmatched = (
+        await client.get("/api/v1/leads?lead_source=Meta-1&induction_matched=false", headers=auth_headers)
+    ).json()
+    assert unmatched["total"] == 0
+
+
+async def test_lead_source_options_are_the_sources_the_leads_came_from(client, auth_headers):
+    await seed_two_sources(client)
+
+    response = await client.get("/api/v1/leads/lead-source-options", headers=auth_headers)
+    assert response.status_code == 200
+    assert response.json() == ["Instagram", "Meta-1"]
+
+
 # --------------------------------------------------------------------------
 # Duplicate prevention
 # --------------------------------------------------------------------------

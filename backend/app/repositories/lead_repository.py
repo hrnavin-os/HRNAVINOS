@@ -167,6 +167,14 @@ class LeadRepository(BaseRepository[Lead]):
         )
         return sorted({v for v in values if v})
 
+    async def linked_induction_entry_ids(self) -> list:
+        """The induction entries the board's leads were matched to - where
+        their Lead Source is read from."""
+        return await Lead.get_motor_collection().distinct(
+            "induction_entry_id",
+            {"is_deleted": False, "reviewed": {"$ne": False}, "induction_entry_id": {"$ne": None}},
+        )
+
     async def distinct_values(self, field: str) -> list[str]:
         # Deleted leads count too: a QR name or remark somebody added doesn't
         # stop being an option because the one lead that used it was removed.
