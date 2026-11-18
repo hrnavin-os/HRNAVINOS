@@ -85,6 +85,8 @@ async def list_leads(
     # The Induction Call Form's Lead Source, read through the induction entry
     # each lead was matched to - the lead itself doesn't carry one.
     lead_source: str | None = None,
+    # The batch the Batch column shows - "Batch-30", or a typed value as written.
+    batch: str | None = None,
     # True for the Finance page's Approved Students tab.
     finance_approved: bool | None = None,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
@@ -108,6 +110,7 @@ async def list_leads(
         induction_matched=induction_matched,
         foundation_group=foundation_group,
         lead_source=lead_source,
+        batch=batch,
         finance_approved=finance_approved,
     )
     items = [await service.to_response(lead) for lead in result.items]
@@ -129,6 +132,8 @@ async def lead_stats(
     date_to: date | None = None,
     foundation_group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
     lead_source: str | None = None,
+    # The batch the Batch column shows - "Batch-30", or a typed value as written.
+    batch: str | None = None,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> LeadStatsResponse:
     scope = await get_actor_scope(actor)
@@ -144,6 +149,7 @@ async def lead_stats(
         date_to=date_to,
         foundation_group=foundation_group,
         lead_source=lead_source,
+        batch=batch,
     )
 
 
@@ -162,6 +168,8 @@ async def whatsapp_counts(
     date_to: date | None = None,
     foundation_group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
     lead_source: str | None = None,
+    # The batch the Batch column shows - "Batch-30", or a typed value as written.
+    batch: str | None = None,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> LeadWhatsAppCountsResponse:
     # Declared before /{lead_id}, or that route would try to parse
@@ -180,6 +188,7 @@ async def whatsapp_counts(
             date_to=date_to,
             foundation_group=foundation_group,
             lead_source=lead_source,
+            batch=batch,
         )
     )
 
@@ -245,6 +254,16 @@ async def list_lead_source_options(
     filter - read off the induction entries they were matched to. Declared
     before /{lead_id}, like the other fixed segments."""
     return await LeadService().lead_source_options()
+
+
+@router.get("/batch-options", response_model=list[str])
+async def list_batch_options(
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
+) -> list[str]:
+    """The batches the board's leads are in, for the Batch filter - named as
+    the Batch column names them. Declared before /{lead_id}, like the other
+    fixed segments."""
+    return await LeadService().batch_options()
 
 
 @router.get("/field-options/{field}", response_model=list[str])

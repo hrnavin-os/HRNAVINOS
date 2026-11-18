@@ -123,6 +123,18 @@ class InductionEntryRepository(BaseRepository[InductionEntry]):
             "_id", {"lead_source": {"$regex": pattern, "$options": "i"}}
         )
 
+    async def batch_numbers(self, entry_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+        """The batch entered on each of these entries, for the ones that have
+        one - for the Foundation board's Batch filter, where an induction batch
+        is the one a lead is shown in. Deleted entries included, as the board
+        still shows the batch off one."""
+        if not entry_ids:
+            return {}
+        rows = await InductionEntry.get_motor_collection().find(
+            {"_id": {"$in": entry_ids}, "batch_number": {"$ne": None}}, {"batch_number": 1}
+        ).to_list(None)
+        return {row["_id"]: row["batch_number"] for row in rows}
+
     async def distinct_lead_sources(self, entry_ids: list[uuid.UUID]) -> list[str]:
         """The Lead Sources among these entries, for the Foundation board's
         filter options - one per source, however many ways it was typed.

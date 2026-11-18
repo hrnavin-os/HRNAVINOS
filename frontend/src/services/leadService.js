@@ -59,6 +59,12 @@ export const leadService = {
     const { data } = await apiClient.get('/leads/lead-source-options')
     return data
   },
+  // The batches the board's leads are in, named as the Batch column names
+  // them ("Batch-30"), newest first - for the Foundation board's Batch filter.
+  getBatchOptions: async () => {
+    const { data } = await apiClient.get('/leads/batch-options')
+    return data
+  },
   // Every course a lead can be moved onto - the live programs, plus any
   // value already in the data that is no longer one. Distinct from
   // getCourseOptions, which is what is in use and is what the filter wants.

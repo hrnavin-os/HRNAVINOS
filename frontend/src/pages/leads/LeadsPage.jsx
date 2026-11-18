@@ -693,6 +693,8 @@ function FoundationLeadsBoard() {
   // Where the lead came from (Meta-1, Retargeting...), as the Induction Call
   // Form recorded it for the call the lead was matched to.
   const [leadSourceFilter, setLeadSourceFilter] = useState('')
+  // The batch the Batch column shows - the Induction form's, else the typed one.
+  const [batchFilter, setBatchFilter] = useState('')
   const [sortOrder, setSortOrder] = useState('desc')
   // `{ from, to, preset }` or null - the same shape the Induction board uses.
   const [dateRange, setDateRange] = useState(null)
@@ -734,15 +736,24 @@ function FoundationLeadsBoard() {
   const callRemarkOptions = withAddedOptions(CALL_REMARK_OPTIONS, useFieldOptions('payment_call_remarks'))
 
   const courseOptionsQuery = useQuery({ queryKey: ['lead-course-options'], queryFn: leadService.getCourseOptions })
-  // Everything the Course cell can offer, which is more than the filter's
-  // list: a course nobody is on yet is a dead end to filter by and the point
-  // of being able to set one.
+  // Every active program - what the Course cell offers.
   const courseCatalogQuery = useQuery({ queryKey: ['lead-course-catalog'], queryFn: leadService.getCourseCatalog })
-  // Junk values from test leads created outside the real Foundation Form
-  // programs - not real courses, so they don't belong in the filter list.
-  const courseOptions = (courseOptionsQuery.data ?? []).filter(
-    (course) => !EXCLUDED_COURSE_OPTIONS.includes(course),
-  )
+  // The Course filter offers every program in Programs Management, whether
+  // or not anyone is on it yet, followed by any other course a lead is
+  // actually on (a retired program) so those leads can still be found. Junk
+  // values from test leads created outside the real Foundation Form programs
+  // are left out of the second half.
+  const courseCatalog = courseCatalogQuery.data ?? []
+  const courseOptions = [
+    ...courseCatalog,
+    ...(courseOptionsQuery.data ?? []).filter(
+      (course) => !courseCatalog.includes(course) && !EXCLUDED_COURSE_OPTIONS.includes(course),
+    ),
+  ]
+  // Only batches somebody is in. Under the 'leads' key so typing a batch on a
+  // row, which invalidates that, adds it here too.
+  const batchOptionsQuery = useQuery({ queryKey: ['leads', 'batch-options'], queryFn: leadService.getBatchOptions })
+  const batchOptions = batchOptionsQuery.data ?? []
   // Only the sources somebody on this board actually came from, so the filter
   // never offers one that matches nobody.
   const leadSourceOptionsQuery = useQuery({
@@ -760,6 +771,7 @@ function FoundationLeadsBoard() {
     qr_code: qrCodeFilter || undefined,
     foundation_group: groupFilter || undefined,
     lead_source: leadSourceFilter || undefined,
+    batch: batchFilter || undefined,
     date_from: dateRange?.from || undefined,
     date_to: dateRange?.to || undefined,
   }
@@ -844,6 +856,26 @@ function FoundationLeadsBoard() {
 
   function handleDateChange(nextRange) {
     setDateRange(nextRange)
+    setPage(1)
+  }
+
+  // The filter row's own dropdowns. Section counts only where it is a
+  // dropdown here - a Section Admin is locked to theirs.
+  const hasRowFilters = Boolean(
+    courseFilter || (!scopedSection && sectionFilter) || statusFilter || planFilter || qrCodeFilter ||
+      callRemarkFilter || groupFilter || batchFilter || leadSourceFilter,
+  )
+
+  function clearRowFilters() {
+    setCourseFilter('')
+    if (!scopedSection) setSectionFilter('')
+    setStatusFilter('')
+    setPlanFilter('')
+    setQrCodeFilter('')
+    setCallRemarkFilter('')
+    setGroupFilter('')
+    setBatchFilter('')
+    setLeadSourceFilter('')
     setPage(1)
   }
 
@@ -1171,110 +1203,146 @@ function FoundationLeadsBoard() {
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 rounded-b-lg border-t border-slate-100 bg-slate-50/60 px-3 py-2.5">
-          <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Filters</span>
-          <FilterDropdown
-            label="Course"
-            value={courseFilter}
-            options={courseOptions.map((course) => ({ value: course, label: course }))}
-            onChange={(value) => {
-              setCourseFilter(value)
-              setPage(1)
-            }}
-          />
-
-          {/* Not for a Section Admin, who is locked to their own section. */}
-          {!scopedSection && (
+        {/* Two groups: the filters wrap among themselves on the left, and the
+            page actions keep their own column on the right - so with nine
+            filters the actions don't fall onto a line of their own under them,
+            where an open menu would sit on top of Create Lead. Stacked below
+            lg, where there is no room beside them. */}
+        <div className="flex flex-col gap-2 rounded-b-lg border-t border-slate-100 bg-slate-50/60 px-3 py-2.5 lg:flex-row lg:items-start">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Filters</span>
             <FilterDropdown
-              label="Section"
-              value={sectionFilter}
-              options={sectionOptions.map((section) => ({ value: section.code, label: section.label }))}
-              onChange={filterSection}
-            />
-          )}
-
-          {/* Every row on the Quit Students tab is the same stage. */}
-          {!showLost && (
-            <FilterDropdown
-              label="Stage"
-              value={statusFilter}
-              options={LEAD_STAGES.map((stage) => ({ value: stage.value, label: stage.label }))}
+              label="Course"
+              value={courseFilter}
+              menuWidth={320}
+              options={courseOptions.map((course) => ({ value: course, label: course }))}
               onChange={(value) => {
-                setStatusFilter(value)
+                setCourseFilter(value)
                 setPage(1)
               }}
             />
-          )}
 
-          {/* Both name their values exactly as the columns they filter do -
-              PAYMENT_PLAN_LABELS and CALL_REMARK_OPTIONS are the same two
-              lists the cells render from, so a filter can't offer a wording
-              the board never shows. */}
-          <FilterDropdown
-            label="Payment Method"
-            value={planFilter}
-            options={Object.entries(PAYMENT_PLAN_LABELS).map(([value, label]) => ({ value, label }))}
-            onChange={(value) => {
-              setPlanFilter(value)
-              setPage(1)
-            }}
-          />
+            {/* Not for a Section Admin, who is locked to their own section. */}
+            {!scopedSection && (
+              <FilterDropdown
+                label="Section"
+                value={sectionFilter}
+                options={sectionOptions.map((section) => ({ value: section.code, label: section.label }))}
+                onChange={filterSection}
+              />
+            )}
 
-          {/* Same list the QR-Code cells offer, added accounts included. */}
-          <FilterDropdown
-            label="QR Code"
-            value={qrCodeFilter}
-            options={qrCodeOptions.map((option) => ({ value: option.value, label: option.label }))}
-            onChange={(value) => {
-              setQrCodeFilter(value)
-              setPage(1)
-            }}
-          />
+            {/* Every row on the Quit Students tab is the same stage. */}
+            {!showLost && (
+              <FilterDropdown
+                label="Stage"
+                value={statusFilter}
+                options={LEAD_STAGES.map((stage) => ({ value: stage.value, label: stage.label }))}
+                onChange={(value) => {
+                  setStatusFilter(value)
+                  setPage(1)
+                }}
+              />
+            )}
 
-          <FilterDropdown
-            label="Payment Remarks"
-            value={callRemarkFilter}
-            options={callRemarkOptions.map((option) => ({ value: option.value, label: option.label }))}
-            onChange={(value) => {
-              setCallRemarkFilter(value)
-              setPage(1)
-            }}
-          />
+            {/* Both name their values exactly as the columns they filter do -
+                PAYMENT_PLAN_LABELS and CALL_REMARK_OPTIONS are the same two
+                lists the cells render from, so a filter can't offer a wording
+                the board never shows. */}
+            <FilterDropdown
+              label="Payment Method"
+              value={planFilter}
+              options={Object.entries(PAYMENT_PLAN_LABELS).map(([value, label]) => ({ value, label }))}
+              onChange={(value) => {
+                setPlanFilter(value)
+                setPage(1)
+              }}
+            />
 
-          {/* A fixed list rather than options read off the data: "nobody is in
-              Group 3 this month" is an answer the filter should be able to
-              give rather than an option it quietly drops. */}
-          <FilterDropdown
-            label="Group"
-            value={groupFilter}
-            options={FOUNDATION_GROUP_OPTIONS}
-            onChange={(value) => {
-              setGroupFilter(value)
-              setPage(1)
-            }}
-          />
+            {/* Same list the QR-Code cells offer, added accounts included. */}
+            <FilterDropdown
+              label="QR Code"
+              value={qrCodeFilter}
+              options={qrCodeOptions.map((option) => ({ value: option.value, label: option.label }))}
+              onChange={(value) => {
+                setQrCodeFilter(value)
+                setPage(1)
+              }}
+            />
 
-          <FilterDropdown
-            label="Lead Source"
-            value={leadSourceFilter}
-            options={leadSourceOptions.map((source) => ({ value: source, label: source }))}
-            onChange={(value) => {
-              setLeadSourceFilter(value)
-              setPage(1)
-            }}
-          />
+            <FilterDropdown
+              label="Payment Remarks"
+              value={callRemarkFilter}
+              options={callRemarkOptions.map((option) => ({ value: option.value, label: option.label }))}
+              onChange={(value) => {
+                setCallRemarkFilter(value)
+                setPage(1)
+              }}
+            />
 
-          {/* Whoever can delete a lead can read back every deletion, with the
-              reason given. Sits ahead of Create Lead and takes the ml-auto
-              when it is here, so the two stay together on the right. */}
-          {canDeleteLead && <DeletedHistoryButton board="foundation" className="ml-auto" />}
-          {/* Most leads still arrive through the Form Collection forms; this
-              is for the walk-in or phone enquiry with nobody to fill one in. */}
-          {canCreateLead && (
-            <Button className={`${canDeleteLead ? '' : 'ml-auto'} shrink-0`} onClick={() => setIsCreating(true)}>
-              <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-              Create Lead
-            </Button>
+            {/* A fixed list rather than options read off the data: "nobody is in
+                Group 3 this month" is an answer the filter should be able to
+                give rather than an option it quietly drops. */}
+            <FilterDropdown
+              label="Group"
+              value={groupFilter}
+              options={FOUNDATION_GROUP_OPTIONS}
+              onChange={(value) => {
+                setGroupFilter(value)
+                setPage(1)
+              }}
+            />
+
+            {/* Named exactly as the Batch column names them. */}
+            <FilterDropdown
+              label="Batch"
+              value={batchFilter}
+              options={batchOptions.map((batch) => ({ value: batch, label: batch }))}
+              onChange={(value) => {
+                setBatchFilter(value)
+                setPage(1)
+              }}
+            />
+
+            <FilterDropdown
+              label="Lead Source"
+              value={leadSourceFilter}
+              options={leadSourceOptions.map((source) => ({ value: source, label: source }))}
+              onChange={(value) => {
+                setLeadSourceFilter(value)
+                setPage(1)
+              }}
+            />
+
+            {/* With nine filters, undoing a few one "x" at a time is a chore. The
+                search, dates and section cards are left alone - they aren't in
+                this row. A Section Admin's section isn't theirs to clear. */}
+            {hasRowFilters && (
+              <button
+                type="button"
+                onClick={clearRowFilters}
+                className="rounded-md px-2 py-1 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+
+          {(canDeleteLead || canCreateLead) && (
+            <div className="flex shrink-0 items-center gap-2 lg:ml-2">
+              {/* Whoever can delete a lead can read back every deletion, with
+                  the reason given. */}
+              {canDeleteLead && <DeletedHistoryButton board="foundation" />}
+              {/* Most leads still arrive through the Form Collection forms;
+                  this is for the walk-in or phone enquiry with nobody to fill
+                  one in. */}
+              {canCreateLead && (
+                <Button className="shrink-0" onClick={() => setIsCreating(true)}>
+                  <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                  Create Lead
+                </Button>
+              )}
+            </div>
           )}
         </div>
       </div>

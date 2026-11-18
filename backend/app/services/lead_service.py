@@ -282,6 +282,7 @@ class LeadService:
         induction_matched: bool | None = None,
         foundation_group: int | None = None,
         lead_source: str | None = None,
+        batch: str | None = None,
         finance_approved: bool | None = None,
     ) -> PaginatedResponse:
         # See LeadRepository.count_total for why this isn't a plain "reviewed": True.
@@ -312,6 +313,7 @@ class LeadService:
                 date_to=date_to,
                 foundation_group=foundation_group,
                 induction_entry_ids=await self._lead_source_entry_ids(lead_source),
+                batch_condition=await self._batch_condition(batch),
             )
         )
         # Separates leads that came across from an induction call from those
@@ -426,6 +428,7 @@ class LeadService:
         date_to: date | None = None,
         foundation_group: int | None = None,
         induction_entry_ids: "list[uuid.UUID] | None" = None,  # quoted: `list` is a method here
+        batch_condition: dict | None = None,
         search: str | None = None,
     ) -> dict:
         """The Foundation board's filter row as a Mongo filter - one copy, read
@@ -467,6 +470,11 @@ class LeadService:
         # matches no lead - as it should.
         if induction_entry_ids is not None:
             filters["induction_entry_id"] = {"$in": induction_entry_ids}
+        # The Batch filter, already resolved by _batch_condition. Under $and
+        # rather than merged in: it is an $or over induction_entry_id, the key
+        # the Lead Source filter above sets, and search adds an $or of its own.
+        if batch_condition is not None:
+            filters["$and"] = [batch_condition]
         # The same match the table's search box makes (BaseRepository._build_query).
         if search:
             pattern = re.escape(search)
@@ -486,6 +494,7 @@ class LeadService:
         date_to: date | None = None,
         foundation_group: int | None = None,
         lead_source: str | None = None,
+        batch: str | None = None,
         search: str | None = None,
     ) -> LeadStatsResponse:
         # Whatever the board's filter row is set to, so the cards move with the
@@ -501,6 +510,7 @@ class LeadService:
             date_to=date_to,
             foundation_group=foundation_group,
             induction_entry_ids=await self._lead_source_entry_ids(lead_source),
+            batch_condition=await self._batch_condition(batch),
             search=search,
         )
         total = await self.leads.count_total(section=section, narrow=narrow)
@@ -529,6 +539,7 @@ class LeadService:
         date_to: date | None = None,
         foundation_group: int | None = None,
         lead_source: str | None = None,
+        batch: str | None = None,
         search: str | None = None,
     ) -> dict[str, int]:
         """Of the rows the Foundation table matches, how many have joined the
@@ -548,6 +559,7 @@ class LeadService:
             date_to=date_to,
             foundation_group=foundation_group,
             induction_entry_ids=await self._lead_source_entry_ids(lead_source),
+            batch_condition=await self._batch_condition(batch),
             search=search,
         )
         total = await self.leads.count_total(section=section, narrow=narrow)
@@ -899,6 +911,72 @@ class LeadService:
         that would match nobody on this board."""
         entry_ids = await self.leads.linked_induction_entry_ids()
         return await self.induction_entries.distinct_lead_sources(entry_ids) if entry_ids else []
+
+    async def _batch_condition(self, batch: str | None) -> dict | None:
+        """The Batch filter as a Mongo condition, for _board_filters.
+
+        Matches the batch the board's Batch column shows (lead_batch_label):
+        the Induction form's batch for a lead that came through Induction, or
+        else the one typed on the lead. So a lead is found under its induction
+        batch even if a different number was typed on it, and never under the
+        typed one. "Batch-30", "30" and a typed "batch 30" are all Batch-30; a
+        typed value that isn't a number ("Batch 29B") matches as written.
+        """
+        if not batch or not batch.strip():
+            return None
+        number = parse_batch(batch)
+        batched = await self.induction_entries.batch_numbers(await self.leads.linked_induction_entry_ids())
+        if number is not None:
+            typed = rf"^\s*(?:batch\s*-?\s*)?0*{number}\s*$"
+            from_induction = [entry_id for entry_id, value in batched.items() if value == number]
+        else:
+            typed = r"^\s*" + re.escape(batch.strip()) + r"\s*$"
+            from_induction = []
+        return {
+            "$or": [
+                {"induction_entry_id": {"$in": from_induction}},
+                {
+                    # $nin matches a lead with no induction entry too.
+                    "induction_entry_id": {"$nin": list(batched)},
+                    "batch_number": {"$regex": typed, "$options": "i"},
+                },
+            ]
+        }
+
+    async def batch_options(self) -> List[str]:
+        """The batches the board's leads are in, for its Batch filter - each
+        named as the Batch column names it, newest batch first, then any typed
+        batch that isn't a number. Only batches somebody is in, like the Lead
+        Source options, so no option is a dead end."""
+        rows = await Lead.aggregate(
+            [
+                {"$match": {"is_deleted": False, "reviewed": {"$ne": False}}},
+                {
+                    "$lookup": {
+                        "from": InductionEntry.Settings.name,
+                        "localField": "induction_entry_id",
+                        "foreignField": "_id",
+                        "as": "_induction",
+                    }
+                },
+                {
+                    "$group": {
+                        "_id": {
+                            "induction": {"$arrayElemAt": ["$_induction.batch_number", 0]},
+                            "typed": "$batch_number",
+                        }
+                    }
+                },
+            ]
+        ).to_list()
+        labels = {
+            label
+            for row in rows
+            if (label := lead_batch_label(row["_id"].get("induction"), row["_id"].get("typed")))
+        }
+        numbered = sorted((label for label in labels if parse_batch(label) is not None), key=parse_batch, reverse=True)
+        others = sorted((label for label in labels if parse_batch(label) is None), key=str.lower)
+        return numbered + others
 
     async def field_options(self, field: str) -> List[str]:
         return await self.leads.distinct_values(field)
