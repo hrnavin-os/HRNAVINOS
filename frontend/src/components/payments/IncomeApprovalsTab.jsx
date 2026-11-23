@@ -9,7 +9,7 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Pagination } from '@/components/ui/Pagination'
-import { formatCurrency, formatDate, formatDateTime, titleCase } from '@/utils/formatters'
+import { formatCurrency, formatDate, formatDateTime, formatExactCurrency, titleCase } from '@/utils/formatters'
 import { getLeadPaymentSummary, getPaymentLedger } from '@/utils/leadPayment'
 import { PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
 import { LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
@@ -22,8 +22,18 @@ import { TableCard } from '@/components/ui/TableCard'
 const APPROVED_PAGE_SIZE = 25
 
 const snoColumn = { key: 'sno', header: 'S.No', render: (row) => row.__rowNumber }
-const leadColumn = { key: 'lead', header: 'Lead', render: (row) => <span className="font-medium text-slate-900">{row.name}</span> }
-const contactColumn = { key: 'contact', header: 'Contact', render: (row) => row.phone }
+// The number under the name rather than in a column of its own: with GST added,
+// the table ran past the card and took the Review button off the screen.
+const leadColumn = {
+  key: 'lead',
+  header: 'Lead',
+  render: (row) => (
+    <div>
+      <p className="font-medium text-slate-900">{row.name}</p>
+      <p className="text-xs text-slate-500">{row.phone}</p>
+    </div>
+  ),
+}
 const planColumn = {
   // Which plan the student picked on the Form Collection payment step.
   // Older/manually-created leads carry no plan at all.
@@ -45,6 +55,22 @@ const amountColumn = {
   render: (row) => {
     const { paidAmount } = getLeadPaymentSummary(row)
     return paidAmount !== null ? formatCurrency(paidAmount) : '—'
+  },
+}
+// Collected on top of the amount, with the two added up under it - the money
+// that should be in the bank. Blank on payments from before GST.
+const gstColumn = {
+  key: 'gst',
+  header: 'GST',
+  render: (row) => {
+    const { gstAmount, totalPaid } = getLeadPaymentSummary(row)
+    if (!(gstAmount > 0)) return '—'
+    return (
+      <div className="whitespace-nowrap">
+        {formatExactCurrency(gstAmount)}
+        <p className="text-xs text-slate-500">Total {formatExactCurrency(totalPaid)}</p>
+      </div>
+    )
   },
 }
 // The accounts the money went into - what Finance checks the bank against.
@@ -106,9 +132,9 @@ const AWAITING_COLUMNS = [
   snoColumn,
   { key: 'date', header: 'Date', render: (row) => formatDate(row.created_at) },
   leadColumn,
-  contactColumn,
   planColumn,
   amountColumn,
+  gstColumn,
   qrCodeColumn,
   dueColumn,
   { key: 'status', header: 'Status', render: () => <Badge tone="amber">● Awaiting Approval</Badge> },
@@ -129,9 +155,9 @@ const APPROVED_COLUMNS = [
     ),
   },
   leadColumn,
-  contactColumn,
   planColumn,
   amountColumn,
+  gstColumn,
   qrCodeColumn,
   dueColumn,
   {

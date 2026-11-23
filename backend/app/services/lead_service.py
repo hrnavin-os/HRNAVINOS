@@ -55,10 +55,12 @@ from app.services.foundation_group_sync import mirror_group_move
 from app.services.foundation_form_answers import derive_answers
 from app.services.foundation_form_pricing import build_payment_expected_summary, plan_fee
 from app.services.payment_ledger import (
+    GST_RATE,
     RECEIVED_KINDS,
     TOKEN_LABEL,
     balance_of,
     fee_of,
+    gst_on,
     rebalance,
     received_of,
     to_ledger,
@@ -183,6 +185,8 @@ class LeadService:
                     label=installment.label,
                     amount=installment.amount,
                     received_amount=installment.received_amount,
+                    gst_rate=installment.gst_rate,
+                    gst_amount=installment.gst_amount,
                     mode=installment.mode,
                     qr_code=installment.qr_code,
                     transaction_id=installment.transaction_id,
@@ -1480,6 +1484,9 @@ class LeadService:
         them, so there is no fixed slot to fill and no fee per payment. A
         payment needs its amount, mode and proof. The token is optional money
         up front and so asks less: its proof can follow, or never come.
+
+        `received_amount` is what goes towards the fee. GST is charged on top
+        of it and worked out here, never sent in - see payment_ledger.
         """
         lead = await self.get(lead_id, scope=scope)
         if not lead.payment_plan:
@@ -1492,7 +1499,11 @@ class LeadService:
                 raise BadRequestError("Record a token or a payment.")
             if kind == PaymentEntryKind.TOKEN and any(entry.kind == PaymentEntryKind.TOKEN for entry in ledger):
                 raise BadRequestError("A token amount is already recorded for this lead - edit that one instead.")
-            entry = PaymentInstallment(kind=kind, label=TOKEN_LABEL if kind == PaymentEntryKind.TOKEN else "Payment")
+            entry = PaymentInstallment(
+                kind=kind,
+                label=TOKEN_LABEL if kind == PaymentEntryKind.TOKEN else "Payment",
+                gst_rate=GST_RATE,
+            )
             ledger.append(entry)
         else:
             if index < 0 or index >= len(ledger) or ledger[index].kind not in RECEIVED_KINDS:
@@ -1546,6 +1557,11 @@ class LeadService:
         entry.proof_urls = proofs
         entry.proof_url = proofs[0] if proofs else None
         entry.amount = entry.received_amount
+        # At the entry's own rate, so a correction follows the amount. One
+        # recorded before GST was collected has no rate, and correcting it must
+        # not claim tax the student was never charged.
+        if entry.gst_rate is not None:
+            entry.gst_amount = gst_on(entry.received_amount, entry.gst_rate)
         if not entry.paid:
             entry.paid = True
             entry.paid_at = utcnow().date()
@@ -1580,6 +1596,7 @@ class LeadService:
             changes={
                 "payment": entry.label,
                 "received_amount": str(entry.received_amount),
+                "gst_amount": str(entry.gst_amount) if entry.gst_amount is not None else None,
                 "mode": entry.mode,
                 "balance": str(balance.amount) if balance else "0",
                 "balance_due_at": balance.scheduled_at.isoformat() if balance and balance.scheduled_at else None,
@@ -1654,6 +1671,7 @@ class LeadService:
             changes={
                 "payment": removed.label,
                 "received_amount": str(removed.collected()),
+                "gst_amount": str(removed.gst_amount) if removed.gst_amount is not None else None,
                 "mode": removed.mode,
                 "qr_code": removed.qr_code,
                 "transaction_id": removed.transaction_id,

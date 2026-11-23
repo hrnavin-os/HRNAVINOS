@@ -9,6 +9,8 @@ import {
   CircleDollarSign,
   CreditCard,
   GraduationCap,
+  Landmark,
+  ReceiptIndianRupee,
   Hash,
   Mail,
   Phone,
@@ -22,11 +24,12 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { leadService } from '@/services/leadService'
 import { getApiErrorMessage } from '@/services/apiClient'
-import { formatCurrency, formatDate, titleCase } from '@/utils/formatters'
+import { formatCurrency, formatDate, formatExactCurrency, titleCase } from '@/utils/formatters'
 import {
   getAfterPlacementFee,
   getEmiPaymentHealth,
   getInstallmentCollected,
+  getInstallmentGst,
   getLeadPaymentSummary,
 } from '@/utils/leadPayment'
 import { PAYMENT_PLAN_LABELS, INSTALLMENT_MODE_TONES } from '@/constants/installmentPaymentModes'
@@ -55,6 +58,14 @@ function buildInfoItems(lead, summary) {
       value: summary.paidAmount !== null ? formatCurrency(summary.paidAmount) : '—',
       tone: 'emerald',
     },
+    // On top of the paid amount, with the two added up beside it: the total is
+    // what Finance will find in the bank.
+    ...(summary.gstAmount > 0
+      ? [
+          { icon: ReceiptIndianRupee, label: 'GST', value: formatExactCurrency(summary.gstAmount), tone: 'blue' },
+          { icon: Landmark, label: 'Total Paid', value: formatExactCurrency(summary.totalPaid), tone: 'emerald' },
+        ]
+      : []),
     { icon: CreditCard, label: 'Payment Mode', value: summary.mode ? titleCase(summary.mode) : '—', tone: 'violet' },
   ]
   // Which account the money went into - what Finance reconciles against.
@@ -247,6 +258,7 @@ function NonPaymentAction({ lead, summary }) {
 function InstallmentScheduleCard({ installment }) {
   const isPaid = installment.paid
   const collected = getInstallmentCollected(installment)
+  const gst = getInstallmentGst(installment)
   const tone = isPaid ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
   const Icon = isPaid ? CheckCircle2 : Calendar
   const dateLabel = isPaid ? 'Payment Date' : 'Due Date'
@@ -261,6 +273,7 @@ function InstallmentScheduleCard({ installment }) {
         <p className="truncate text-sm font-semibold text-slate-900">{installment.label}</p>
       </div>
       <p className="mt-2 text-base font-semibold text-slate-900">{formatCurrency(installment.amount)}</p>
+      {gst > 0 && <p className="text-xs font-medium text-slate-500">+ {formatExactCurrency(gst)} GST</p>}
       {/* Part-paid: what came in, so the fee above isn't read as received. */}
       {!isPaid && collected > 0 && (
         <p className="text-xs font-medium text-amber-700">{formatCurrency(collected)} received</p>

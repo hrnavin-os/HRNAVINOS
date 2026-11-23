@@ -42,10 +42,17 @@ import { PAYMENT_PLAN_TONES, QR_CODE_OPTIONS } from '@/constants/paymentOptions'
 import { leadService } from '@/services/leadService'
 import { foundationFormService } from '@/services/foundationFormService'
 import { PaymentDetailContent } from '@/components/payments/PaymentDetailModal'
-import { getPaymentLedger, hasFirstPayment, hasToken } from '@/utils/leadPayment'
+import {
+  GST_RATE,
+  getInstallmentGst,
+  getPaymentLedger,
+  gstOn,
+  hasFirstPayment,
+  hasToken,
+} from '@/utils/leadPayment'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { useAuth } from '@/hooks/useAuth'
-import { formatCurrency, formatDate, formatDateTime, titleCase } from '@/utils/formatters'
+import { formatCurrency, formatDate, formatDateTime, formatExactCurrency, titleCase } from '@/utils/formatters'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { DetailPanel, InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
 import { MEDIA_BASE_URL } from '@/constants/config'
@@ -454,6 +461,27 @@ function useQrCodeOptions(current) {
 
 const asAmount = (value) => (value === '' || value === null || value === undefined ? 0 : Number(value))
 
+// The amount, the GST on top of it, and what to take from the student. The fee
+// is only ever reduced by the amount, so the three are shown apart rather than
+// as one figure somebody would have to take 18% back out of.
+function GstBreakdown({ amount, gst, rate, totalLabel }) {
+  const items = [
+    { label: 'Amount', value: amount, tone: 'text-slate-900' },
+    { label: `GST (${Number(rate)}%)`, value: gst, tone: 'text-slate-900' },
+    { label: totalLabel, value: amount + gst, tone: 'text-brand-700' },
+  ]
+  return (
+    <div className="grid grid-cols-3 divide-x divide-brand-100 rounded-lg border border-brand-200 bg-brand-50">
+      {items.map((item) => (
+        <div key={item.label} className="min-w-0 px-3 py-2">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">{item.label}</p>
+          <p className={`truncate text-sm font-semibold tabular-nums ${item.tone}`}>{formatExactCurrency(item.value)}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // One token or payment. A form while it is being recorded or corrected, and a
 // one-glance summary once saved: six full forms for six payments pushed the
 // balance off the bottom of the popup, and a saved payment is read far more
@@ -529,6 +557,12 @@ function PaymentCard({
   const needsBalanceDate = remaining > 0 && !balanceDueAt
   const hasProof = Boolean(files.length || kept.length)
 
+  // A saved payment keeps the rate it was collected at. One from before GST has
+  // none, and correcting it doesn't add any - the backend holds to the same.
+  const gstRate = entry ? entry.gst_rate : GST_RATE
+  const hasGst = gstRate !== null && gstRate !== undefined
+  const savedGst = entry ? getInstallmentGst(entry) : 0
+
   function cancelEdit() {
     setRemarks(entry.remarks ?? '')
     setReceived(entry.received_amount ?? entry.amount ?? '')
@@ -545,7 +579,7 @@ function PaymentCard({
 
   function handleSave() {
     if (!received || Number(received) <= 0 || !mode) {
-      setValidationError('Fill in the amount received and the payment mode before saving.')
+      setValidationError('Fill in the amount and the payment mode before saving.')
       return
     }
     // The token is optional money up front, so its proof can follow later.
@@ -627,6 +661,14 @@ function PaymentCard({
               </p>
               {entry.paid_at && <p className="text-xs text-slate-500">{formatDate(entry.paid_at)}</p>}
             </div>
+            {savedGst > 0 && (
+              <GstBreakdown
+                amount={asAmount(entry.received_amount ?? entry.amount)}
+                gst={savedGst}
+                rate={gstRate}
+                totalLabel="Total Collected"
+              />
+            )}
             <p className="text-sm text-slate-600">
               {[INSTALLMENT_MODE_LABELS[entry.mode] ?? entry.mode, entry.qr_code, entry.transaction_id || entry.upi_id]
                 .filter(Boolean)
@@ -703,7 +745,7 @@ function PaymentCard({
                 and the save button off the bottom of the popup. */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Input
-                label="Amount Received"
+                label={hasGst ? 'Amount (excluding GST)' : 'Amount Received'}
                 type="number"
                 step="0.01"
                 min="0"
@@ -778,6 +820,17 @@ function PaymentCard({
               )}
             </div>
 
+            {/* Always there, at zero until an amount is typed, so the GST is
+                seen to be coming rather than appearing at the end. */}
+            {hasGst && (
+              <GstBreakdown
+                amount={asAmount(received)}
+                gst={gstOn(received, gstRate)}
+                rate={gstRate}
+                totalLabel="Total to Collect"
+              />
+            )}
+
             {/* What this leaves owing. The first payment short of the fee asks
                 when the rest is coming - the due reminders run off that date;
                 after that the date lives in Balance Due below. */}
@@ -786,6 +839,7 @@ function PaymentCard({
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-amber-700">Remaining Due</p>
                   <p className="text-lg font-semibold text-amber-800">{formatCurrency(remaining)}</p>
+                  <GstToCome amount={remaining} />
                 </div>
                 {needsBalanceDate ? (
                   <Input
@@ -890,20 +944,32 @@ function PaymentCard({
   )
 }
 
+// Under a figure still owed, which is fee only: what asking for it comes to.
+function GstToCome({ amount }) {
+  const gst = gstOn(amount)
+  return (
+    <p className="text-xs text-amber-700">
+      + {formatExactCurrency(gst)} GST = {formatExactCurrency(amount + gst)} to collect
+    </p>
+  )
+}
+
 // What the plan costs, what has come in and what is left - read before the
 // cards, so nobody has to add up six of them to know where a student stands.
+// The GST sits on its own: it is on top of the fee, not part of it.
 function PaymentTotals({ ledger }) {
   const items = [
     { label: 'Total Fee', value: ledger.fee, tone: 'text-slate-900' },
     { label: 'Received', value: ledger.received, tone: 'text-emerald-700' },
+    { label: 'GST Collected', value: ledger.gst, tone: 'text-brand-700' },
     { label: 'Due', value: ledger.due, tone: ledger.due > 0 ? 'text-amber-700' : 'text-emerald-700' },
   ]
   return (
-    <div className="grid grid-cols-3 divide-x divide-slate-100 rounded-lg border border-slate-200 bg-white">
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-100 sm:grid-cols-4">
       {items.map((item) => (
-        <div key={item.label} className="min-w-0 px-3 py-2">
+        <div key={item.label} className="min-w-0 bg-white px-3 py-2">
           <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{item.label}</p>
-          <p className={`truncate text-sm font-semibold ${item.tone}`}>{formatCurrency(item.value)}</p>
+          <p className={`truncate text-sm font-semibold ${item.tone}`}>{formatExactCurrency(item.value)}</p>
         </div>
       ))}
     </div>
@@ -924,6 +990,7 @@ function BalancePanel({ ledger, onSave, isSaving, justSaved, error }) {
       <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm font-semibold text-emerald-700">
         <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
         Fully paid - {formatCurrency(ledger.received)} received
+        {ledger.gst > 0 && ` + ${formatExactCurrency(ledger.gst)} GST`}
       </div>
     )
   }
@@ -938,6 +1005,7 @@ function BalancePanel({ ledger, onSave, isSaving, justSaved, error }) {
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-amber-700">Balance Due</p>
           <p className="text-lg font-semibold text-amber-800">{formatCurrency(ledger.due)}</p>
+          <GstToCome amount={ledger.due} />
         </div>
         {overdue ? (
           <Badge tone="red">Overdue since {formatDate(balance.scheduled_at)}</Badge>

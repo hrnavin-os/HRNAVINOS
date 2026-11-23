@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { DataTable } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
-import { formatCurrency, formatDate, titleCase } from '@/utils/formatters'
+import { formatCurrency, formatDate, formatExactCurrency, titleCase } from '@/utils/formatters'
 import { getAfterPlacementFee, getLeadPaymentSummary } from '@/utils/leadPayment'
 import { PAYMENT_PLAN_TONES } from '@/constants/paymentOptions'
 import {
@@ -42,6 +42,32 @@ const columns = [
     render: (row) => {
       const { paidAmount } = getLeadPaymentSummary(row)
       return paidAmount !== null ? formatCurrency(paidAmount) : dash
+    },
+  },
+  {
+    // Collected on top of the amount. Blank on payments from before GST.
+    key: 'gst',
+    header: 'GST',
+    align: 'right',
+    numeric: true,
+    render: (row) => {
+      const { gstAmount } = getLeadPaymentSummary(row)
+      return gstAmount > 0 ? formatExactCurrency(gstAmount) : dash
+    },
+  },
+  {
+    // Amount and GST together - the money that should be in the bank.
+    key: 'total_paid',
+    header: 'Total Paid',
+    align: 'right',
+    numeric: true,
+    render: (row) => {
+      const { totalPaid } = getLeadPaymentSummary(row)
+      return totalPaid !== null ? (
+        <span className="font-medium text-slate-900">{formatExactCurrency(totalPaid)}</span>
+      ) : (
+        dash
+      )
     },
   },
   {

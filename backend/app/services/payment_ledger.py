@@ -18,11 +18,16 @@ fully paid is every entry paid - exactly what they read off the old plan slots,
 which is why the dashboards, reminders, cashbook and batch confirmation needed
 no change.
 
+GST is collected on top of every token and payment and held beside it, in
+`gst_amount`. It is not part of the fee, so none of the amounts above include it
+and the invariant holds with or without it: a student paying 10,000 off a 15,000
+fee hands over 11,800 and still owes 5,000 (plus GST on that when it comes).
+
 The old shape was one slot per plan installment (Week 1..6, Payment 1/2), each
 priced up front. `to_ledger` converts it, and the startup backfill runs that
 over every lead once.
 """
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from app.models.enums import PaymentEntryKind
 from app.models.lead import PaymentInstallment
@@ -31,6 +36,16 @@ TOKEN_LABEL = "Token Amount"
 BALANCE_LABEL = "Balance Due"
 
 RECEIVED_KINDS = (PaymentEntryKind.TOKEN, PaymentEntryKind.PAYMENT)
+
+# Percent. Each entry keeps the rate it was recorded at, so changing this only
+# affects money recorded from then on. Mirrored by GST_RATE in the frontend's
+# utils/leadPayment.js, which previews the figure before it is saved.
+GST_RATE = Decimal(18)
+
+
+def gst_on(amount: Decimal, rate: Decimal) -> Decimal:
+    """GST at `rate` percent on top of `amount`, to the paisa."""
+    return (Decimal(amount) * Decimal(rate) / 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def is_ledger(entries: list[PaymentInstallment]) -> bool:

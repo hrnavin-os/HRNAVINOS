@@ -199,6 +199,9 @@ class PaymentInstallmentResponse(BaseModel):
     label: str
     amount: Decimal | None
     received_amount: Decimal | None = None
+    # On top of received_amount - see PaymentInstallment.gst_amount.
+    gst_rate: Decimal | None = None
+    gst_amount: Decimal | None = None
     mode: InstallmentPaymentMode | None
     qr_code: str | None = None
     transaction_id: str | None

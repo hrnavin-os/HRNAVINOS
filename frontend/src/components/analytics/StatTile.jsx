@@ -133,7 +133,7 @@ export function StatTile({
  */
 export function MiniStatStrip({ items }) {
   return (
-    <div className="grid gap-2 sm:grid-cols-3">
+    <div className={`grid gap-2 ${items.length === 4 ? 'sm:grid-cols-2 xl:grid-cols-4' : 'sm:grid-cols-3'}`}>
       {items.map(({ label, value, share, icon: Icon, tone = 'brand' }) => {
         const style = statTone(tone)
         return (

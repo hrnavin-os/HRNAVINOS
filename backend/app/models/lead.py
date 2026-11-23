@@ -85,6 +85,13 @@ class PaymentInstallment(BaseModel):
     # couple of days - and the shortfall stays due until `scheduled_at`.
     # None on installments saved before this existed: those were paid in full.
     received_amount: MongoDecimal | None = None
+    # GST collected on top of `received_amount`, and the rate it was worked out
+    # at. Kept apart from the amounts above, which are the fee: GST is owed on
+    # to the government, so it never counts towards what the student has paid
+    # off or what Statistics says was collected. None on money recorded before
+    # GST was collected, which had none on it.
+    gst_rate: MongoDecimal | None = None
+    gst_amount: MongoDecimal | None = None
     mode: InstallmentPaymentMode | None = None
     # Which QR code / account this payment went into. Lead.qr_code mirrors the
     # latest one, which is what the board filters on.

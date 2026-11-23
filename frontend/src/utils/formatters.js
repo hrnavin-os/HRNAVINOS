@@ -5,6 +5,19 @@ export function formatCurrency(value) {
   )
 }
 
+// Keeps the paise when there are any. GST rarely lands on a whole rupee, and a
+// total Finance checks against the bank has to be the exact one.
+export function formatExactCurrency(value) {
+  const amount = Math.round(Number(value ?? 0) * 100) / 100
+  const digits = Number.isInteger(amount) ? 0 : 2
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(amount)
+}
+
 export function formatDate(value) {
   if (!value) return '—'
   return new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium' }).format(new Date(value))

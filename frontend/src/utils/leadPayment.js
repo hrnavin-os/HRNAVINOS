@@ -14,6 +14,27 @@ export function getInstallmentCollected(installment) {
   return 0
 }
 
+// GST, in percent, collected on top of every token and payment. Mirrors GST_RATE
+// in payment_ledger.py, which works out what is actually saved - this one only
+// previews it while the payment is being typed in.
+export const GST_RATE = 18
+
+// Worked in whole paise so it rounds the way the backend does.
+export function gstOn(amount, rate = GST_RATE) {
+  return Math.round((Math.round(Number(amount || 0) * 100) * Number(rate)) / 100) / 100
+}
+
+// Adding rupee figures as floats leaves dust (599.94 + 0.06 = 600.0000000001),
+// which would read as paise that aren't there.
+const toPaisa = (value) => Math.round(value * 100) / 100
+
+// The GST collected with one payment - on top of the amount, never part of it,
+// so it doesn't count against the fee. None on money recorded before GST was
+// collected, or on a balance nobody has paid yet.
+export function getInstallmentGst(installment) {
+  return getInstallmentCollected(installment) > 0 ? Number(installment.gst_amount ?? 0) : 0
+}
+
 // A lead's payment collection split into its parts - see payment_ledger.py on
 // the backend. The plan prices the fee; an optional token and any number of
 // payments are what came in; the balance is what is still owed, with the date
@@ -31,7 +52,10 @@ export function getPaymentLedger(lead) {
   const received = [token, ...payments]
     .filter(Boolean)
     .reduce((sum, { entry }) => sum + getInstallmentCollected(entry), 0)
-  return { token, payments, balance, fee, received, due: balance ? Number(balance.entry.amount ?? 0) : 0 }
+  const gst = toPaisa(
+    [token, ...payments].filter(Boolean).reduce((sum, { entry }) => sum + getInstallmentGst(entry), 0),
+  )
+  return { token, payments, balance, fee, received, gst, due: balance ? Number(balance.entry.amount ?? 0) : 0 }
 }
 
 export function getLeadPaymentSummary(lead) {
@@ -40,6 +64,7 @@ export function getLeadPaymentSummary(lead) {
     const totalAmount = installments.reduce((sum, installment) => sum + Number(installment.amount ?? 0), 0)
     const paidInstallments = installments.filter((installment) => getInstallmentCollected(installment) > 0)
     const paidAmount = installments.reduce((sum, installment) => sum + getInstallmentCollected(installment), 0)
+    const gstAmount = toPaisa(installments.reduce((sum, installment) => sum + getInstallmentGst(installment), 0))
     const latest = paidInstallments[paidInstallments.length - 1] ?? null
     // When the next money is expected: the earliest date on anything still
     // owed - a part-paid installment's balance, or a scheduled one.
@@ -52,6 +77,9 @@ export function getLeadPaymentSummary(lead) {
     return {
       hasPlan: true,
       paidAmount,
+      gstAmount,
+      // What the student actually handed over - the figure in the bank.
+      totalPaid: toPaisa(paidAmount + gstAmount),
       dueAmount: totalAmount - paidAmount,
       balanceDueAt,
       mode: latest?.mode ?? null,
@@ -70,6 +98,9 @@ export function getLeadPaymentSummary(lead) {
   return {
     hasPlan: false,
     paidAmount: lead.paid_amount ?? null,
+    // The single-amount fields never had GST recorded with them.
+    gstAmount: 0,
+    totalPaid: lead.paid_amount ?? null,
     dueAmount: null,
     balanceDueAt: null,
     mode: lead.payment_mode ?? null,

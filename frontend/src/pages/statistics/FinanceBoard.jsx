@@ -9,6 +9,7 @@ import {
   Clock,
   GraduationCap,
   Hourglass,
+  ReceiptIndianRupee,
   Search,
   Wallet,
   X,
@@ -31,7 +32,7 @@ import { MiniStatStrip, StatTile } from '@/components/analytics/StatTile'
 import { IncomeDetailModal } from '@/components/payments/IncomeDetailModal'
 import { OverallIncomeTab } from '@/components/payments/OverallIncomeTab'
 import { PAYMENT_PLAN_LABELS, INSTALLMENT_MODE_LABELS } from '@/constants/installmentPaymentModes'
-import { formatCurrency, formatDate, titleCase } from '@/utils/formatters'
+import { formatCurrency, formatDate, formatExactCurrency, titleCase } from '@/utils/formatters'
 import { getAfterPlacementFee, getEmiPaymentHealth, getLeadPaymentSummary } from '@/utils/leadPayment'
 
 const DAY = 24 * 60 * 60 * 1000
@@ -78,6 +79,9 @@ function readLeads(leads) {
       summary,
       approved: lead.status === 'batch_confirmation',
       paid,
+      // On top of `paid`, and left out of every collected figure here: it is
+      // owed on to the government, so it isn't income and settles no fee.
+      gst: Number(summary.gstAmount ?? 0),
       due,
       status: repaymentStatus(summary, getEmiPaymentHealth(lead), today, weekAhead),
       afterPlacement: afterPlacement && !/^nil$/i.test(afterPlacement) ? afterPlacement : null,
@@ -252,6 +256,13 @@ const chaseColumns = [
     render: (row) => PAYMENT_PLAN_LABELS[row.lead.payment_plan] ?? (row.lead.payment_plan ? titleCase(row.lead.payment_plan) : '—'),
   },
   { key: 'paid', header: 'Paid', align: 'right', numeric: true, render: (row) => formatCurrency(row.paid) },
+  {
+    key: 'gst',
+    header: 'GST',
+    align: 'right',
+    numeric: true,
+    render: (row) => (row.gst > 0 ? formatExactCurrency(row.gst) : '—'),
+  },
   {
     key: 'due',
     header: 'Due',
@@ -514,6 +525,12 @@ export function FinanceBoard({ boardTabs, onOpenBoard }) {
                 value: formatCurrency(scope.length ? sum(scope, 'paid') / scope.length : 0),
                 icon: Wallet,
                 tone: 'emerald',
+              },
+              {
+                label: 'GST collected',
+                value: formatExactCurrency(Math.round(sum(scope, 'gst') * 100) / 100),
+                icon: ReceiptIndianRupee,
+                tone: 'brand',
               },
             ]}
           />
