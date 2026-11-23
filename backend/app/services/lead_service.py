@@ -55,9 +55,12 @@ from app.services.foundation_group_sync import mirror_group_move
 from app.services.foundation_form_answers import derive_answers
 from app.services.foundation_form_pricing import build_payment_expected_summary, plan_fee
 from app.services.payment_ledger import (
+    AWAITING_FINANCE,
+    BATCH_PAYMENT_AWAITING,
     GST_RATE,
     RECEIVED_KINDS,
     TOKEN_LABEL,
+    awaiting_finance,
     balance_of,
     fee_of,
     gst_on,
@@ -197,6 +200,11 @@ class LeadService:
                     scheduled_at=installment.scheduled_at,
                     paid=installment.paid,
                     paid_at=installment.paid_at,
+                    finance_approved_at=installment.finance_approved_at,
+                    finance_approved_by_name=installment.finance_approved_by_name,
+                    finance_rejected_at=installment.finance_rejected_at,
+                    finance_rejected_by_name=installment.finance_rejected_by_name,
+                    finance_rejected_reason=installment.finance_rejected_reason,
                 )
                 for installment in lead.installments
             ],
@@ -288,6 +296,7 @@ class LeadService:
         lead_source: str | None = None,
         batch: str | None = None,
         finance_approved: bool | None = None,
+        awaiting_finance: bool = False,
     ) -> PaginatedResponse:
         # See LeadRepository.count_total for why this isn't a plain "reviewed": True.
         filters = {"reviewed": {"$ne": False}}
@@ -327,6 +336,14 @@ class LeadService:
         # over, the Lead Source filter's `$in`, which sets the same key.
         if induction_matched is not None:
             filters.setdefault("induction_entry_id", {})["$ne" if induction_matched else "$eq"] = None
+        # The Finance page's two tabs. A student with a payment waiting is on
+        # Awaiting Approval until it is dealt with, and not on Approved
+        # Students as well - a lead is never on both. Under $and, beside the
+        # Batch filter, because search adds an $or of its own.
+        if awaiting_finance:
+            filters.setdefault("$and", []).append(AWAITING_FINANCE)
+        if finance_approved:
+            filters.setdefault("$and", []).append({"$nor": [BATCH_PAYMENT_AWAITING]})
         # Second place the reminder sweep is driven from, besides the
         # notification poll. That poll only happens while the bell is on
         # screen, which is a Section Admin on the Foundation board - so a
@@ -1094,6 +1111,8 @@ class LeadService:
         # Back for approval: what Finance approved before is not what it is
         # being asked about now, so the lead leaves Approved Students until it
         # is approved again - and is never on both of Finance's tabs at once.
+        # Not how a later payment gets approved: that reaches Finance by
+        # itself, with the student left in Batch Confirmation (approve_payment).
         if data.status == LeadStatus.FINANCIAL_APPROVAL and lead.status != LeadStatus.FINANCIAL_APPROVAL:
             update_data["finance_approved_at"] = None
             update_data["finance_approved_by"] = None
@@ -1510,6 +1529,10 @@ class LeadService:
                 raise BadRequestError("That payment isn't on this lead any more. Reopen the lead and try again.")
             entry = ledger[index]
 
+        # What Finance checks a payment by. Correcting any of it makes the
+        # payment a different one from what Finance approved.
+        checked = (entry.received_amount, entry.mode, entry.qr_code, entry.transaction_id, entry.upi_id)
+
         if received_amount is not None:
             entry.received_amount = received_amount
         if mode is not None:
@@ -1565,6 +1588,17 @@ class LeadService:
         if not entry.paid:
             entry.paid = True
             entry.paid_at = utcnow().date()
+        # Back to Finance when what it approved has changed, or when a payment
+        # it rejected has been corrected - any save of that one answers the
+        # rejection, even if only a clearer proof was added.
+        if entry.finance_rejected_at is not None or checked != (
+            entry.received_amount,
+            entry.mode,
+            entry.qr_code,
+            entry.transaction_id,
+            entry.upi_id,
+        ):
+            entry.clear_finance_check()
 
         lead.installments = rebalance(ledger, fee)
         balance = balance_of(lead.installments)
@@ -1725,34 +1759,122 @@ class LeadService:
         so the lead moves on to Batch Confirmation and onto the Approved
         Students tab.
 
+        A student already in Batch Confirmation who has paid again is approved
+        where they are. Any first payment is enough to attend class, so what
+        comes in after it is checked without touching their stage - taking them
+        out of Batch Confirmation would drop them from the Student Portal.
+
         Its own action rather than a status write, because the stage can be
         reached without Finance now - what the tab lists is what Finance
         actually approved, and only this records that.
         """
         lead = await self.get(lead_id, scope=scope)
-        if lead.status != LeadStatus.FINANCIAL_APPROVAL:
-            raise BadRequestError("Only a lead awaiting financial approval can be approved.")
-        self._validate_stage_transition(lead, LeadStatus.BATCH_CONFIRMATION)
+        ledger = to_ledger(lead.installments)
         previous_status = lead.status
-        lead.status = LeadStatus.BATCH_CONFIRMATION
-        lead.finance_approved_at = utcnow()
+        if lead.status == LeadStatus.FINANCIAL_APPROVAL:
+            self._validate_stage_transition(lead, LeadStatus.BATCH_CONFIRMATION)
+            # The whole lead is what is being approved here, so a payment
+            # rejected earlier is approved with the rest.
+            payments = [
+                entry
+                for entry in ledger
+                if entry.kind in RECEIVED_KINDS and entry.paid and entry.finance_approved_at is None
+            ]
+            lead.status = LeadStatus.BATCH_CONFIRMATION
+        elif lead.status == LeadStatus.BATCH_CONFIRMATION:
+            payments = self._require_awaiting(ledger)
+        else:
+            raise BadRequestError("Only a lead awaiting financial approval can be approved.")
+
+        now = utcnow()
+        name = await self._actor_name(actor_id)
+        for entry in payments:
+            entry.approve(at=now, by=actor_id, by_name=name)
+        lead.installments = ledger
+        lead.finance_approved_at = now
         lead.finance_approved_by = actor_id
-        lead.finance_approved_by_name = await self._actor_name(actor_id)
+        lead.finance_approved_by_name = name
         lead.updated_by = actor_id
         lead.touch(actor_id)
         await lead.save()
-        await self.audit.record(
-            user_id=actor_id,
-            action="UPDATE",
-            entity_type="Lead",
-            entity_id=str(lead.id),
-            changes={
-                "status": LeadStatus.BATCH_CONFIRMATION,
-                "previous_status": previous_status,
-                "finance_approved": True,
-            },
-        )
+        if lead.status != previous_status:
+            await self.audit.record(
+                user_id=actor_id,
+                action="UPDATE",
+                entity_type="Lead",
+                entity_id=str(lead.id),
+                changes={
+                    "status": lead.status,
+                    "previous_status": previous_status,
+                    "finance_approved": True,
+                },
+            )
+        await self._audit_finance_check(lead, payments, action="APPROVE_PAYMENT", actor_id=actor_id)
         return lead
+
+    async def reject_payment(
+        self, lead_id: uuid.UUID, *, reason: str, actor_id: uuid.UUID | None, scope: str | None = None
+    ) -> Lead:
+        """Finance turns down a payment of a student in Batch Confirmation.
+
+        The student stays where they are - a problem with a later payment
+        doesn't take back the seat an earlier one earned. The payment is marked
+        with the reason and leaves Finance's list until whoever recorded it
+        corrects it (which sends it back) or an admin deletes it. Rejecting a
+        lead still in Financial Approval is a stage move, made through `update`
+        as before.
+        """
+        lead = await self.get(lead_id, scope=scope)
+        if lead.status != LeadStatus.BATCH_CONFIRMATION:
+            raise BadRequestError("Only a payment of a student in Batch Confirmation can be rejected here.")
+        note = reason.strip()
+        if len(note) < 3:
+            raise BadRequestError("Give a reason for rejecting this payment.")
+        ledger = to_ledger(lead.installments)
+        payments = self._require_awaiting(ledger)
+        now = utcnow()
+        name = await self._actor_name(actor_id)
+        for entry in payments:
+            entry.reject(at=now, by=actor_id, by_name=name, reason=note)
+        lead.installments = ledger
+        lead.updated_by = actor_id
+        lead.touch(actor_id)
+        await lead.save()
+        await self._audit_finance_check(lead, payments, action="REJECT_PAYMENT", actor_id=actor_id, reason=note)
+        return lead
+
+    @staticmethod
+    def _require_awaiting(ledger: "list[PaymentInstallment]") -> "list[PaymentInstallment]":
+        payments = awaiting_finance(ledger)
+        if not payments:
+            raise BadRequestError("This student has no payment awaiting approval.")
+        return payments
+
+    async def _audit_finance_check(
+        self,
+        lead: Lead,
+        payments: "list[PaymentInstallment]",
+        *,
+        action: str,
+        actor_id: uuid.UUID | None,
+        reason: str | None = None,
+    ) -> None:
+        """One timeline entry per payment, so each reads against its amount."""
+        for entry in payments:
+            await self.audit.record(
+                user_id=actor_id,
+                action=action,
+                entity_type="Lead",
+                entity_id=str(lead.id),
+                changes={
+                    "payment": entry.label,
+                    "received_amount": str(entry.collected()),
+                    "gst_amount": str(entry.gst_amount) if entry.gst_amount is not None else None,
+                    "mode": entry.mode,
+                    "qr_code": entry.qr_code,
+                    **({"reason": reason} if reason else {}),
+                },
+            )
 
     async def mark_lost_nonpayment(
         self, lead_id: uuid.UUID, *, actor_id: uuid.UUID | None, scope: str | None = None

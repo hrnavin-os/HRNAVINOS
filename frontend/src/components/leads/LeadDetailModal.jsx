@@ -45,6 +45,7 @@ import { PaymentDetailContent } from '@/components/payments/PaymentDetailModal'
 import {
   GST_RATE,
   getInstallmentGst,
+  getPaymentApproval,
   getPaymentLedger,
   gstOn,
   hasFirstPayment,
@@ -106,6 +107,8 @@ const ACTION_ICONS = {
   REJOIN: RotateCcw,
   STAGE_BACK: Undo2,
   DELETE_PAYMENT: Trash2,
+  APPROVE_PAYMENT: CheckCircle2,
+  REJECT_PAYMENT: X,
 }
 const ACTION_TONES = {
   CREATE: 'bg-emerald-100 text-emerald-600',
@@ -118,6 +121,8 @@ const ACTION_TONES = {
   // A move back undoes somebody's progress, so it stands out from the edits.
   STAGE_BACK: 'bg-amber-100 text-amber-600',
   DELETE_PAYMENT: 'bg-red-100 text-red-600',
+  APPROVE_PAYMENT: 'bg-emerald-100 text-emerald-600',
+  REJECT_PAYMENT: 'bg-red-100 text-red-600',
 }
 
 // The pipeline in order, for telling a move back from a move forward. Quit is
@@ -152,6 +157,14 @@ function describeTimelineEntry(entry) {
   if (entry.action === 'DELETE_PAYMENT') {
     return {
       title: `Deleted ${changes.payment ?? 'a payment'} of ${formatCurrency(Number(changes.received_amount ?? 0))}${by}`,
+      detail: [INSTALLMENT_MODE_LABELS[changes.mode] ?? changes.mode, changes.qr_code].filter(Boolean).join(' · ') || null,
+      reason: changes.reason ?? null,
+    }
+  }
+  if (entry.action === 'APPROVE_PAYMENT' || entry.action === 'REJECT_PAYMENT') {
+    const decided = entry.action === 'APPROVE_PAYMENT' ? 'Finance approved' : 'Finance rejected'
+    return {
+      title: `${decided} ${changes.payment ?? 'a payment'} of ${formatCurrency(Number(changes.received_amount ?? 0))}${by}`,
       detail: [INSTALLMENT_MODE_LABELS[changes.mode] ?? changes.mode, changes.qr_code].filter(Boolean).join(' · ') || null,
       reason: changes.reason ?? null,
     }
@@ -482,6 +495,14 @@ function GstBreakdown({ amount, gst, rate, totalLabel }) {
   )
 }
 
+// Where a saved payment stands with Finance. "Paid" until it is sent there,
+// which a lead before Financial Approval hasn't been.
+const APPROVAL_BADGES = {
+  approved: { tone: 'emerald', label: 'Approved' },
+  awaiting: { tone: 'amber', label: 'Awaiting Finance' },
+  rejected: { tone: 'red', label: 'Rejected' },
+}
+
 // One token or payment. A form while it is being recorded or corrected, and a
 // one-glance summary once saved: six full forms for six payments pushed the
 // balance off the bottom of the popup, and a saved payment is read far more
@@ -493,6 +514,8 @@ function PaymentCard({
   entry,
   due,
   balanceDueAt,
+  // getPaymentApproval's answer for a saved payment.
+  approval = null,
   onSave,
   onRemove,
   isSaving,
@@ -636,7 +659,7 @@ function PaymentCard({
             Saved
           </Badge>
         ) : entry ? (
-          <Badge tone="emerald">Paid</Badge>
+          <Badge tone={APPROVAL_BADGES[approval]?.tone ?? 'emerald'}>{APPROVAL_BADGES[approval]?.label ?? 'Paid'}</Badge>
         ) : (
           isToken && <Badge tone="slate">Optional</Badge>
         )}
@@ -675,6 +698,14 @@ function PaymentCard({
                 .join(' · ')}
             </p>
             {entry.remarks && <p className="break-words text-sm text-slate-500">{entry.remarks}</p>}
+            {approval === 'rejected' && (
+              <div className="rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-sm text-red-700">
+                <p className="break-words">
+                  <span className="font-semibold">Finance rejected this:</span> {entry.finance_rejected_reason}
+                </p>
+                <p className="mt-0.5 text-xs">Edit and save it to send it to Finance again.</p>
+              </div>
+            )}
             {stored.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {stored.map((url) => (
@@ -1111,6 +1142,7 @@ function PaymentCollectionSection({
       entry: card.entry,
       due: ledger.due,
       balanceDueAt,
+      approval: getPaymentApproval(card.entry, lead),
       onSave: (values) => save(card, kind, values),
       isSaving: savingPaymentKey === card.key,
       justSaved: savedPaymentKey === card.key,
@@ -1663,6 +1695,8 @@ export function LeadDetailModal({ lead, onClose }) {
     onSuccess: (updatedLead, { savedKey }) => {
       setLiveLead(updatedLead)
       invalidateLeadQueries()
+      // A payment on a student in Batch Confirmation goes straight to Finance.
+      queryClient.invalidateQueries({ queryKey: ['income-approvals'] })
       setSavedPaymentKey(savedKey)
     },
     onSettled: () => setSavingPaymentKey(null),

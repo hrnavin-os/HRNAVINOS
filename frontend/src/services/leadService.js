@@ -184,9 +184,17 @@ export const leadService = {
     return data
   },
   // Finance's Approve: records the approval and moves the lead on to Batch
-  // Confirmation, which puts it on the Approved Students tab.
+  // Confirmation, which puts it on the Approved Students tab. A student already
+  // there has their new payment approved without being moved.
   financeApprove: async (id) => {
     const { data } = await apiClient.post(`/leads/${id}/finance-approve`)
+    return data
+  },
+  // Turns down a new payment of a student already in Batch Confirmation, who
+  // stays there. A lead still in Financial Approval is rejected by moving it
+  // back instead.
+  financeReject: async (id, reason) => {
+    const { data } = await apiClient.post(`/leads/${id}/finance-reject`, { reason })
     return data
   },
   markLost: async (id) => {

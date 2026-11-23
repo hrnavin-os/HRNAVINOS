@@ -28,6 +28,7 @@ from app.schemas.lead_schema import (
     LeadCreate,
     LeadDelete,
     LeadPaymentDelete,
+    LeadPaymentReject,
     LeadPlanAssign,
     LeadRejoin,
     LeadRemarkCreate,
@@ -89,6 +90,8 @@ async def list_leads(
     batch: str | None = None,
     # True for the Finance page's Approved Students tab.
     finance_approved: bool | None = None,
+    # True for its Awaiting Approval tab.
+    awaiting_finance: bool = False,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
 ) -> PaginatedResponse[LeadResponse]:
     params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)
@@ -112,6 +115,7 @@ async def list_leads(
         lead_source=lead_source,
         batch=batch,
         finance_approved=finance_approved,
+        awaiting_finance=awaiting_finance,
     )
     items = [await service.to_response(lead) for lead in result.items]
     return PaginatedResponse[LeadResponse].build(items, result.total, result.page, result.page_size)
@@ -651,6 +655,20 @@ async def finance_approve_lead(
     service = LeadService()
     scope = await get_actor_scope(actor)
     lead = await service.approve_payment(lead_id, actor_id=actor.id, scope=scope)
+    return await service.to_response(lead)
+
+
+@router.post("/{lead_id}/finance-reject", response_model=LeadResponse)
+async def finance_reject_payment(
+    lead_id: uuid.UUID,
+    payload: LeadPaymentReject,
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_UPDATE)),
+) -> LeadResponse:
+    """Turns down a payment of a student already in Batch Confirmation, without
+    moving them."""
+    service = LeadService()
+    scope = await get_actor_scope(actor)
+    lead = await service.reject_payment(lead_id, reason=payload.reason, actor_id=actor.id, scope=scope)
     return await service.to_response(lead)
 
 

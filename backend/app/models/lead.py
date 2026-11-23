@@ -111,6 +111,18 @@ class PaymentInstallment(BaseModel):
     paid: bool = False
     # Set once, the moment `paid` first flips to True - LeadService.update_installment.
     paid_at: date | None = None
+    # Finance's check of this payment. Held per payment rather than on the lead
+    # because a student pays in parts: the first one gets them into Batch
+    # Confirmation, and each one after it still has to be checked without
+    # taking them back out of class. Neither set means Finance hasn't decided
+    # on it. A rejected payment leaves Finance's list until it is corrected.
+    finance_approved_at: datetime | None = None
+    finance_approved_by: uuid.UUID | None = None
+    finance_approved_by_name: str | None = Field(default=None, max_length=150)
+    finance_rejected_at: datetime | None = None
+    finance_rejected_by: uuid.UUID | None = None
+    finance_rejected_by_name: str | None = Field(default=None, max_length=150)
+    finance_rejected_reason: str | None = Field(default=None, max_length=500)
 
     def all_proofs(self) -> list[str]:
         """Every proof on file, including the lone `proof_url` of an
@@ -125,6 +137,29 @@ class PaymentInstallment(BaseModel):
         if self.received_amount and self.mode and self.all_proofs():
             return Decimal(self.received_amount)
         return Decimal(0)
+
+    def approve(self, *, at: datetime, by: uuid.UUID | None, by_name: str | None) -> None:
+        self.clear_finance_check()
+        self.finance_approved_at = at
+        self.finance_approved_by = by
+        self.finance_approved_by_name = by_name
+
+    def reject(self, *, at: datetime, by: uuid.UUID | None, by_name: str | None, reason: str) -> None:
+        self.clear_finance_check()
+        self.finance_rejected_at = at
+        self.finance_rejected_by = by
+        self.finance_rejected_by_name = by_name
+        self.finance_rejected_reason = reason
+
+    def clear_finance_check(self) -> None:
+        """Back to undecided, so Finance is asked about it again."""
+        self.finance_approved_at = None
+        self.finance_approved_by = None
+        self.finance_approved_by_name = None
+        self.finance_rejected_at = None
+        self.finance_rejected_by = None
+        self.finance_rejected_by_name = None
+        self.finance_rejected_reason = None
 
 
 class Lead(BaseDocument):
@@ -257,9 +292,11 @@ class Lead(BaseDocument):
     # why rather than just that it happened.
     lost_reason: str | None = Field(default=None, max_length=500)
     lost_at: datetime | None = None
-    # Set when Finance approves the payment from Income Approvals, which also
-    # moves the lead to Batch Confirmation - the Approved Students tab lists
-    # these. Recorded rather than read off the stage, because the stage can now
+    # The latest time Finance approved a payment from Income Approvals. The
+    # first approval also moves the lead to Batch Confirmation; payments after
+    # it are approved with the lead left there (see PaymentInstallment). The
+    # Approved Students tab lists these, less anyone with a payment waiting.
+    # Recorded rather than read off the stage, because the stage can now
     # be reached without Finance (see LeadService._validate_stage_transition).
     # Cleared when the lead comes back for approval, so it is in one tab only.
     # The approver's name is snapshotted for the same reason remark authors are.

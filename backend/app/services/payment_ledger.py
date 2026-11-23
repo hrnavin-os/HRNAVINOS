@@ -29,7 +29,7 @@ over every lead once.
 """
 from decimal import ROUND_HALF_UP, Decimal
 
-from app.models.enums import PaymentEntryKind
+from app.models.enums import LeadStatus, PaymentEntryKind
 from app.models.lead import PaymentInstallment
 
 TOKEN_LABEL = "Token Amount"
@@ -69,6 +69,38 @@ def balance_of(entries: list[PaymentInstallment]) -> PaymentInstallment | None:
 def token_of(entries: list[PaymentInstallment]) -> PaymentInstallment | None:
     """The token, if one has actually been paid."""
     return next((entry for entry in entries if entry.kind == PaymentEntryKind.TOKEN and entry.collected()), None)
+
+
+def awaiting_finance(entries: list[PaymentInstallment]) -> list[PaymentInstallment]:
+    """The money received that Finance has neither approved nor rejected."""
+    return [
+        entry
+        for entry in entries
+        if entry.kind in RECEIVED_KINDS
+        and entry.paid
+        and entry.finance_approved_at is None
+        and entry.finance_rejected_at is None
+    ]
+
+
+# `awaiting_finance` as a Mongo condition, for a student already at Batch
+# Confirmation - in class, with a payment still to check. `None` also matches
+# entries from before the fields, where the keys are absent.
+BATCH_PAYMENT_AWAITING = {
+    "status": LeadStatus.BATCH_CONFIRMATION.value,
+    "installments": {
+        "$elemMatch": {
+            "kind": {"$in": [kind.value for kind in RECEIVED_KINDS]},
+            "paid": True,
+            "finance_approved_at": None,
+            "finance_rejected_at": None,
+        }
+    },
+}
+
+# Everything waiting on Finance: the leads in Financial Approval, and the
+# students past it with a payment Finance hasn't decided on.
+AWAITING_FINANCE = {"$or": [{"status": LeadStatus.FINANCIAL_APPROVAL.value}, BATCH_PAYMENT_AWAITING]}
 
 
 def rebalance(entries: list[PaymentInstallment], fee: Decimal) -> list[PaymentInstallment]:

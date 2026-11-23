@@ -7,6 +7,7 @@ every boot after the first one is a single cheap query that matches nothing.
 """
 import logging
 import uuid
+from decimal import Decimal, InvalidOperation
 
 from pymongo import UpdateOne
 
@@ -14,7 +15,7 @@ from app.database.base import BaseDocument, utcnow
 from app.models.audit_log import AuditLog
 from app.models.enums import LeadStatus, PaymentEntryKind
 from app.models.induction_entry import InductionEntry
-from app.models.lead import Lead
+from app.models.lead import Lead, PaymentInstallment
 from app.models.permission import Permission
 from app.models.role import Role
 from app.models.user import User
@@ -26,7 +27,7 @@ from app.permissions.role_definitions import (
     RETIRED_ADMIN_ROLE,
     ROLE_SCOPED_SECTION,
 )
-from app.services.payment_ledger import to_ledger
+from app.services.payment_ledger import RECEIVED_KINDS, to_ledger
 from app.utils.phone import normalize_phone
 
 logger = logging.getLogger(__name__)
@@ -518,6 +519,77 @@ async def backfill_finance_approvals() -> int:
     return approved
 
 
+PAYMENT_APPROVALS_MIGRATION = "finance_approval_per_payment"
+
+
+async def backfill_payment_approvals() -> int:
+    """Marks the payments Finance approved before approval was held on each
+    payment, once.
+
+    Approving used to be recorded on the lead alone, so a lead's approval
+    covers every payment recorded up to it. What came in after it was never
+    shown to Finance - the lead was already past Financial Approval - and is
+    left unmarked, which is what puts it on the Awaiting Approval tab. So is
+    everything on a student moved into Batch Confirmation by hand: Finance
+    approved none of it.
+
+    A payment is dated by the day only, so one recorded on the day of the
+    approval is placed before or after it by the audit log, and counts as
+    approved if the log doesn't say. Once, recorded in `migrations`: from then
+    on only Finance's own Approve marks a payment.
+    """
+    collection = Lead.get_motor_collection()
+    migrations = collection.database["migrations"]
+    if await migrations.find_one({"_id": PAYMENT_APPROVALS_MIGRATION}):
+        return 0
+    operations = []
+    async for lead in Lead.find({"finance_approved_at": {"$ne": None}, "installments.0": {"$exists": True}}):
+        approved_on = lead.finance_approved_at.date()
+        for index, entry in enumerate(lead.installments):
+            if entry.kind not in RECEIVED_KINDS or entry.finance_approved_at or entry.finance_rejected_at:
+                continue
+            if entry.paid_at and entry.paid_at > approved_on:
+                continue
+            if entry.paid_at == approved_on and await _recorded_after_approval(lead, entry):
+                continue
+            operations.append(
+                UpdateOne(
+                    {"_id": lead.id},
+                    {
+                        "$set": {
+                            f"installments.{index}.finance_approved_at": lead.finance_approved_at,
+                            f"installments.{index}.finance_approved_by": lead.finance_approved_by,
+                            f"installments.{index}.finance_approved_by_name": lead.finance_approved_by_name,
+                        }
+                    },
+                )
+            )
+    if operations:
+        await collection.bulk_write(operations, ordered=False)
+    await migrations.insert_one({"_id": PAYMENT_APPROVALS_MIGRATION, "applied_at": utcnow()})
+    return len(operations)
+
+
+async def _recorded_after_approval(lead: Lead, entry: PaymentInstallment) -> bool:
+    """Whether the audit log has this payment first recorded after the lead
+    was approved. Corrections are logged the same way, hence the first."""
+    rows = (
+        await AuditLog.find(
+            {"entity_type": "Lead", "entity_id": str(lead.id), "action": "UPDATE", "changes.payment": entry.label}
+        )
+        .sort("+created_at")
+        .to_list()
+    )
+    for row in rows:
+        try:
+            amount = Decimal(str(row.changes.get("received_amount")))
+        except InvalidOperation:
+            continue
+        if amount == entry.collected():
+            return row.created_at > lead.finance_approved_at
+    return False
+
+
 TOKEN_AMOUNT_MIGRATION = "token_amount_replaces_partially_paid"
 
 # The retired Partially Paid stage's stored value. LeadStatus no longer has it,
@@ -597,6 +669,11 @@ async def run_startup_backfills() -> None:
     updated = await backfill_payment_ledger()
     if updated:
         logger.info("Converted the payment collection on %d leads.", updated)
+    # After both: it reads the approval off the lead and the payments off the
+    # converted collection.
+    updated = await backfill_payment_approvals()
+    if updated:
+        logger.info("Recorded the finance approval on %d payments made before it.", updated)
     for model in (Lead, InductionEntry):
         updated = await backfill_phone_normalized(model)
         if updated:

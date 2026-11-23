@@ -10,7 +10,14 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Pagination } from '@/components/ui/Pagination'
 import { formatCurrency, formatDate, formatDateTime, formatExactCurrency, titleCase } from '@/utils/formatters'
-import { getLeadPaymentSummary, getPaymentLedger } from '@/utils/leadPayment'
+import {
+  getAwaitingPayments,
+  getInstallmentCollected,
+  getInstallmentGst,
+  getLeadPaymentSummary,
+  getPaymentApproval,
+  getPaymentLedger,
+} from '@/utils/leadPayment'
 import { PAYMENT_PLAN_LABELS } from '@/constants/installmentPaymentModes'
 import { LEAD_STAGE_BY_VALUE } from '@/constants/leadStages'
 import { PaymentDetailModal } from '@/components/payments/PaymentDetailModal'
@@ -84,25 +91,26 @@ function paidIntoQrCodes(lead) {
   return unique.length ? unique : lead.qr_code ? [lead.qr_code] : []
 }
 
+function QrCodes({ codes }) {
+  if (!codes.length) return '—'
+  return (
+    <div className="flex flex-col items-center gap-1">
+      {codes.map((code) => (
+        <Badge key={code} outline tone="violet">
+          {code}
+        </Badge>
+      ))}
+    </div>
+  )
+}
+
 // In place of the payment mode, which was UPI on nearly every row and told
 // Finance nothing it needed to check.
 const qrCodeColumn = {
   key: 'qr_code',
   header: 'QR Code',
   align: 'center',
-  render: (row) => {
-    const codes = paidIntoQrCodes(row)
-    if (!codes.length) return '—'
-    return (
-      <div className="flex flex-col items-center gap-1">
-        {codes.map((code) => (
-          <Badge key={code} outline tone="violet">
-            {code}
-          </Badge>
-        ))}
-      </div>
-    )
-  },
+  render: (row) => <QrCodes codes={paidIntoQrCodes(row)} />,
 }
 const dueColumn = {
   key: 'due',
@@ -118,6 +126,80 @@ const dueColumn = {
     )
   },
 }
+// A student already in class who has paid again, rather than a first payment.
+const isLaterPayment = (lead) => lead.status === 'batch_confirmation'
+
+// What Finance is being asked about on the Awaiting tab: the new payments of a
+// student paying again, or else everything the lead has paid.
+function awaitingFigures(lead) {
+  const payments = isLaterPayment(lead) ? getAwaitingPayments(lead) : []
+  const { paidAmount, gstAmount } = getLeadPaymentSummary(lead)
+  if (!payments.length) return { payments, amount: paidAmount, gst: gstAmount, paidAmount }
+  return {
+    payments,
+    amount: payments.reduce((sum, entry) => sum + getInstallmentCollected(entry), 0),
+    gst: payments.reduce((sum, entry) => sum + getInstallmentGst(entry), 0),
+    paidAmount,
+  }
+}
+
+// When the money came in for a student paying again - the day their lead was
+// created is long past and says nothing about the payment.
+const awaitingDateColumn = {
+  key: 'date',
+  header: 'Date',
+  render: (row) => {
+    const paidOn = isLaterPayment(row) ? getAwaitingPayments(row).at(-1)?.paid_at : null
+    return formatDate(paidOn ?? row.created_at)
+  },
+}
+// The amount to approve, not the running total: for a student paying again the
+// rest of it has been approved already.
+const awaitingAmountColumn = {
+  ...amountColumn,
+  render: (row) => {
+    const { payments, amount, paidAmount } = awaitingFigures(row)
+    if (amount === null) return '—'
+    if (!isLaterPayment(row)) return formatCurrency(amount)
+    return (
+      <div className="whitespace-nowrap">
+        {formatCurrency(amount)}
+        <p className="text-xs text-slate-500">{payments.map((entry) => entry.label).join(', ')}</p>
+        <p className="text-xs text-slate-500">{formatCurrency(paidAmount)} paid in all</p>
+      </div>
+    )
+  },
+}
+const awaitingGstColumn = {
+  ...gstColumn,
+  render: (row) => {
+    const { amount, gst } = awaitingFigures(row)
+    if (!(gst > 0)) return '—'
+    return (
+      <div className="whitespace-nowrap">
+        {formatExactCurrency(gst)}
+        <p className="text-xs text-slate-500">Total {formatExactCurrency(amount + gst)}</p>
+      </div>
+    )
+  },
+}
+const awaitingQrColumn = {
+  ...qrCodeColumn,
+  render: (row) => {
+    const codes = [...new Set(getAwaitingPayments(row).map((entry) => entry.qr_code).filter(Boolean))]
+    return <QrCodes codes={isLaterPayment(row) ? codes : paidIntoQrCodes(row)} />
+  },
+}
+const awaitingStatusColumn = {
+  key: 'status',
+  header: 'Status',
+  render: (row) => (
+    <div className="space-y-1">
+      <Badge tone="amber">● Awaiting Approval</Badge>
+      {isLaterPayment(row) && <p className="text-xs text-slate-500">In Batch Confirmation</p>}
+    </div>
+  ),
+}
 const actionColumn = (label, variant) => ({
   key: 'actions',
   header: '',
@@ -130,14 +212,14 @@ const actionColumn = (label, variant) => ({
 
 const AWAITING_COLUMNS = [
   snoColumn,
-  { key: 'date', header: 'Date', render: (row) => formatDate(row.created_at) },
+  awaitingDateColumn,
   leadColumn,
   planColumn,
-  amountColumn,
-  gstColumn,
-  qrCodeColumn,
+  awaitingAmountColumn,
+  awaitingGstColumn,
+  awaitingQrColumn,
   dueColumn,
-  { key: 'status', header: 'Status', render: () => <Badge tone="amber">● Awaiting Approval</Badge> },
+  awaitingStatusColumn,
   actionColumn('Review', 'primary'),
 ]
 
@@ -168,7 +250,18 @@ const APPROVED_COLUMNS = [
     align: 'center',
     render: (row) => {
       const stage = LEAD_STAGE_BY_VALUE[row.status]
-      return <Badge tone={stage?.tone ?? 'slate'}>{stage?.label ?? titleCase(row.status)}</Badge>
+      // A payment Finance turned down, until it is corrected and comes back.
+      const rejected = (row.installments ?? []).filter((entry) => getPaymentApproval(entry, row) === 'rejected')
+      return (
+        <div className="flex flex-col items-center gap-1">
+          <Badge tone={stage?.tone ?? 'slate'}>{stage?.label ?? titleCase(row.status)}</Badge>
+          {rejected.length > 0 && (
+            <p className="text-xs font-medium text-red-600">
+              {rejected.map((entry) => entry.label).join(', ')} rejected
+            </p>
+          )}
+        </div>
+      )
     },
   },
   actionColumn('View', 'secondary'),
@@ -208,7 +301,9 @@ function ViewTabs({ tabs, value, onChange }) {
 }
 
 // Finance's income approvals in two lists: leads waiting on Finance, and the
-// students Finance has approved. Approving one moves it across - the backend
+// students Finance has approved. A student paying in parts comes back to the
+// first list with each payment, without leaving Batch Confirmation. Approving
+// one moves it across - the backend
 // records the approval (LeadService.approve_payment), and both lists are
 // refetched under the shared 'income-approvals' key.
 export function IncomeApprovalsTab() {
@@ -219,7 +314,7 @@ export function IncomeApprovalsTab() {
   // Both always fetched, so each tab's count is there before it is opened.
   const awaitingQuery = useQuery({
     queryKey: ['income-approvals', 'awaiting'],
-    queryFn: () => leadService.list({ status: 'financial_approval', page_size: 100 }),
+    queryFn: () => leadService.list({ awaiting_finance: true, page_size: 100 }),
   })
   const approvedQuery = useQuery({
     queryKey: ['income-approvals', 'approved', approvedPage],
@@ -265,7 +360,7 @@ export function IncomeApprovalsTab() {
           <DataTable
             columns={view === 'awaiting' ? AWAITING_COLUMNS : APPROVED_COLUMNS}
             rows={leads}
-            emptyMessage={view === 'awaiting' ? 'No leads awaiting financial approval.' : 'No students approved yet.'}
+            emptyMessage={view === 'awaiting' ? 'No payments awaiting approval.' : 'No students approved yet.'}
           />
           {view === 'approved' && (
             <Pagination

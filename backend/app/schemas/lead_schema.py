@@ -180,6 +180,13 @@ class LeadPaymentDelete(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
 
 
+class LeadPaymentReject(BaseModel):
+    """Why Finance turned a payment down. Required - see
+    LeadService.reject_payment."""
+
+    reason: str = Field(min_length=3, max_length=500)
+
+
 class LeadBalanceUpdate(BaseModel):
     """When the rest of the fee will be paid, and anything said about it.
     Both are written as sent, so leaving one out clears it."""
@@ -212,6 +219,12 @@ class PaymentInstallmentResponse(BaseModel):
     scheduled_at: date | None
     paid: bool
     paid_at: date | None
+    # Finance's check of this payment - see PaymentInstallment.
+    finance_approved_at: datetime | None = None
+    finance_approved_by_name: str | None = None
+    finance_rejected_at: datetime | None = None
+    finance_rejected_by_name: str | None = None
+    finance_rejected_reason: str | None = None
 
 
 class LeadResponse(BaseModel):
@@ -275,8 +288,8 @@ class LeadResponse(BaseModel):
     group_assigned_at: datetime | None = None
     lost_reason: str | None = None
     lost_at: datetime | None = None
-    # When and by whom Finance approved the payment. Set means the lead is on
-    # the Approved Students tab.
+    # When and by whom Finance last approved a payment. Set means the lead is
+    # on the Approved Students tab, unless another payment is waiting.
     finance_approved_at: datetime | None = None
     finance_approved_by_name: str | None = None
     payment_plan: PaymentPlanOption | None = None

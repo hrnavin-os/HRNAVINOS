@@ -51,12 +51,17 @@ def _names(full_name: str) -> tuple[str, str]:
 
 
 def _admitted_on(lead: Lead) -> date:
-    """The day Finance approved the lead, which is the day they reached Batch
-    Confirmation, in the institute's zone. Today for a lead moved there by
-    hand with no approval on record."""
+    """The day Finance first approved the lead, which is the day they reached
+    Batch Confirmation, in the institute's zone. Today for a lead moved there
+    by hand with no approval on record. First, because the lead's own approval
+    is the latest one and moves on as later payments are approved."""
     if lead.finance_approved_at is None:
         return local_today()
-    return (lead.finance_approved_at + timedelta(minutes=settings.MEET_UTC_OFFSET_MINUTES)).date()
+    first = min(
+        [lead.finance_approved_at]
+        + [entry.finance_approved_at for entry in lead.installments if entry.finance_approved_at]
+    )
+    return (first + timedelta(minutes=settings.MEET_UTC_OFFSET_MINUTES)).date()
 
 
 class StudentEnrollmentService:

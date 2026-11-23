@@ -58,6 +58,29 @@ export function getPaymentLedger(lead) {
   return { token, payments, balance, fee, received, gst, due: balance ? Number(balance.entry.amount ?? 0) : 0 }
 }
 
+// Where one payment stands with Finance, or null where the question doesn't
+// arise: money not in yet, or a lead that hasn't been sent to Finance. Each
+// payment is approved on its own - see PaymentInstallment on the backend.
+export function getPaymentApproval(entry, lead) {
+  if (!entry || entry.kind === 'balance' || getInstallmentCollected(entry) <= 0) return null
+  if (entry.finance_approved_at) return 'approved'
+  if (entry.finance_rejected_at) return 'rejected'
+  return ['financial_approval', 'batch_confirmation'].includes(lead.status) ? 'awaiting' : null
+}
+
+// The payments Finance is being asked about now. On a lead in Financial
+// Approval that is everything received so far; on a student already in Batch
+// Confirmation it is only what they have paid since.
+export function getAwaitingPayments(lead) {
+  return (lead.installments ?? []).filter((entry) => getPaymentApproval(entry, lead) === 'awaiting')
+}
+
+// Every proof on one payment. Those saved before several were possible carry
+// only the single `proof_url`.
+export function getProofUrls(entry) {
+  return entry.proof_urls?.length ? entry.proof_urls : entry.proof_url ? [entry.proof_url] : []
+}
+
 export function getLeadPaymentSummary(lead) {
   if (lead.payment_plan && lead.installments?.length) {
     const installments = lead.installments

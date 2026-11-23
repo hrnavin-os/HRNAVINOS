@@ -31,6 +31,7 @@ import {
   getInstallmentCollected,
   getInstallmentGst,
   getLeadPaymentSummary,
+  getPaymentApproval,
 } from '@/utils/leadPayment'
 import { PAYMENT_PLAN_LABELS, INSTALLMENT_MODE_TONES } from '@/constants/installmentPaymentModes'
 import { PAYMENT_PLAN_TONES } from '@/constants/paymentOptions'
@@ -255,7 +256,14 @@ function NonPaymentAction({ lead, summary }) {
 // keep once there's more than one payment to track (two-shot or EMI). Cards
 // lay out in a horizontally-scrolling row rather than a stacked list, so a
 // 6-installment EMI plan reads as a timeline instead of a tall column.
-function InstallmentScheduleCard({ installment }) {
+const APPROVAL_LABELS = {
+  approved: { text: 'Approved', tone: 'text-emerald-600' },
+  awaiting: { text: 'Awaiting approval', tone: 'text-amber-600' },
+  rejected: { text: 'Rejected', tone: 'text-red-600' },
+}
+
+function InstallmentScheduleCard({ installment, lead }) {
+  const approval = APPROVAL_LABELS[getPaymentApproval(installment, lead)]
   const isPaid = installment.paid
   const collected = getInstallmentCollected(installment)
   const gst = getInstallmentGst(installment)
@@ -282,6 +290,11 @@ function InstallmentScheduleCard({ installment }) {
       <p className={`text-xs font-medium ${isPaid ? 'text-emerald-600' : 'text-slate-600'}`}>
         {dateValue ? formatDate(dateValue) : 'Not scheduled yet'}
       </p>
+      {approval && (
+        <p className={`mt-1 text-xs font-semibold ${approval.tone}`} title={installment.finance_rejected_reason ?? undefined}>
+          {approval.text}
+        </p>
+      )}
     </div>
   )
 }
@@ -328,8 +341,17 @@ function PaymentHealthBanner({ health, onMarkLost, isMarkingLost }) {
 // own - reused both by the standalone modal below (which adds its own
 // avatar/name header) and by the Lead Detail Modal's Payment Details tab
 // (whose parent modal already shows the lead's name).
-export function PaymentDetailContent({ lead, error, onMarkLost, isMarkingLost, showReminders = false }) {
+export function PaymentDetailContent({
+  lead,
+  error,
+  onMarkLost,
+  isMarkingLost,
+  showReminders = false,
+  // The proofs to show instead of the latest payment's.
+  proofs,
+}) {
   const summary = getLeadPaymentSummary(lead)
+  const proofUrls = proofs?.length ? proofs : summary.proofUrls
   const health = getEmiPaymentHealth(lead)
 
   return (
@@ -368,22 +390,22 @@ export function PaymentDetailContent({ lead, error, onMarkLost, isMarkingLost, s
         </p>
       )}
 
-      {summary.proofUrls.length > 0 && (
+      {proofUrls.length > 0 && (
         <div>
           <p className="mb-1.5 text-sm font-medium text-slate-700">
-            Payment Proof{summary.proofUrls.length > 1 ? ` (${summary.proofUrls.length})` : ''}
+            Payment Proof{proofUrls.length > 1 ? ` (${proofUrls.length})` : ''}
           </p>
           {/* One proof keeps the full-width view; several sit side by side,
               each opening the full image. */}
-          {summary.proofUrls.length === 1 ? (
+          {proofUrls.length === 1 ? (
             <img
-              src={`${MEDIA_BASE_URL}${summary.proofUrls[0]}`}
+              src={`${MEDIA_BASE_URL}${proofUrls[0]}`}
               alt="Payment proof"
               className="max-h-64 w-full rounded-md border border-slate-200 object-contain"
             />
           ) : (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {summary.proofUrls.map((url) => (
+              {proofUrls.map((url) => (
                 <a key={url} href={`${MEDIA_BASE_URL}${url}`} target="_blank" rel="noreferrer">
                   <img
                     src={`${MEDIA_BASE_URL}${url}`}
@@ -403,7 +425,7 @@ export function PaymentDetailContent({ lead, error, onMarkLost, isMarkingLost, s
           <p className="mb-1.5 text-sm font-medium text-slate-700">Payments</p>
           <div className="table-scroll flex gap-2.5 overflow-x-auto pb-1.5">
             {lead.installments.map((installment, index) => (
-              <InstallmentScheduleCard key={index} installment={installment} />
+              <InstallmentScheduleCard key={index} installment={installment} lead={lead} />
             ))}
           </div>
         </div>
@@ -425,6 +447,9 @@ export function PaymentDetailModal({
   onMarkLost,
   isMarkingLost,
   showReminders = false,
+  // Shown above the details: what is being asked about, on a review.
+  notice,
+  proofs,
 }) {
   const summary = getLeadPaymentSummary(lead)
 
@@ -452,12 +477,15 @@ export function PaymentDetailModal({
           </div>
         </div>
 
+        {notice}
+
         <PaymentDetailContent
           lead={lead}
           error={error}
           onMarkLost={onMarkLost}
           isMarkingLost={isMarkingLost}
           showReminders={showReminders}
+          proofs={proofs}
         />
 
         {footer && <div className="flex justify-end gap-2 border-t border-slate-200 pt-4">{footer}</div>}
