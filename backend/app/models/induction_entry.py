@@ -217,6 +217,9 @@ class InductionEntry(BaseDocument):
     # reason it had to be given. Setting a batch on an entry that had none is
     # not a change and is not in here. See InductionEntryService.update.
     batch_history: list[BatchChange] = Field(default_factory=list)
+    # The batch a rejoining student was in before, shown as "Rejoin-30" after
+    # their name. None for everybody who isn't a rejoin - see RejoinAnswer.
+    rejoin_batch: int | None = None
     # Where this candidate stands after the induction call - set from a
     # dropdown on the board. Open text rather than an enum for the same reason
     # the fields above are: the list is long, entirely operational, and gets

@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.models.enums import PaymentPlanOption, PaymentTimeline
+from app.schemas.rejoin_schema import RejoinAnswer
 
 FieldType = Literal["text", "email", "tel", "textarea"]
 
@@ -57,7 +58,7 @@ class FoundationFormPricingResponse(BaseModel):
     categories: dict[str, FoundationFormCategory]
 
 
-class FoundationFormSubmit(BaseModel):
+class FoundationFormSubmit(RejoinAnswer):
     name: str = Field(min_length=2, max_length=150)
     mobile_number: str = Field(min_length=6, max_length=20)
     email: EmailStr | None = None

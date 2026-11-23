@@ -28,6 +28,7 @@ import { LeadSectionStageStats, LeadSectionStats } from '@/components/leads/Lead
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
 import { LeadCourseCell } from '@/components/leads/LeadCourseCell'
 import { LeadDetailModal } from '@/components/leads/LeadDetailModal'
+import { RejoinChip } from '@/components/leads/RejoinChip'
 import { CreateLeadModal } from '@/components/leads/CreateLeadModal'
 import { LeadRemarksCell } from '@/components/leads/LeadRemarksCell'
 import { LeadGroupCell } from '@/components/leads/FoundationGroupCell'
@@ -892,7 +893,10 @@ function FoundationLeadsBoard() {
         <div className="flex items-center gap-3">
           <LeadAvatar name={row.name} />
           <div className="min-w-0">
-            <p className="font-medium text-slate-900">{row.name}</p>
+            <p className="flex items-center gap-1.5 font-medium text-slate-900">
+              {row.name}
+              <RejoinChip batch={row.rejoin_batch} />
+            </p>
             {row.phone && <p className="text-xs tabular-nums text-slate-500">{row.phone}</p>}
           </div>
         </div>

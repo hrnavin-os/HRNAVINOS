@@ -28,6 +28,8 @@ export const KNOWN_KEYS = new Set([
   'payment_plan',
   'payment_timeline',
   'queries',
+  'is_rejoin',
+  'rejoin_batch',
 ])
 
 export function buildCustomFields(values, extraKnownKeys = []) {

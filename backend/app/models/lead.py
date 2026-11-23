@@ -252,6 +252,11 @@ class Lead(BaseDocument):
     # separate from `batch_preference` (what the student asked for on the form)
     # and from the Batch documents the allocation flow uses.
     batch_number: str | None = Field(default=None, max_length=50)
+    # The batch a rejoining student was in before, shown as "Rejoin-30" after
+    # their name; None for everybody who isn't a rejoin. Kept the same as the
+    # induction entry's by rejoin_sync. Separate from the Rejoin action, which
+    # reopens a lead at the Quit stage.
+    rejoin_batch: int | None = None
     # Which foundation class group this student sits in. Inherited from the
     # induction entry when the two are matched, since that is where it was
     # asked for, and editable on the Foundation board afterwards.

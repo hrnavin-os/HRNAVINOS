@@ -31,8 +31,10 @@ from app.schemas.induction_entry_schema import (
     InductionEntryResponse,
     InductionEntryUpdate,
 )
+from app.schemas.rejoin_schema import resolve_rejoin_update
 from app.services.audit_service import AuditService
 from app.services.foundation_group_sync import mirror_group_move
+from app.services.rejoin_sync import mirror_rejoin
 from app.utils.foundation_groups import parse_foundation_group
 from app.utils.phone import normalize_phone
 
@@ -240,7 +242,8 @@ class InductionEntryService:
         chosen = await self.resolve_section(data.section)
         assignee, section = await self._next_assignee(chosen)
         entry = InductionEntry(
-            **data.model_dump(exclude={"section", "group", "batch"}),
+            **data.model_dump(exclude={"section", "group", "batch", "is_rejoin", "rejoin_batch"}),
+            rejoin_batch=data.old_batch,
             # Typed as the bare number; "Batch-20" is only ever how it's shown.
             batch_number=data.batch,
             # The form sends the label its dropdown offered ("Group 2"); the
@@ -591,6 +594,7 @@ class InductionEntryService:
         if update_data.get("phone"):
             update_data["phone_normalized"] = normalize_phone(update_data["phone"])
         _resolve_quit_reason(entry, update_data)
+        rejoin_answered = resolve_rejoin_update(update_data)
         # Spaces alone are no reason; stored as None so the cell asks again.
         if "foundation_pending_reason" in update_data:
             update_data["foundation_pending_reason"] = (
@@ -629,6 +633,8 @@ class InductionEntryService:
         # here leaves the two out of step rather than losing the move entirely.
         if moved:
             await mirror_group_move(entry, actor_id=actor_id, actor_name=await self.actor_name(actor_id))
+        if rejoin_answered:
+            await mirror_rejoin(entry, actor_id=actor_id)
         await self.audit.record(
             user_id=actor_id,
             action="UPDATE",

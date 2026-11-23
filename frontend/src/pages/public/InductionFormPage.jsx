@@ -12,6 +12,8 @@ import { inductionFormConfigService } from '@/services/inductionFormConfigServic
 import { getApiErrorMessage } from '@/services/apiClient'
 import { PublicFormShell } from '@/components/public/PublicFormShell'
 import { FormProgress } from '@/components/public/FormProgress'
+import { RejoinField } from '@/components/foundation/RejoinField'
+import { rejoinPayload } from '@/utils/rejoin'
 
 // Which input a field gets is structural (a date is a date), so it's derived
 // from the key rather than being another thing to configure.
@@ -58,6 +60,7 @@ export function InductionFormPage() {
     control,
     handleSubmit,
     trigger,
+    watch,
     reset,
     formState: { errors },
   } = useForm()
@@ -83,7 +86,10 @@ export function InductionFormPage() {
     if (page !== PAGES.length - 1) return
     // Untouched optional fields arrive as "" from the DOM; the API expects
     // them absent rather than empty (paid_date="" fails date parsing).
-    mutation.mutate(Object.fromEntries(Object.entries(values).filter(([, value]) => value !== '')))
+    mutation.mutate({
+      ...Object.fromEntries(Object.entries(values).filter(([, value]) => value !== '')),
+      ...rejoinPayload(values),
+    })
   }
 
   // The shell already draws the card, so these branches render their contents
@@ -139,6 +145,7 @@ export function InductionFormPage() {
   const fields = configQuery.data?.fields ?? []
   const pageFields = fields.filter((field) => pageOf(field) === page)
   const isLast = page === PAGES.length - 1
+  const isRejoin = watch('is_rejoin')
 
   // Only validates the page you're leaving, so a required field further on
   // can't block you before you've reached it.
@@ -151,7 +158,9 @@ export function InductionFormPage() {
   // the default action closes that off no matter what the element becomes.
   async function next(event) {
     event.preventDefault()
-    const valid = await trigger(pageFields.filter((field) => field.required).map((field) => field.key))
+    const keys = pageFields.filter((field) => field.required).map((field) => field.key)
+    if (page === 0 && isRejoin) keys.push('rejoin_batch')
+    const valid = await trigger(keys)
     if (valid) setPage((current) => current + 1)
   }
 
@@ -199,6 +208,9 @@ export function InductionFormPage() {
               />
             ),
           )}
+          {/* Not one of the configured fields: the answer is a tick and the
+              number under it, and it always closes the candidate's details. */}
+          {page === 0 && <RejoinField checked={isRejoin} register={register} errors={errors} />}
         </div>
 
         <div className="mt-6 flex items-center justify-between gap-2 border-t border-slate-200 pt-4">

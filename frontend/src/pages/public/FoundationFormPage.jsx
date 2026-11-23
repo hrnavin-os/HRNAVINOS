@@ -19,6 +19,8 @@ import {
   ProgramField,
   buildCustomFields,
 } from '@/components/foundation/FoundationQuestions'
+import { RejoinField } from '@/components/foundation/RejoinField'
+import { rejoinPayload } from '@/utils/rejoin'
 
 const STEP_TYPE_LABELS = { details: 'Your Details', plan: 'Payment Plan', page3: 'Confirm & Submit' }
 
@@ -110,10 +112,11 @@ export function FoundationFormPage() {
   const selectedProgram = programs.find((p) => p.value === selectedProgramValue)
   const category = selectedProgram ? categories[selectedProgram.category] : null
   const watchedPaymentPlan = watch('payment_plan')
+  const isRejoin = watch('is_rejoin')
   const watchedPaymentTimeline = watch('payment_timeline')
 
   const STEP_FIELD_KEYS = {
-    details: page1Fields.map((f) => f.key),
+    details: [...page1Fields.map((f) => f.key), ...(isRejoin ? ['rejoin_batch'] : [])],
     plan: ['payment_plan'],
     page3: page3Fields.map((f) => f.key),
   }
@@ -124,7 +127,12 @@ export function FoundationFormPage() {
   }
 
   function onSubmit(values) {
-    const payload = { name: values.name, mobile_number: values.mobile_number, custom_fields: {} }
+    const payload = {
+      name: values.name,
+      mobile_number: values.mobile_number,
+      custom_fields: {},
+      ...rejoinPayload(values),
+    }
     for (const key of ['email', 'program_interest', 'payment_plan', 'payment_timeline', 'queries']) {
       if (values[key]) payload[key] = values[key]
     }
@@ -149,6 +157,12 @@ export function FoundationFormPage() {
                 <DynamicField key={field.key} field={field} register={register} errors={errors} />
               ),
             )}
+            <RejoinField
+              label="I am a rejoining student"
+              checked={isRejoin}
+              register={register}
+              errors={errors}
+            />
             <Button
               type={isLastStep ? 'submit' : 'button'}
               className="w-full"

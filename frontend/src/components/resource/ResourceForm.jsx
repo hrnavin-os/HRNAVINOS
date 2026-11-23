@@ -8,7 +8,7 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage'
 
 // Declarative form renderer shared by every module's "create" modal.
 // fields: [{ name, label, type, required, options }]
-// type: 'text'|'number'|'date'|'select'|'textarea'|'combobox'|'password'
+// type: 'text'|'number'|'date'|'select'|'textarea'|'combobox'|'password'|'checkbox'
 //
 // 'combobox' is a select that still accepts a typed value - a native input
 // backed by a <datalist>, so the browser offers the options while leaving the
@@ -109,6 +109,22 @@ export function ResourceForm({ fields, defaultValues = {}, onSubmit, onCancel, s
               autoComplete="new-password"
               {...register(field.name, validation)}
             />
+          )
+        }
+
+        if (field.type === 'checkbox') {
+          return (
+            <label
+              key={field.name}
+              className="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-700"
+            >
+              <input
+                type="checkbox"
+                className="h-4 w-4 cursor-pointer rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                {...register(field.name)}
+              />
+              {field.label}
+            </label>
           )
         }
 

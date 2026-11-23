@@ -53,8 +53,11 @@ import {
 } from '@/utils/leadPayment'
 import { getApiErrorMessage } from '@/services/apiClient'
 import { useAuth } from '@/hooks/useAuth'
+import { PERMISSIONS } from '@/constants/permissions'
 import { formatCurrency, formatDate, formatDateTime, formatExactCurrency, titleCase } from '@/utils/formatters'
 import { LeadAvatar } from '@/components/leads/LeadAvatar'
+import { RejoinChip } from '@/components/leads/RejoinChip'
+import { RejoinEditor } from '@/components/leads/RejoinEditor'
 import { DetailPanel, InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
 import { MEDIA_BASE_URL } from '@/constants/config'
 import { DateTimePicker, isFutureDateTime } from '@/components/ui/DateTimePicker'
@@ -1301,6 +1304,8 @@ function OverviewTab({
   lead,
   onSelectStage,
   isSaving,
+  canEditRejoin,
+  onLeadSaved,
   onRejoin,
   isRejoining,
   rejoinError,
@@ -1316,6 +1321,8 @@ function OverviewTab({
           <InfoCard key={item.key} item={item} />
         ))}
       </div>
+
+      {canEditRejoin && <RejoinEditor lead={lead} onSaved={onLeadSaved} />}
 
       {lead.payment_expected && <PaymentExpectedPanel value={lead.payment_expected} />}
 
@@ -1563,7 +1570,7 @@ export function LeadDetailModal({ lead, onClose }) {
   // How many payments this popup has deleted - see PaymentCollectionSection's
   // mountKey. Admins only: the server answers who, from PAYMENT_DELETE_ROLES.
   const [paymentDeletions, setPaymentDeletions] = useState(0)
-  const { user } = useAuth()
+  const { user, hasPermission } = useAuth()
   const canDeletePayments = Boolean(user?.can_delete_payments)
   // A stage move that has to ask something first: why (Quit, or a move back to
   // an earlier stage), and/or when (Follow up call, which is a call booked for
@@ -1767,6 +1774,7 @@ export function LeadDetailModal({ lead, onClose }) {
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="truncate text-base font-semibold text-slate-900">{lead.name}</h2>
+          <RejoinChip batch={liveLead.rejoin_batch} />
           <Badge outline tone={stageInfo?.tone ?? 'slate'}>
             {stageInfo?.label ?? titleCase(liveLead.status)}
           </Badge>
@@ -1815,6 +1823,13 @@ export function LeadDetailModal({ lead, onClose }) {
             lead={liveLead}
             onSelectStage={selectStage}
             isSaving={stageMutation.isPending}
+            canEditRejoin={hasPermission(PERMISSIONS.LEADS_UPDATE)}
+            onLeadSaved={(updatedLead) => {
+              setLiveLead(updatedLead)
+              invalidateLeadQueries()
+              // The induction record carries it too.
+              queryClient.invalidateQueries({ queryKey: ['induction-entries'] })
+            }}
             onRejoin={(courseInterest) => rejoinMutation.mutate(courseInterest)}
             isRejoining={rejoinMutation.isPending}
             rejoinError={rejoinMutation.error ? getApiErrorMessage(rejoinMutation.error) : null}

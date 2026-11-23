@@ -34,6 +34,7 @@ from app.schemas.foundation_form_schema import (
     FoundationFormSubmit,
 )
 from app.services.foundation_form_answers import DerivedAnswers, derive_answers
+from app.services.rejoin_sync import mirror_rejoin
 from app.utils.phone import normalize_phone
 
 
@@ -148,6 +149,8 @@ class FoundationFormService:
         """
         entry.foundation_lead_id = lead.id
         entry.converted_at = utcnow()
+        # Answered on either form, it is shown on both boards.
+        entry.rejoin_batch = lead.rejoin_batch
         entry.touch()
         await entry.save()
 
@@ -193,6 +196,10 @@ class FoundationFormService:
             lead.course_interest = derived.course_interest
         if data.program_interest is not None:
             lead.program_interest = data.program_interest
+        # Only a ticked box is an answer here: leaving it alone on a second
+        # submission doesn't undo a rejoin already on record.
+        if data.old_batch is not None:
+            lead.rejoin_batch = data.old_batch
         # Merged, not replaced: a second submission that skipped an optional
         # question shouldn't erase the answer given the first time.
         lead.raw_form_data = {**(lead.raw_form_data or {}), **derived.raw_form_data}
@@ -228,10 +235,14 @@ class FoundationFormService:
                 # late-arriving match is no reason to undo it.
                 if lead.foundation_group is None:
                     lead.foundation_group = entry.foundation_group
+                if lead.rejoin_batch is None:
+                    lead.rejoin_batch = entry.rejoin_batch
                 await self._link(entry, lead)
 
         lead.touch()
         await lead.save()
+        if data.old_batch is not None:
+            await mirror_rejoin(lead, actor_id=None)
         return lead
 
     async def submit(self, data: FoundationFormSubmit) -> Lead:
@@ -267,6 +278,8 @@ class FoundationFormService:
             # because the lead's group is editable from there afterwards, which
             # a value read through the link could not be.
             foundation_group=entry.foundation_group if entry else None,
+            # Ticked here, or already recorded on the Induction Call Form.
+            rejoin_batch=data.old_batch or (entry.rejoin_batch if entry else None),
             source=LeadSource.FOUNDATION_FORM,
             course_interest=derived.course_interest,
             payment_expected=derived.payment_expected,

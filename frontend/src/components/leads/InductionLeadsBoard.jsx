@@ -23,6 +23,7 @@ import { InductionRecordingCell } from '@/components/leads/InductionRecordingCel
 import { FoundationPendingReasonCell } from '@/components/leads/FoundationPendingReasonCell'
 import { InductionEntryDetail } from '@/components/leads/InductionEntryDetail'
 import { InductionUpdateModal } from '@/components/leads/InductionUpdateModal'
+import { RejoinChip } from '@/components/leads/RejoinChip'
 import { DeletedHistoryButton } from '@/components/leads/LeadDeletionHistoryModal'
 import { useAuth } from '@/hooks/useAuth'
 import { PERMISSIONS } from '@/constants/permissions'
@@ -32,6 +33,7 @@ import { REMARK_GROUPS } from '@/constants/inductionCallRemarks'
 import { DETAILS_OPTIONS, DETAILS_OTHER, DETAILS_OTHER_FILTER, DETAILS_VALUES } from '@/constants/inductionDetails'
 import { formatDate, formatDateTime } from '@/utils/formatters'
 import { UPCOMING_PRESETS } from '@/utils/datePresets'
+import { OLD_BATCH_RULES } from '@/utils/rejoin'
 
 const dash = <span className="text-slate-400">—</span>
 const orDash = (value) => value || dash
@@ -119,7 +121,10 @@ const nameColumn = {
   sticky: true,
   render: (row) => (
     <div className="min-w-0">
-      <p className="font-medium text-slate-900">{row.name}</p>
+      <p className="flex items-center gap-1.5 font-medium text-slate-900">
+        {row.name}
+        <RejoinChip batch={row.rejoin_batch} />
+      </p>
       {row.phone && <p className="text-xs tabular-nums text-slate-500">{row.phone}</p>}
     </div>
   ),
@@ -276,6 +281,15 @@ const editFields = [
     // The API refuses a reason of only spaces, so the form does too rather
     // than letting it through to fail on save.
     validation: { validate: (value) => value.trim() !== '' || 'Reason for changing the batch is required' },
+  },
+  { name: 'is_rejoin', label: 'Rejoin student', type: 'checkbox' },
+  {
+    name: 'rejoin_batch',
+    label: 'Old Batch Number',
+    required: true,
+    placeholder: 'e.g. 30',
+    showWhen: (values) => Boolean(values.is_rejoin),
+    validation: OLD_BATCH_RULES,
   },
   { name: 'sales_person', label: 'Sales Person' },
   { name: 'lead_source', label: 'Lead Source' },
@@ -813,7 +827,12 @@ export function InductionLeadsBoard() {
         // it here.
         rowActions={{
           view: {
-            title: (row) => row.name,
+            title: (row) => (
+              <span className="flex items-center gap-2">
+                {row.name}
+                <RejoinChip batch={row.rejoin_batch} />
+              </span>
+            ),
             maxWidth: 'max-w-xl',
             // Hidden for the same reason as the column: it's always them.
             renderBody: (row) => <InductionEntryDetail entry={row} hideAssignee={Boolean(scopedSection)} />,
@@ -834,6 +853,8 @@ export function InductionLeadsBoard() {
                     registration_date: row.registration_date?.slice(0, 10) ?? '',
                     paid_date: row.paid_date?.slice(0, 10) ?? '',
                     batch_number: row.batch_number ?? '',
+                    is_rejoin: Boolean(row.rejoin_batch),
+                    rejoin_batch: row.rejoin_batch ?? '',
                     sales_person: row.sales_person ?? '',
                     lead_source: row.lead_source ?? '',
                     payment_mode: row.payment_mode ?? '',

@@ -16,10 +16,11 @@ from app.models.enums import (
     PaymentTimeline,
 )
 from app.schemas.foundation_group_schema import FoundationGroupMoveSchema
+from app.schemas.rejoin_schema import RejoinAnswer
 from app.utils.foundation_groups import MAX_FOUNDATION_GROUP
 
 
-class LeadCreate(BaseModel):
+class LeadCreate(RejoinAnswer):
     name: str = Field(min_length=2, max_length=150)
     email: EmailStr | None = None
     phone: str = Field(min_length=6, max_length=20)
@@ -60,7 +61,7 @@ class LeadCreate(BaseModel):
         return self
 
 
-class LeadUpdate(BaseModel):
+class LeadUpdate(RejoinAnswer):
     name: str | None = Field(default=None, min_length=2, max_length=150)
     email: EmailStr | None = None
     phone: str | None = Field(default=None, min_length=6, max_length=20)
@@ -272,6 +273,8 @@ class LeadResponse(BaseModel):
     # The batch to show: induction_batch when there is one, otherwise the
     # typed batch_number as "Batch-N". See lead_batch_label.
     batch: str | None = None
+    # The old batch of a rejoining student; None for everybody else.
+    rejoin_batch: int | None = None
     # Where the lead came from (Meta-1, Retargeting...), as the Induction Call
     # Form recorded it for the call this lead was matched to. None for a lead
     # no induction call matched - the lead itself carries no source.

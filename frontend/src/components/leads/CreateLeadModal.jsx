@@ -19,6 +19,8 @@ import {
   ProgramField,
   buildCustomFields,
 } from '@/components/foundation/FoundationQuestions'
+import { RejoinField } from '@/components/foundation/RejoinField'
+import { rejoinPayload } from '@/utils/rejoin'
 
 // Two of the form's keys are called something else on a lead. Registering them
 // under the CRM's names keeps the payload a plain LeadCreate and keeps them out
@@ -107,6 +109,7 @@ export function CreateLeadModal({ sections, defaultSection, lockSection, onClose
       foundation_group: foundationGroupValue(values.foundation_group),
       // Typed as the Batch cell takes it ("29"); the board shows it as Batch-29.
       batch_number: values.batch_number?.trim() || null,
+      ...rejoinPayload(values),
       notes: values.notes?.trim() || null,
       // Whatever an admin has added to the form beyond the built-in questions.
       custom_fields: buildCustomFields(values, EXTRA_KNOWN_KEYS),
@@ -228,6 +231,8 @@ export function CreateLeadModal({ sections, defaultSection, lockSection, onClose
               {...register('batch_number')}
             />
           </div>
+
+          <RejoinField checked={watch('is_rejoin')} register={register} errors={errors} />
 
           {/* The form's page 2. Nothing to show until a program is picked -
               the plans and their prices are the chosen program's, and there is

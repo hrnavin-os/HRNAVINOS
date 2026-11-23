@@ -52,6 +52,7 @@ from app.schemas.lead_schema import (
 )
 from app.services.audit_service import AuditService
 from app.services.foundation_group_sync import mirror_group_move
+from app.services.rejoin_sync import mirror_rejoin
 from app.services.foundation_form_answers import derive_answers
 from app.services.foundation_form_pricing import build_payment_expected_summary, plan_fee
 from app.services.payment_ledger import (
@@ -73,6 +74,7 @@ from app.services.reminder_service import ReminderService
 from app.services.storage_service import StorageService
 from app.models.foundation_group import pop_group_move
 from app.schemas.foundation_group_schema import FoundationGroupMoveSchema
+from app.schemas.rejoin_schema import resolve_rejoin_update
 from app.utils.phone import normalize_phone
 
 
@@ -172,6 +174,7 @@ class LeadService:
             batch_number=lead.batch_number,
             induction_batch=batch_label(entry.batch_number) if entry else None,
             batch=lead_batch_label(entry.batch_number if entry else None, lead.batch_number),
+            rejoin_batch=lead.rejoin_batch,
             # Spaces tidied the way the filter's options are, so the column
             # and the dropdown name a source the same way.
             lead_source=(" ".join(entry.lead_source.split()) or None) if entry and entry.lead_source else None,
@@ -245,8 +248,16 @@ class LeadService:
 
         lead = Lead(
             **data.model_dump(
-                exclude={"course_interest", "payment_expected", "payment_timeline", "custom_fields"}
+                exclude={
+                    "course_interest",
+                    "payment_expected",
+                    "payment_timeline",
+                    "custom_fields",
+                    "is_rejoin",
+                    "rejoin_batch",
+                }
             ),
+            rejoin_batch=data.old_batch,
             # The program is the authority on the course whenever one was
             # picked; a bare course_interest is only used when it wasn't.
             course_interest=derived.course_interest or data.course_interest,
@@ -375,6 +386,7 @@ class LeadService:
         if data.status is not None:
             self._validate_stage_transition(lead, data.status)
         update_data = data.model_dump(exclude_unset=True)
+        rejoin_answered = resolve_rejoin_update(update_data)
         update_data["reviewed"] = True
         update_data["updated_by"] = actor_id
         # Not a lead field - it goes on the follow-up's history entry.
@@ -401,6 +413,8 @@ class LeadService:
         # and the attendance roll reads it off there.
         if moved:
             await mirror_group_move(lead, actor_id=actor_id, actor_name=await self._actor_name(actor_id))
+        if rejoin_answered:
+            await mirror_rejoin(lead, actor_id=actor_id)
         await self.audit.record(
             user_id=actor_id,
             action="UPDATE",
@@ -1091,6 +1105,7 @@ class LeadService:
         # matching on the number it actually has.
         if update_data.get("phone"):
             update_data["phone_normalized"] = normalize_phone(update_data["phone"])
+        rejoin_answered = resolve_rejoin_update(update_data)
         # The board's WhatsApp tick writes the same join the HR WhatsApp board
         # records, so the two can't disagree about who is in the group. Ticking
         # a student already in keeps the time they joined.
@@ -1159,6 +1174,8 @@ class LeadService:
         # and the attendance roll reads it off there.
         if moved:
             await mirror_group_move(lead, actor_id=actor_id, actor_name=await self._actor_name(actor_id))
+        if rejoin_answered:
+            await mirror_rejoin(lead, actor_id=actor_id)
         await self.audit.record(
             user_id=actor_id,
             # Its own action so the timeline can set a move back apart from

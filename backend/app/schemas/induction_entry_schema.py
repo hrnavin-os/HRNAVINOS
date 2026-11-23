@@ -6,10 +6,11 @@ from pydantic import BaseModel, Field
 
 from app.models.enums import InductionStatus
 from app.schemas.foundation_group_schema import FoundationGroupMoveSchema
+from app.schemas.rejoin_schema import RejoinAnswer
 from app.utils.foundation_groups import MAX_FOUNDATION_GROUP
 
 
-class InductionEntryCreate(BaseModel):
+class InductionEntryCreate(RejoinAnswer):
     name: str = Field(min_length=2, max_length=150)
     email: str | None = Field(default=None, max_length=255)
     phone: str = Field(min_length=6, max_length=20)
@@ -146,7 +147,7 @@ class BatchChangeSchema(BaseModel):
     by_name: str | None = None
 
 
-class InductionEntryUpdate(BaseModel):
+class InductionEntryUpdate(RejoinAnswer):
     name: str | None = Field(default=None, min_length=2, max_length=150)
     email: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, min_length=6, max_length=20)
@@ -214,6 +215,8 @@ class InductionEntryResponse(BaseModel):
     # Every change of batch with its reason, oldest first. Sent with each row
     # because the board prints the last one under the batch.
     batch_history: list[BatchChangeSchema] = Field(default_factory=list)
+    # The old batch of a rejoining student; None for everybody else.
+    rejoin_batch: int | None = None
     registration_date: date
     paid_date: date | None
     sales_person: str | None
