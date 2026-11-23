@@ -66,7 +66,8 @@ async def in_class(client, auth_headers, first: str = "5000") -> str:
     lead_id = await planned_lead(client, auth_headers)
     paid = await pay(client, auth_headers, lead_id, received_amount=first, balance_due_at=DUE)
     assert paid.status_code == 200, paid.text
-    await move(client, auth_headers, lead_id, "financial_approval")
+    # Saving it is what sent it to Finance.
+    assert paid.json()["status"] == "financial_approval"
     response = await approve(client, auth_headers, lead_id)
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "batch_confirmation"
@@ -203,8 +204,72 @@ async def planned_lead_awaiting(client, auth_headers) -> str:
     )
     lead_id = created.json()["id"]
     await pay(client, auth_headers, lead_id, received_amount="5000", balance_due_at=DUE)
-    await move(client, auth_headers, lead_id, "financial_approval")
     return lead_id
+
+
+@pytest.mark.parametrize("stage", ["new_lead", "rnr", "pre_screening"])
+async def test_saving_a_payment_sends_it_to_finance_from_any_earlier_stage(client, auth_headers, uploads, stage):
+    lead_id = await planned_lead(client, auth_headers)
+    if stage != "new_lead":
+        await move(client, auth_headers, lead_id, stage)
+
+    body = (await pay(client, auth_headers, lead_id, received_amount="1500", balance_due_at=DUE)).json()
+
+    assert body["status"] == "financial_approval"
+    assert await awaiting(client, auth_headers) == [lead_id]
+
+
+async def test_the_full_fee_at_once_is_approved_once_and_stays_in_batch_confirmation(
+    client, auth_headers, uploads
+):
+    lead_id = await in_class(client, auth_headers, first="15000")
+
+    body = (await client.get(f"/api/v1/leads/{lead_id}", headers=auth_headers)).json()
+
+    assert body["status"] == "batch_confirmation"
+    assert [entry["kind"] for entry in body["installments"]] == ["payment"]
+    assert await awaiting(client, auth_headers) == []
+
+
+async def test_a_token_alone_waits_for_a_payment(client, auth_headers, uploads):
+    lead_id = await planned_lead(client, auth_headers)
+
+    await pay(client, auth_headers, lead_id, proof=False, kind="token", received_amount="500", balance_due_at=DUE)
+    assert await awaiting(client, auth_headers) == []
+
+    await pay(client, auth_headers, lead_id, received_amount="1500")
+    assert await awaiting(client, auth_headers) == [lead_id]
+
+
+async def test_a_correction_does_not_move_a_lead_that_was_sent_back(client, auth_headers, uploads):
+    lead_id = await planned_lead_awaiting(client, auth_headers)
+    await move(client, auth_headers, lead_id, "pre_screening", stage_change_reason="Not credited yet")
+
+    response = await client.post(
+        f"/api/v1/leads/{lead_id}/payments/0", headers=auth_headers, data={"remarks": "Asked for the reference"}
+    )
+    assert response.json()["status"] == "pre_screening"
+    assert await awaiting(client, auth_headers) == []
+
+    # The payment card's Send to Finance.
+    await move(client, auth_headers, lead_id, "financial_approval")
+    assert await awaiting(client, auth_headers) == [lead_id]
+    assert (await approve(client, auth_headers, lead_id)).json()["installments"][0]["finance_approved_at"]
+
+
+async def test_a_payment_from_a_student_put_back_to_follow_up_goes_through_financial_approval(
+    client, auth_headers, uploads
+):
+    lead_id = await in_class(client, auth_headers)
+    await move(client, auth_headers, lead_id, "pre_screening", stage_change_reason="Call for the balance")
+
+    body = (await pay(client, auth_headers, lead_id, received_amount="7000")).json()
+
+    assert body["status"] == "financial_approval" and body["finance_approved_at"] is None
+    assert await awaiting(client, auth_headers) == [lead_id]
+    assert await approved(client, auth_headers) == []
+    body = (await approve(client, auth_headers, lead_id)).json()
+    assert body["status"] == "batch_confirmation"
 
 
 async def test_awaiting_lists_first_and_later_payments_and_nobody_before_financial_approval(
@@ -223,7 +288,11 @@ async def test_awaiting_lists_first_and_later_payments_and_nobody_before_financi
             "payment_plan": "single_shot",
         },
     )
-    await pay(client, auth_headers, created.json()["id"], received_amount="500", balance_due_at=DUE)
+    # Only the token so far, which isn't sent to Finance by itself.
+    await pay(
+        client, auth_headers, created.json()["id"],
+        proof=False, kind="token", received_amount="500", balance_due_at=DUE,
+    )
 
     assert set(await awaiting(client, auth_headers)) == {student, new}
     # Search narrows the tab; its own $or must not replace the tab's.

@@ -68,6 +68,7 @@ async def test_insights_count_the_funnel_and_the_money(client, auth_headers, upl
     due = body["upcoming_dues"][0]
     assert due["name"] == "Sha Prasanna" and due["overdue"] is True and float(due["amount"]) == 5000
     stages = {row["status"]: row["count"] for row in body["pipeline"]}
-    assert stages["new_lead"] == 1 and stages["lost"] == 1
+    # Recording the payment sent the lead to Finance.
+    assert stages["financial_approval"] == 1 and stages["lost"] == 1
     assert body["recent_leads"][0]["name"] in {"Sha Prasanna", "Mathuri"}
     assert {row["course"] for row in body["top_courses"]} == {"Recruitment + Internship", "HR Recruitment"}

@@ -72,12 +72,15 @@ async def test_recording_the_token_moves_the_lead_to_token_amount(client, auth_h
     assert entry.changes["previous_status"] == "new_lead"
 
 
-async def test_a_payment_that_is_not_a_token_leaves_the_stage_alone(client, auth_headers, uploads):
+async def test_a_payment_after_the_token_goes_to_finance(client, auth_headers, uploads):
     lead_id = await planned_lead(client, auth_headers, "7305341130")
+    await token(client, auth_headers, lead_id)
 
     body = await payment(client, auth_headers, lead_id)
 
-    assert body["status"] == "new_lead"
+    assert body["status"] == "financial_approval"
+    entry = await AuditLog.find_one({"entity_id": lead_id, "changes.status": "financial_approval"})
+    assert entry.changes["previous_status"] == "token_amount"
 
 
 async def test_a_token_recorded_late_leaves_financial_approval_alone(client, auth_headers, uploads):
@@ -127,6 +130,7 @@ async def test_the_token_stays_while_the_lead_is_in_token_amount(client, auth_he
     lead_id = await planned_lead(client, auth_headers, "7305341130")
     await token(client, auth_headers, lead_id)
     await payment(client, auth_headers, lead_id)
+    await move(client, auth_headers, lead_id, "token_amount", stage_change_reason="Rest due on the 21st")
 
     response = await delete_payment(client, auth_headers, lead_id, 0)
 
@@ -163,8 +167,8 @@ async def test_partially_paid_leads_and_early_token_payers_move_once(client, aut
     # Past Token Amount already: left alone.
     assert (await raw(approved_with_token))["status"] == "financial_approval"
     # On the timeline, with where it came from and why.
-    entry = await AuditLog.find_one({"entity_id": part_without, "changes.status": "financial_approval"})
-    assert entry.changes["previous_status"] == "partially_paid" and entry.changes["reason"]
+    entry = await AuditLog.find_one({"entity_id": part_without, "changes.previous_status": "partially_paid"})
+    assert entry.changes["status"] == "financial_approval" and entry.changes["reason"]
     # Once only: a token payer moved back to Follow up call later stays there.
     await set_status(follow_up_with_token, "pre_screening")
     assert await move_partially_paid_to_token_amount() == 0

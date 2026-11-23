@@ -56,14 +56,6 @@ async def test_the_token_can_be_deleted(client, auth_headers, uploads):
     lead_id = await planned_lead(client, auth_headers)
     await pay(client, auth_headers, lead_id, received_amount="5000", balance_due_at="2026-09-27")
     await pay(client, auth_headers, lead_id, proof=False, kind="token", received_amount="1500")
-    # Recording the token moved the lead to Token Amount, which it can't be
-    # taken out from under (test_token_amount_stage).
-    await client.put(
-        f"/api/v1/leads/{lead_id}",
-        headers=auth_headers,
-        json={"status": "new_lead", "stage_change_reason": "Token was recorded by mistake"},
-    )
-
     response = await delete_payment(client, auth_headers, lead_id, 0)
 
     assert response.status_code == 200, response.text
@@ -102,13 +94,29 @@ async def test_the_balance_cannot_be_deleted(client, auth_headers, uploads):
     assert response.status_code == 400
 
 
-async def test_the_last_payment_stays_while_the_lead_is_in_a_paid_stage(client, auth_headers, uploads):
-    """Financial Approval and the stage after it are entered on a payment, so
-    the only one can't be taken out from under a lead still in one."""
+async def test_deleting_the_only_payment_takes_the_lead_back_out_of_financial_approval(
+    client, auth_headers, uploads
+):
+    """Recording it is what sent the lead there."""
+    lead_id = await planned_lead(client, auth_headers)
+    paid = await pay(client, auth_headers, lead_id, received_amount="5000", balance_due_at="2026-09-27")
+    assert paid.json()["status"] == "financial_approval"
+
+    response = await delete_payment(client, auth_headers, lead_id, 0, reason="Wrong student")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "pre_screening"
+    entry = await AuditLog.find_one({"entity_id": lead_id, "action": "STAGE_BACK"})
+    assert entry.changes["previous_status"] == "financial_approval" and entry.changes["reason"] == "Wrong student"
+
+
+async def test_the_last_payment_stays_while_the_lead_is_in_batch_confirmation(client, auth_headers, uploads):
+    """A student is in class on the strength of it, so it can't be taken out
+    from under them."""
     lead_id = await planned_lead(client, auth_headers)
     await pay(client, auth_headers, lead_id, received_amount="5000", balance_due_at="2026-09-27")
-    moved = await client.put(f"/api/v1/leads/{lead_id}", headers=auth_headers, json={"status": "financial_approval"})
-    assert moved.status_code == 200, moved.text
+    approved = await client.post(f"/api/v1/leads/{lead_id}/finance-approve", headers=auth_headers)
+    assert approved.json()["status"] == "batch_confirmation"
 
     response = await delete_payment(client, auth_headers, lead_id, 0)
 

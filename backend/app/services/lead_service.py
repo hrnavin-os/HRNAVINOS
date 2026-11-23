@@ -1047,6 +1047,11 @@ class LeadService:
     # recorded late doesn't undo Finance's progress - nor from Quit.
     _BEFORE_TOKEN = (LeadStatus.NEW_LEAD, LeadStatus.RNR, LeadStatus.PRE_SCREENING)
 
+    # Where a lead is when recording a payment sends it to Financial Approval.
+    # Past it the payment reaches Finance with the lead left where it is (see
+    # approve_payment), and a lead at Quit stays quit.
+    _BEFORE_FINANCE = (*_BEFORE_TOKEN, LeadStatus.TOKEN_AMOUNT)
+
     def _validate_stage_transition(self, lead: Lead, new: LeadStatus) -> None:
         """A lead can move to any stage from any other, in either direction -
         a move back still has to say why (see `update`). The one gate left is
@@ -1521,6 +1526,9 @@ class LeadService:
         payment needs its amount, mode and proof. The token is optional money
         up front and so asks less: its proof can follow, or never come.
 
+        Recording a payment sends it to Finance, whatever part of the fee it
+        is. A token alone doesn't: it waits in Token Amount for a payment.
+
         `received_amount` is what goes towards the fee. GST is charged on top
         of it and worked out here, never sent in - see payment_ledger.
         """
@@ -1635,6 +1643,15 @@ class LeadService:
         previous_status = lead.status
         if index is None and kind == PaymentEntryKind.TOKEN and lead.status in self._BEFORE_TOKEN:
             lead.status = LeadStatus.TOKEN_AMOUNT
+        # A new payment is sent to Finance. A correction isn't: a lead put back
+        # to an earlier stage is there for a reason, and fixing a remark on it
+        # shouldn't undo that. It is sent again from the payment's own button.
+        if index is None and kind == PaymentEntryKind.PAYMENT and lead.status in self._BEFORE_FINANCE:
+            lead.status = LeadStatus.FINANCIAL_APPROVAL
+            # As on any move there (see `update`): it is waiting again.
+            lead.finance_approved_at = None
+            lead.finance_approved_by = None
+            lead.finance_approved_by_name = None
 
         lead.updated_by = actor_id
         lead.touch(actor_id)
@@ -1696,7 +1713,14 @@ class LeadService:
                 "This lead is in Token Amount on the strength of this token. "
                 "Move the lead to an earlier stage before deleting it."
             )
-        if lead.status in self._PAID_STAGES and received_of(ledger) <= 0:
+        # Financial Approval is the exception: recording the payment is what put
+        # the lead there, so deleting it - with a reason already given - takes
+        # the lead back out, to where Finance's own Reject sends one.
+        previous_status = lead.status
+        nothing_left = received_of(ledger) <= 0
+        if nothing_left and lead.status == LeadStatus.FINANCIAL_APPROVAL:
+            lead.status = LeadStatus.PRE_SCREENING
+        elif nothing_left and lead.status in self._PAID_STAGES:
             raise BadRequestError(
                 f"This is the only payment on this lead, which is in {self._PAID_STAGES[lead.status]}. "
                 "Move the lead back to an earlier stage before deleting it."
@@ -1734,6 +1758,14 @@ class LeadService:
                 "balance": str(balance.amount) if balance else "0",
             },
         )
+        if lead.status != previous_status:
+            await self.audit.record(
+                user_id=actor_id,
+                action="STAGE_BACK",
+                entity_type="Lead",
+                entity_id=str(lead.id),
+                changes={"status": lead.status, "previous_status": previous_status, "reason": reason.strip()},
+            )
         return lead
 
     async def update_balance(

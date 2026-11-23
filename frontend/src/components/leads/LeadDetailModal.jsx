@@ -18,6 +18,7 @@ import {
   PhoneCall,
   Plus,
   RotateCcw,
+  Send,
   Trash2,
   Undo2,
   UserPlus,
@@ -506,6 +507,11 @@ const APPROVAL_BADGES = {
   rejected: { tone: 'red', label: 'Rejected' },
 }
 
+// The stages a lead is in before Finance has been asked about it, where
+// recording a payment moves it to Financial Approval. Mirrors
+// LeadService._BEFORE_FINANCE.
+const BEFORE_FINANCE_STAGES = ['new_lead', 'rnr', 'pre_screening', 'token_amount']
+
 // One token or payment. A form while it is being recorded or corrected, and a
 // one-glance summary once saved: six full forms for six payments pushed the
 // balance off the bottom of the popup, and a saved payment is read far more
@@ -519,6 +525,13 @@ function PaymentCard({
   balanceDueAt,
   // getPaymentApproval's answer for a saved payment.
   approval = null,
+  // Whether saving this card puts the payment in front of Finance.
+  sendsToFinance = false,
+  // Sends a saved payment to Finance. Absent once it has been, and on a token,
+  // which goes with the first payment.
+  onSend,
+  isSending = false,
+  sendError,
   onSave,
   onRemove,
   isSaving,
@@ -659,7 +672,7 @@ function PaymentCard({
         {justSaved ? (
           <Badge tone="emerald">
             <CheckCircle2 className="h-3 w-3" strokeWidth={2.5} aria-hidden="true" />
-            Saved
+            {approval === 'awaiting' ? 'Sent to Finance' : 'Saved'}
           </Badge>
         ) : entry ? (
           <Badge tone={APPROVAL_BADGES[approval]?.tone ?? 'emerald'}>{APPROVAL_BADGES[approval]?.label ?? 'Paid'}</Badge>
@@ -716,6 +729,7 @@ function PaymentCard({
                 ))}
               </div>
             )}
+            {onSend && <ErrorMessage message={sendError} />}
             {confirmingDelete ? (
               // Asked rather than fired on the press: this takes money off the
               // books, and the reason is what the timeline keeps of it.
@@ -758,7 +772,7 @@ function PaymentCard({
                 </div>
               </div>
             ) : (
-              <div className="flex justify-end gap-2 border-t border-slate-100 pt-2">
+              <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-2">
                 {onDelete && (
                   <Button variant="reject" className="px-3! py-1! text-xs" onClick={() => setConfirmingDelete(true)}>
                     <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
@@ -769,6 +783,12 @@ function PaymentCard({
                   <Pencil className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
                   Edit
                 </Button>
+                {onSend && (
+                  <Button className="px-3! py-1! text-xs" onClick={onSend} disabled={isSending}>
+                    <Send className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                    {isSending ? 'Sending…' : 'Send to Finance'}
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -968,7 +988,15 @@ function PaymentCard({
                 </Button>
               )}
               <Button onClick={handleSave} disabled={isSaving}>
-                {isSaving ? 'Saving…' : entry ? 'Save changes' : isToken ? 'Save token' : 'Save payment'}
+                {isSaving
+                  ? 'Saving…'
+                  : sendsToFinance
+                    ? 'Save & send to Finance'
+                    : entry
+                      ? 'Save changes'
+                      : isToken
+                        ? 'Save token'
+                        : 'Save payment'}
               </Button>
             </div>
           </div>
@@ -1085,6 +1113,9 @@ function PaymentCollectionSection({
   savingPaymentKey,
   savedPaymentKey,
   failedPayment,
+  onSendToFinance,
+  isSendingToFinance,
+  sendToFinanceError,
   onSaveBalance,
   isSavingBalance,
   balanceError,
@@ -1139,13 +1170,28 @@ function PaymentCollectionSection({
     )
   }
 
+  // Saving reaches Finance when it is a new payment on an active lead, a new
+  // token on one Finance already has, or the correction of a payment Finance
+  // rejected while the student was in class.
+  function sendsToFinance(card, kind) {
+    const withFinance = PAID_STAGES.includes(lead.status)
+    if (card.entry) return withFinance && getPaymentApproval(card.entry, lead) === 'rejected'
+    return withFinance || (kind === 'payment' && BEFORE_FINANCE_STAGES.includes(lead.status))
+  }
+
   function cardProps(card, kind) {
+    const approval = getPaymentApproval(card.entry, lead)
     return {
       kind,
       entry: card.entry,
       due: ledger.due,
       balanceDueAt,
-      approval: getPaymentApproval(card.entry, lead),
+      approval,
+      sendsToFinance: sendsToFinance(card, kind),
+      // A payment saved on a lead that is (back) in an earlier stage.
+      ...(card.entry && kind === 'payment' && !approval && BEFORE_FINANCE_STAGES.includes(lead.status)
+        ? { onSend: onSendToFinance, isSending: isSendingToFinance, sendError: sendToFinanceError }
+        : {}),
       onSave: (values) => save(card, kind, values),
       isSaving: savingPaymentKey === card.key,
       justSaved: savedPaymentKey === card.key,
@@ -1709,6 +1755,17 @@ export function LeadDetailModal({ lead, onClose }) {
     onSettled: () => setSavingPaymentKey(null),
   })
 
+  // A payment saved before its lead went to Finance, or on one sent back since.
+  // It is the lead that goes, with everything unapproved on it.
+  const sendToFinanceMutation = useMutation({
+    mutationFn: () => leadService.update(lead.id, { status: 'financial_approval' }),
+    onSuccess: (updatedLead) => {
+      setLiveLead(updatedLead)
+      invalidateLeadQueries()
+      queryClient.invalidateQueries({ queryKey: ['income-approvals'] })
+    },
+  })
+
   const balanceMutation = useMutation({
     mutationFn: (values) => leadService.updateBalance(lead.id, values),
     onSuccess: (updatedLead) => {
@@ -1752,6 +1809,9 @@ export function LeadDetailModal({ lead, onClose }) {
     failedPayment: paymentMutation.isError
       ? { cardKey: paymentMutation.variables?.cardKey, message: getApiErrorMessage(paymentMutation.error) }
       : null,
+    onSendToFinance: () => sendToFinanceMutation.mutate(),
+    isSendingToFinance: sendToFinanceMutation.isPending,
+    sendToFinanceError: sendToFinanceMutation.error ? getApiErrorMessage(sendToFinanceMutation.error) : null,
     onSaveBalance: (values) => balanceMutation.mutate(values),
     isSavingBalance: balanceMutation.isPending,
     balanceError: balanceMutation.error ? getApiErrorMessage(balanceMutation.error) : null,
