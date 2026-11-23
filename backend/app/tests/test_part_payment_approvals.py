@@ -4,6 +4,7 @@ The first payment goes through Financial Approval and puts the student in Batch
 Confirmation, where they attend class however little it was. Every payment
 after that still goes to Finance, with the student left where they are.
 """
+import asyncio
 import uuid
 from datetime import timedelta
 from decimal import Decimal
@@ -324,6 +325,27 @@ async def test_backfill_tells_payments_of_the_approval_day_apart_by_the_log(clie
 
     lead = await Lead.get(uuid.UUID(lead_id))
     assert lead.installments[0].finance_approved_at and not lead.installments[1].finance_approved_at
+
+
+async def test_every_worker_starting_at_once_can_run_the_backfill(client, auth_headers, uploads):
+    lead_id = await in_class(client, auth_headers)
+    await as_before_the_field(lead_id)
+
+    # Production starts four; one that raised would take the service down.
+    await asyncio.gather(*(backfill_payment_approvals() for _ in range(4)))
+
+    lead = await Lead.get(uuid.UUID(lead_id))
+    assert lead.installments[0].finance_approved_at == lead.finance_approved_at
+
+
+async def test_backfill_skips_a_lead_it_cannot_read(client, auth_headers, uploads):
+    lead_id = await in_class(client, auth_headers)
+    await as_before_the_field(lead_id)
+    unreadable = {**await Lead.get_motor_collection().find_one({"_id": uuid.UUID(lead_id)})}
+    unreadable.update(_id=uuid.uuid4(), status="partially_paid")
+    await Lead.get_motor_collection().insert_one(unreadable)
+
+    assert await backfill_payment_approvals() == 1
 
 
 async def test_backfill_counts_a_payment_the_log_does_not_have_as_approved(client, auth_headers, uploads):

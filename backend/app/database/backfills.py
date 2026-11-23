@@ -10,6 +10,7 @@ import uuid
 from decimal import Decimal, InvalidOperation
 
 from pymongo import UpdateOne
+from pymongo.errors import DuplicateKeyError
 
 from app.database.base import BaseDocument, utcnow
 from app.models.audit_log import AuditLog
@@ -543,31 +544,54 @@ async def backfill_payment_approvals() -> int:
     if await migrations.find_one({"_id": PAYMENT_APPROVALS_MIGRATION}):
         return 0
     operations = []
-    async for lead in Lead.find({"finance_approved_at": {"$ne": None}, "installments.0": {"$exists": True}}):
-        approved_on = lead.finance_approved_at.date()
-        for index, entry in enumerate(lead.installments):
-            if entry.kind not in RECEIVED_KINDS or entry.finance_approved_at or entry.finance_rejected_at:
-                continue
-            if entry.paid_at and entry.paid_at > approved_on:
-                continue
-            if entry.paid_at == approved_on and await _recorded_after_approval(lead, entry):
-                continue
-            operations.append(
-                UpdateOne(
-                    {"_id": lead.id},
-                    {
-                        "$set": {
-                            f"installments.{index}.finance_approved_at": lead.finance_approved_at,
-                            f"installments.{index}.finance_approved_by": lead.finance_approved_by,
-                            f"installments.{index}.finance_approved_by_name": lead.finance_approved_by_name,
-                        }
-                    },
-                )
-            )
+    rows = await collection.find(
+        {"finance_approved_at": {"$ne": None}, "installments.0": {"$exists": True}}, {"_id": 1}
+    ).to_list(length=None)
+    for row in rows:
+        # One at a time: a lead that can't be read is skipped rather than
+        # stopping the app from starting.
+        try:
+            lead = await Lead.find_one({"_id": row["_id"]})
+            if lead is not None:
+                operations.extend(await _approvals_covered(lead))
+        except Exception:
+            logger.exception("Couldn't record the finance approval on the payments of lead %s.", row["_id"])
     if operations:
         await collection.bulk_write(operations, ordered=False)
-    await migrations.insert_one({"_id": PAYMENT_APPROVALS_MIGRATION, "applied_at": utcnow()})
+    try:
+        await migrations.insert_one({"_id": PAYMENT_APPROVALS_MIGRATION, "applied_at": utcnow()})
+    except DuplicateKeyError:
+        # Every worker runs this at startup, and another finished first. They
+        # wrote the same values, and one that fails to start takes the whole
+        # service down with it.
+        pass
     return len(operations)
+
+
+async def _approvals_covered(lead: Lead) -> list[UpdateOne]:
+    """The approval of each payment the lead's own approval covers."""
+    approved_on = lead.finance_approved_at.date()
+    operations = []
+    for index, entry in enumerate(lead.installments):
+        if entry.kind not in RECEIVED_KINDS or entry.finance_approved_at or entry.finance_rejected_at:
+            continue
+        if entry.paid_at and entry.paid_at > approved_on:
+            continue
+        if entry.paid_at == approved_on and await _recorded_after_approval(lead, entry):
+            continue
+        operations.append(
+            UpdateOne(
+                {"_id": lead.id},
+                {
+                    "$set": {
+                        f"installments.{index}.finance_approved_at": lead.finance_approved_at,
+                        f"installments.{index}.finance_approved_by": lead.finance_approved_by,
+                        f"installments.{index}.finance_approved_by_name": lead.finance_approved_by_name,
+                    }
+                },
+            )
+        )
+    return operations
 
 
 async def _recorded_after_approval(lead: Lead, entry: PaymentInstallment) -> bool:
