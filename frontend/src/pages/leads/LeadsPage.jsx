@@ -694,6 +694,8 @@ function FoundationLeadsBoard() {
   // Where the lead came from (Meta-1, Retargeting...), as the Induction Call
   // Form recorded it for the call the lead was matched to.
   const [leadSourceFilter, setLeadSourceFilter] = useState('')
+  // Who brought the lead in, from that same Induction Call Form entry.
+  const [salesPersonFilter, setSalesPersonFilter] = useState('')
   // The batch the Batch column shows - the Induction form's, else the typed one.
   const [batchFilter, setBatchFilter] = useState('')
   const [sortOrder, setSortOrder] = useState('desc')
@@ -762,6 +764,12 @@ function FoundationLeadsBoard() {
     queryFn: leadService.getLeadSourceOptions,
   })
   const leadSourceOptions = leadSourceOptionsQuery.data ?? []
+  // Only the people who brought in somebody on this board, for the same reason.
+  const salesPersonOptionsQuery = useQuery({
+    queryKey: ['lead-sales-person-options'],
+    queryFn: leadService.getSalesPersonOptions,
+  })
+  const salesPersonOptions = salesPersonOptionsQuery.data ?? []
 
   // The filter row, shared by the table and the stat cards so a filter moves
   // both. Stage, section and the Lost tab are added per consumer below.
@@ -772,6 +780,7 @@ function FoundationLeadsBoard() {
     qr_code: qrCodeFilter || undefined,
     foundation_group: groupFilter || undefined,
     lead_source: leadSourceFilter || undefined,
+    sales_person: salesPersonFilter || undefined,
     batch: batchFilter || undefined,
     date_from: dateRange?.from || undefined,
     date_to: dateRange?.to || undefined,
@@ -864,7 +873,7 @@ function FoundationLeadsBoard() {
   // dropdown here - a Section Admin is locked to theirs.
   const hasRowFilters = Boolean(
     courseFilter || (!scopedSection && sectionFilter) || statusFilter || planFilter || qrCodeFilter ||
-      callRemarkFilter || groupFilter || batchFilter || leadSourceFilter,
+      callRemarkFilter || groupFilter || batchFilter || leadSourceFilter || salesPersonFilter,
   )
 
   function clearRowFilters() {
@@ -877,6 +886,7 @@ function FoundationLeadsBoard() {
     setGroupFilter('')
     setBatchFilter('')
     setLeadSourceFilter('')
+    setSalesPersonFilter('')
     setPage(1)
   }
 
@@ -1208,7 +1218,7 @@ function FoundationLeadsBoard() {
         </div>
 
         {/* Two groups: the filters wrap among themselves on the left, and the
-            page actions keep their own column on the right - so with nine
+            page actions keep their own column on the right - so with ten
             filters the actions don't fall onto a line of their own under them,
             where an open menu would sit on top of Create Lead. Stacked below
             lg, where there is no room beside them. */}
@@ -1318,7 +1328,17 @@ function FoundationLeadsBoard() {
               }}
             />
 
-            {/* With nine filters, undoing a few one "x" at a time is a chore. The
+            <FilterDropdown
+              label="Sales Person"
+              value={salesPersonFilter}
+              options={salesPersonOptions.map((person) => ({ value: person, label: person }))}
+              onChange={(value) => {
+                setSalesPersonFilter(value)
+                setPage(1)
+              }}
+            />
+
+            {/* With ten filters, undoing a few one "x" at a time is a chore. The
                 search, dates and section cards are left alone - they aren't in
                 this row. A Section Admin's section isn't theirs to clear. */}
             {hasRowFilters && (

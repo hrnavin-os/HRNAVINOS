@@ -276,6 +276,77 @@ async def test_lead_source_spelled_differently_is_one_option(client, auth_header
     assert leads["total"] == 4
 
 
+async def seed_sales_people(client) -> None:
+    """Four matched leads: three brought in by Vikasini (one call has the name
+    typed differently) from different sources, one by Priya. Plus a lead nobody
+    matched to an induction call, and a call by Sudha that never became a
+    lead."""
+    await seed_programs(client)
+    calls = [
+        ("Arun", "9000000001", "Vikasini", "Instagram"),
+        ("Meera", "9000000002", " vikasini ", "Meta-1"),
+        ("Kavya", "9000000003", "Priya", "Meta-1"),
+        ("Deepa", "9000000004", "Vikasini", "Meta-2"),
+    ]
+    for name, phone, sales_person, lead_source in calls:
+        await client.post(
+            INDUCTION_URL,
+            json=induction_payload(
+                name=name, phone=phone, sales_person=sales_person, lead_source=lead_source, batch="30"
+            ),
+        )
+        await client.post(FOUNDATION_URL, json=foundation_payload(name=name, mobile_number=phone))
+    await client.post(INDUCTION_URL, json=induction_payload(name="Ravi", phone="9000000005", sales_person="Sudha"))
+    await client.post(FOUNDATION_URL, json=foundation_payload(name="Cold Lead", mobile_number="9123456789"))
+
+
+async def leads_with(client, auth_headers, **params) -> list[str]:
+    response = await client.get("/api/v1/leads", headers=auth_headers, params=params)
+    assert response.status_code == 200, response.text
+    return sorted(item["name"] for item in response.json()["items"])
+
+
+async def test_leads_can_be_filtered_by_sales_person(client, auth_headers):
+    await seed_sales_people(client)
+
+    # However the name was typed on the call.
+    assert await leads_with(client, auth_headers, sales_person="Vikasini") == ["Arun", "Deepa", "Meera"]
+    assert await leads_with(client, auth_headers, sales_person="Priya") == ["Kavya"]
+    # Somebody whose calls never became a lead matches nobody, not everybody.
+    assert await leads_with(client, auth_headers, sales_person="Sudha") == []
+    # A whole name, not a part of one.
+    assert await leads_with(client, auth_headers, sales_person="Vika") == []
+    # Cleared, it isn't a filter.
+    assert len(await leads_with(client, auth_headers, sales_person="")) == 5
+
+    # The stat cards and the WhatsApp header count the same rows the table shows.
+    params = {"sales_person": "Vikasini"}
+    stats = (await client.get("/api/v1/leads/stats", headers=auth_headers, params=params)).json()
+    assert stats["total"] == 3
+    counts = (await client.get("/api/v1/leads/whatsapp-counts", headers=auth_headers, params=params)).json()
+    assert counts["added"] + counts["not_added"] == 3
+
+
+async def test_sales_person_filter_combines_with_lead_source_and_batch(client, auth_headers):
+    await seed_sales_people(client)
+
+    # Both, not either: Kavya shares the source and Arun the person.
+    assert await leads_with(client, auth_headers, sales_person="Vikasini", lead_source="Meta-1") == ["Meera"]
+    assert await leads_with(client, auth_headers, sales_person="Priya", lead_source="Instagram") == []
+    # The Batch filter reads the induction entry as well, and neither replaces
+    # the other.
+    assert await leads_with(client, auth_headers, sales_person="Priya", batch="Batch-30") == ["Kavya"]
+    assert await leads_with(client, auth_headers, sales_person="Priya", batch="Batch-99") == []
+
+
+async def test_sales_person_options_are_who_brought_in_the_leads(client, auth_headers):
+    await seed_sales_people(client)
+
+    response = await client.get("/api/v1/leads/sales-person-options", headers=auth_headers)
+    assert response.status_code == 200
+    assert response.json() == ["Priya", "Vikasini"]
+
+
 # --------------------------------------------------------------------------
 # Duplicate prevention
 # --------------------------------------------------------------------------

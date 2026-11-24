@@ -1,6 +1,7 @@
 """Data access for InductionEntry documents."""
 import re
 import uuid
+from typing import Literal
 
 from app.database.base import utcnow
 from app.models.enums import InductionStatus
@@ -103,25 +104,33 @@ class InductionEntryRepository(BaseRepository[InductionEntry]):
         ).to_list()
         return {row["_id"]: row["count"] for row in rows}
 
-    async def ids_with_lead_source(self, lead_source: str) -> list[uuid.UUID]:
-        """Every entry whose Lead Source is this one, for the
-        Foundation board's Lead Source filter - the source is recorded on the
-        induction call, not on the lead it later turned into.
+    async def ids_matching(
+        self, *, lead_source: str | None = None, sales_person: str | None = None
+    ) -> list[uuid.UUID]:
+        """Every entry with this Lead Source and this Sales Person, whichever
+        of the two are given, for the Foundation board's filters of those names
+        - both are recorded on the induction call, not on the lead it later
+        turned into. One query for the pair, so picking both means entries
+        that have both.
 
         Deleted entries included: removing the call record doesn't change
-        where the lead it brought in came from. Through Motor's distinct
-        because only the ids are wanted, not thousands of whole documents."""
-        words = lead_source.split()
-        if not words:
-            return []
-        # Typed by hand, so the same source is stored as "Direct Instagram",
-        # "Direct instagram" and "Direct  Instagram ". All of them are the one
-        # option the filter offers (see distinct_lead_sources), so all of them
-        # are what picking it matches: any case, any run of spaces.
-        pattern = r"^\s*" + r"\s+".join(re.escape(word) for word in words) + r"\s*$"
-        return await InductionEntry.get_motor_collection().distinct(
-            "_id", {"lead_source": {"$regex": pattern, "$options": "i"}}
-        )
+        where the lead it brought in came from, or who brought it in. Through
+        Motor's distinct because only the ids are wanted, not thousands of
+        whole documents."""
+        query: dict = {}
+        for field, value in (("lead_source", lead_source), ("sales_person", sales_person)):
+            if value is None:
+                continue
+            words = value.split()
+            if not words:
+                return []
+            # Typed by hand, so the same source is stored as "Direct Instagram",
+            # "Direct instagram" and "Direct  Instagram ". All of them are the
+            # one option the filter offers (see distinct_spellings), so all of
+            # them are what picking it matches: any case, any run of spaces.
+            pattern = r"^\s*" + r"\s+".join(re.escape(word) for word in words) + r"\s*$"
+            query[field] = {"$regex": pattern, "$options": "i"}
+        return await InductionEntry.get_motor_collection().distinct("_id", query)
 
     async def batch_numbers(self, entry_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
         """The batch entered on each of these entries, for the ones that have
@@ -135,17 +144,20 @@ class InductionEntryRepository(BaseRepository[InductionEntry]):
         ).to_list(None)
         return {row["_id"]: row["batch_number"] for row in rows}
 
-    async def distinct_lead_sources(self, entry_ids: list[uuid.UUID]) -> list[str]:
-        """The Lead Sources among these entries, for the Foundation board's
-        filter options - one per source, however many ways it was typed.
+    async def distinct_spellings(
+        self, field: Literal["lead_source", "sales_person"], entry_ids: list[uuid.UUID]
+    ) -> list[str]:
+        """The Lead Sources or Sales Persons among these entries, for the
+        Foundation board's filter options - one per source or person, however
+        many ways it was typed.
 
-        Values differing only in case or spacing are one source. Each is shown
-        the way most entries spell it, so a one-off "Direct instagram" doesn't
-        get to name the option."""
+        Values differing only in case or spacing are one. Each is shown the way
+        most entries spell it, so a one-off "Direct instagram" doesn't get to
+        name the option."""
         rows = await InductionEntry.get_motor_collection().aggregate(
             [
-                {"$match": {"_id": {"$in": entry_ids}, "lead_source": {"$ne": None}}},
-                {"$group": {"_id": "$lead_source", "count": {"$sum": 1}}},
+                {"$match": {"_id": {"$in": entry_ids}, field: {"$ne": None}}},
+                {"$group": {"_id": f"${field}", "count": {"$sum": 1}}},
             ]
         ).to_list(None)
         best: dict[str, tuple[int, str]] = {}

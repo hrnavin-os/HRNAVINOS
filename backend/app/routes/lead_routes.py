@@ -83,9 +83,11 @@ async def list_leads(
     # longer capped at two: the number of groups is whatever the Induction Call
     # Form's Group dropdown offers.
     foundation_group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
-    # The Induction Call Form's Lead Source, read through the induction entry
-    # each lead was matched to - the lead itself doesn't carry one.
+    # The Induction Call Form's Lead Source and Sales Person, read through the
+    # induction entry each lead was matched to - the lead itself carries
+    # neither.
     lead_source: str | None = None,
+    sales_person: str | None = None,
     # The batch the Batch column shows - "Batch-30", or a typed value as written.
     batch: str | None = None,
     # True for the Finance page's Approved Students tab.
@@ -113,6 +115,7 @@ async def list_leads(
         induction_matched=induction_matched,
         foundation_group=foundation_group,
         lead_source=lead_source,
+        sales_person=sales_person,
         batch=batch,
         finance_approved=finance_approved,
         awaiting_finance=awaiting_finance,
@@ -136,6 +139,7 @@ async def lead_stats(
     date_to: date | None = None,
     foundation_group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
     lead_source: str | None = None,
+    sales_person: str | None = None,
     # The batch the Batch column shows - "Batch-30", or a typed value as written.
     batch: str | None = None,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
@@ -153,6 +157,7 @@ async def lead_stats(
         date_to=date_to,
         foundation_group=foundation_group,
         lead_source=lead_source,
+        sales_person=sales_person,
         batch=batch,
     )
 
@@ -172,6 +177,7 @@ async def whatsapp_counts(
     date_to: date | None = None,
     foundation_group: int | None = Query(default=None, ge=1, le=MAX_FOUNDATION_GROUP),
     lead_source: str | None = None,
+    sales_person: str | None = None,
     # The batch the Batch column shows - "Batch-30", or a typed value as written.
     batch: str | None = None,
     actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
@@ -192,6 +198,7 @@ async def whatsapp_counts(
             date_to=date_to,
             foundation_group=foundation_group,
             lead_source=lead_source,
+            sales_person=sales_person,
             batch=batch,
         )
     )
@@ -258,6 +265,16 @@ async def list_lead_source_options(
     filter - read off the induction entries they were matched to. Declared
     before /{lead_id}, like the other fixed segments."""
     return await LeadService().lead_source_options()
+
+
+@router.get("/sales-person-options", response_model=list[str])
+async def list_sales_person_options(
+    actor: User = Depends(RequirePermissions(Permissions.LEADS_VIEW)),
+) -> list[str]:
+    """The Sales Persons who brought in the board's leads, for the Sales Person
+    filter - read off the induction entries they were matched to. Declared
+    before /{lead_id}, like the other fixed segments."""
+    return await LeadService().sales_person_options()
 
 
 @router.get("/batch-options", response_model=list[str])
