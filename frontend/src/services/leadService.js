@@ -59,6 +59,12 @@ export const leadService = {
     const { data } = await apiClient.get('/leads/lead-source-options')
     return data
   },
+  // The Sales Persons who brought the board's leads in - read off the matched
+  // Induction entries too. For the Foundation board's Sales Person filter.
+  getSalesPersonOptions: async () => {
+    const { data } = await apiClient.get('/leads/sales-person-options')
+    return data
+  },
   // The batches the board's leads are in, named as the Batch column names
   // them ("Batch-30"), newest first - for the Foundation board's Batch filter.
   getBatchOptions: async () => {

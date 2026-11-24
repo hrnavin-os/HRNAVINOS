@@ -305,6 +305,7 @@ class LeadService:
         induction_matched: bool | None = None,
         foundation_group: int | None = None,
         lead_source: str | None = None,
+        sales_person: str | None = None,
         batch: str | None = None,
         finance_approved: bool | None = None,
         awaiting_finance: bool = False,
@@ -336,7 +337,7 @@ class LeadService:
                 date_from=date_from,
                 date_to=date_to,
                 foundation_group=foundation_group,
-                induction_entry_ids=await self._lead_source_entry_ids(lead_source),
+                induction_entry_ids=await self._induction_entry_ids(lead_source, sales_person),
                 batch_condition=await self._batch_condition(batch),
             )
         )
@@ -344,7 +345,8 @@ class LeadService:
         # whose number never appeared in Induction. `$eq: None` rather than a
         # bare None so it also matches leads created before the field existed,
         # where the key is absent rather than null. Merged into, not written
-        # over, the Lead Source filter's `$in`, which sets the same key.
+        # over, the Lead Source and Sales Person filters' `$in`, which sets the
+        # same key.
         if induction_matched is not None:
             filters.setdefault("induction_entry_id", {})["$ne" if induction_matched else "$eq"] = None
         # The Finance page's two tabs. A student with a payment waiting is on
@@ -499,15 +501,15 @@ class LeadService:
         # longer has to be composed around the date range above.
         if foundation_group:
             filters["foundation_group"] = foundation_group
-        # The Lead Source filter, already resolved to the induction entries
-        # carrying that source (see _lead_source_entry_ids). None is "not
-        # filtering"; an empty list is a source nobody's entry has, which
-        # matches no lead - as it should.
+        # The Lead Source and Sales Person filters, already resolved to the
+        # induction entries carrying them (see _induction_entry_ids). None is
+        # "not filtering"; an empty list is a source or person nobody's entry
+        # has, which matches no lead - as it should.
         if induction_entry_ids is not None:
             filters["induction_entry_id"] = {"$in": induction_entry_ids}
         # The Batch filter, already resolved by _batch_condition. Under $and
         # rather than merged in: it is an $or over induction_entry_id, the key
-        # the Lead Source filter above sets, and search adds an $or of its own.
+        # the filters above set, and search adds an $or of its own.
         if batch_condition is not None:
             filters["$and"] = [batch_condition]
         # The same match the table's search box makes (BaseRepository._build_query).
@@ -529,6 +531,7 @@ class LeadService:
         date_to: date | None = None,
         foundation_group: int | None = None,
         lead_source: str | None = None,
+        sales_person: str | None = None,
         batch: str | None = None,
         search: str | None = None,
     ) -> LeadStatsResponse:
@@ -544,7 +547,7 @@ class LeadService:
             date_from=date_from,
             date_to=date_to,
             foundation_group=foundation_group,
-            induction_entry_ids=await self._lead_source_entry_ids(lead_source),
+            induction_entry_ids=await self._induction_entry_ids(lead_source, sales_person),
             batch_condition=await self._batch_condition(batch),
             search=search,
         )
@@ -574,6 +577,7 @@ class LeadService:
         date_to: date | None = None,
         foundation_group: int | None = None,
         lead_source: str | None = None,
+        sales_person: str | None = None,
         batch: str | None = None,
         search: str | None = None,
     ) -> dict[str, int]:
@@ -593,7 +597,7 @@ class LeadService:
             date_from=date_from,
             date_to=date_to,
             foundation_group=foundation_group,
-            induction_entry_ids=await self._lead_source_entry_ids(lead_source),
+            induction_entry_ids=await self._induction_entry_ids(lead_source, sales_person),
             batch_condition=await self._batch_condition(batch),
             search=search,
         )
@@ -926,18 +930,22 @@ class LeadService:
     async def course_options(self) -> List[str]:
         return await self.leads.distinct_course_interests()
 
-    async def _lead_source_entry_ids(self, lead_source: str | None) -> "list[uuid.UUID] | None":
-        """The induction entries with this Lead Source, for _board_filters.
+    async def _induction_entry_ids(
+        self, lead_source: str | None, sales_person: str | None
+    ) -> "list[uuid.UUID] | None":
+        """The induction entries with this Lead Source and Sales Person, for
+        _board_filters. None when neither is being filtered on.
 
-        A lead's source is not stored on the lead: it is what the Induction
-        Call Form recorded for the call the lead was matched to on mobile
-        number, so the filter is "leads whose induction entry is one of these".
-        A lead nobody matched to an induction call has no source, and never
-        shows under one.
+        Neither is stored on the lead: both are what the Induction Call Form
+        recorded for the call the lead was matched to on mobile number, so the
+        filter is "leads whose induction entry is one of these". A lead nobody
+        matched to an induction call has neither, and never shows under one.
         """
-        if not lead_source:
+        if not lead_source and not sales_person:
             return None
-        return await self.induction_entries.ids_with_lead_source(lead_source)
+        return await self.induction_entries.ids_matching(
+            lead_source=lead_source or None, sales_person=sales_person or None
+        )
 
     async def lead_source_options(self) -> List[str]:
         """The Lead Sources the board's leads actually came from, for its
@@ -945,7 +953,13 @@ class LeadService:
         Induction form's configured list, so the filter never offers a source
         that would match nobody on this board."""
         entry_ids = await self.leads.linked_induction_entry_ids()
-        return await self.induction_entries.distinct_lead_sources(entry_ids) if entry_ids else []
+        return await self.induction_entries.distinct_spellings("lead_source", entry_ids) if entry_ids else []
+
+    async def sales_person_options(self) -> List[str]:
+        """The Sales Persons who brought in the board's leads, for its filter -
+        read off the matched induction entries, like the Lead Source options."""
+        entry_ids = await self.leads.linked_induction_entry_ids()
+        return await self.induction_entries.distinct_spellings("sales_person", entry_ids) if entry_ids else []
 
     async def _batch_condition(self, batch: str | None) -> dict | None:
         """The Batch filter as a Mongo condition, for _board_filters.

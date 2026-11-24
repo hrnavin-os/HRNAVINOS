@@ -169,7 +169,7 @@ class LeadRepository(BaseRepository[Lead]):
 
     async def linked_induction_entry_ids(self) -> list:
         """The induction entries the board's leads were matched to - where
-        their Lead Source is read from."""
+        their Lead Source and Sales Person are read from."""
         return await Lead.get_motor_collection().distinct(
             "induction_entry_id",
             {"is_deleted": False, "reviewed": {"$ne": False}, "induction_entry_id": {"$ne": None}},
